@@ -5,6 +5,7 @@ import {
   isLocalScreenShareTrackReady,
   isScreenShareSource,
 } from '~/co-work/lib/livekit-screen-share'
+import { ANDROID_PRESENT_UNAVAILABLE_MESSAGE } from '~/co-work/lib/android-present-build'
 import { Track } from 'livekit-client'
 import { softMediaToggleFailure } from '~/co-work/lib/meeting-mobile'
 
@@ -37,6 +38,12 @@ describe('Android screen-share publish contract', () => {
         },
       } as never),
     ).toBe(true)
+  })
+
+  it('preserves Play-update copy when Android Present is blocked on old binaries', () => {
+    expect(softMediaToggleFailure('screen_share', new Error(ANDROID_PRESENT_UNAVAILABLE_MESSAGE))).toBe(
+      ANDROID_PRESENT_UNAVAILABLE_MESSAGE,
+    )
   })
 
   it('preserves MediaProjection blank-frame errors in soft toggle copy', () => {

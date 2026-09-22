@@ -33,6 +33,9 @@ type MeetingBackgroundPanelProps = {
   effects: MeetingVideoEffects
   onClose: () => void
   fullWidth?: boolean
+  /** Zoom-style: turn camera on before applying blur/image if needed. */
+  onEnsureCamera?: () => void | Promise<void>
+  cameraEnabled?: boolean
 }
 
 function selected(
@@ -49,6 +52,8 @@ export function MeetingBackgroundPanel({
   effects,
   onClose,
   fullWidth,
+  onEnsureCamera,
+  cameraEnabled = true,
 }: MeetingBackgroundPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const toast = useAppToast()
@@ -91,6 +96,11 @@ export function MeetingBackgroundPanel({
     async (value: VirtualBackgroundSelection): Promise<boolean> => {
       setBusyId(value.id ?? value.mode)
       try {
+        if (value.mode !== 'off' && !cameraEnabled && onEnsureCamera) {
+          await onEnsureCamera()
+          // Give LiveKit a beat to publish the camera track before attaching effects.
+          await new Promise((resolve) => setTimeout(resolve, 450))
+        }
         const resolved = await resolveVirtualBackgroundSelection(value)
         if (resolved.mode === 'image' && !resolved.imageUrl) {
           toast.show('Background not applied', {
@@ -101,9 +111,21 @@ export function MeetingBackgroundPanel({
         }
         const ok = await effects.apply(resolved)
         if (!ok) {
-          toast.show('Background not applied', { tone: 'danger', message: effects.error ?? undefined })
+          toast.show('Background not applied', {
+            tone: 'danger',
+            message: effects.error ?? 'Turn on your camera and try again.',
+          })
+          return false
         }
-        return ok
+        toast.show(
+          resolved.mode === 'off'
+            ? 'Background off'
+            : resolved.mode === 'blur'
+              ? 'Blur applied'
+              : 'Background applied',
+          { tone: 'success' },
+        )
+        return true
       } catch (error) {
         toast.show('Background not applied', {
           tone: 'danger',
@@ -114,7 +136,7 @@ export function MeetingBackgroundPanel({
         setBusyId(null)
       }
     },
-    [effects, toast],
+    [cameraEnabled, effects, onEnsureCamera, toast],
   )
 
   const upload = useCallback(async () => {
@@ -136,12 +158,12 @@ export function MeetingBackgroundPanel({
       // Prefer local file for apply before library refresh (HTTPS decode fails natively).
       const applied = await applySelection(customBackgroundSelection(created))
       await loadCustom()
-      toast.show(applied ? 'Background applied' : 'Background uploaded', {
-        tone: applied ? 'success' : 'warning',
-        message: applied
-          ? 'Your custom image is now your virtual background.'
-          : 'Saved to your library — tap it again if the camera did not update.',
-      })
+      if (!applied) {
+        toast.show('Background uploaded', {
+          tone: 'warning',
+          message: 'Saved to your library — tap it again if the camera did not update.',
+        })
+      }
     } catch (error) {
       toast.show('Upload failed', {
         tone: 'danger',
@@ -193,7 +215,7 @@ export function MeetingBackgroundPanel({
         icon={<Icons.Sparkles size={19} color={coworkUi.brand} />}
         onClose={onClose}
       />
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 18 }}>
+      <ScrollView flex={1} contentContainerStyle={{ padding: 16, gap: 18 }}>
         {effects.capability === 'unavailable' ? (
           <YStack padding="$4" borderRadius={16} backgroundColor={coworkUi.dangerMuted} gap="$2">
             <Text fontWeight="700" color={coworkUi.danger}>Effects unavailable</Text>

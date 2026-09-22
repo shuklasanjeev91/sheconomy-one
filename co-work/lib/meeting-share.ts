@@ -163,8 +163,6 @@ export function buildMeetingInvitationText(
     `Meeting ID: ${formatMeetingCode(meeting.meeting_code)}`,
     passcode ? `Passcode: ${passcode}` : null,
     '',
-    'Add to Calendar from the meeting page (Calendar icon).',
-    '',
     '—',
     `Shared via ${BRAND_COWORK_LABEL}`,
   ]

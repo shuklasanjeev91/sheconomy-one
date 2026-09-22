@@ -3,6 +3,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useMemo } from 'react'
 
 import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
+import { MeetingCalendarIconButton } from '~/co-work/components/MeetingCalendarIconButton'
 import { MeetingCardOverflowMenu } from '~/co-work/components/MeetingCardOverflowMenu'
 import { fetchMyMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
 import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
@@ -144,16 +145,8 @@ export function UpcomingMeetingsStrip({
               <Text fontSize={12} fontWeight="600" color={coworkUi.textMuted}>
                 Code {formatMeetingCode(meeting.meeting_code)}
               </Text>
-              <XStack gap="$2" flexWrap="wrap">
-                <Button
-                  tone="outline"
-                  size="$3"
-                  borderRadius={999}
-                  icon={<Icons.Calendar size={15} />}
-                  onPress={() => void addToCalendar(meeting)}
-                >
-                  Calendar
-                </Button>
+              <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                <MeetingCalendarIconButton onPress={() => void addToCalendar(meeting)} />
                 <Button
                   tone="primary"
                   size="$3"

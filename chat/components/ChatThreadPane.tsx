@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { KeyboardAvoidingView, Platform, Share } from 'react-native'
+import { Platform, Share } from 'react-native'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { FlashList, type FlashListRef } from '@shopify/flash-list'
 
@@ -37,6 +37,7 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { useIsDarkTheme } from '~/lib/theme/useAppUi'
+import { useComposerKeyboardInset } from '~/hooks/useKeyboardVisible'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { BRAND_NAME } from '~/config/brand'
 
@@ -115,6 +116,7 @@ export function ChatThreadPane({
 }: ChatThreadPaneProps) {
   const theme = useChatTheme()
   const isDark = useIsDarkTheme()
+  const keyboardInset = useComposerKeyboardInset()
   const scrollRef = useRef<FlashListRef<ChatMessage>>(null)
   const isGroup = chat.type === 'group'
 
@@ -1193,11 +1195,8 @@ export function ChatThreadPane({
   if (Platform.OS === 'web') return body
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <YStack flex={1} minHeight={0} width="100%" paddingBottom={keyboardInset}>
       {body}
-    </KeyboardAvoidingView>
+    </YStack>
   )
 }

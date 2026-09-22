@@ -16,6 +16,7 @@ import {
 import {
   forceScreenShareTrackSettings,
   patchLiveKitWaitForDimensions,
+  peekUnpatchedVideoSize,
 } from '~/co-work/lib/livekit-patch-dimensions'
 
 // Apply as soon as meeting screen-share code loads (web + native).
@@ -42,6 +43,7 @@ export const SCREEN_SHARE_PUBLISH_OPTIONS: TrackPublishOptions = {
 
 export const WEB_SCREEN_SHARE_CAPTURE: ScreenShareCaptureOptions = {
   // System audio is optional and fails on many browsers; video is required.
+  // Callers can override via resolveScreenShareCapture({ shareComputerSound: true }).
   audio: false,
   resolution: ScreenSharePresets.h720fps15.resolution,
   contentHint: 'detail',
@@ -56,6 +58,34 @@ export const WEB_SCREEN_SHARE_CAPTURE: ScreenShareCaptureOptions = {
 export const NATIVE_SCREEN_SHARE_CAPTURE: ScreenShareCaptureOptions = {
   audio: false,
   resolution: ScreenSharePresets.h720fps15.resolution,
+}
+
+/** Zoom-style share options applied when starting capture. */
+export type ScreenShareStartOptions = {
+  shareComputerSound?: boolean
+  optimizeForVideo?: boolean
+}
+
+/** Build capture options for web/native from Zoom share prefs. */
+export function resolveScreenShareCapture(
+  platform: 'web' | 'native',
+  options?: ScreenShareStartOptions | null,
+): ScreenShareCaptureOptions {
+  const shareSound = options?.shareComputerSound === true
+  const forVideo = options?.optimizeForVideo === true
+  const contentHint = forVideo ? 'motion' : 'detail'
+  if (platform === 'web') {
+    return {
+      ...WEB_SCREEN_SHARE_CAPTURE,
+      audio: shareSound,
+      contentHint,
+    }
+  }
+  return {
+    ...NATIVE_SCREEN_SHARE_CAPTURE,
+    audio: shareSound,
+    contentHint,
+  }
 }
 
 export function isScreenSharePublication(publication: TrackPublication | undefined | null): boolean {
@@ -99,18 +129,23 @@ export async function setLocalScreenShareEnabled(
   localParticipant: LocalParticipant,
   enabled: boolean,
   platform: 'web' | 'native',
+  options?: ScreenShareStartOptions | null,
 ): Promise<void> {
   if (!enabled) {
     await localParticipant.setScreenShareEnabled(false)
     return
   }
 
-  const capture = platform === 'web' ? WEB_SCREEN_SHARE_CAPTURE : NATIVE_SCREEN_SHARE_CAPTURE
+  const capture = resolveScreenShareCapture(platform, options)
   await localParticipant.setScreenShareEnabled(true, capture, SCREEN_SHARE_PUBLISH_OPTIONS)
 
   // Ensure the published track is unmuted/enabled after the OS capture sheet.
   // On native, the MediaStream can attach a moment after setScreenShareEnabled resolves.
-  const publication = await waitForLocalScreenShareTrack(localParticipant)
+  // iOS ReplayKit "Start Broadcast" can take well over 8s after the picker.
+  const publication = await waitForLocalScreenShareTrack(
+    localParticipant,
+    platform === 'native' ? 25_000 : 8_000,
+  )
   if (!publication?.track) {
     throw new Error(
       platform === 'native'
@@ -133,27 +168,32 @@ export async function setLocalScreenShareEnabled(
     // Content hint helps Android WebRTC pick a screen-share encode path.
     if (mediaTrack && 'contentHint' in mediaTrack) {
       try {
-        ;(mediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = 'detail'
+        ;(mediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint =
+          options?.optimizeForVideo ? 'motion' : 'detail'
       } catch {
         // ignore
       }
     }
-    // Wait briefly for MediaProjection/ReplayKit to attach a real MediaStream.
-    // Publishing without frames makes remote iOS/web tiles stay blank.
+    // Wait for *real* MediaProjection/ReplayKit pixels. Faked 720p getSettings()
+    // used to trip this loop immediately, so Android published a black track
+    // and web/iOS stayed on an empty stage.
     const started = Date.now()
-    while (Date.now() - started < 4_000) {
+    while (Date.now() - started < 12_000) {
       if (!isLocalScreenShareTrackReady(publication)) break
       const stream = publication.track.mediaStream
       const live = publication.track.mediaStreamTrack
-      const settings = live?.getSettings?.() ?? {}
-      const w = Number(settings.width) || 0
-      const h = Number(settings.height) || 0
-      if (stream?.id && (w > 1 || live?.readyState === 'live')) break
+      const actual = peekUnpatchedVideoSize(live)
+      if (stream?.id && actual.width > 1 && actual.height > 1) break
       await new Promise((resolve) => setTimeout(resolve, 200))
       forceScreenShareTrackSettings(publication.track.mediaStreamTrack)
     }
 
-    if (!isLocalScreenShareTrackReady(publication)) {
+    const actual = peekUnpatchedVideoSize(publication.track?.mediaStreamTrack)
+    if (
+      !isLocalScreenShareTrackReady(publication) ||
+      actual.width <= 1 ||
+      actual.height <= 1
+    ) {
       try {
         await localParticipant.setScreenShareEnabled(false)
       } catch {

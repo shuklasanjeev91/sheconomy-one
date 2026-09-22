@@ -37,6 +37,12 @@ export type MeetingMachineState = {
   mirrorLocalVideo: boolean
   /** Zoom-style: hide the local camera tile from gallery / filmstrip. */
   hideSelfView: boolean
+  /** Zoom: hide participants with camera off from the gallery stage. */
+  hideNonVideoParticipants: boolean
+  /** Force side-by-side filmstrip during speaker / screen-share. */
+  sideBySideShare: boolean
+  /** Gallery: only active speakers (+ pins / spotlight / self). */
+  activeSpeakersOnly: boolean
   /** Wide desktop: 7×7 dense gallery pages (49 tiles). */
   denseGallery: boolean
   controlsVisible: boolean
@@ -63,6 +69,9 @@ export type MeetingMachineAction =
   | { type: 'TOGGLE_UI_MODE' }
   | { type: 'SET_MIRROR_LOCAL_VIDEO'; enabled: boolean }
   | { type: 'SET_HIDE_SELF_VIEW'; enabled: boolean }
+  | { type: 'SET_HIDE_NON_VIDEO'; enabled: boolean }
+  | { type: 'SET_SIDE_BY_SIDE_SHARE'; enabled: boolean }
+  | { type: 'SET_ACTIVE_SPEAKERS_ONLY'; enabled: boolean }
   | { type: 'SET_DENSE_GALLERY'; enabled: boolean }
   | { type: 'SET_CONTROLS'; visible: boolean }
   | { type: 'SET_CONTROLS_PINNED'; pinned: boolean }
@@ -121,7 +130,10 @@ export const initialMeetingMachineState: MeetingMachineState = {
   uiMode: 'normal',
   mirrorLocalVideo: true,
   hideSelfView: false,
-  denseGallery: false,
+  hideNonVideoParticipants: false,
+  sideBySideShare: false,
+  activeSpeakersOnly: false,
+  denseGallery: true,
   controlsVisible: true,
   controlsPinned: false,
   participantStripMinimized: false,
@@ -372,8 +384,8 @@ export function meetingStateReducer(
         viewMode: state.lifecycle === 'SCREEN_SHARING' ? state.viewMode : 'screen-share',
         uiMode: state.lifecycle === 'SCREEN_SHARING' ? state.uiMode : 'maximized',
         controlsVisible: true,
-        participantStripMinimized:
-          state.lifecycle === 'SCREEN_SHARING' ? state.participantStripMinimized : true,
+        // Keep the participant strip visible so others stay reachable (Zoom-style).
+        participantStripMinimized: false,
       }
     }
     case 'SHARE_STOPPED':
@@ -397,13 +409,9 @@ export function meetingStateReducer(
       return {
         ...state,
         viewMode: action.viewMode,
-        // Speaker / screen-share need the filmstrip unless the stage is maximized.
+        // Speaker / screen-share always show the filmstrip so everyone stays visible.
         participantStripMinimized:
-          action.viewMode === 'gallery'
-            ? state.participantStripMinimized
-            : state.uiMode === 'maximized'
-              ? true
-              : false,
+          action.viewMode === 'gallery' ? state.participantStripMinimized : false,
         uiMode:
           action.viewMode === 'screen-share' && state.uiMode === 'normal'
             ? 'maximized'
@@ -414,8 +422,13 @@ export function meetingStateReducer(
         ...state,
         uiMode: action.uiMode,
         controlsVisible: true,
+        // Maximized gallery has no filmstrip; never hide it in speaker/share.
         participantStripMinimized:
-          action.uiMode === 'maximized' ? true : state.participantStripMinimized,
+          action.uiMode === 'maximized' && state.viewMode === 'gallery'
+            ? true
+            : action.uiMode === 'maximized'
+              ? false
+              : state.participantStripMinimized,
       }
     case 'TOGGLE_UI_MODE':
       return meetingStateReducer(state, {
@@ -428,6 +441,15 @@ export function meetingStateReducer(
     case 'SET_HIDE_SELF_VIEW':
       if (state.hideSelfView === action.enabled) return state
       return { ...state, hideSelfView: action.enabled }
+    case 'SET_HIDE_NON_VIDEO':
+      if (state.hideNonVideoParticipants === action.enabled) return state
+      return { ...state, hideNonVideoParticipants: action.enabled }
+    case 'SET_SIDE_BY_SIDE_SHARE':
+      if (state.sideBySideShare === action.enabled) return state
+      return { ...state, sideBySideShare: action.enabled }
+    case 'SET_ACTIVE_SPEAKERS_ONLY':
+      if (state.activeSpeakersOnly === action.enabled) return state
+      return { ...state, activeSpeakersOnly: action.enabled }
     case 'SET_DENSE_GALLERY':
       if (state.denseGallery === action.enabled) return state
       return { ...state, denseGallery: action.enabled }

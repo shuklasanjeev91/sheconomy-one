@@ -1,6 +1,5 @@
 import { Platform } from 'react-native'
 
-import { CALL_AUDIO_CAPTURE } from '~/co-work/lib/livekit-call-audio'
 import {
   meetingPermissionDenialMessage,
   type MeetingMobileDenial,
@@ -10,6 +9,9 @@ import {
   mapWebMediaPermissionError,
   meetingWebJoinBlocker,
   meetingWebUnsupportedMessage,
+  queryWebMediaPermission,
+  releaseWebMediaStream,
+  requestWebMicrophoneStream,
 } from '~/co-work/lib/meeting-web'
 
 export type MeetingMediaPermissionResult = {
@@ -23,22 +25,80 @@ export type MeetingMediaPermissionResult = {
 }
 
 /**
- * Require microphone access and request optional camera / notifications before joining.
+ * Request optional camera / notifications and (on a user gesture) microphone before joining.
  * Must run from a user gesture on web; on native shows system permission sheets.
  *
- * Never throws. Camera, notifications, and screen share are optional — denial never
- * crashes the app and never blocks an audio-capable join.
+ * Never throws. On web, microphone denial does not block join — callers should join muted
+ * and let Unmute prompt. Camera, notifications, and screen share are always optional.
  */
+/**
+ * Ensure RECORD_AUDIO / mic permission before unmute on native.
+ * Never throws — returns granted + copy for the banner when denied.
+ */
+export async function ensureNativeMicrophonePermission(): Promise<{
+  granted: boolean
+  blockedInSettings: boolean
+  message?: string
+}> {
+  if (Platform.OS === 'web') {
+    return { granted: true, blockedInSettings: false }
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Camera } = require('expo-camera') as typeof import('expo-camera')
+    const current = await Camera.getMicrophonePermissionsAsync()
+    if (current.granted) {
+      return { granted: true, blockedInSettings: false }
+    }
+    const requested = await Camera.requestMicrophonePermissionsAsync()
+    if (requested.granted) {
+      return { granted: true, blockedInSettings: false }
+    }
+    const blockedInSettings = requested.canAskAgain === false
+    return {
+      granted: false,
+      blockedInSettings,
+      message: meetingPermissionDenialMessage('microphone', { blockedInSettings }),
+    }
+  } catch (cause) {
+    return {
+      granted: false,
+      blockedInSettings: false,
+      message:
+        cause instanceof Error
+          ? cause.message
+          : meetingPermissionDenialMessage('microphone'),
+    }
+  }
+}
+
 export async function ensureMeetingMediaPermissions(): Promise<MeetingMediaPermissionResult> {
   return ensureMeetingMobilePermissions({ requestNotifications: false })
+}
+
+/** Honor pre-join mute/video prefs against what the browser actually granted. */
+export function meetingJoinMediaFromPermissions(
+  perms: MeetingMediaPermissionResult,
+  preferred?: { audioEnabled?: boolean; videoEnabled?: boolean },
+): { audioEnabled: boolean; videoEnabled: boolean } {
+  return {
+    audioEnabled: (preferred?.audioEnabled ?? true) && perms.microphoneGranted,
+    videoEnabled: (preferred?.videoEnabled ?? true) && perms.cameraGranted,
+  }
 }
 
 export async function ensureMeetingMobilePermissions(options?: {
   /** Soft-request push permission (denied = still ok to join). */
   requestNotifications?: boolean
+  /** Web: skip getUserMedia when the user chose "Don't connect to audio". Default true. */
+  requestMicrophone?: boolean
+  /** Web: skip camera probe when the user chose "Turn off my video". Default true. */
+  requestCamera?: boolean
 }): Promise<MeetingMediaPermissionResult> {
   const denials: MeetingMobileDenial[] = []
   const requestNotifications = options?.requestNotifications ?? Platform.OS !== 'web'
+  const requestMicrophone = options?.requestMicrophone ?? true
+  const requestCamera = options?.requestCamera ?? true
 
   try {
     if (Platform.OS === 'web') {
@@ -63,51 +123,52 @@ export async function ensureMeetingMobilePermissions(options?: {
       }
 
       let microphoneGranted = false
-      try {
-        const audioStream = await navigator.mediaDevices.getUserMedia({
-          audio: { ...CALL_AUDIO_CAPTURE },
-          video: false,
-        })
-        microphoneGranted = true
-        audioStream.getTracks().forEach((track) => track.stop())
-      } catch (cause) {
-        const message = mapWebMediaPermissionError('microphone', cause)
-        const blocked = /blocked|site settings/i.test(message)
-        denials.push({ kind: 'microphone', message, blockedInSettings: blocked })
-        return {
-          ok: false,
-          cameraGranted: false,
-          microphoneGranted: false,
-          notificationsGranted: false,
-          screenShareAvailable: capabilities.getDisplayMedia,
-          denials,
-          message,
+      if (requestMicrophone) {
+        try {
+          const audioStream = await requestWebMicrophoneStream()
+          microphoneGranted = true
+          await releaseWebMediaStream(audioStream)
+        } catch (cause) {
+          const permissionState = await queryWebMediaPermission('microphone')
+          const message = mapWebMediaPermissionError('microphone', cause, permissionState)
+          denials.push({
+            kind: 'microphone',
+            message,
+            blockedInSettings: permissionState === 'denied',
+          })
         }
       }
 
       let cameraGranted = false
-      try {
-        const videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        cameraGranted = true
-        videoStream.getTracks().forEach((track) => track.stop())
-      } catch (cause) {
-        denials.push({
-          kind: 'camera',
-          message: mapWebMediaPermissionError('camera', cause),
-          blockedInSettings: false,
-        })
+      if (requestCamera) {
+        try {
+          const videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+          cameraGranted = true
+          await releaseWebMediaStream(videoStream)
+        } catch (cause) {
+          const permissionState = await queryWebMediaPermission('camera')
+          denials.push({
+            kind: 'camera',
+            message: mapWebMediaPermissionError('camera', cause, permissionState),
+            blockedInSettings: permissionState === 'denied',
+          })
+        }
       }
 
+      const micDenial = denials.find((denial) => denial.kind === 'microphone')
       return {
-        ok: microphoneGranted,
+        // Web can always join muted when getUserMedia exists — Zoom-style.
+        ok: true,
         cameraGranted,
         microphoneGranted,
         notificationsGranted: false,
         screenShareAvailable: capabilities.getDisplayMedia,
         denials,
-        message: capabilities.getDisplayMedia
-          ? undefined
-          : meetingWebUnsupportedMessage('screen_share'),
+        message: microphoneGranted
+          ? capabilities.getDisplayMedia
+            ? undefined
+            : meetingWebUnsupportedMessage('screen_share')
+          : micDenial?.message,
       }
     }
 
@@ -118,23 +179,43 @@ export async function ensureMeetingMobilePermissions(options?: {
     let micBlocked = false
     let camBlocked = false
 
-    try {
-      const cam = await Camera.requestCameraPermissionsAsync()
-      cameraGranted = !!cam.granted
-      camBlocked = !cam.granted && cam.canAskAgain === false
-    } catch {
-      cameraGranted = false
+    if (requestCamera) {
+      try {
+        const cam = await Camera.requestCameraPermissionsAsync()
+        cameraGranted = !!cam.granted
+        camBlocked = !cam.granted && cam.canAskAgain === false
+      } catch {
+        cameraGranted = false
+      }
+    } else {
+      try {
+        const cam = await Camera.getCameraPermissionsAsync()
+        cameraGranted = !!cam.granted
+        camBlocked = !cam.granted && cam.canAskAgain === false
+      } catch {
+        cameraGranted = false
+      }
     }
 
-    try {
-      const mic = await Camera.requestMicrophonePermissionsAsync()
-      microphoneGranted = !!mic.granted
-      micBlocked = !mic.granted && mic.canAskAgain === false
-    } catch {
-      microphoneGranted = false
+    if (requestMicrophone) {
+      try {
+        const mic = await Camera.requestMicrophonePermissionsAsync()
+        microphoneGranted = !!mic.granted
+        micBlocked = !mic.granted && mic.canAskAgain === false
+      } catch {
+        microphoneGranted = false
+      }
+    } else {
+      try {
+        const mic = await Camera.getMicrophonePermissionsAsync()
+        microphoneGranted = !!mic.granted
+        micBlocked = !mic.granted && mic.canAskAgain === false
+      } catch {
+        microphoneGranted = false
+      }
     }
 
-    if (!cameraGranted) {
+    if (requestCamera && !cameraGranted) {
       denials.push({
         kind: 'camera',
         message: meetingPermissionDenialMessage('camera', { blockedInSettings: camBlocked }),
@@ -142,7 +223,7 @@ export async function ensureMeetingMobilePermissions(options?: {
       })
     }
 
-    if (!microphoneGranted) {
+    if (requestMicrophone && !microphoneGranted) {
       const message = meetingPermissionDenialMessage('microphone', {
         blockedInSettings: micBlocked,
       })
@@ -159,6 +240,19 @@ export async function ensureMeetingMobilePermissions(options?: {
         screenShareAvailable: true,
         denials,
         message,
+      }
+    }
+
+    // Join muted without a mic prompt — still ok; Unmute will request permission.
+    if (!requestMicrophone && !microphoneGranted) {
+      return {
+        ok: true,
+        cameraGranted,
+        microphoneGranted: false,
+        notificationsGranted: false,
+        screenShareAvailable: true,
+        denials,
+        message: meetingPermissionDenialMessage('microphone', { blockedInSettings: micBlocked }),
       }
     }
 

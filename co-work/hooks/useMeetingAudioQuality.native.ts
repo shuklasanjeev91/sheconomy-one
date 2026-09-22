@@ -19,6 +19,7 @@ import {
   type MeetingConnectionStatus,
   type MeetingMicrophonePermission,
 } from '~/co-work/lib/meeting-audio-quality'
+import { meetingPermissionDenialMessage } from '~/co-work/lib/meeting-mobile'
 
 function createSpeakerTestWaveBase64(): string {
   const sampleRate = 8000
@@ -121,7 +122,7 @@ export function useMeetingAudioQuality(
       if (denied) setMicrophonePermission('denied')
       setError(
         denied
-          ? 'Microphone access is blocked. Enable it in Settings → SHEconomy and try again.'
+          ? meetingPermissionDenialMessage('microphone', { blockedInSettings: true })
           : cause.message || 'The microphone is unavailable.',
       )
     }
@@ -251,12 +252,19 @@ export function useMeetingAudioQuality(
     selectInputDevice: async () => {},
     selectOutputDevice: async () => {},
     selectVideoDevice: async () => {},
-    reportError: (cause) =>
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : 'Could not change microphone state. Check microphone permission and try again.',
-      ),
+    reportError: (cause) => {
+      const message =
+        typeof cause === 'string'
+          ? cause
+          : cause instanceof Error
+            ? cause.message ||
+              'Could not change microphone state. Check microphone permission and try again.'
+            : 'Could not change microphone state. Check microphone permission and try again.'
+      if (/blocked|Settings → SHEconomy|permission/i.test(message)) {
+        setMicrophonePermission(/blocked|Settings → SHEconomy/i.test(message) ? 'denied' : 'prompt')
+      }
+      setError(message)
+    },
     clearError: () => setError(null),
     retryConnection,
   }

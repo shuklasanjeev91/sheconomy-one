@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
+import android.os.SystemClock
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.Segmentation
 import com.google.mlkit.vision.segmentation.SegmentationMask
@@ -26,6 +27,10 @@ class MeetingBackgroundProcessorFactory(private val context: Context) :
 
 private data class MaskSnapshot(val values: FloatArray, val width: Int, val height: Int)
 
+private const val MAX_PROCESS_WIDTH = 640
+private const val MIN_PROCESS_INTERVAL_MS = 80L
+private const val SLOW_FRAME_MS = 45L
+
 private class MeetingBackgroundProcessor(private val context: Context) : VideoFrameProcessor {
   private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
   private val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -39,43 +44,74 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
   @Volatile private var latestMask: MaskSnapshot? = null
   private var cachedImagePath: String? = null
   private var cachedImage: Bitmap? = null
+  private var lastOutput: VideoFrame.I420Buffer? = null
+  private var lastProcessAt = 0L
+  private var skipBudget = 0
 
   override fun process(frame: VideoFrame, textureHelper: SurfaceTextureHelper): VideoFrame {
     val thermalPressure = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
       powerManager.currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE
     if (MeetingBackgroundConfig.mode == "off" || activityManager.isLowRamDevice || thermalPressure) {
-      val copy = frame.buffer.toI420() ?: run {
-        frame.buffer.retain()
-        return VideoFrame(frame.buffer, frame.rotation, frame.timestampNs)
-      }
-      return VideoFrame(copy, frame.rotation, frame.timestampNs)
+      return frame
     }
 
-    val i420 = frame.buffer.toI420() ?: run {
-      frame.buffer.retain()
-      return VideoFrame(frame.buffer, frame.rotation, frame.timestampNs)
+    val now = SystemClock.elapsedRealtime()
+    if (skipBudget > 0 || now - lastProcessAt < MIN_PROCESS_INTERVAL_MS) {
+      if (skipBudget > 0) skipBudget--
+      lastOutput?.let { cached ->
+        cached.retain()
+        return VideoFrame(cached, frame.rotation, frame.timestampNs)
+      }
+      return frame
     }
+
+    val started = SystemClock.elapsedRealtime()
+    val i420 = frame.buffer.toI420() ?: return frame
+    val origW = i420.width
+    val origH = i420.height
+    val (procW, procH) = processSize(origW, origH)
     val source = try {
-      i420ToBitmap(i420)
+      i420ToBitmap(i420, procW, procH)
     } finally {
       i420.release()
     }
 
     requestMask(source)
-    val mask = latestMask
-    if (mask == null) {
-      val raw = bitmapToI420(source)
-      source.recycle()
-      return VideoFrame(raw, frame.rotation, frame.timestampNs)
-    }
+    val mask = latestMask ?: fallbackMask(source.width, source.height)
 
     val background = backgroundFor(source)
-    val composited = composite(source, background, mask)
+    var composited = composite(source, background, mask)
     if (background !== cachedImage && background !== source) background.recycle()
     source.recycle()
+    if (composited.width != origW || composited.height != origH) {
+      val scaled = Bitmap.createScaledBitmap(composited, origW, origH, true)
+      if (scaled !== composited) composited.recycle()
+      composited = scaled
+    }
     val output = bitmapToI420(composited)
     composited.recycle()
+
+    val elapsed = SystemClock.elapsedRealtime() - started
+    lastProcessAt = SystemClock.elapsedRealtime()
+    if (elapsed > SLOW_FRAME_MS) skipBudget = 2
+
+    releaseLast()
+    lastOutput = output
+    output.retain()
     return VideoFrame(output, frame.rotation, frame.timestampNs)
+  }
+
+  private fun releaseLast() {
+    lastOutput?.release()
+    lastOutput = null
+  }
+
+  private fun processSize(width: Int, height: Int): Pair<Int, Int> {
+    if (width <= MAX_PROCESS_WIDTH) {
+      return (width - width % 2).coerceAtLeast(2) to (height - height % 2).coerceAtLeast(2)
+    }
+    val scaledHeight = (height * MAX_PROCESS_WIDTH / width).coerceAtLeast(2)
+    return MAX_PROCESS_WIDTH to (scaledHeight - scaledHeight % 2).coerceAtLeast(2)
   }
 
   private fun requestMask(source: Bitmap) {
@@ -108,12 +144,9 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
       cachedImage?.let { image ->
         return centerCrop(image, source.width, source.height)
       }
-      // Image mode with a failed decode must not silently fall back to blur —
-      // that looks like the upload "did nothing" / applied the wrong effect.
       return source
     }
 
-    // A small downsample/upscale gives a stable real-time blur on API 24+.
     val divisor = (MeetingBackgroundConfig.blurRadius / 2.0).toInt().coerceIn(4, 12)
     val tiny = Bitmap.createScaledBitmap(
       source,
@@ -126,14 +159,32 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
     return blurred
   }
 
+  private fun fallbackMask(width: Int, height: Int): MaskSnapshot {
+    val values = FloatArray(width * height)
+    val cx = width / 2f
+    val cy = height * 0.42f
+    val rx = width * 0.28f
+    val ry = height * 0.38f
+    for (y in 0 until height) {
+      for (x in 0 until width) {
+        val nx = (x - cx) / rx
+        val ny = (y - cy) / ry
+        values[y * width + x] = if (nx * nx + ny * ny <= 1f) 1f else 0f
+      }
+    }
+    return MaskSnapshot(values, width, height)
+  }
+
   private fun decodeBackgroundBitmap(path: String): Bitmap? {
     return try {
       when {
         path.startsWith("file:") -> {
-          val localPath = Uri.parse(path).path
-          localPath?.let(BitmapFactory::decodeFile)
+          val parsed = Uri.parse(path).path
+          BitmapFactory.decodeFile(parsed)
+            ?: BitmapFactory.decodeFile(path.removePrefix("file://"))
+            ?: BitmapFactory.decodeFile(path.removePrefix("file:"))
         }
-        path.startsWith("content:") -> {
+        path.startsWith("content:") || path.startsWith("android.resource:") -> {
           context.contentResolver.openInputStream(Uri.parse(path))?.use { stream ->
             BitmapFactory.decodeStream(stream)
           }
@@ -148,8 +199,8 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
 
   private fun centerCrop(image: Bitmap, width: Int, height: Int): Bitmap {
     val scale = maxOf(width.toFloat() / image.width, height.toFloat() / image.height)
-    val scaledWidth = (image.width * scale).toInt()
-    val scaledHeight = (image.height * scale).toInt()
+    val scaledWidth = (image.width * scale).toInt().coerceAtLeast(1)
+    val scaledHeight = (image.height * scale).toInt().coerceAtLeast(1)
     val scaled = Bitmap.createScaledBitmap(image, scaledWidth, scaledHeight, true)
     val cropped = Bitmap.createBitmap(
       scaled,
@@ -175,7 +226,6 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
       val my = (y * mask.height / height).coerceAtMost(mask.height - 1)
       for (x in 0 until width) {
         val mx = (x * mask.width / width).coerceAtMost(mask.width - 1)
-        // Feather the ML mask around the subject edge.
         val alpha = ((mask.values[my * mask.width + mx] - 0.15f) / 0.7f).coerceIn(0f, 1f)
         val index = y * width + x
         fg[index] = blend(fg[index], bg[index], alpha)
@@ -192,25 +242,27 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
     return (0xff shl 24) or (r shl 16) or (g shl 8) or b
   }
 
-  private fun i420ToBitmap(buffer: VideoFrame.I420Buffer): Bitmap {
-    val width = buffer.width
-    val height = buffer.height
-    val pixels = IntArray(width * height)
-    for (y in 0 until height) {
-      for (x in 0 until width) {
-        val yy = unsigned(buffer.dataY, y * buffer.strideY + x)
-        val uu = unsigned(buffer.dataU, (y / 2) * buffer.strideU + x / 2)
-        val vv = unsigned(buffer.dataV, (y / 2) * buffer.strideV + x / 2)
+  private fun i420ToBitmap(buffer: VideoFrame.I420Buffer, outW: Int, outH: Int): Bitmap {
+    val srcW = buffer.width
+    val srcH = buffer.height
+    val pixels = IntArray(outW * outH)
+    for (y in 0 until outH) {
+      val srcY = (y * srcH / outH).coerceAtMost(srcH - 1)
+      for (x in 0 until outW) {
+        val srcX = (x * srcW / outW).coerceAtMost(srcW - 1)
+        val yy = unsigned(buffer.dataY, srcY * buffer.strideY + srcX)
+        val uu = unsigned(buffer.dataU, (srcY / 2) * buffer.strideU + srcX / 2)
+        val vv = unsigned(buffer.dataV, (srcY / 2) * buffer.strideV + srcX / 2)
         val c = yy - 16
         val d = uu - 128
         val e = vv - 128
         val r = ((298 * c + 409 * e + 128) shr 8).coerceIn(0, 255)
         val g = ((298 * c - 100 * d - 208 * e + 128) shr 8).coerceIn(0, 255)
         val b = ((298 * c + 516 * d + 128) shr 8).coerceIn(0, 255)
-        pixels[y * width + x] = (0xff shl 24) or (r shl 16) or (g shl 8) or b
+        pixels[y * outW + x] = (0xff shl 24) or (r shl 16) or (g shl 8) or b
       }
     }
-    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+    return Bitmap.createBitmap(pixels, outW, outH, Bitmap.Config.ARGB_8888)
   }
 
   private fun bitmapToI420(bitmap: Bitmap): JavaI420Buffer {

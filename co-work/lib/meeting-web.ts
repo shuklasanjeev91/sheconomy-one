@@ -86,9 +86,70 @@ export function meetingWebUnsupportedMessage(feature: MeetingWebFeature): string
   }
 }
 
+export type WebMediaPermissionState = 'granted' | 'denied' | 'prompt' | 'unknown'
+
+/**
+ * Query the Permissions API without prompting. Chrome reports `prompt` when the
+ * user has never decided — a `NotAllowedError` in that state is usually a missing
+ * user gesture (auto-join from useEffect), not a site-settings block.
+ */
+export async function queryWebMediaPermission(
+  name: 'microphone' | 'camera',
+  globalObject: typeof globalThis = globalThis,
+): Promise<WebMediaPermissionState> {
+  try {
+    const nav = (globalObject as typeof globalThis & { navigator?: Navigator }).navigator
+    const query = nav?.permissions?.query
+    if (typeof query !== 'function') return 'unknown'
+    const result = await query.call(nav.permissions, { name } as PermissionDescriptor)
+    if (result.state === 'granted' || result.state === 'denied' || result.state === 'prompt') {
+      return result.state
+    }
+    return 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
+/** True when getUserMedia can run without a click (already granted in site settings). */
+export function canCaptureWebMediaWithoutGesture(state: WebMediaPermissionState): boolean {
+  return state === 'granted'
+}
+
+/**
+ * Request the microphone from a user gesture. Falls back to default constraints if
+ * AEC/NS/AGC (or other advanced fields) overconstrain the device.
+ */
+export async function requestWebMicrophoneStream(
+  mediaDevices: Pick<MediaDevices, 'getUserMedia'> | undefined = typeof navigator === 'undefined'
+    ? undefined
+    : navigator.mediaDevices,
+): Promise<MediaStream> {
+  if (!mediaDevices?.getUserMedia) {
+    throw new Error(meetingWebUnsupportedMessage('microphone'))
+  }
+  try {
+    return await mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    })
+  } catch (first) {
+    const raw = first instanceof Error ? `${first.name} ${first.message}` : String(first)
+    if (/Overconstrained|ConstraintNotSatisfied/i.test(raw)) {
+      return await mediaDevices.getUserMedia({ audio: true, video: false })
+    }
+    throw first
+  }
+}
+
 export function mapWebMediaPermissionError(
   kind: 'camera' | 'microphone',
   cause?: unknown,
+  permissionState?: WebMediaPermissionState,
 ): string {
   const raw =
     cause instanceof Error
@@ -97,9 +158,14 @@ export function mapWebMediaPermissionError(
         ? cause
         : ''
   if (/NotAllowed|Permission|denied|SecurityError/i.test(raw)) {
+    if (permissionState === 'denied') {
+      return kind === 'camera'
+        ? 'Camera access is blocked. Allow camera in your browser site settings, then try again.'
+        : 'Microphone access is blocked. Allow microphone in your browser site settings, then try again.'
+    }
     return kind === 'camera'
-      ? 'Camera access is blocked. Allow camera in your browser site settings, then try again.'
-      : 'Microphone access is blocked. Allow microphone in your browser site settings, then try again.'
+      ? 'Camera needs permission. Allow camera when your browser asks, then try again.'
+      : 'Microphone needs permission. Tap Unmute and allow access when your browser asks.'
   }
   if (/NotFound|DevicesNotFound|Overconstrained/i.test(raw)) {
     return kind === 'camera'
@@ -152,4 +218,45 @@ export function meetingWebJoinBlocker(capabilities: MeetingWebCapabilities): str
 export function describeMeetingWebScreenShare(capabilities: MeetingWebCapabilities): string {
   if (!capabilities.getDisplayMedia) return meetingWebUnsupportedMessage('screen_share')
   return 'When you share, your browser lets you pick Entire screen, a Window, or a Browser tab where supported.'
+}
+
+/**
+ * Prime the browser audio graph on a user gesture (Join / Start / Unmute).
+ * Chrome autoplay blocks LiveKit remote audio after navigation unless an
+ * AudioContext is resumed in the same click that enters the meeting.
+ */
+export function unlockWebAudioPlayback(globalObject: typeof globalThis = globalThis): void {
+  try {
+    const g = globalObject as typeof globalThis & {
+      AudioContext?: typeof AudioContext
+      webkitAudioContext?: typeof AudioContext
+    }
+    const AudioCtx = g.AudioContext || g.webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    void ctx.resume()
+    const buffer = ctx.createBuffer(1, 1, 22050)
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.connect(ctx.destination)
+    source.start(0)
+  } catch {
+    // LiveKit room.startAudio still runs after connect.
+  }
+}
+
+/** Stop a permission-probe stream and yield so the device can be recaptured. */
+export async function releaseWebMediaStream(stream: {
+  getTracks: () => Array<{ stop: () => void }>
+}): Promise<void> {
+  for (const track of stream.getTracks()) {
+    try {
+      track.stop()
+    } catch {
+      // Track already ended.
+    }
+  }
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 40)
+  })
 }

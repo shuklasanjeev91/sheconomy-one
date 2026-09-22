@@ -97,11 +97,63 @@ export function MeetingProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
+    void import('~/co-work/lib/meeting-gallery-prefs').then(({ loadMeetingGalleryPrefs }) =>
+      loadMeetingGalleryPrefs().then((prefs) => {
+        if (cancelled) return
+        if (prefs.viewMode === 'gallery' || prefs.viewMode === 'speaker') {
+          dispatch({ type: 'SET_VIEW', viewMode: prefs.viewMode })
+        }
+        if (typeof prefs.denseGallery === 'boolean') {
+          dispatch({ type: 'SET_DENSE_GALLERY', enabled: prefs.denseGallery })
+        }
+        if (typeof prefs.hideSelfView === 'boolean') {
+          dispatch({ type: 'SET_HIDE_SELF_VIEW', enabled: prefs.hideSelfView })
+        }
+        if (typeof prefs.hideNonVideoParticipants === 'boolean') {
+          dispatch({ type: 'SET_HIDE_NON_VIDEO', enabled: prefs.hideNonVideoParticipants })
+        }
+        if (typeof prefs.sideBySideShare === 'boolean') {
+          dispatch({ type: 'SET_SIDE_BY_SIDE_SHARE', enabled: prefs.sideBySideShare })
+        }
+        if (typeof prefs.activeSpeakersOnly === 'boolean') {
+          dispatch({ type: 'SET_ACTIVE_SPEAKERS_ONLY', enabled: prefs.activeSpeakersOnly })
+        }
+      }),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!mirrorPreferenceLoaded.current) return
     void AsyncStorage.setItem(MIRROR_LOCAL_VIDEO_KEY, state.mirrorLocalVideo ? '1' : '0').catch(
       () => {},
     )
   }, [state.mirrorLocalVideo])
+
+  useEffect(() => {
+    void import('~/co-work/lib/meeting-gallery-prefs').then(({ saveMeetingGalleryPrefs }) =>
+      saveMeetingGalleryPrefs({
+        viewMode: state.viewMode === 'screen-share' ? 'gallery' : state.viewMode,
+        denseGallery: state.denseGallery,
+        hideSelfView: state.hideSelfView,
+        hideNonVideoParticipants: state.hideNonVideoParticipants,
+        sideBySideShare: state.sideBySideShare,
+        activeSpeakersOnly: state.activeSpeakersOnly,
+        participantStripMinimized: state.participantStripMinimized,
+      }).catch(() => {}),
+    )
+  }, [
+    state.activeSpeakersOnly,
+    state.denseGallery,
+    state.hideNonVideoParticipants,
+    state.hideSelfView,
+    state.participantStripMinimized,
+    state.sideBySideShare,
+    state.viewMode,
+  ])
 
   const registerMediaAdapter = useCallback((adapter: MeetingMediaAdapter | null) => {
     customMediaRef.current = adapter

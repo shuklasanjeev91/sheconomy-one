@@ -14,9 +14,9 @@ export type LiveCaptionLine = {
   timestamp: number
 }
 
-/** Web Speech API on browsers; Voice STT on iOS/Android; all platforms can view shared captions. */
+/** Web Speech API on browsers; Voice STT on iOS/Android. Viewing shared captions is always available. */
 export function isLiveCaptionsSupported() {
-  return hasSpeechRecognition() || isNativeRuntime()
+  return true
 }
 
 /** Publish captions from this device's microphone. */

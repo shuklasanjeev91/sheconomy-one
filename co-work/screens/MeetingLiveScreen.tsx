@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { AppLink } from '~/components/navigation/AppLink'
 import { ScreenCenter } from '~/components/layout'
 import { Button, Spinner, Text, YStack } from '~/components/ui'
-import { ensureMeetingMobilePermissions } from '~/co-work/lib/meeting-media-permissions'
+import {
+  ensureMeetingMobilePermissions,
+  meetingJoinMediaFromPermissions,
+} from '~/co-work/lib/meeting-media-permissions'
 import {
   loadRememberedMeetingDisplayName,
   safeMeetingDisplayName,
@@ -29,6 +33,11 @@ import { useProfile } from '~/hooks/useProfile'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { coWorkRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
+import {
+  canCaptureWebMediaWithoutGesture,
+  queryWebMediaPermission,
+  unlockWebAudioPlayback,
+} from '~/co-work/lib/meeting-web'
 
 type MeetingLiveScreenProps = {
   code: string
@@ -46,6 +55,10 @@ type MeetingLiveScreenProps = {
    */
   resumeEnteredRoom?: boolean
   resumeDisplayName?: string | null
+  /** Pre-join audio/mic preference */
+  initialAudioEnabled?: boolean
+  /** Pre-join video/camera preference */
+  initialVideoEnabled?: boolean
   /** Overlay / in-place host: close session instead of relying on route alone. */
   onExit?: () => void
 }
@@ -69,6 +82,8 @@ function MeetingLiveScreenBody({
   autoJoin = false,
   resumeEnteredRoom = false,
   resumeDisplayName = null,
+  initialAudioEnabled,
+  initialVideoEnabled,
   onExit,
 }: MeetingLiveScreenProps) {
   const { ui: coworkUi } = useCoWorkTheme()
@@ -90,8 +105,12 @@ function MeetingLiveScreenBody({
   )
   const [isLocked, setIsLocked] = useState(false)
   const [passcodeVerified, setPasscodeVerified] = useState(false)
-  const [joinAudioEnabled, setJoinAudioEnabled] = useState(true)
-  const [joinVideoEnabled, setJoinVideoEnabled] = useState(true)
+  const [joinAudioEnabled, setJoinAudioEnabled] = useState(
+    () => (typeof initialAudioEnabled === 'boolean' ? initialAudioEnabled : true),
+  )
+  const [joinVideoEnabled, setJoinVideoEnabled] = useState(
+    () => (typeof initialVideoEnabled === 'boolean' ? initialVideoEnabled : true),
+  )
   const loadedCodeRef = useRef<string | null>(null)
   const autoJoinAttemptedRef = useRef(false)
   const resumedRoomRef = useRef(shouldResumeRoom)
@@ -142,7 +161,7 @@ function MeetingLiveScreenBody({
   const loadMeeting = useCallback(async () => {
     if (!normalizedCode) {
       setPhase('error')
-      setError('Missing meeting code. Go back to Co-Work and try again.')
+      setError('Missing meeting code. Go back to Meetings and try again.')
       return
     }
 
@@ -234,33 +253,78 @@ function MeetingLiveScreenBody({
 
       setPhase('joining')
       setError(null)
+      unlockWebAudioPlayback()
+      let nextAudio =
+        typeof options?.audioEnabled === 'boolean'
+          ? options.audioEnabled
+          : typeof initialAudioEnabled === 'boolean'
+            ? initialAudioEnabled
+            : true
+      let nextVideo =
+        typeof options?.videoEnabled === 'boolean'
+          ? options.videoEnabled
+          : typeof initialVideoEnabled === 'boolean'
+            ? initialVideoEnabled
+            : true
+      // Host schedule: mute / video-off on join (Zoom-style) — guests only.
+      const { applyMeetingJoinSecurityMedia } = await import('~/co-work/lib/meeting-join-enforcement')
+      const secured = applyMeetingJoinSecurityMedia({
+        audioEnabled: nextAudio,
+        videoEnabled: nextVideo,
+        security: meeting.security_settings,
+        isHost,
+      })
+      nextAudio = secured.audioEnabled
+      nextVideo = secured.videoEnabled
       // Resume / Maximize must not re-prompt permissions — that bounced users to Join.
       // Instant "New" already requested mic in the click gesture; skip a second prompt
       // that can hang behind the fullscreen overlay on web.
-      if (!shouldResumeRoom && !resumedRoomRef.current && !options?.skipPermissionPrompt) {
-        const permissions = await ensureMeetingMobilePermissions({
-          requestNotifications: false,
-        })
-        if (!permissions.ok) {
-          const message = permissions.message ?? 'Microphone permission is required to join.'
-          // Stay on the join confirm screen so the user can open Settings and retry.
-          // Never escalate a permission denial into an uncaught crash.
-          setError(message)
-          setPhase('confirm')
-          throw new Error(message)
+      if (!shouldResumeRoom && !resumedRoomRef.current) {
+        if (!options?.skipPermissionPrompt) {
+          const permissions = await ensureMeetingMobilePermissions({
+            requestNotifications: false,
+            requestMicrophone: nextAudio,
+            requestCamera: nextVideo,
+          })
+          const media = meetingJoinMediaFromPermissions(permissions, {
+            audioEnabled: nextAudio,
+            videoEnabled: nextVideo,
+          })
+          nextAudio = media.audioEnabled
+          nextVideo = media.videoEnabled
+        } else if (Platform.OS === 'web') {
+          // Auto-join from useEffect is not a user gesture. If this session already
+          // captured in a click, trust that result. Otherwise only capture when
+          // the Permissions API says access is already granted.
+          const audioExplicit =
+            typeof options?.audioEnabled === 'boolean' || typeof initialAudioEnabled === 'boolean'
+          const videoExplicit =
+            typeof options?.videoEnabled === 'boolean' || typeof initialVideoEnabled === 'boolean'
+          if (nextAudio && !audioExplicit) {
+            const micState = await queryWebMediaPermission('microphone')
+            if (!canCaptureWebMediaWithoutGesture(micState)) nextAudio = false
+          }
+          if (nextVideo && !videoExplicit) {
+            const camState = await queryWebMediaPermission('camera')
+            if (!canCaptureWebMediaWithoutGesture(camState)) nextVideo = false
+          }
         }
       }
-      if (typeof options?.audioEnabled === 'boolean') {
-        setJoinAudioEnabled(options.audioEnabled)
-      }
-      if (typeof options?.videoEnabled === 'boolean') {
-        setJoinVideoEnabled(options.videoEnabled)
-      }
+      setJoinAudioEnabled(nextAudio)
+      setJoinVideoEnabled(nextVideo)
       setConfirmedDisplayName(displayName)
       resumedRoomRef.current = true
       setPhase('ready')
     },
-    [isHost, isLocked, meeting, passcodeVerified, shouldResumeRoom],
+    [
+      initialAudioEnabled,
+      initialVideoEnabled,
+      isHost,
+      isLocked,
+      meeting,
+      passcodeVerified,
+      shouldResumeRoom,
+    ],
   )
 
   useEffect(() => {
@@ -414,12 +478,12 @@ function MeetingLiveScreenBody({
           </Button>
           {onExit ? (
             <Button tone="outline" borderRadius={999} onPress={exitMeeting}>
-              Back to Co-Work
+              Back to Meetings
             </Button>
           ) : (
             <AppLink href={coWorkRoutes.home} asChild>
               <Button tone="outline" borderRadius={999}>
-                Back to Co-Work
+                Back to Meetings
               </Button>
             </AppLink>
           )}

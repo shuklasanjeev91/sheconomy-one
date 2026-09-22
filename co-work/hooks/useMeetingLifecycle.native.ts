@@ -16,7 +16,11 @@ import {
   meetingLifecycleNotice,
   type MeetingLifecyclePlatform,
 } from '~/co-work/lib/meeting-lifecycle'
-import { classifyMeetingAppStateInterruption } from '~/co-work/lib/meeting-mobile'
+import { classifyMeetingAppStateInterruption, MEETING_BACKGROUND_CAMERA_PAUSE_DEBOUNCE_MS } from '~/co-work/lib/meeting-mobile'
+import {
+  getMeetingCameraIntent,
+  syncMeetingCameraIntentFromTrack,
+} from '~/co-work/lib/meeting-camera-intent'
 import { useMeetingStateManager } from '~/co-work/hooks/useMeetingStateManager'
 import { useOnReconnect } from '~/providers/ConnectivityProvider'
 
@@ -40,7 +44,9 @@ export function useMeetingLifecycle({
   useKeepAwake('sheconomy-meeting-native')
   const { syncLifecycle } = useMeetingStateManager()
   const [notice, setNotice] = useState<string | null>(null)
-  const [inBackground, setInBackground] = useState(AppState.currentState !== 'active')
+  // Initial state: only true OS background counts. Permission sheets often
+  // leave currentState as 'inactive' briefly — never start with the banner on.
+  const [inBackground, setInBackground] = useState(AppState.currentState === 'background')
   const [phoneCallInterrupted, setPhoneCallInterrupted] = useState(false)
   const [screenShareStoppedByOs, setScreenShareStoppedByOs] = useState(false)
   const [restoring, setRestoring] = useState(false)
@@ -51,6 +57,7 @@ export function useMeetingLifecycle({
   const screenSharingRef = useRef(screenSharing)
   const speakerOnRef = useRef(speakerOn)
   const appStateRef = useRef<AppStateStatus>(AppState.currentState)
+  const backgroundPauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   screenSharingRef.current = screenSharing
   speakerOnRef.current = speakerOn
 
@@ -58,9 +65,18 @@ export function useMeetingLifecycle({
 
   useEffect(() => {
     if (!inBackground) {
-      intendedCameraRef.current = cameraEnabled
+      // Prefer explicit Start Video intent over the last published track state.
+      intendedCameraRef.current = getMeetingCameraIntent() || cameraEnabled
+      syncMeetingCameraIntentFromTrack(intendedCameraRef.current)
     }
   }, [cameraEnabled, inBackground])
+
+  const clearBackgroundPauseTimer = useCallback(() => {
+    if (backgroundPauseTimerRef.current) {
+      clearTimeout(backgroundPauseTimerRef.current)
+      backgroundPauseTimerRef.current = null
+    }
+  }, [])
 
   const refreshNotice = useCallback(
     (overrides?: Partial<{
@@ -98,6 +114,31 @@ export function useMeetingLifecycle({
     ],
   )
 
+  const confirmBackgroundPause = useCallback(() => {
+    // Keep prior intent — do not overwrite with cameraEnabled mid permission sheet.
+    intendedCameraRef.current = getMeetingCameraIntent() || intendedCameraRef.current
+    wasSharingWhenBackgroundRef.current = screenSharingRef.current
+    setInBackground(true)
+    setScreenShareStoppedByOs(false)
+    setRestoring(false)
+    refreshNotice({
+      inBackground: true,
+      screenShareStoppedByOs: false,
+      restoring: false,
+    })
+    void (async () => {
+      try {
+        await configureLiveKitCallAudio(mediaMode)
+        await applyPreferredCallAudioOutput(mediaMode, speakerOnRef.current)
+        if (room.state === ConnectionState.Connected) {
+          await pauseMeetingCameraForBackground(room)
+        }
+      } catch {
+        // Soft-fail — stay connected; banner explains limits.
+      }
+    })()
+  }, [mediaMode, refreshNotice, room])
+
   useEffect(() => {
     refreshNotice()
   }, [refreshNotice])
@@ -115,36 +156,28 @@ export function useMeetingLifecycle({
 
       if (next !== 'active') {
         // `inactive` (control center, permission sheets, More modal) must NOT
-        // pause the camera — only true OS background. In-app minimize keeps
-        // AppState active; never treat that as a camera pause.
+        // pause the camera. Android permission dialogs often flip to
+        // `background` briefly — debounce before treating as a true pause.
         if (next === 'background') {
-          intendedCameraRef.current = cameraEnabled
-          wasSharingWhenBackgroundRef.current = screenSharingRef.current
-          setInBackground(true)
-          setScreenShareStoppedByOs(false)
-          setRestoring(false)
-          refreshNotice({
-            inBackground: true,
-            screenShareStoppedByOs: false,
-            restoring: false,
-          })
-          // Pause camera so audio can continue under OS background rules.
-          void (async () => {
-            try {
-              await configureLiveKitCallAudio(mediaMode)
-              await applyPreferredCallAudioOutput(mediaMode, speakerOnRef.current)
-              if (room.state === ConnectionState.Connected) {
-                await pauseMeetingCameraForBackground(room)
-              }
-            } catch {
-              // Soft-fail — stay connected; banner explains limits.
-            }
-          })()
+          clearBackgroundPauseTimer()
+          backgroundPauseTimerRef.current = setTimeout(() => {
+            backgroundPauseTimerRef.current = null
+            if (appStateRef.current !== 'background') return
+            confirmBackgroundPause()
+          }, MEETING_BACKGROUND_CAMERA_PAUSE_DEBOUNCE_MS)
         }
         return
       }
 
+      clearBackgroundPauseTimer()
       setPhoneCallInterrupted(false)
+
+      // Brief permission-sheet background never confirmed — no restore banner.
+      if (!inBackground) {
+        refreshNotice({ inBackground: false, restoring: false, phoneCallInterrupted: false })
+        return
+      }
+
       setInBackground(false)
       setRestoring(true)
       refreshNotice({ inBackground: false, restoring: true, phoneCallInterrupted: false })
@@ -155,7 +188,7 @@ export function useMeetingLifecycle({
           await applyPreferredCallAudioOutput(mediaMode, speakerOnRef.current)
           if (room.state === ConnectionState.Connected) {
             await restoreMeetingMediaAfterForeground(room, mediaMode, {
-              intendedCameraOn: intendedCameraRef.current,
+              intendedCameraOn: getMeetingCameraIntent() || intendedCameraRef.current,
             })
             if (wasSharingWhenBackgroundRef.current && !screenSharingRef.current) {
               setScreenShareStoppedByOs(true)
@@ -179,8 +212,18 @@ export function useMeetingLifecycle({
     }
 
     const subscription = AppState.addEventListener('change', onChange)
-    return () => subscription.remove()
-  }, [cameraEnabled, mediaMode, refreshNotice, room])
+    return () => {
+      subscription.remove()
+      clearBackgroundPauseTimer()
+    }
+  }, [
+    clearBackgroundPauseTimer,
+    confirmBackgroundPause,
+    inBackground,
+    mediaMode,
+    refreshNotice,
+    room,
+  ])
 
   useEffect(() => {
     if (screenSharing) {

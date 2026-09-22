@@ -20,12 +20,23 @@ export type ClientSendOtpInput = {
  * Never logs OTP values. verificationId is a client handle for UX state only.
  */
 export async function sendAuthOtp(input: ClientSendOtpInput): Promise<SendOtpResponse> {
-  const { error } = await sendSupabaseOtp(input.channel, input.identifier, {
-    fullName: input.fullName,
-  })
+  try {
+    const { error } = await sendSupabaseOtp(input.channel, input.identifier, {
+      fullName: input.fullName,
+    })
 
-  if (error) {
-    const mapped = mapAuthErrorMessage(error.message, { code: error.code })
+    if (error) {
+      const mapped = mapAuthErrorMessage(error.message, { code: error.code })
+      return {
+        success: false,
+        verificationId: '',
+        expiresIn: 0,
+        resendAfter: 30,
+        error: mapped.text,
+      }
+    }
+  } catch (error) {
+    const mapped = mapAuthErrorMessage(error instanceof Error ? error.message : null)
     return {
       success: false,
       verificationId: '',
@@ -56,26 +67,40 @@ export async function verifyAuthOtp(input: {
   otp: string
 }): Promise<VerifyOtpResponse> {
   // OTP is passed only to Supabase over HTTPS — never logged.
-  const { data, error } = await verifySupabaseOtp(
-    input.channel,
-    input.identifier,
-    input.otp.trim(),
-  )
-
-  if (error) {
-    const mapped = mapAuthErrorMessage(error.message, { code: error.code })
+  let data: Awaited<ReturnType<typeof verifySupabaseOtp>>['data']
+  try {
+    const result = await verifySupabaseOtp(input.channel, input.identifier, input.otp.trim())
+    if (result.error) {
+      const mapped = mapAuthErrorMessage(result.error.message, { code: result.error.code })
+      return { success: false, error: mapped.text, code: mapped.code }
+    }
+    data = result.data
+  } catch (error) {
+    const mapped = mapAuthErrorMessage(error instanceof Error ? error.message : null)
     return { success: false, error: mapped.text, code: mapped.code }
   }
 
   const session = data.session
   const user = data.user ?? session?.user
-  const { data: sessionData } = await getSession()
-  const resolved = user ?? sessionData.session?.user
+  let accessToken = session?.access_token
+  let refreshToken = session?.refresh_token
+  let resolved = user
+
+  if (!resolved || !accessToken) {
+    try {
+      const { data: sessionData } = await getSession()
+      resolved = resolved ?? sessionData.session?.user
+      accessToken = accessToken ?? sessionData.session?.access_token
+      refreshToken = refreshToken ?? sessionData.session?.refresh_token
+    } catch {
+      // verifyOtp already created the session; missing metadata is non-fatal.
+    }
+  }
 
   return {
     success: true,
-    accessToken: session?.access_token ?? sessionData.session?.access_token,
-    refreshToken: session?.refresh_token ?? sessionData.session?.refresh_token,
+    accessToken,
+    refreshToken,
     user: resolved
       ? {
           id: resolved.id,

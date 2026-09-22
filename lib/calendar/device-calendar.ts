@@ -17,6 +17,47 @@ export type AddMeetingCalendarResult =
   | 'cancelled'
   | 'failed'
 
+export type WebCalendarFallback = 'ics' | 'google' | 'outlook'
+
+type WritableCalendarCandidate = {
+  allowsModifications?: boolean
+  isPrimary?: boolean
+  source?: { name?: string | null; type?: string | null } | null
+}
+
+/** Apple Calendar on iOS/Safari; Google Calendar on Android; Google otherwise. */
+export function preferredWebCalendarFallback(
+  userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '',
+): WebCalendarFallback {
+  const ua = userAgent.toLowerCase()
+  if (/\boutlook\b/.test(ua)) return 'outlook'
+  const appleMobile = /iphone|ipad|ipod/.test(ua)
+  const macSafari =
+    /macintosh/.test(ua) && /safari/.test(ua) && !/chrome|crios|fxios|edg/.test(ua)
+  if (appleMobile || macSafari) return 'ics'
+  return 'google'
+}
+
+/** Prefer the device’s primary / default calendar app (iCloud, Google, Outlook). */
+export function pickDeviceWritableCalendar<T extends WritableCalendarCandidate>(
+  calendars: T[],
+  platform: string,
+): T | undefined {
+  const writable = calendars.filter((calendar) => calendar.allowsModifications)
+  if (writable.length === 0) return undefined
+  const primary = writable.find((calendar) => calendar.isPrimary)
+  if (primary) return primary
+  const sourceOf = (calendar: T) => `${calendar.source?.name ?? ''} ${calendar.source?.type ?? ''}`
+  if (platform === 'ios') {
+    return writable.find((calendar) => /icloud|caldav|local/i.test(sourceOf(calendar))) ?? writable[0]
+  }
+  return (
+    writable.find((calendar) => /google/i.test(sourceOf(calendar))) ??
+    writable.find((calendar) => /outlook|exchange/i.test(sourceOf(calendar))) ??
+    writable[0]
+  )
+}
+
 /**
  * Prefer saving directly into the device default calendar (Zoom-style).
  * Falls back to the system event editor, then ICS / Google Calendar.
@@ -45,11 +86,7 @@ export async function addMeetingToDeviceCalendar(
       const permission = await Calendar.requestCalendarPermissionsAsync()
       if (permission.status === 'granted') {
         const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT)
-        const writable = calendars.filter((calendar) => calendar.allowsModifications)
-        const preferred =
-          writable.find((calendar) => calendar.isPrimary) ||
-          writable.find((calendar) => /icloud|google|outlook|exchange|local/i.test(calendar.source?.name || '')) ||
-          writable[0]
+        const preferred = pickDeviceWritableCalendar(calendars, Platform.OS)
 
         if (preferred) {
           await Calendar.createEventAsync(preferred.id, {
@@ -81,14 +118,22 @@ export async function addMeetingToDeviceCalendar(
     }
   }
 
-  // Web / fallback: open Google Calendar template (most common default), then ICS.
+  // Web / fallback: Apple Calendar via ICS on iOS/Safari, else Google/Outlook.
+  const fallback = preferredWebCalendarFallback()
+  if (fallback === 'ics') {
+    const ics = buildMeetingShareIcs(meeting)
+    const result = await shareIcsFile(ics, `sheconomy-${meeting.meeting_code}.ics`)
+    if (result === 'shared') return 'shared'
+  }
+
   try {
-    const { google } = buildMeetingCalendarShareLinks(meeting)
+    const links = buildMeetingCalendarShareLinks(meeting)
+    const url = fallback === 'outlook' ? links.outlook : links.google
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const opened = window.open(google, '_blank', 'noopener,noreferrer')
+      const opened = window.open(url, '_blank', 'noopener,noreferrer')
       if (opened) return 'opened'
     } else {
-      await Linking.openURL(google)
+      await Linking.openURL(url)
       return 'opened'
     }
   } catch {

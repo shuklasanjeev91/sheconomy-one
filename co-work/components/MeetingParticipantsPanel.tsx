@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { Modal, Platform, Pressable, ScrollView as RNScrollView } from 'react-native'
 
 import {
   Avatar,
@@ -7,13 +8,13 @@ import {
   Input,
   Popover,
   PopoverContent,
-  ScrollView,
   Text,
   XStack,
   YStack,
 } from '~/components/ui'
 import { CoWorkPanelShell, CoWorkSectionLabel } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
+import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { MeetingRoleBadge } from '~/co-work/components/MeetingRoleBadge'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { MeetingParticipant, MeetingRole } from '~/co-work/lib/types'
@@ -31,28 +32,45 @@ type MeetingParticipantsPanelProps = {
   viewerRole: MeetingRole
   currentUserId: string
   isLocked?: boolean
+  /** Whether participants can unmute themselves (host can toggle this). */
+  allowSelfUnmute?: boolean
   onAdmit: (participantId: string) => void
   onReject?: (participantId: string) => void
   onAdmitAll?: () => void
   onRemove?: (participantId: string) => void
+  /** Send admitted participant back to waiting room. */
+  onPutInWaitingRoom?: (participantId: string) => void
   onAllowRejoin?: (participantId: string) => void
   onForceMute?: (userId: string) => void
   onAskToUnmute?: (userId: string) => void
   onRequestMute?: (userId: string) => void
+  /** Host lowers one raised hand. */
+  onLowerHand?: (userId: string) => void
   onStopVideo?: (userId: string) => void
+  /** Host asks a video-off participant to start their camera. */
+  onAskToStartVideo?: (userId: string) => void
+  /** Rename a participant (session-only display name). */
+  onRename?: (userId: string, newName: string) => void
   onAssignCoHost?: (userId: string) => void
   onRemoveCoHost?: (userId: string) => void
   onTransferHost?: (userId: string) => void
-  /** Opens Zoom-style joined-participant picker to transfer host. */
+  /** Opens SHEconomy joined-participant picker to transfer host. */
   onOpenTransferHost?: () => void
   onToggleLock?: () => void
   onMuteAll?: () => void
   onAskAllToUnmute?: () => void
   onAskAllToMute?: () => void
+  /** Toggle whether locked-muted participants can self-unmute. */
+  onToggleAllowSelfUnmute?: () => void
   onRemoveAllExceptHost?: () => void
   onClose: () => void
+  onInvite?: () => void
   raisedHands?: Record<string, boolean>
   fullWidth?: boolean
+  spotlightUserId?: string | null
+  onSetSpotlight?: (userId: string | null) => void
+  pinnedUserIds?: string[]
+  onTogglePin?: (userId: string) => void
 }
 
 export function MeetingParticipantsPanel({
@@ -61,15 +79,20 @@ export function MeetingParticipantsPanel({
   viewerRole,
   currentUserId,
   isLocked,
+  allowSelfUnmute = true,
   onAdmit,
   onReject,
   onAdmitAll,
   onRemove,
+  onPutInWaitingRoom,
   onAllowRejoin,
   onForceMute,
   onAskToUnmute,
   onRequestMute,
+  onLowerHand,
   onStopVideo,
+  onAskToStartVideo,
+  onRename,
   onAssignCoHost,
   onRemoveCoHost,
   onTransferHost,
@@ -78,14 +101,24 @@ export function MeetingParticipantsPanel({
   onMuteAll,
   onAskAllToUnmute,
   onAskAllToMute,
+  onToggleAllowSelfUnmute,
   onRemoveAllExceptHost,
   onClose,
+  onInvite,
   raisedHands = {},
   fullWidth,
+  spotlightUserId = null,
+  onSetSpotlight,
+  pinnedUserIds = [],
+  onTogglePin,
 }: MeetingParticipantsPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | 'muted' | 'hand' | 'waiting'>('all')
+  // Rename: track which user is being renamed
+  const [renamingUserId, setRenamingUserId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const spotlightedUserId = spotlightUserId
   const admitted = participants.filter((p) => p.status === 'admitted')
   const waiting = participants.filter((p) => p.status === 'waiting')
   const removed = participants.filter((p) => p.status === 'removed')
@@ -111,8 +144,159 @@ export function MeetingParticipantsPanel({
   })
   const filteredWaiting = waiting.filter(matchesQuery)
 
+  // Zoom participants ordering: You (Host, me) pinned at top, then hands raised, then hosts/cohosts, then alphabetical
+  const selfAdmitted = filteredAdmitted.find((p) => p.user_id === currentUserId)
+  const otherAdmitted = filteredAdmitted.filter((p) => p.user_id !== currentUserId)
+  const sortedOthers = [...otherAdmitted].sort((a, b) => {
+    const handA = !!raisedHands[a.user_id]
+    const handB = !!raisedHands[b.user_id]
+    if (handA !== handB) return handA ? -1 : 1
+    const isHostA = a.is_host || a.role === 'host' || a.role === 'co-host'
+    const isHostB = b.is_host || b.role === 'host' || b.role === 'co-host'
+    if (isHostA !== isHostB) return isHostA ? -1 : 1
+    const nameA = (a.display_name || a.profile?.full_name || '').toLowerCase()
+    const nameB = (b.display_name || b.profile?.full_name || '').toLowerCase()
+    return nameA.localeCompare(nameB)
+  })
+  const displayAdmitted = selfAdmitted ? [selfAdmitted, ...sortedOthers] : sortedOthers
+
+  const footerMenuItems: MoreAction[] = []
+  if (bulkActions.includes('ask_all_to_unmute') && onAskAllToUnmute) {
+    footerMenuItems.push({
+      key: 'ask-all-unmute',
+      label: 'Ask all to unmute',
+      onPress: onAskAllToUnmute,
+    })
+  }
+  if (onAskAllToMute) {
+    footerMenuItems.push({
+      key: 'ask-all-mute',
+      label: 'Mute participants upon entry',
+      onPress: onAskAllToMute,
+    })
+  }
+  if (bulkActions.includes('lock_meeting') && onToggleLock) {
+    footerMenuItems.push({
+      key: 'lock-meeting',
+      label: isLocked ? 'Unlock meeting' : 'Lock meeting',
+      onPress: onToggleLock,
+    })
+  }
+  if (onOpenTransferHost) {
+    footerMenuItems.push({
+      key: 'transfer-host',
+      label: 'Transfer host…',
+      onPress: onOpenTransferHost,
+    })
+  }
+  if (canModerate && onToggleAllowSelfUnmute) {
+    footerMenuItems.push({
+      key: 'allow-self-unmute',
+      label: allowSelfUnmute ? 'Prevent participants from unmuting' : 'Allow participants to unmute',
+      onPress: onToggleAllowSelfUnmute,
+    })
+  }
+  if (bulkActions.includes('remove_all_except_host') && onRemoveAllExceptHost) {
+    footerMenuItems.push({
+      key: 'remove-all-except-host',
+      label: 'Remove all except host',
+      onPress: onRemoveAllExceptHost,
+    })
+  }
+
+  const renamingParticipant = renamingUserId
+    ? participants.find((p) => p.user_id === renamingUserId)
+    : null
+
   return (
-    <CoWorkPanelShell fullWidth={fullWidth}>
+    <>
+      {/* Rename inline modal */}
+      <Modal
+        visible={!!renamingUserId}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRenamingUserId(null)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}
+          onPress={() => setRenamingUserId(null)}
+        >
+          <Pressable
+            style={{ width: '100%', maxWidth: 380 }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <YStack
+              backgroundColor={coworkUi.surface}
+              borderRadius={16}
+              borderWidth={1}
+              borderColor={coworkUi.borderSoft}
+              padding="$5"
+              gap="$4"
+              style={{ boxShadow: '0 16px 40px rgba(0,0,0,0.5)' }}
+            >
+              <YStack gap="$1">
+                <Text fontSize={16} fontWeight="700" color={coworkUi.text}>
+                  Rename participant
+                </Text>
+                {renamingParticipant ? (
+                  <Text fontSize={12} color={coworkUi.textSecondary}>
+                    Renaming{' '}
+                    {safeMeetingDisplayName(
+                      renamingParticipant.display_name ||
+                        renamingParticipant.profile?.full_name ||
+                        renamingParticipant.profile?.username,
+                    )}{' '}
+                    — session only
+                  </Text>
+                ) : null}
+              </YStack>
+              <Input
+                value={renameValue}
+                onChangeText={setRenameValue}
+                placeholder="Enter new name"
+                autoFocus
+                backgroundColor={coworkUi.surfaceElevated}
+                borderColor={coworkUi.borderSoft}
+                color={coworkUi.text}
+                borderRadius={10}
+                maxLength={60}
+              />
+              <XStack gap="$2" justifyContent="flex-end">
+                <Button
+                  tone="outline"
+                  size="$3"
+                  borderRadius={8}
+                  onPress={() => setRenamingUserId(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  tone="primary"
+                  size="$3"
+                  borderRadius={8}
+                  disabled={!renameValue.trim()}
+                  onPress={() => {
+                    if (renamingUserId && renameValue.trim() && onRename) {
+                      onRename(renamingUserId, renameValue.trim())
+                    }
+                    setRenamingUserId(null)
+                  }}
+                >
+                  Rename
+                </Button>
+              </XStack>
+            </YStack>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <CoWorkPanelShell fullWidth={fullWidth}>
       <MeetingPanelHeader
         title={`Participants (${admitted.length})`}
         subtitle={waiting.length ? `${waiting.length} waiting` : undefined}
@@ -120,7 +304,7 @@ export function MeetingParticipantsPanel({
         onClose={onClose}
       />
 
-      <YStack paddingHorizontal="$3" paddingTop="$2" gap="$2">
+      <YStack paddingHorizontal="$3" paddingTop="$2" gap="$2" flexShrink={0}>
         <Input
           value={query}
           onChangeText={setQuery}
@@ -128,10 +312,12 @@ export function MeetingParticipantsPanel({
           backgroundColor="rgba(255,255,255,0.05)"
           borderColor={coworkUi.borderSoft}
           color={coworkUi.text}
-          borderRadius={12}
-          height={40}
+          placeholderTextColor={coworkUi.textMuted}
+          borderRadius={10}
+          height={38}
+          fontSize={13}
         />
-        <XStack gap="$1.5" flexWrap="wrap">
+        <XStack gap="$1.5" flexWrap="wrap" paddingBottom="$1">
           {(
             [
               ['all', 'All'],
@@ -144,98 +330,34 @@ export function MeetingParticipantsPanel({
               key={key}
               tone={filter === key ? 'primary' : 'outline'}
               size="$2"
+              height={28}
+              paddingHorizontal={10}
               borderRadius={999}
               onPress={() => setFilter(key)}
             >
-              {label}
-              {key === 'waiting' && waiting.length ? ` (${waiting.length})` : ''}
+              <Text fontSize={12} fontWeight="600" color={filter === key ? '#fff' : coworkUi.text}>
+                {label}
+                {key === 'waiting' && waiting.length ? ` (${waiting.length})` : ''}
+              </Text>
             </Button>
           ))}
         </XStack>
       </YStack>
 
-      <ScrollView flex={1} padding="$3">
-        <YStack gap="$4">
-          {canModerate ? (
-            <YStack gap="$3">
-              <CoWorkSectionLabel>Host controls</CoWorkSectionLabel>
-              {(bulkActions.includes('mute_all') ||
-                bulkActions.includes('ask_all_to_unmute') ||
-                onAskAllToMute) ? (
-                <YStack gap="$1.5">
-                  <Text fontSize={11} fontWeight="700" color={coworkUi.meetingIconMuted}>
-                    Audio
-                  </Text>
-                  <XStack gap="$2" flexWrap="wrap">
-                    {bulkActions.includes('mute_all') && onMuteAll ? (
-                      <Button tone="outline" size="$2" borderRadius={12} onPress={onMuteAll}>
-                        Mute all
-                      </Button>
-                    ) : null}
-                    {onAskAllToMute ? (
-                      <Button tone="outline" size="$2" borderRadius={12} onPress={onAskAllToMute}>
-                        Ask all to mute
-                      </Button>
-                    ) : null}
-                    {bulkActions.includes('ask_all_to_unmute') && onAskAllToUnmute ? (
-                      <Button tone="outline" size="$2" borderRadius={12} onPress={onAskAllToUnmute}>
-                        Ask all to unmute
-                      </Button>
-                    ) : null}
-                  </XStack>
-                </YStack>
-              ) : null}
-              {(bulkActions.includes('lock_meeting') && onToggleLock) || onOpenTransferHost ? (
-                <YStack gap="$1.5">
-                  <Text fontSize={11} fontWeight="700" color={coworkUi.meetingIconMuted}>
-                    Room
-                  </Text>
-                  <XStack gap="$2" flexWrap="wrap">
-                    {bulkActions.includes('lock_meeting') && onToggleLock ? (
-                      <Button tone="outline" size="$2" borderRadius={12} onPress={onToggleLock}>
-                        {isLocked ? 'Unlock' : 'Lock'}
-                      </Button>
-                    ) : null}
-                    {onOpenTransferHost ? (
-                      <Button
-                        tone="primary"
-                        size="$2"
-                        borderRadius={12}
-                        onPress={onOpenTransferHost}
-                        icon={<Icons.UserCheck size={14} color="white" />}
-                      >
-                        Transfer host
-                      </Button>
-                    ) : null}
-                  </XStack>
-                </YStack>
-              ) : null}
-              {bulkActions.includes('remove_all_except_host') && onRemoveAllExceptHost ? (
-                <YStack gap="$1.5">
-                  <Text fontSize={11} fontWeight="700" color={coworkUi.danger}>
-                    Danger
-                  </Text>
-                  <Button
-                    tone="outline"
-                    size="$2"
-                    borderRadius={12}
-                    borderColor="rgba(244,63,104,0.45)"
-                    color={coworkUi.danger}
-                    onPress={onRemoveAllExceptHost}
-                  >
-                    Remove all except host
-                  </Button>
-                </YStack>
-              ) : null}
-            </YStack>
-          ) : null}
-
+      <RNScrollView
+        style={{ flex: 1, minHeight: 0 }}
+        contentContainerStyle={{ padding: 12, paddingBottom: 28 }}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator
+      >
+        <YStack gap="$3">
           {(filter === 'waiting' || filter === 'all') && filteredWaiting.length > 0 ? (
             <YStack gap="$2">
               <XStack alignItems="center" justifyContent="space-between">
-                <CoWorkSectionLabel>Waiting room</CoWorkSectionLabel>
+                <CoWorkSectionLabel>Waiting room ({filteredWaiting.length})</CoWorkSectionLabel>
                 {canAdmit && onAdmitAll ? (
-                  <Button tone="primary" size="$2" borderRadius={999} onPress={onAdmitAll}>
+                  <Button tone="primary" size="$2" height={28} borderRadius={999} onPress={onAdmitAll}>
                     Admit all
                   </Button>
                 ) : null}
@@ -244,14 +366,15 @@ export function MeetingParticipantsPanel({
                 <ParticipantRow
                   key={p.id}
                   participant={p}
+                  isSelf={false}
                   action={
                     canAdmit ? (
-                      <XStack gap="$2">
-                        <Button tone="primary" size="$2" borderRadius={999} onPress={() => onAdmit(p.id)}>
+                      <XStack gap="$1.5">
+                        <Button tone="primary" size="$2" height={30} borderRadius={8} onPress={() => onAdmit(p.id)}>
                           Admit
                         </Button>
                         {onReject ? (
-                          <Button tone="outline" size="$2" borderRadius={999} onPress={() => onReject(p.id)}>
+                          <Button tone="outline" size="$2" height={30} borderRadius={8} onPress={() => onReject(p.id)}>
                             Deny
                           </Button>
                         ) : null}
@@ -264,16 +387,14 @@ export function MeetingParticipantsPanel({
           ) : null}
 
           {filter !== 'waiting' ? (
-          <YStack gap="$2">
-            <CoWorkSectionLabel>In the meeting</CoWorkSectionLabel>
-            {filteredAdmitted.length === 0 ? (
-              <Text fontSize={13} color={coworkUi.textMuted} paddingVertical="$2">
-                No participants match.
-              </Text>
-            ) : null}
-            {[...filteredAdmitted]
-              .sort((a, b) => Number(!!raisedHands[b.user_id]) - Number(!!raisedHands[a.user_id]))
-              .map((p) => {
+            <YStack gap="$2">
+              <CoWorkSectionLabel>In the meeting ({displayAdmitted.length})</CoWorkSectionLabel>
+              {displayAdmitted.length === 0 ? (
+                <Text fontSize={13} color={coworkUi.textMuted} paddingVertical="$2">
+                  No participants match.
+                </Text>
+              ) : null}
+              {displayAdmitted.map((p) => {
                 const role = meetingRoleFromFlags({
                   role: p.role,
                   isHost: p.is_host,
@@ -286,6 +407,7 @@ export function MeetingParticipantsPanel({
                   isSelf,
                   isMuted: !!p.is_muted,
                   isVideoOff: !!p.is_video_off,
+                  handRaised: !!raisedHands[p.user_id],
                 })
                 const menuItems: MoreAction[] = []
                 if (actions.includes('mute') && onForceMute) {
@@ -305,11 +427,27 @@ export function MeetingParticipantsPanel({
                     onPress: () => onRequestMute(p.user_id),
                   })
                 }
-                if (actions.includes('stop_video') && onStopVideo) {
+                if (actions.includes('lower_hand') && onLowerHand) {
+                  menuItems.push({
+                    key: 'lower-hand',
+                    label: 'Lower hand',
+                    onPress: () => onLowerHand(p.user_id),
+                  })
+                }
+                // Stop video (host, when participant has video on)
+                if (actions.includes('stop_video') && !p.is_video_off && onStopVideo) {
                   menuItems.push({
                     key: 'stop-video',
                     label: 'Stop video',
                     onPress: () => onStopVideo(p.user_id),
+                  })
+                }
+                // Ask to start video (host only, when video is off)
+                if (actions.includes('stop_video') && p.is_video_off && onAskToStartVideo) {
+                  menuItems.push({
+                    key: 'ask-start-video',
+                    label: 'Ask to start video',
+                    onPress: () => onAskToStartVideo(p.user_id),
                   })
                 }
                 if (actions.includes('make_co_host') && onAssignCoHost) {
@@ -333,6 +471,45 @@ export function MeetingParticipantsPanel({
                     onPress: () => onTransferHost(p.user_id),
                   })
                 }
+                // Spotlight (room-wide) + Pin (local view)
+                if (!isSelf) {
+                  const isSpotlighted = spotlightedUserId === p.user_id
+                  const isPinned = pinnedUserIds.includes(p.user_id)
+                  if (canModerate && onSetSpotlight) {
+                    menuItems.push({
+                      key: 'spotlight',
+                      label: isSpotlighted ? 'Remove spotlight' : 'Spotlight for everyone',
+                      onPress: () => onSetSpotlight(isSpotlighted ? null : p.user_id),
+                    })
+                  }
+                  if (onTogglePin) {
+                    menuItems.push({
+                      key: 'pin',
+                      label: isPinned ? 'Unpin video' : 'Pin video',
+                      onPress: () => onTogglePin(p.user_id),
+                    })
+                  }
+                }
+                // Rename (self or host)
+                if ((isSelf || canModerate) && onRename) {
+                  menuItems.push({
+                    key: 'rename',
+                    label: 'Rename',
+                    onPress: () => {
+                      const current =
+                        p.display_name || p.profile?.full_name || p.profile?.username || ''
+                      setRenameValue(current)
+                      setRenamingUserId(p.user_id)
+                    },
+                  })
+                }
+                if (actions.includes('put_in_waiting_room') && onPutInWaitingRoom) {
+                  menuItems.push({
+                    key: 'waiting-room',
+                    label: 'Put in waiting room',
+                    onPress: () => onPutInWaitingRoom(p.id),
+                  })
+                }
                 if (actions.includes('remove') && onRemove) {
                   menuItems.push({ key: 'remove', label: 'Remove', onPress: () => onRemove(p.id) })
                 }
@@ -341,27 +518,31 @@ export function MeetingParticipantsPanel({
                   <ParticipantRow
                     key={p.id}
                     participant={p}
+                    isSelf={isSelf}
                     handRaised={!!raisedHands[p.user_id]}
+                    isSpotlighted={spotlightedUserId === p.user_id}
                     action={menuItems.length > 0 ? <MoreActionsMenu items={menuItems} /> : null}
                   />
                 )
               })}
-          </YStack>
+            </YStack>
           ) : null}
 
           {canModerate && removed.length > 0 ? (
-            <YStack gap="$2">
-              <CoWorkSectionLabel>Removed</CoWorkSectionLabel>
+            <YStack gap="$2" paddingTop="$2">
+              <CoWorkSectionLabel>Removed ({removed.length})</CoWorkSectionLabel>
               {removed.map((participant) => (
                 <ParticipantRow
                   key={participant.id}
                   participant={participant}
+                  isSelf={false}
                   action={
                     onAllowRejoin ? (
                       <Button
                         tone="outline"
                         size="$2"
-                        borderRadius={999}
+                        height={28}
+                        borderRadius={8}
                         onPress={() => onAllowRejoin(participant.id)}
                       >
                         Allow rejoin
@@ -373,8 +554,65 @@ export function MeetingParticipantsPanel({
             </YStack>
           ) : null}
         </YStack>
-      </ScrollView>
+      </RNScrollView>
+
+      {/* Permanently Docked Zoom Footer Toolbar */}
+      <XStack
+        alignItems="center"
+        justifyContent="space-between"
+        paddingHorizontal="$3.5"
+        paddingVertical="$2.5"
+        borderTopWidth={1}
+        borderTopColor={coworkUi.borderSoft}
+        backgroundColor={coworkUi.surfaceElevated}
+        flexShrink={0}
+      >
+        <Button
+          tone="outline"
+          size="$2"
+          height={32}
+          borderRadius={8}
+          icon={<Icons.UserPlus size={14} color={coworkUi.text} />}
+          onPress={onInvite}
+        >
+          Invite
+        </Button>
+
+        <XStack alignItems="center" gap="$2">
+          {canModerate && bulkActions.includes('mute_all') && onMuteAll ? (
+            <Button
+              tone="outline"
+              size="$2"
+              height={32}
+              borderRadius={8}
+              icon={<Icons.MicOff size={14} color={coworkUi.text} />}
+              onPress={onMuteAll}
+            >
+              Mute All
+            </Button>
+          ) : null}
+
+          {canModerate && footerMenuItems.length > 0 ? (
+            <MoreActionsMenu
+              items={footerMenuItems}
+              placement="top-end"
+              trigger={
+                <Button
+                  tone="outline"
+                  size="$2"
+                  height={32}
+                  paddingHorizontal={10}
+                  borderRadius={8}
+                  icon={<Icons.MoreHorizontal size={16} color={coworkUi.text} />}
+                  accessibilityLabel="More host actions"
+                />
+              }
+            />
+          ) : null}
+        </XStack>
+      </XStack>
     </CoWorkPanelShell>
+    </>
   )
 }
 
@@ -384,49 +622,122 @@ type MoreAction = {
   onPress: () => void
 }
 
-function MoreActionsMenu({ items }: { items: MoreAction[] }) {
+function MoreActionsMenu({
+  items,
+  placement = 'bottom-end',
+  trigger,
+}: {
+  items: MoreAction[]
+  placement?: 'bottom-end' | 'top-end'
+  trigger?: ReactNode
+}) {
   const { ui: coworkUi } = useCoWorkTheme()
   const [open, setOpen] = useState(false)
 
+  if (Platform.OS !== 'web') {
+    return (
+      <YStack>
+        {trigger ? (
+          <Pressable onPress={() => setOpen((current) => !current)}>
+            {trigger}
+          </Pressable>
+        ) : (
+          <MeetingSheetButton
+            accessibilityLabel="More participant actions"
+            onPress={() => setOpen((current) => !current)}
+            style={{ width: 34, height: 34, borderRadius: 8 }}
+          >
+            <Icons.MoreHorizontal size={16} color={coworkUi.textMuted} />
+          </MeetingSheetButton>
+        )}
+        {open ? (
+          <YStack
+            marginTop={6}
+            minWidth={200}
+            padding="$2"
+            borderRadius={12}
+            borderWidth={1}
+            borderColor={coworkUi.borderSoft}
+            backgroundColor={coworkUi.surface}
+            gap={2}
+          >
+            {items.map((item) => (
+              <MeetingSheetButton
+                key={item.key}
+                accessibilityLabel={item.label}
+                onPress={() => {
+                  setOpen(false)
+                  item.onPress()
+                }}
+                style={{
+                  minHeight: 38,
+                  borderRadius: 8,
+                  justifyContent: 'flex-start',
+                  paddingHorizontal: 12,
+                }}
+              >
+                <Text fontSize={13} fontWeight="600" color={coworkUi.text}>
+                  {item.label}
+                </Text>
+              </MeetingSheetButton>
+            ))}
+          </YStack>
+        ) : null}
+      </YStack>
+    )
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen} placement="bottom-end" allowFlip>
+    <Popover open={open} onOpenChange={setOpen} placement={placement} allowFlip>
       <Popover.Trigger asChild>
-        <Button
-          tone="ghost"
-          size="$1"
-          circular
-          icon={<Icons.MoreHorizontal size={16} color={coworkUi.textMuted} />}
-          accessibilityLabel="More participant actions"
-          onPress={(event) => {
-            event?.stopPropagation?.()
+        {trigger ? (
+          <Pressable onPress={(e) => {
+            e?.stopPropagation?.()
             setOpen((current) => !current)
-          }}
-        />
+          }}>
+            {trigger}
+          </Pressable>
+        ) : (
+          <Button
+            tone="ghost"
+            size="$1"
+            circular
+            icon={<Icons.MoreHorizontal size={15} color={coworkUi.textMuted} />}
+            accessibilityLabel="More participant actions"
+            onPress={(event) => {
+              event?.stopPropagation?.()
+              setOpen((current) => !current)
+            }}
+          />
+        )}
       </Popover.Trigger>
       <PopoverContent
         zIndex={400000}
-        minWidth={200}
+        minWidth={210}
         padding="$2"
-        backgroundColor={coworkUi.surface}
+        backgroundColor={coworkUi.surfaceElevated}
         borderColor={coworkUi.borderSoft}
+        style={{
+          boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+        }}
       >
         <YStack gap={2}>
           {items.map((item) => (
             <XStack
               key={item.key}
               alignItems="center"
-              minHeight={40}
+              minHeight={36}
               paddingHorizontal="$3"
-              borderRadius={10}
+              borderRadius={8}
               cursor="pointer"
-              hoverStyle={{ backgroundColor: coworkUi.surfaceMuted }}
+              hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
               pressStyle={{ opacity: 0.8 }}
               onPress={() => {
                 setOpen(false)
                 item.onPress()
               }}
             >
-              <Text fontSize={14} fontWeight="600" color={coworkUi.text}>
+              <Text fontSize={13} fontWeight="600" color={coworkUi.text}>
                 {item.label}
               </Text>
             </XStack>
@@ -441,13 +752,17 @@ function ParticipantRow({
   participant,
   action,
   handRaised,
+  isSelf,
+  isSpotlighted,
 }: {
   participant: MeetingParticipant
   action?: ReactNode
   handRaised?: boolean
+  isSelf?: boolean
+  isSpotlighted?: boolean
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
-  const name = safeMeetingDisplayName(
+  const baseName = safeMeetingDisplayName(
     participant.display_name ||
       participant.profile?.full_name ||
       participant.profile?.username,
@@ -456,6 +771,21 @@ function ParticipantRow({
     role: participant.role,
     isHost: participant.is_host,
   })
+  const isHost = role === 'host'
+  const isCoHost = role === 'co-host'
+
+  const suffix = isSelf
+    ? isHost
+      ? ' (Host, me)'
+      : isCoHost
+        ? ' (Co-host, me)'
+        : ' (me)'
+    : isHost
+      ? ' (Host)'
+      : isCoHost
+        ? ' (Co-host)'
+        : ''
+
   const micOn = !participant.is_muted
   const cameraOn = !participant.is_video_off
 
@@ -464,62 +794,56 @@ function ParticipantRow({
       alignItems="center"
       gap="$2"
       justifyContent="space-between"
-      padding="$3"
-      borderRadius={14}
-      backgroundColor="rgba(255,255,255,0.04)"
+      paddingHorizontal="$3"
+      paddingVertical="$2"
+      borderRadius={10}
+      backgroundColor={isSpotlighted ? 'rgba(216,27,96,0.08)' : 'rgba(255,255,255,0.03)'}
       borderWidth={1}
-      borderColor={handRaised ? coworkUi.borderAccent : coworkUi.borderSoft}
+      borderColor={isSpotlighted ? coworkUi.borderAccent : handRaised ? coworkUi.borderAccent : 'transparent'}
+      hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.07)' }}
     >
-      <XStack alignItems="center" gap="$3" flex={1} minWidth={0}>
-        <Avatar name={name} src={participant.profile?.avatar_url ?? undefined} size="$3" />
-        <YStack flex={1} gap={4} minWidth={0}>
-          <XStack alignItems="center" gap="$2" flexWrap="wrap">
+      <XStack alignItems="center" gap="$2.5" flex={1} minWidth={0}>
+        <Avatar name={baseName} src={participant.profile?.avatar_url ?? undefined} size="$4" />
+        <YStack flex={1} minWidth={0} gap={2}>
+          <XStack alignItems="center" gap="$1.5" flexWrap="nowrap">
             <Text fontSize={14} fontWeight="700" color={coworkUi.text} numberOfLines={1}>
-              {name}
+              {baseName}
+              <Text fontSize={12} color={coworkUi.textMuted} fontWeight="400">
+                {suffix}
+              </Text>
             </Text>
+            {handRaised ? <Text fontSize={13}>✋</Text> : null}
+            {isSpotlighted ? (
+              <XStack
+                alignItems="center"
+                gap={3}
+                paddingHorizontal={5}
+                paddingVertical={2}
+                borderRadius={4}
+                backgroundColor={coworkUi.brandMuted}
+              >
+                <Icons.Pin size={11} color={coworkUi.brandLight} />
+                <Text fontSize={10} fontWeight="700" color={coworkUi.brandLight}>Spotlight</Text>
+              </XStack>
+            ) : null}
+          </XStack>
+          {role !== 'participant' && !suffix ? (
             <MeetingRoleBadge role={role} />
-            {handRaised ? <Text fontSize={14}>✋</Text> : null}
-          </XStack>
-          <XStack gap="$3" alignItems="center" flexWrap="wrap">
-            <MediaStatus
-              on={micOn}
-              onIcon={Icons.Mic}
-              offIcon={Icons.MicOff}
-              label={micOn ? 'Mic on' : 'Muted'}
-            />
-            <MediaStatus
-              on={cameraOn}
-              onIcon={Icons.Video}
-              offIcon={Icons.VideoOff}
-              label={cameraOn ? 'Camera on' : 'Camera off'}
-            />
-          </XStack>
+          ) : (
+            <Text fontSize={11} color={coworkUi.textMuted} numberOfLines={1}>
+              {cameraOn ? 'Video on' : 'Camera off'}
+              {' · '}
+              {micOn ? 'Mic on' : 'Muted'}
+            </Text>
+          )}
         </YStack>
       </XStack>
-      {action}
-    </XStack>
-  )
-}
 
-function MediaStatus({
-  on,
-  onIcon: OnIcon,
-  offIcon: OffIcon,
-  label,
-}: {
-  on: boolean
-  onIcon: typeof Icons.Mic
-  offIcon: typeof Icons.MicOff
-  label: string
-}) {
-  const { ui: coworkUi } = useCoWorkTheme()
-  const Icon = on ? OnIcon : OffIcon
-  return (
-    <XStack alignItems="center" gap={4}>
-      <Icon size={13} color={on ? coworkUi.live : coworkUi.textMuted} />
-      <Text fontSize={11} color={coworkUi.textMuted}>
-        {label}
-      </Text>
+      <XStack alignItems="center" gap="$2">
+        <Icons.Mic size={15} color={micOn ? coworkUi.live : coworkUi.danger} />
+        <Icons.Video size={15} color={cameraOn ? coworkUi.live : coworkUi.danger} />
+        {action}
+      </XStack>
     </XStack>
   )
 }

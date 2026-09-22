@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native'
 
 import { Text, XStack } from '~/components/ui'
 import { useScreenZoom } from '~/lib/zoom/ScreenZoomContext'
+import { useAppUi } from '~/lib/theme/useAppUi'
 
 /**
  * Wraps app content so screen zoom enlarges every word, icon, and image together.
@@ -24,8 +25,9 @@ export function ScreenZoomControls({
   tone?: 'dark' | 'light'
 }) {
   const { percentLabel, canZoomIn, canZoomOut, zoomIn, zoomOut, reset } = useScreenZoom()
-  const bg = tone === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.92)'
-  const fg = tone === 'dark' ? '#fff' : '#1a0a12'
+  const ui = useAppUi()
+  const bg = tone === 'dark' ? ui.chromeBg : ui.chromeBg
+  const fg = tone === 'dark' ? ui.overlayDotActive ?? '#fff' : ui.text
 
   return (
     <XStack

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { MeetingAudioTestModal } from '~/co-work/components/MeetingAudioTestModal'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 const LONG_WAIT_MS = 90_000
@@ -30,6 +31,7 @@ export function MeetingWaitingRoom({
   const [elapsedMs, setElapsedMs] = useState(0)
   const [action, setAction] = useState<'retry' | 'cancel' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [showAudioTest, setShowAudioTest] = useState(false)
 
   useEffect(() => {
     const startedAt = Date.now()
@@ -53,105 +55,97 @@ export function MeetingWaitingRoom({
 
   const connectionLabel = realtimeConnected
     ? hostPresent
-      ? 'Connected to the waiting room'
-      : 'Waiting for the host to connect'
+      ? 'Waiting room connected'
+      : 'Waiting for host to join'
     : realtimeDegraded
-      ? 'Reconnecting · requests are still checked automatically'
-      : 'Connecting to the waiting room…'
+      ? 'Reconnecting to waiting room…'
+      : 'Connecting to waiting room…'
 
   return (
     <YStack
       flex={1}
       width="100%"
       minHeight="100%"
-      backgroundColor={coworkUi.pageBg}
+      backgroundColor="#0c080a"
       alignItems="center"
       justifyContent="center"
       padding="$5"
     >
+      {/* Zoom Centered Waiting Box */}
       <YStack
         width="100%"
-        maxWidth={520}
+        maxWidth="100%"
         padding="$6"
-        borderRadius={24}
-        backgroundColor={coworkUi.surface}
+        borderRadius={20}
+        backgroundColor="rgba(22, 18, 24, 0.96)"
         borderWidth={1}
-        borderColor={coworkUi.borderSoft}
+        borderColor="rgba(255, 255, 255, 0.12)"
         alignItems="center"
         gap="$4"
+        style={{
+          boxShadow: '0 24px 64px rgba(0, 0, 0, 0.7)',
+        }}
       >
+        {/* Pulsing indicator */}
         <YStack
           width={64}
           height={64}
           borderRadius={999}
           alignItems="center"
           justifyContent="center"
-          backgroundColor={coworkUi.brandMuted}
+          backgroundColor="rgba(224, 30, 90, 0.12)"
           borderWidth={1}
-          borderColor={coworkUi.borderAccent}
+          borderColor="rgba(224, 30, 90, 0.3)"
         >
-          <Icons.Shield size={28} color={coworkUi.brandLight} />
+          <Spinner size="large" color={coworkUi.brand} />
         </YStack>
 
         <YStack gap="$2" alignItems="center">
-          <Text fontSize={24} fontWeight="800" color={coworkUi.text} textAlign="center">
-            Waiting for the host to let you in.
+          <Text fontSize={22} fontWeight="800" color="#ffffff" textAlign="center" letterSpacing={-0.3}>
+            Please wait, the meeting host will let you in soon.
           </Text>
-          <Text color={coworkUi.textSecondary} textAlign="center" lineHeight={21}>
-            The host has received your request. You’ll enter {meetingTitle} as soon as they admit
-            you.
+          <Text color={coworkUi.brandLight} fontSize={16} fontWeight="700" textAlign="center">
+            {meetingTitle}
           </Text>
         </YStack>
 
+        {/* Connection status pill */}
         <XStack
           alignItems="center"
           gap="$2"
           paddingHorizontal="$3"
-          paddingVertical="$2"
+          paddingVertical="$1.5"
           borderRadius={999}
-          backgroundColor={realtimeDegraded ? coworkUi.warningMuted : coworkUi.liveMuted}
+          backgroundColor="rgba(255, 255, 255, 0.06)"
+          borderWidth={1}
+          borderColor="rgba(255, 255, 255, 0.1)"
         >
-          {!realtimeConnected && !realtimeDegraded ? (
-            <Spinner size="small" color={coworkUi.brand} />
-          ) : (
-            <YStack
-              width={8}
-              height={8}
-              borderRadius={999}
-              backgroundColor={realtimeDegraded ? coworkUi.warning : hostPresent ? coworkUi.live : coworkUi.textMuted}
-            />
-          )}
-          <Text
-            fontSize={12}
-            fontWeight="700"
-            color={realtimeDegraded ? coworkUi.warning : coworkUi.textSecondary}
-          >
+          <YStack
+            width={8}
+            height={8}
+            borderRadius={999}
+            backgroundColor={realtimeDegraded ? '#F59E0B' : hostPresent ? '#10B981' : '#E01E5A'}
+          />
+          <Text fontSize={12} fontWeight="600" color={coworkUi.textSecondary}>
             {connectionLabel}
           </Text>
         </XStack>
-
-        {!hostPresent && realtimeConnected ? (
-          <Text color={coworkUi.textMuted} textAlign="center" fontSize={13}>
-            The host may have disconnected. This screen will update automatically when they return.
-          </Text>
-        ) : null}
 
         {elapsedMs >= LONG_WAIT_MS ? (
           <YStack
             width="100%"
             padding="$3"
-            gap="$2"
-            borderRadius={14}
-            backgroundColor={coworkUi.warningMuted}
+            gap="$1.5"
+            borderRadius={10}
+            backgroundColor="rgba(245, 158, 11, 0.1)"
             borderWidth={1}
-            borderColor={coworkUi.borderSoft}
+            borderColor="rgba(245, 158, 11, 0.25)"
           >
-            <Text color={coworkUi.warning} fontWeight="700" textAlign="center">
+            <Text color="#F59E0B" fontWeight="700" fontSize={13} textAlign="center">
               Still waiting?
             </Text>
             <Text color={coworkUi.textSecondary} fontSize={12} textAlign="center">
-              Send the request again or leave the waiting room. You won’t remain on an indefinite
-              loading screen.
+              The host may be wrapping up. You can send the request again or leave.
             </Text>
           </YStack>
         ) : null}
@@ -166,28 +160,66 @@ export function MeetingWaitingRoom({
           Meeting ID: {meetingCode}
         </Text>
 
-        <XStack width="100%" gap="$3" justifyContent="center" flexWrap="wrap">
-          <Button
-            tone="primary"
-            size="$3"
-            borderRadius={999}
-            disabled={!!action}
-            icon={action === 'retry' ? <Spinner size="small" /> : <Icons.RefreshCw size={16} />}
-            onPress={() => void run('retry', onRetry)}
-          >
-            Send request again
-          </Button>
+        {/* Zoom Waiting Room Action Buttons */}
+        <YStack width="100%" gap="$2.5" paddingTop="$2">
+          {/* Test Computer Audio Button */}
           <Button
             tone="outline"
-            size="$3"
-            borderRadius={999}
-            disabled={!!action}
-            onPress={() => void run('cancel', onCancel)}
+            size="$4"
+            borderRadius={10}
+            borderColor="rgba(255, 255, 255, 0.16)"
+            backgroundColor="rgba(255, 255, 255, 0.05)"
+            icon={<Icons.Volume2 size={17} color="#fff" />}
+            onPress={() => setShowAudioTest(true)}
           >
-            {action === 'cancel' ? 'Leaving…' : 'Cancel and go back'}
+            <Text fontSize={14} fontWeight="700" color="#fff">
+              Test Computer Audio
+            </Text>
           </Button>
-        </XStack>
+
+          <XStack width="100%" gap="$2.5">
+            <Button
+              flex={1}
+              tone="outline"
+              size="$4"
+              borderRadius={10}
+              disabled={!!action}
+              borderColor="rgba(255, 255, 255, 0.16)"
+              backgroundColor="rgba(255, 255, 255, 0.05)"
+              icon={action === 'retry' ? <Spinner size="small" /> : <Icons.RefreshCw size={15} color="#fff" />}
+              onPress={() => void run('retry', onRetry)}
+            >
+              <Text fontSize={13} fontWeight="600" color="#fff">
+                Send Again
+              </Text>
+            </Button>
+
+            <Button
+              flex={1}
+              tone="outline"
+              size="$4"
+              borderRadius={10}
+              disabled={!!action}
+              borderColor="rgba(239, 68, 68, 0.3)"
+              backgroundColor="rgba(239, 68, 68, 0.08)"
+              onPress={() => void run('cancel', onCancel)}
+            >
+              <Text fontSize={13} fontWeight="600" color="#EF4444">
+                {action === 'cancel' ? 'Leaving…' : 'Leave Meeting'}
+              </Text>
+            </Button>
+          </XStack>
+        </YStack>
       </YStack>
+
+      {/* Interactive Audio Test Modal */}
+      {showAudioTest ? (
+        <MeetingAudioTestModal
+          open={showAudioTest}
+          onOpenChange={setShowAudioTest}
+          onClose={() => setShowAudioTest(false)}
+        />
+      ) : null}
     </YStack>
   )
 }

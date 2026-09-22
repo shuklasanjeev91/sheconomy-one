@@ -1,6 +1,6 @@
 import '~/lib/polyfills/install-dom-exception'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   BackgroundProcessor,
   supportsBackgroundProcessors,
@@ -32,9 +32,16 @@ import { useAppToast } from '~/components/ui'
 
 type MeetingBackgroundPreviewProps = {
   userId?: string | null
+  /** When false, stop the local camera so Join can open without fighting the lobby preview. */
+  active?: boolean
+  videoOverlay?: ReactNode
 }
 
-export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewProps = {}) {
+export function MeetingBackgroundPreview({
+  userId,
+  active = true,
+  videoOverlay,
+}: MeetingBackgroundPreviewProps = {}) {
   const toast = useAppToast()
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const trackRef = useRef<LocalVideoTrack | null>(null)
@@ -180,6 +187,20 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
   }, [refreshCustoms])
 
   useEffect(() => {
+    if (!active) {
+      const track = trackRef.current
+      processorRef.current = null
+      trackRef.current = null
+      effectsAvailableRef.current = false
+      setBusy(false)
+      if (track) {
+        track.detach()
+        void track.stopProcessor().catch(() => undefined)
+        track.stop()
+      }
+      return
+    }
+
     let cancelled = false
     void (async () => {
       try {
@@ -194,7 +215,7 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
         const track = await createLocalVideoTrack({
           resolution: { width: 640, height: 360, frameRate: 15 },
         })
-        if (cancelled) {
+        if (cancelled || !active) {
           track.stop()
           return
         }
@@ -220,7 +241,7 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
           await track.setProcessor(processor)
           processorRef.current = processor
           const saved = await loadVirtualBackgroundPreference()
-          if (!cancelled) await apply(saved)
+          if (!cancelled && active) await apply(saved)
         } catch (cause) {
           effectsAvailableRef.current = false
           if (!cancelled) {
@@ -252,7 +273,7 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
         track.stop()
       }
     }
-  }, [apply])
+  }, [active, apply])
 
   const previewImageUri =
     selection.mode === 'image' && selection.imageUrl ? selection.imageUrl : null
@@ -268,6 +289,7 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
       uploadBusy={uploadBusy}
       customItems={customs}
       selectedImageUri={previewImageUri}
+      videoOverlay={videoOverlay}
       preview={
         <video
           ref={videoRef}

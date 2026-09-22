@@ -1,6 +1,9 @@
 import type { LocalParticipant, Room } from 'livekit-client'
 import type { MeetingVideoEffects } from '~/co-work/lib/meeting-video-effects'
 import type { MeetingAudioQuality } from '~/co-work/lib/meeting-audio-quality'
+import type { ScreenShareStartOptions } from '~/co-work/lib/livekit-screen-share'
+
+export type CameraFacing = 'user' | 'environment'
 
 export type LiveKitMediaControls = {
   room: Room
@@ -12,10 +15,14 @@ export type LiveKitMediaControls = {
   audioQuality: MeetingAudioQuality
   /** True when local output is forced to the loudspeaker (vs earpiece / BT). */
   speakerOn: boolean
+  /** Front (`user`) vs rear (`environment`) camera facing. */
+  cameraFacing: CameraFacing
   toggleAudio: () => void
   toggleVideo: () => void
-  toggleScreenShare: () => void | Promise<void>
+  toggleScreenShare: (options?: ScreenShareStartOptions | null) => void | Promise<void>
   toggleSpeaker: () => void | Promise<void>
+  /** Flip between front and rear cameras (enables camera if needed). Returns the new facing. */
+  flipCamera: () => CameraFacing | Promise<CameraFacing>
 }
 
 /** `audio` = voice-only publish; `video` / `meeting` enable camera on join. */

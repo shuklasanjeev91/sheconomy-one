@@ -8,8 +8,10 @@ import { isTrackReference } from '@livekit/components-core'
 import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks'
 import {
   capFilmstripTracks,
+  MEETING_GALLERY_FOLLOW_RESUME_MS,
   meetingGalleryLayout,
   meetingGalleryPageForIndex,
+  meetingGalleryPrefetchIdentities,
   paginateMeetingGallery,
   resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
@@ -26,14 +28,22 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useMeetingMachine } from '~/co-work/components/MeetingProvider'
 
 import { SheconomyParticipantTile } from '~/co-work/components/SheconomyParticipantTile'
+import { useMeetingLiveSignals } from '~/co-work/components/MeetingLiveSignalsContext'
 import { screenShareRoleLabel } from '~/co-work/lib/meeting-lifecycle'
 
 /** SHEconomy-branded video gallery — web LiveKit stage (native uses NativeLiveKitMeetingRoom). */
 export function MeetingVideoStage() {
   const { isDesktop, isTablet, safeTop, safeBottom, safeLeft, safeRight } = useAppLayout()
   const { state, dispatch } = useMeetingMachine()
+  const { stageTrailingInset } = useMeetingLiveSignals()
   const room = useRoomContext()
   const { width, height } = useWindowDimensions()
+  const [hdVideoPref, setHdVideoPref] = useState(true)
+  useEffect(() => {
+    void import('~/co-work/lib/meeting-media-prefs').then(({ loadMeetingMediaPrefs }) =>
+      loadMeetingMediaPrefs().then((prefs) => setHdVideoPref(prefs.hdVideo !== false)),
+    )
+  }, [])
   const chrome = useMemo(() => {
     const base = resolveMeetingChromeLayout({
       width,
@@ -73,7 +83,9 @@ export function MeetingVideoStage() {
   const [page, setPage] = useState(0)
   const [filmstripWidth, setFilmstripWidth] = useState(chrome.filmstripWidth)
   const [filmstripOffset, setFilmstripOffset] = useState({ x: 0, y: 0 })
+  const [screenShareBannerVisible, setScreenShareBannerVisible] = useState(false)
   const previousScreenShare = useRef(false)
+  const followSpeakerUntilRef = useRef(0)
   const filmstripRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{
     pointerId: number
@@ -92,8 +104,8 @@ export function MeetingVideoStage() {
   const speakerLayoutEarly = state.viewMode === 'speaker'
   const filmstripBesideEarly =
     speakerLayoutEarly || screenLayoutEarly
-      ? chrome.filmstripBeside || width >= 700
-      : chrome.filmstripBeside
+      ? chrome.filmstripBeside || width >= 700 || state.sideBySideShare
+      : chrome.filmstripBeside || state.sideBySideShare
   const { width: stageWidth, height: stageHeight } = meetingStageContentBox({
     viewportWidth: width,
     viewportHeight: height,
@@ -109,6 +121,7 @@ export function MeetingVideoStage() {
           : chrome.filmstripHeight,
     },
     filmstripExpanded,
+    stageTrailingInset,
   })
   const paged = useMemo(
     () => paginateMeetingGallery(stageTracks, page, pageSize),
@@ -123,9 +136,16 @@ export function MeetingVideoStage() {
     if (paged.page !== page) setPage(paged.page)
   }, [page, paged.page])
 
-  // Jump to the page holding the active speaker (Zoom-style).
+  const goToPage = (nextPage: number) => {
+    // Manual Prev/Next / dots — pause auto-follow so speaking can't yank the page back.
+    followSpeakerUntilRef.current = Date.now() + MEETING_GALLERY_FOLLOW_RESUME_MS
+    setPage(nextPage)
+  }
+
+  // Jump to the page holding the active speaker only while the user is not paging.
   useEffect(() => {
     if (state.viewMode !== 'gallery') return
+    if (Date.now() < followSpeakerUntilRef.current) return
     const speaking = stageTracks.findIndex(
       (track) => isTrackReference(track) && track.participant.isSpeaking,
     )
@@ -135,10 +155,9 @@ export function MeetingVideoStage() {
   }, [page, pageSize, stageTracks, state.viewMode])
 
   useEffect(() => {
-    const identities = new Set<string>()
-    for (const track of paged.items) {
-      identities.add(track.participant.identity)
-    }
+    const identities = new Set<string>(
+      meetingGalleryPrefetchIdentities(stageTracks, paged.page, pageSize),
+    )
     for (const track of filmstripCapped.visible) {
       identities.add(track.participant.identity)
     }
@@ -149,16 +168,26 @@ export function MeetingVideoStage() {
       }
     }
     applyMeetingSelectiveCameraSubscribe(room, identities)
-  }, [filmstripCapped.visible, paged.items, room, stageTracks])
+  }, [filmstripCapped.visible, paged.page, pageSize, room, stageTracks])
 
   useEffect(() => {
     if (hasScreenShare && !previousScreenShare.current) {
       dispatch({ type: 'SET_VIEW', viewMode: 'screen-share' })
+      setScreenShareBannerVisible(true)
     } else if (!hasScreenShare && state.viewMode === 'screen-share') {
       dispatch({ type: 'SET_VIEW', viewMode: 'gallery' })
+      setScreenShareBannerVisible(false)
+    } else if (!hasScreenShare) {
+      setScreenShareBannerVisible(false)
     }
     previousScreenShare.current = hasScreenShare
   }, [dispatch, hasScreenShare, state.viewMode])
+
+  useEffect(() => {
+    if (!hasScreenShare || !screenShareBannerVisible) return
+    const timer = setTimeout(() => setScreenShareBannerVisible(false), 4500)
+    return () => clearTimeout(timer)
+  }, [hasScreenShare, screenShareBannerVisible])
 
   useEffect(() => {
     setFilmstripWidth(chrome.filmstripWidth)
@@ -271,7 +300,7 @@ export function MeetingVideoStage() {
           paddingTop: chrome.stagePaddingTop,
           paddingBottom: chrome.stagePaddingBottom,
           paddingLeft: chrome.stagePaddingLeft,
-          paddingRight: chrome.stagePaddingRight,
+          paddingRight: chrome.stagePaddingRight + stageTrailingInset,
           boxSizing: 'border-box',
         } as CSSProperties
       }
@@ -296,7 +325,7 @@ export function MeetingVideoStage() {
         }
       >
         <TrackLoop tracks={paged.items}>
-          <SheconomyParticipantTile mirrorLocalVideo={state.mirrorLocalVideo} />
+          <SheconomyParticipantTile mirrorLocalVideo={state.mirrorLocalVideo} hdVideo={hdVideoPref} />
         </TrackLoop>
       </div>
 
@@ -343,7 +372,7 @@ export function MeetingVideoStage() {
           {!state.participantStripMinimized ? (
             <>
               <TrackLoop tracks={filmstripCapped.visible}>
-                <SheconomyParticipantTile mirrorLocalVideo={state.mirrorLocalVideo} />
+                <SheconomyParticipantTile mirrorLocalVideo={state.mirrorLocalVideo} hdVideo={hdVideoPref} />
               </TrackLoop>
               {filmstripCapped.overflow > 0 ? (
                 <div className="sheconomy-video-filmstrip__overflow" aria-label="More participants">
@@ -360,7 +389,7 @@ export function MeetingVideoStage() {
           <button
             type="button"
             disabled={paged.page === 0}
-            onClick={() => setPage((value) => value - 1)}
+            onClick={() => goToPage(paged.page - 1)}
           >
             ‹ Prev
           </button>
@@ -380,7 +409,7 @@ export function MeetingVideoStage() {
                       ? 'sheconomy-gallery-pagination__dot sheconomy-gallery-pagination__dot--active'
                       : 'sheconomy-gallery-pagination__dot'
                   }
-                  onClick={() => setPage(pageIndex)}
+                  onClick={() => goToPage(pageIndex)}
                   aria-label={`Gallery page ${pageIndex + 1}`}
                 />
               )
@@ -388,11 +417,12 @@ export function MeetingVideoStage() {
           </div>
           <span>
             {paged.page + 1} / {paged.pageCount}
+            {totalTiles > 0 ? ` · ${totalTiles} people` : ''}
           </span>
           <button
             type="button"
             disabled={paged.page === paged.pageCount - 1}
-            onClick={() => setPage((value) => value + 1)}
+            onClick={() => goToPage(paged.page + 1)}
           >
             Next ›
           </button>
@@ -401,6 +431,7 @@ export function MeetingVideoStage() {
 
       {totalTiles === 0 ? <div className="sheconomy-video-empty" /> : null}
       {(() => {
+        if (!screenShareBannerVisible) return null
         const role = isLocalScreenSharing ? 'sharing' : hasScreenShare ? 'viewing' : 'none'
         const label = screenShareRoleLabel(role)
         return label ? (

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   captionLanguageName,
+  captionLooksLikeTargetLang,
   localizeCaptionLine,
+  resolveLiveCaptionDisplay,
   speechRecognitionLocale,
   translateCaptionText,
 } from '~/co-work/lib/caption-translate'
@@ -37,6 +39,9 @@ export type LiveCaptionPreferences = {
   collapsed: boolean
   size: CaptionOverlaySize
   placement: CaptionOverlayPlacement
+  /** Free-drag offset from the default corner (px). */
+  offsetX: number
+  offsetY: number
 }
 
 const CAPTION_PREFERENCE_PREFIX = 'cowork.live-captions.v2'
@@ -64,6 +69,14 @@ export function normalizeLiveCaptionPreferences(
     collapsed: value?.collapsed === true,
     size: value?.size && VALID_SIZES.has(value.size) ? value.size : 'comfortable',
     placement: value?.placement === 'top' ? 'top' : 'bottom',
+    offsetX:
+      typeof value?.offsetX === 'number' && Number.isFinite(value.offsetX)
+        ? Math.round(value.offsetX)
+        : 0,
+    offsetY:
+      typeof value?.offsetY === 'number' && Number.isFinite(value.offsetY)
+        ? Math.round(value.offsetY)
+        : 0,
   }
 }
 
@@ -127,7 +140,8 @@ export function useLiveCaptions({
   const [active, setActive] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [interimText, setInterimText] = useState('')
-  const [translatedInterim, setTranslatedInterim] = useState('')
+  const [liveCaptionText, setLiveCaptionText] = useState('')
+  const [liveCaptionSpeaker, setLiveCaptionSpeaker] = useState('')
   const [localLines, setLocalLines] = useState<LiveCaptionLine[]>([])
   const [translatedRemote, setTranslatedRemote] = useState<LiveCaptionLine[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -139,6 +153,8 @@ export function useLiveCaptions({
   const speakLocaleRef = useRef(speakLocale)
   const activeRef = useRef(active)
   const publishingRef = useRef(publishing)
+  const pendingLiveRawRef = useRef('')
+  const lastGoodBySpeakerRef = useRef<Map<string, string>>(new Map())
   const localizedCacheRef = useRef<Map<string, LiveCaptionLine>>(new Map())
   const onFinalCaptionRef = useRef(onFinalCaption)
   const onPublishCaptionRef = useRef(onPublishCaption)
@@ -173,7 +189,7 @@ export function useLiveCaptions({
     const now = Date.now()
     if (
       trimmed === lastInterimBroadcastRef.current &&
-      now - lastInterimBroadcastAtRef.current < 450
+      now - lastInterimBroadcastAtRef.current < 250
     ) {
       return
     }
@@ -204,7 +220,6 @@ export function useLiveCaptions({
       })
       publishCaption(text, true)
       setInterimText('')
-      setTranslatedInterim('')
       lastInterimBroadcastRef.current = ''
     },
     [publishCaption, userId],
@@ -294,8 +309,8 @@ export function useLiveCaptions({
       },
     })
     if (!session) {
-      // Keep CC active for viewing room captions; avoid a permanent orange banner.
-      setError(null)
+      // Keep CC active for viewing room captions; show a soft hint once.
+      setError('Could not start speech recognition on this device. You can still view others’ captions.')
       return false
     }
     nativeSessionRef.current = session
@@ -305,7 +320,7 @@ export function useLiveCaptions({
       setError(null)
       return true
     } catch {
-      setError(null)
+      setError('Could not start speech recognition. You can still view others’ captions.')
       return false
     }
   }, [commitFinalCaption, publishCaption])
@@ -353,7 +368,8 @@ export function useLiveCaptions({
     nativeSessionRef.current = null
     if (native) void native.destroy()
     setInterimText('')
-    setTranslatedInterim('')
+    setLiveCaptionText('')
+    setLiveCaptionSpeaker('')
     setPublishing(false)
   }, [])
 
@@ -434,34 +450,30 @@ export function useLiveCaptions({
     }
   }, [active, enabled, stopRecognition])
 
+  // Finalize history localization (non-live). Debounced; in-flight results still apply.
   useEffect(() => {
-    let cancelled = false
     const lang = targetLang
-
-    async function run() {
-      const next: LiveCaptionLine[] = []
-      for (const line of remoteCaptions.slice(-40)) {
-        const key = `${line.id}::${lang}`
-        const cached = localizedCacheRef.current.get(key)
-        if (cached) {
-          next.push(cached)
-          continue
-        }
-        const localized = await localizeCaptionLine(
-          { ...line, originalText: line.originalText || line.text },
-          lang,
+    const handle = setTimeout(() => {
+      void (async () => {
+        const finals = remoteCaptions.filter((line) => line.isFinal).slice(-20)
+        const next = await Promise.all(
+          finals.map(async (line) => {
+            const original = (line.originalText || line.text).trim()
+            const key = `${line.id}::${lang}::${original}`
+            const cached = localizedCacheRef.current.get(key)
+            if (cached) return cached
+            const localized = await localizeCaptionLine(
+              { ...line, originalText: original || line.text },
+              lang,
+            )
+            localizedCacheRef.current.set(key, localized)
+            return localized
+          }),
         )
-        if (cancelled) return
-        localizedCacheRef.current.set(key, localized)
-        next.push(localized)
-      }
-      if (!cancelled) setTranslatedRemote(next)
-    }
-
-    void run()
-    return () => {
-      cancelled = true
-    }
+        setTranslatedRemote(next)
+      })()
+    }, 280)
+    return () => clearTimeout(handle)
   }, [remoteCaptions, targetLang])
 
   useEffect(() => {
@@ -490,32 +502,100 @@ export function useLiveCaptions({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetLang])
 
-  // Translate interim (partial) captions into the selected display language so
-  // the live overlay matches finals — not the spoken/STT language.
+  // Live overlay: translate the current speaking line into THIS viewer's Show language.
+  // Debounce aggressively and never blank the overlay between STT ticks (that caused
+  // the "Listening…" / speaker flicker glitch on Android).
   useEffect(() => {
-    const text = interimText.trim()
-    if (!text || !active) {
-      setTranslatedInterim('')
+    if (!active) return
+
+    let raw = interimText.trim()
+    let speaker = displayNameRef.current
+    let speakerId = userId
+    let remoteTranslated: boolean | null = null
+    if (!raw) {
+      const remote = [...remoteCaptions]
+        .filter((line) => (line.originalText || line.text).trim())
+        .sort((a, b) => b.timestamp - a.timestamp)[0]
+      // Ignore stale remotes so a quiet room does not revive an old line.
+      if (remote && Date.now() - remote.timestamp < 10_000) {
+        raw = (remote.originalText || remote.text).trim()
+        speaker = remote.speaker
+        speakerId = remote.userId
+        remoteTranslated = remote.translated === true
+      }
+    }
+    if (!raw) return
+
+    pendingLiveRawRef.current = raw
+    const lastGood = lastGoodBySpeakerRef.current.get(speakerId) || null
+    const isLocal = speakerId === userId
+
+    const display = resolveLiveCaptionDisplay({
+      targetLang,
+      localInterimRaw: isLocal ? raw : null,
+      localInterimTranslated: isLocal && lastGood && captionLooksLikeTargetLang(lastGood, targetLang)
+        ? lastGood
+        : null,
+      lastGoodLocalTranslated: isLocal ? lastGood : null,
+      remoteInterimText: isLocal ? null : raw,
+      remoteInterimTranslated: isLocal ? null : remoteTranslated,
+      fallbackFinalText: lastGood,
+    })
+
+    if (display) {
+      setLiveCaptionText(display)
+      setLiveCaptionSpeaker(speaker)
+      if (captionLooksLikeTargetLang(display, targetLang)) {
+        lastGoodBySpeakerRef.current.set(speakerId, display)
+      }
+    } else {
+      setLiveCaptionSpeaker(speaker)
+    }
+
+    if (captionLooksLikeTargetLang(raw, targetLang)) {
       return
     }
 
-    let cancelled = false
+    const snap = raw
+    const snapSpeaker = speaker
+    const snapSpeakerId = speakerId
     const handle = setTimeout(() => {
       void translateCaptionText({
-        text,
+        text: snap,
         targetLang,
         sourceLang: 'auto',
       }).then((result) => {
-        if (cancelled) return
-        setTranslatedInterim(result.translatedText.trim() || text)
-      })
-    }, 320)
+        const pending = pendingLiveRawRef.current
+        const stillRelevant =
+          pending === snap ||
+          pending.startsWith(snap) ||
+          snap.startsWith(pending) ||
+          pending.toLowerCase().includes(snap.toLowerCase().slice(0, Math.min(24, snap.length)))
+        if (!stillRelevant) return
 
-    return () => {
-      cancelled = true
-      clearTimeout(handle)
-    }
-  }, [active, interimText, targetLang])
+        const out = result.translatedText.trim()
+        // Prefer translated text; if empty or script check fails, keep showing
+        // raw/lastGood via resolveLiveCaptionDisplay — never blank the overlay.
+        const next = resolveLiveCaptionDisplay({
+          targetLang,
+          localInterimRaw: snapSpeakerId === userId ? snap : null,
+          localInterimTranslated: out || null,
+          lastGoodLocalTranslated: lastGoodBySpeakerRef.current.get(snapSpeakerId) || null,
+          remoteInterimText: snapSpeakerId === userId ? null : snap,
+          remoteInterimTranslated: Boolean(out),
+          fallbackFinalText: lastGoodBySpeakerRef.current.get(snapSpeakerId) || snap,
+        })
+        if (!next) return
+        if (out && captionLooksLikeTargetLang(out, targetLang)) {
+          lastGoodBySpeakerRef.current.set(snapSpeakerId, out)
+        }
+        setLiveCaptionText(next)
+        setLiveCaptionSpeaker(snapSpeaker)
+      })
+    }, 220)
+
+    return () => clearTimeout(handle)
+  }, [active, displayName, interimText, remoteCaptions, roomWantsCaptions, targetLang, userId])
 
   const visibleLines = useMemo(
     () =>
@@ -539,29 +619,14 @@ export function useLiveCaptions({
     [localLines, translatedRemote],
   )
 
-  // Prefer live interim (local STT or remote peer) so Zoom-style captions update
-  // while someone is still speaking. Never let a lagging one-word translation
-  // replace a longer live hypothesis mid-utterance.
-  const remoteInterim = [...translatedRemote].reverse().find((line) => !line.isFinal)
-  const liveInterim = (() => {
-    const raw = interimText.trim()
-    if (!raw) return ''
-    const translated = translatedInterim.trim()
-    if (!translated) return raw
-    const rawWords = raw.split(/\s+/).filter(Boolean).length
-    const translatedWords = translated.split(/\s+/).filter(Boolean).length
-    if (translatedWords < rawWords && rawWords > 1) return raw
-    return translated
+  const fallbackFinal = (() => {
+    const last = visibleLines[visibleLines.length - 1]
+    if (!last?.text?.trim()) return ''
+    if (last.translated || captionLooksLikeTargetLang(last.text, targetLang)) return last.text.trim()
+    return ''
   })()
-  const currentCaption = (
-    liveInterim
-      ? liveInterim
-      : remoteInterim?.text?.trim()
-        ? remoteInterim.text
-        : visibleLines.length > 0
-          ? visibleLines[visibleLines.length - 1]?.text || ''
-          : ''
-  ).trim()
+
+  const currentCaption = (liveCaptionText.trim() || fallbackFinal).trim()
 
   // Once remote (or local) captions are flowing, drop soft STT warnings so the
   // orange banner does not stick over a working CC overlay.
@@ -573,9 +638,15 @@ export function useLiveCaptions({
     }
   }, [currentCaption, error, interimText, visibleLines.length])
 
-  const showingTranslation = visibleLines.some((line) => line.translated)
+  const showingTranslation = Boolean(
+    liveCaptionText &&
+      !captionLooksLikeTargetLang(interimText || '', targetLang) &&
+      captionLooksLikeTargetLang(liveCaptionText, targetLang),
+  ) || visibleLines.some((line) => line.translated)
 
   const setTargetLang = useCallback((language: string) => {
+    lastGoodBySpeakerRef.current.clear()
+    setLiveCaptionText('')
     setPreferences((current) =>
       normalizeLiveCaptionPreferences(
         { ...current, targetLang: language },
@@ -605,6 +676,14 @@ export function useLiveCaptions({
     setPreferences((current) => ({ ...current, placement }))
   }, [])
 
+  const setOverlayOffset = useCallback((offsetX: number, offsetY: number) => {
+    setPreferences((current) => ({
+      ...current,
+      offsetX: Math.round(offsetX),
+      offsetY: Math.round(offsetY),
+    }))
+  }, [])
+
   return {
     supported,
     canPublish,
@@ -614,6 +693,7 @@ export function useLiveCaptions({
     interimText,
     visibleLines,
     currentCaption,
+    liveCaptionSpeaker,
     transcriptLines,
     targetLang,
     targetLangName,
@@ -628,6 +708,7 @@ export function useLiveCaptions({
     setCollapsed,
     setOverlaySize,
     setPlacement,
+    setOverlayOffset,
     toggleCaptions,
     setActive,
   }

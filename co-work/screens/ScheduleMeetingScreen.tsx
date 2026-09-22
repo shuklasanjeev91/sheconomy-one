@@ -76,6 +76,7 @@ export function ScheduleMeetingScreen() {
   const [waitingRoom, setWaitingRoom] = useState(true)
   const [muteOnJoin, setMuteOnJoin] = useState(false)
   const [videoOffOnJoin, setVideoOffOnJoin] = useState(false)
+  const [usePersonalMeetingId, setUsePersonalMeetingId] = useState(false)
   const [authenticatedOnly, setAuthenticatedOnly] = useState(true)
   const [allowScreenShare, setAllowScreenShare] = useState(true)
   const [allowChat, setAllowChat] = useState(true)
@@ -438,19 +439,35 @@ export function ScheduleMeetingScreen() {
         return
       }
 
-      const meeting = await createMeeting(user.id, {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        scheduledAt: startsAt,
-        scheduledEndAt: endsAt,
-        timeZone: zone,
-        maxParticipants: capacity,
-        isRecurring,
-        repeat: isRecurring ? repeat : null,
-        securitySettings,
-        meetingOptions,
-        invitees,
-      })
+      const meeting = usePersonalMeetingId
+        ? await (
+            await import('~/co-work/lib/meeting-pmi')
+          ).scheduleOnPersonalMeeting(user.id, {
+            title: title.trim(),
+            description: description.trim() || undefined,
+            scheduledAt: startsAt,
+            scheduledEndAt: endsAt,
+            timeZone: zone,
+            maxParticipants: capacity,
+            isRecurring,
+            repeat: isRecurring ? repeat : null,
+            securitySettings,
+            meetingOptions,
+            invitees,
+          })
+        : await createMeeting(user.id, {
+            title: title.trim(),
+            description: description.trim() || undefined,
+            scheduledAt: startsAt,
+            scheduledEndAt: endsAt,
+            timeZone: zone,
+            maxParticipants: capacity,
+            isRecurring,
+            repeat: isRecurring ? repeat : null,
+            securitySettings,
+            meetingOptions,
+            invitees,
+          })
 
       if (invitees.length > 0) {
         try {
@@ -514,7 +531,6 @@ export function ScheduleMeetingScreen() {
   return (
     <AppPage
       scroll
-      form
       backgroundColor={coworkUi.pageBg}
       paddingVertical="$6"
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
@@ -643,7 +659,7 @@ export function ScheduleMeetingScreen() {
 
           <ScheduleSection title="Invite people">
             <Text fontSize={13} color={coworkUi.textSecondary} marginBottom="$2">
-              Add {BRAND_NAME} members or guests by email — like Zoom or Google Meet.
+              Add {BRAND_NAME} members or guests by email for instant calendar invitations.
             </Text>
             <MeetingInvitePicker hostId={user.id} value={invitees} onChange={setInvitees} />
           </ScheduleSection>
@@ -685,6 +701,14 @@ export function ScheduleMeetingScreen() {
           </ScheduleSection>
 
           <ScheduleSection title="Security">
+            {!isEditing ? (
+              <ScheduleToggleRow
+                label="Use Personal Meeting ID"
+                description="Schedule on your reusable PMI room instead of a new meeting code"
+                checked={usePersonalMeetingId}
+                onCheckedChange={setUsePersonalMeetingId}
+              />
+            ) : null}
             <Field label="Passcode (optional)">
               <Input
                 value={passcode}
@@ -775,7 +799,7 @@ export function ScheduleMeetingScreen() {
         </YStack>
 
         <AppLink href={coWorkRoutes.home} asChild>
-          <Button tone="ghost">Open Co-Work</Button>
+          <Button tone="ghost">Back to Meetings</Button>
         </AppLink>
       </YStack>
     </AppPage>

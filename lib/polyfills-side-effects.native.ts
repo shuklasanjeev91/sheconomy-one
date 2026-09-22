@@ -2,6 +2,7 @@
 // cold start straight into /co-work/meeting/:code/live (universal link) evaluated it
 // before any meeting-side guard could run. Keep this the first import in the bundle.
 import '~/lib/polyfills/install-dom-exception'
+import { installWebCryptoPolyfill } from '~/lib/polyfills/web-crypto'
 // TextDecoder/TextEncoder must exist before Supabase, LiveKit, or other deps load on Hermes.
 // Deep LiveKit package subpaths are blocked by "exports"; load via absolute path helper.
 import '~/lib/livekit-encoder-polyfill.cjs'
@@ -67,6 +68,7 @@ function installAbortSignalHelpers() {
 }
 
 installAbortSignalHelpers()
+installWebCryptoPolyfill()
 
 // LiveKit screen-share on iOS/Android often logs a recoverable dimensions miss;
 // keep it out of the red LogBox overlay in meeting builds.

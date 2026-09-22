@@ -1,12 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
+import { meetingJoinMediaFromPermissions } from '../../../co-work/lib/meeting-media-permissions'
 import {
+  canCaptureWebMediaWithoutGesture,
   describeMeetingWebScreenShare,
   detectMeetingWebCapabilities,
   mapWebMediaPermissionError,
   mapWebScreenShareError,
   meetingWebJoinBlocker,
   meetingWebUnsupportedMessage,
+  queryWebMediaPermission,
+  releaseWebMediaStream,
+  requestWebMicrophoneStream,
+  unlockWebAudioPlayback,
 } from '../../../co-work/lib/meeting-web'
 
 describe('meeting web capabilities', () => {
@@ -73,12 +79,75 @@ describe('meeting web capabilities', () => {
   })
 
   it('maps camera and microphone permission errors to clear copy', () => {
-    expect(mapWebMediaPermissionError('camera', new Error('NotAllowedError'))).toMatch(/Camera access is blocked/)
-    expect(mapWebMediaPermissionError('microphone', new DOMException('Denied', 'NotAllowedError'))).toMatch(
-      /Microphone access is blocked/,
+    expect(mapWebMediaPermissionError('camera', new Error('NotAllowedError'))).toMatch(
+      /Camera needs permission/,
     )
+    expect(mapWebMediaPermissionError('microphone', new DOMException('Denied', 'NotAllowedError'))).toMatch(
+      /Tap Unmute/,
+    )
+    expect(
+      mapWebMediaPermissionError('microphone', new DOMException('Denied', 'NotAllowedError'), 'denied'),
+    ).toMatch(/Microphone access is blocked/)
+    expect(
+      mapWebMediaPermissionError('microphone', new DOMException('Denied', 'NotAllowedError'), 'prompt'),
+    ).toMatch(/Tap Unmute/)
     expect(mapWebMediaPermissionError('camera', new Error('NotFoundError'))).toMatch(/No camera was found/)
     expect(mapWebMediaPermissionError('microphone', new Error('NotReadableError'))).toMatch(/in use/)
+  })
+
+  it('queries the Permissions API without throwing when it is missing', async () => {
+    expect(await queryWebMediaPermission('microphone', { navigator: {} } as typeof globalThis)).toBe(
+      'unknown',
+    )
+    expect(
+      await queryWebMediaPermission('microphone', {
+        navigator: {
+          permissions: {
+            query: async () => ({ state: 'granted' }),
+          },
+        },
+      } as unknown as typeof globalThis),
+    ).toBe('granted')
+    expect(canCaptureWebMediaWithoutGesture('granted')).toBe(true)
+    expect(canCaptureWebMediaWithoutGesture('prompt')).toBe(false)
+    expect(canCaptureWebMediaWithoutGesture('denied')).toBe(false)
+  })
+
+  it('retries getUserMedia without advanced constraints when the device is overconstrained', async () => {
+    const getUserMedia = vi
+      .fn()
+      .mockRejectedValueOnce(new DOMException('OverconstrainedError', 'OverconstrainedError'))
+      .mockResolvedValueOnce({ getTracks: () => [] })
+    const stream = await requestWebMicrophoneStream({ getUserMedia })
+    expect(stream).toBeTruthy()
+    expect(getUserMedia).toHaveBeenCalledTimes(2)
+    expect(getUserMedia.mock.calls[1][0]).toEqual({ audio: true, video: false })
+  })
+
+  it('joins muted when the browser has not granted microphone or camera', () => {
+    expect(
+      meetingJoinMediaFromPermissions({
+        ok: true,
+        cameraGranted: false,
+        microphoneGranted: false,
+        notificationsGranted: false,
+        screenShareAvailable: true,
+        denials: [],
+      }),
+    ).toEqual({ audioEnabled: false, videoEnabled: false })
+    expect(
+      meetingJoinMediaFromPermissions(
+        {
+          ok: true,
+          cameraGranted: true,
+          microphoneGranted: true,
+          notificationsGranted: false,
+          screenShareAvailable: true,
+          denials: [],
+        },
+        { audioEnabled: false, videoEnabled: true },
+      ),
+    ).toEqual({ audioEnabled: false, videoEnabled: true })
   })
 
   it('maps screen-share picker cancel, deny, and unsupported errors', () => {
@@ -122,5 +191,29 @@ describe('meeting web capabilities', () => {
     expect(meetingWebUnsupportedMessage('device_selection')).toMatch(/Device selection/)
     expect(meetingWebUnsupportedMessage('tab_share')).toMatch(/tab sharing/)
     expect(meetingWebUnsupportedMessage('window_share')).toMatch(/Window sharing/)
+  })
+
+  it('resumes AudioContext so remote audio can play after a join click', () => {
+    const resume = vi.fn(async () => undefined)
+    const start = vi.fn()
+    const connect = vi.fn()
+    class FakeAudioContext {
+      createBuffer() {
+        return {}
+      }
+      createBufferSource() {
+        return { buffer: null, connect, start }
+      }
+      resume = resume
+    }
+    unlockWebAudioPlayback({ AudioContext: FakeAudioContext } as unknown as typeof globalThis)
+    expect(resume).toHaveBeenCalled()
+    expect(start).toHaveBeenCalled()
+  })
+
+  it('stops permission-probe tracks before LiveKit recaptures the mic', async () => {
+    const stop = vi.fn()
+    await releaseWebMediaStream({ getTracks: () => [{ stop }, { stop }] })
+    expect(stop).toHaveBeenCalledTimes(2)
   })
 })

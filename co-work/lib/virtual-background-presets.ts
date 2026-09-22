@@ -9,6 +9,10 @@ export type VirtualBackgroundPreset = {
   selection: VirtualBackgroundSelection
 }
 
+export async function resolveNativePresetFileUri(_id: string | undefined): Promise<string | null> {
+  return null
+}
+
 /**
  * Web/SSR-safe presets — files live in `/public/meeting-backgrounds`.
  * Native uses `virtual-background-presets.native.ts` (Metro `require`).

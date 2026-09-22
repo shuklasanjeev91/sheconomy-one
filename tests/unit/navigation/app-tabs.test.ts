@@ -66,7 +66,7 @@ import {
 describe('APP_CENTER_NAV', () => {
   it('covers every product section with a real href + matcher', () => {
     const labels = APP_CENTER_NAV.map((item) => item.label)
-    expect(labels).toEqual(['Commerce', 'Community', 'Chat', 'Classes', 'Co-Work'])
+    expect(labels).toEqual(['Commerce', 'Community', 'Chat', 'Class', 'Co-Work'])
 
     for (const item of APP_CENTER_NAV) {
       expect(String(item.href)).toMatch(/^\//)
@@ -80,7 +80,7 @@ describe('APP_CENTER_NAV', () => {
     expect(APP_CENTER_NAV.find((i) => i.label === 'Commerce')!.match('/community')).toBe(false)
     expect(APP_CENTER_NAV.find((i) => i.label === 'Community')!.match('/chat')).toBe(false)
     expect(APP_CENTER_NAV.find((i) => i.label === 'Chat')!.match('/class')).toBe(false)
-    expect(APP_CENTER_NAV.find((i) => i.label === 'Classes')!.match('/co-work')).toBe(false)
+    expect(APP_CENTER_NAV.find((i) => i.label === 'Class')!.match('/co-work')).toBe(false)
     expect(APP_CENTER_NAV.find((i) => i.label === 'Co-Work')!.match('/')).toBe(false)
   })
 })
@@ -169,6 +169,7 @@ describe('mobile bottom tabs', () => {
     expect(APP_CLASS_MOBILE_TABS.map((t) => String(t.href))).toEqual([
       String(classRoutes.video),
       String(classRoutes.audio),
+      String(classRoutes.playlists),
     ])
     expect(APP_CLASS_MOBILE_TABS[0]?.match?.('/class')).toBe(false)
     expect(APP_CLASS_MOBILE_TABS[0]?.match?.('/class/video')).toBe(true)

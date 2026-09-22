@@ -58,6 +58,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
   const [apiError, setApiError] = useState<string | null>(null)
   const [resendIn, setResendIn] = useState(0)
   const verifyingRef = useRef(false)
+  const lastAutoSubmitRef = useRef<string | null>(null)
 
   const isEmail = channel === 'email'
 
@@ -179,8 +180,9 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
 
   async function handleSendOtp() {
     // Flush pending IME / native TextInput edits into React state before validate.
+    if (isSubmitting || verifyingRef.current) return
     Keyboard.dismiss()
-    await new Promise<void>((resolve) => setTimeout(resolve, 120))
+    await new Promise<void>((resolve) => setTimeout(resolve, 80))
     setApiError(null)
 
     form.fields.identifier.touch()
@@ -190,26 +192,42 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
     if (!validated) return
 
     setIsSubmitting(true)
-    const result = await sendAuthOtp({
-      channel,
-      identifier: validated,
-      purpose: 'login',
-    })
-    setIsSubmitting(false)
+    try {
+      const result = await sendAuthOtp({
+        channel,
+        identifier: validated,
+        purpose: 'login',
+      })
 
-    if (!result.success) {
-      setApiError(result.error ?? 'Unable to send code.')
-      return
+      if (!result.success) {
+        const message = result.error ?? 'Unable to send code.'
+        setApiError(message)
+        // Rate limits: keep the user on the code step if one was already sent,
+        // and extend the cooldown so they do not burn more OTPs.
+        if (/too many|wait|rate/i.test(message)) {
+          setResendIn(Math.max(resendIn, 60))
+        }
+        return
+      }
+
+      setOtpSent(true)
+      form.fields.otpCode.reset()
+      lastAutoSubmitRef.current = null
+      verifyingRef.current = false
+      setResendIn(result.resendAfter || RESEND_COOLDOWN_SECONDS)
+      toast.show('Code sent', {
+        tone: 'success',
+        message: isEmail
+          ? 'Enter the newest code from your inbox — older codes will not work.'
+          : `Enter the newest code sent to ${formatPhoneForDisplay(validated)}.`,
+      })
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : 'Unable to send code. Please try again.',
+      )
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setOtpSent(true)
-    setResendIn(result.resendAfter || RESEND_COOLDOWN_SECONDS)
-    toast.show('Code sent', {
-      tone: 'success',
-      message: isEmail
-        ? 'Check your inbox for the verification code.'
-        : `Code sent to ${formatPhoneForDisplay(validated)}`,
-    })
   }
 
   const handleVerifyOtp = useCallback(
@@ -229,28 +247,39 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
 
       verifyingRef.current = true
       setIsSubmitting(true)
+      let verified = false
 
-      const result = await verifyAuthOtp({
-        channel,
-        identifier: validated,
-        otp: code,
-      })
+      try {
+        const result = await verifyAuthOtp({
+          channel,
+          identifier: validated,
+          otp: code,
+        })
 
-      setIsSubmitting(false)
+        if (!result.success) {
+          setApiError(result.error ?? 'Verification failed.')
+          return
+        }
 
-      if (!result.success) {
-        verifyingRef.current = false
-        setApiError(result.error ?? 'Verification failed.')
-        return
+        const sessionResult = await Promise.race([
+          getSession(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+        ])
+        const createdAt = sessionResult?.data.session?.user?.created_at
+        const isNewUser =
+          !!createdAt && Date.now() - new Date(createdAt).getTime() < 2 * 60 * 1000
+
+        verified = true
+        toast.show(isNewUser ? AUTH_COPY.welcomeNew : AUTH_COPY.welcomeBack, { tone: 'success' })
+        onSuccess?.({ isNewUser })
+      } catch (error) {
+        setApiError(
+          error instanceof Error ? error.message : 'Unable to verify code. Please try again.',
+        )
+      } finally {
+        setIsSubmitting(false)
+        if (!verified) verifyingRef.current = false
       }
-
-      const { data: sessionData } = await getSession()
-      const createdAt = sessionData.session?.user?.created_at
-      const isNewUser =
-        !!createdAt && Date.now() - new Date(createdAt).getTime() < 2 * 60 * 1000
-
-      toast.show(isNewUser ? AUTH_COPY.welcomeNew : AUTH_COPY.welcomeBack, { tone: 'success' })
-      onSuccess?.({ isNewUser })
     },
     [channel, form.fields.otpCode, isEmail, onSuccess, toast],
   )
@@ -265,7 +294,6 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
 
   useOtpAutofill({ enabled: otpSent && !isSubmitting, onCode: onAutofillCode })
 
-  const lastAutoSubmitRef = useRef<string | null>(null)
   useEffect(() => {
     if (!otpSent) return
     const code = form.fields.otpCode.value.trim()
@@ -311,6 +339,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
               <Text fontWeight="700" color={ui.text}>
                 {displayIdentifier}
               </Text>
+              . Use the latest code only.
             </Text>
           </YStack>
 

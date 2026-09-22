@@ -26,7 +26,8 @@ type MeetingAiDraftPanelProps = {
 }
 
 /**
- * Zoom / Google Meet–style natural language meeting creator.
+ * SHEconomy AI meeting creator — describe a meeting in plain language and let AI
+ * draft the title, agenda, and schedule for you.
  * Fills title, agenda/description, and suggested time on the schedule form.
  */
 export function MeetingAiDraftPanel({ timeZone, onApply, initialPrompt }: MeetingAiDraftPanelProps) {
@@ -109,7 +110,7 @@ export function MeetingAiDraftPanel({ timeZone, onApply, initialPrompt }: Meetin
         </Text>
       </XStack>
       <Text fontSize={13} color={coworkUi.textSecondary} lineHeight={20}>
-        Describe the meeting like you would in Zoom or Google Calendar — we’ll draft the title, agenda, and time.
+        Describe the meeting in plain language — we'll draft the title, agenda, and time for you.
       </Text>
 
       <XStack gap="$2" flexWrap="wrap">

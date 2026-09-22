@@ -7,6 +7,7 @@ import {
   classifyMeetingAppStateInterruption,
   meetingMobileInterruptionNotice,
   meetingPermissionDenialMessage,
+  shouldConfirmNativeBackgroundPause,
   softMediaToggleFailure,
 } from '../../../co-work/lib/meeting-mobile'
 import { meetingLifecycleNotice } from '../../../co-work/lib/meeting-lifecycle'
@@ -23,6 +24,7 @@ describe('meeting mobile requirements', () => {
     expect(meetingPermissionDenialMessage('microphone', { blockedInSettings: true })).toMatch(
       /Settings/i,
     )
+    expect(meetingPermissionDenialMessage('microphone')).toMatch(/unmute|speak|microphone/i)
     expect(meetingPermissionDenialMessage('camera')).toMatch(/audio only/i)
     expect(meetingPermissionDenialMessage('notifications')).toMatch(/push|alert/i)
     expect(meetingPermissionDenialMessage('screen_broadcast')).toMatch(/sharing|capture/i)
@@ -32,7 +34,13 @@ describe('meeting mobile requirements', () => {
   it('soft-fails media toggles on permission errors', () => {
     expect(softMediaToggleFailure('camera', new Error('NotAllowedError'))).toMatch(/Camera/i)
     expect(softMediaToggleFailure('microphone', new Error('Permission denied'))).toMatch(
-      /Microphone/i,
+      /Microphone|unmute|speak/i,
+    )
+    expect(
+      softMediaToggleFailure('microphone', undefined, { blockedInSettings: true }),
+    ).toMatch(/Settings/i)
+    expect(softMediaToggleFailure('microphone', new Error('track failed'))).toMatch(
+      /microphone state|permission/i,
     )
     expect(softMediaToggleFailure('speaker')).toMatch(/speaker|earpiece|Bluetooth/i)
   })
@@ -46,6 +54,12 @@ describe('meeting mobile requirements', () => {
     ).toBe('none')
     expect(meetingMobileInterruptionNotice('phone_call')).toMatch(/Phone call/i)
     expect(meetingMobileInterruptionNotice('app_inactive')).toMatch(/stays connected|system UI/i)
+  })
+
+  it('debounces brief Android permission-sheet backgrounds before pausing camera', () => {
+    expect(shouldConfirmNativeBackgroundPause(true, 200)).toBe(false)
+    expect(shouldConfirmNativeBackgroundPause(true, 1_200)).toBe(true)
+    expect(shouldConfirmNativeBackgroundPause(false, 5_000)).toBe(false)
   })
 
   it('surfaces phone-call interruption in lifecycle banner copy', () => {

@@ -3,13 +3,23 @@ import { describe, expect, it } from 'vitest'
 import {
   MEETING_SIDE_PANEL_Z_INDEX,
   MEETING_TOOLBAR_Z_INDEX,
+  meetingToolbarChrome,
   meetingToolbarMoreKeys,
+  meetingToolbarMoreSections,
   meetingToolbarPrimaryKeys,
+  meetingToolbarPrimaryLabel,
   meetingToolbarSecurityKeys,
 } from '../../../co-work/lib/meeting-toolbar'
 
 describe('meeting toolbar layout', () => {
-  it('orders primary dock with Reactions and Hand after Chat', () => {
+  it('maps compact → Zoom mobile chrome and roomy → Zoom web', () => {
+    expect(meetingToolbarChrome({ compact: true })).toBe('mobile')
+    expect(meetingToolbarChrome({ compact: false })).toBe('web')
+    expect(meetingToolbarChrome({ chrome: 'mobile' })).toBe('mobile')
+    expect(meetingToolbarChrome({ chrome: 'web', compact: true })).toBe('web')
+  })
+
+  it('keeps a lean Zoom iPad/large primary dock', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'participant',
@@ -23,17 +33,17 @@ describe('meeting toolbar layout', () => {
       'participants',
       'chat',
       'reactions',
-      'raise_hand',
-      'browse',
       'share_screen',
       'captions',
-      'invite',
+      'whiteboard',
+      'docs',
+      'apps',
       'more',
       'leave',
     ])
   })
 
-  it('adds Security, End, and Stop recording for hosts while recording', () => {
+  it('adds End for hosts on Zoom iPad/large dock (Security/Record in More)', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -41,52 +51,41 @@ describe('meeting toolbar layout', () => {
         supportsScreenShare: true,
         supportsLiveCaptions: true,
         supportsRecording: true,
-        recording: true,
+        recording: false,
       }),
     ).toEqual([
       'mic',
       'camera',
-      'security',
       'participants',
       'chat',
       'reactions',
-      'raise_hand',
-      'browse',
       'share_screen',
       'captions',
-      'invite',
-      'stop_record',
+      'whiteboard',
+      'docs',
+      'apps',
       'more',
-      'leave',
       'end_meeting',
     ])
-  })
-
-  it('puts Record on the primary dock for host and co-host when allowed', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
         supportsVideo: true,
         supportsScreenShare: true,
-        supportsLiveCaptions: true,
         supportsRecording: true,
-        recording: false,
       }),
-    ).toContain('record')
-
+    ).not.toContain('security')
     expect(
       meetingToolbarPrimaryKeys({
-        viewerRole: 'co_host',
+        viewerRole: 'host',
         supportsVideo: true,
         supportsScreenShare: true,
-        supportsLiveCaptions: true,
         supportsRecording: true,
-        recording: false,
       }),
-    ).toContain('record')
+    ).not.toContain('record')
   })
 
-  it('keeps Captions on compact primary and moves Invite to More', () => {
+  it('uses Zoom mobile primary dock: Mute · Video · Chat · More · End', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -98,18 +97,144 @@ describe('meeting toolbar layout', () => {
     ).toEqual([
       'mic',
       'camera',
-      'security',
-      'participants',
       'chat',
-      'reactions',
-      'raise_hand',
-      'browse',
-      'share_screen',
-      'captions',
       'more',
       'leave',
       'end_meeting',
     ])
+
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'participant',
+        supportsVideo: true,
+        supportsScreenShare: true,
+        chrome: 'mobile',
+      }),
+    ).toContain('chat')
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'participant',
+        supportsVideo: true,
+        supportsScreenShare: true,
+        chrome: 'mobile',
+      }),
+    ).not.toContain('share_screen')
+  })
+
+  it('keeps Stop recording on the Zoom mobile primary dock while recording', () => {
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'host',
+        supportsVideo: true,
+        supportsScreenShare: true,
+        supportsLiveCaptions: true,
+        supportsRecording: true,
+        recording: true,
+        compact: true,
+      }),
+    ).toEqual([
+      'mic',
+      'camera',
+      'chat',
+      'stop_record',
+      'more',
+      'leave',
+      'end_meeting',
+    ])
+  })
+
+  it('puts Record in More (not primary dock) for host and co-host on Zoom iPad/large', () => {
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'host',
+        supportsVideo: true,
+        supportsScreenShare: true,
+        supportsLiveCaptions: true,
+        supportsRecording: true,
+        recording: false,
+      }),
+    ).not.toContain('record')
+
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'co_host',
+        supportsVideo: true,
+        supportsScreenShare: true,
+        supportsLiveCaptions: true,
+        supportsRecording: true,
+        recording: false,
+      }),
+    ).not.toContain('record')
+
+    expect(
+      meetingToolbarMoreKeys({
+        viewerRole: 'host',
+        supportsRecording: true,
+        recordOnPrimary: false,
+      }),
+    ).toContain('record')
+  })
+
+  it('shortens Zoom mobile dock captions', () => {
+    expect(
+      meetingToolbarPrimaryLabel('camera', { chrome: 'mobile', videoEnabled: true }),
+    ).toBe('Stop video')
+    expect(
+      meetingToolbarPrimaryLabel('camera', { chrome: 'web', videoEnabled: true }),
+    ).toBe('Stop Video')
+    expect(meetingToolbarPrimaryLabel('participants', { chrome: 'mobile' })).toBe('People')
+    expect(meetingToolbarPrimaryLabel('share_screen', { chrome: 'mobile' })).toBe('Share')
+    expect(meetingToolbarPrimaryLabel('reactions', { chrome: 'web' })).toBe('Reactions')
+    expect(meetingToolbarPrimaryLabel('share_screen', { chrome: 'web' })).toBe('Start share')
+    expect(meetingToolbarPrimaryLabel('docs', { chrome: 'web' })).toBe('Docs')
+    expect(meetingToolbarPrimaryLabel('apps', { chrome: 'web' })).toBe('Apps')
+  })
+
+  it('orders Zoom mobile More: Meeting (chat) → AV → View → Apps → Host', () => {
+    const sections = meetingToolbarMoreSections({
+      viewerRole: 'host',
+      supportsRecording: true,
+      supportsVideo: true,
+      hasAudioSettings: true,
+      hasShareLink: true,
+      hasFullscreen: true,
+      hasMinimize: true,
+      hasPictureInPicture: true,
+      compact: true,
+      supportsLiveCaptions: true,
+      hasInvite: true,
+      reactionsOnPrimary: false,
+      raiseHandOnPrimary: false,
+      captionsOnPrimary: false,
+      whiteboardOnPrimary: false,
+      inviteOnPrimary: false,
+      recordOnPrimary: false,
+    })
+
+    expect(sections.map((s) => s.title)).toEqual([
+      'Browse',
+      'Meeting',
+      'Audio & video',
+      'View',
+      'Apps',
+      'Host',
+    ])
+    expect(sections.find((s) => s.title === 'Meeting')?.keys).toEqual(
+      expect.arrayContaining([
+        'manage_participants',
+        'raise_hand',
+        'reactions',
+        'captions',
+        'share_screen',
+        'disconnect_audio',
+        'settings',
+        'safe_driving',
+        'record',
+      ]),
+    )
+    expect(sections.find((s) => s.title === 'Meeting')?.keys).not.toContain('chat')
+    expect(sections.find((s) => s.title === 'View')?.keys).not.toContain('active_speakers_only')
+    expect(sections.find((s) => s.title === 'View')?.keys).toContain('hd_video')
 
     expect(
       meetingToolbarMoreKeys({
@@ -124,32 +249,49 @@ describe('meeting toolbar layout', () => {
         compact: true,
         supportsLiveCaptions: true,
         hasInvite: true,
-        reactionsOnPrimary: true,
-        raiseHandOnPrimary: true,
-        recordOnPrimary: true,
+        supportsScreenShare: true,
+        reactionsOnPrimary: false,
+        raiseHandOnPrimary: false,
+        captionsOnPrimary: false,
+        whiteboardOnPrimary: false,
+        inviteOnPrimary: false,
+        recordOnPrimary: false,
       }),
-    ).toEqual([
-      'minimize',
-      'view_gallery',
-      'view_speaker',
-      'view_screen_share',
-      'mirror_video',
-      'hide_self_view',
-      'maximize',
-      'audio_settings',
-      'background',
-      'meeting_info',
-      'invite',
-      'share_link',
-      'fullscreen',
-      'picture_in_picture',
-      'host_tools',
-    ])
+    ).toEqual(
+      expect.arrayContaining([
+        'minimize',
+        'meeting_info',
+        'manage_participants',
+        'raise_hand',
+        'reactions',
+        'captions',
+        'share_screen',
+        'disconnect_audio',
+        'settings',
+        'safe_driving',
+        'record',
+        'invite',
+        'share_link',
+        'host_tools',
+      ]),
+    )
+    expect(
+      meetingToolbarMoreKeys({
+        viewerRole: 'host',
+        supportsRecording: true,
+        supportsVideo: true,
+        compact: true,
+        supportsLiveCaptions: true,
+      }),
+    ).not.toContain('chat')
   })
 
-  it('keeps Security flyout slim and groups More without duplicate reactions', () => {
+  it('keeps Security flyout slim and groups Zoom web More without duplicate reactions', () => {
     expect(meetingToolbarSecurityKeys('host')).toEqual([
       'lock_meeting',
+      'waiting_room',
+      'mute_on_join',
+      'video_off_on_join',
       'mute_all',
       'ask_all_to_mute',
       'ask_all_to_unmute',
@@ -164,7 +306,13 @@ describe('meeting toolbar layout', () => {
         supportsScreenShare: true,
         supportsLiveCaptions: true,
       }),
-    ).toContain('security')
+    ).not.toContain('security')
+    expect(
+      meetingToolbarMoreKeys({
+        viewerRole: 'host',
+        hasAudioSettings: true,
+      }),
+    ).toEqual(expect.arrayContaining(['host_tools']))
 
     expect(
       meetingToolbarMoreKeys({
@@ -177,8 +325,12 @@ describe('meeting toolbar layout', () => {
         hasMinimize: true,
         hasPictureInPicture: true,
         reactionsOnPrimary: true,
-        raiseHandOnPrimary: true,
+        raiseHandOnPrimary: false,
+        captionsOnPrimary: false,
+        whiteboardOnPrimary: false,
+        inviteOnPrimary: false,
         recording: true,
+        recordOnPrimary: true,
       }),
     ).toEqual([
       'minimize',
@@ -187,10 +339,22 @@ describe('meeting toolbar layout', () => {
       'view_screen_share',
       'mirror_video',
       'hide_self_view',
+      'hide_non_video',
+      'active_speakers_only',
+      'side_by_side',
+      'stop_incoming_video',
       'maximize',
+      'pin_toolbar',
+      'raise_hand',
       'audio_settings',
+      'original_sound',
+      'hd_video',
+      'enter_exit_sound',
       'background',
+      'captions',
+      'whiteboard',
       'meeting_info',
+      'invite',
       'share_link',
       'fullscreen',
       'picture_in_picture',
@@ -205,7 +369,10 @@ describe('meeting toolbar layout', () => {
         hasAudioSettings: true,
         hasShareLink: false,
         reactionsOnPrimary: true,
-        raiseHandOnPrimary: true,
+        raiseHandOnPrimary: false,
+        captionsOnPrimary: false,
+        whiteboardOnPrimary: false,
+        inviteOnPrimary: false,
       }),
     ).toEqual([
       'view_gallery',
@@ -213,10 +380,22 @@ describe('meeting toolbar layout', () => {
       'view_screen_share',
       'mirror_video',
       'hide_self_view',
+      'hide_non_video',
+      'active_speakers_only',
+      'side_by_side',
+      'stop_incoming_video',
       'maximize',
+      'pin_toolbar',
+      'raise_hand',
       'audio_settings',
+      'original_sound',
+      'hd_video',
+      'enter_exit_sound',
       'background',
+      'captions',
+      'whiteboard',
       'meeting_info',
+      'invite',
       'host_tools',
       'ask_all_to_mute',
       'ask_all_to_unmute',
@@ -224,7 +403,7 @@ describe('meeting toolbar layout', () => {
     ])
   })
 
-  it('surfaces polls, Q&A, breakouts, and dense gallery in More', () => {
+  it('surfaces polls, Q&A, breakouts, and dense gallery in Zoom web More', () => {
     expect(
       meetingToolbarMoreKeys({
         viewerRole: 'host',
@@ -240,7 +419,10 @@ describe('meeting toolbar layout', () => {
         hasQa: true,
         hasBreakouts: true,
         reactionsOnPrimary: true,
-        raiseHandOnPrimary: true,
+        raiseHandOnPrimary: false,
+        captionsOnPrimary: false,
+        whiteboardOnPrimary: false,
+        inviteOnPrimary: false,
         recordOnPrimary: true,
       }),
     ).toEqual([
@@ -250,17 +432,29 @@ describe('meeting toolbar layout', () => {
       'view_screen_share',
       'mirror_video',
       'hide_self_view',
+      'hide_non_video',
+      'active_speakers_only',
+      'side_by_side',
+      'stop_incoming_video',
       'maximize',
+      'pin_toolbar',
       'view_dense_gallery',
+      'raise_hand',
       'audio_settings',
+      'original_sound',
+      'hd_video',
+      'enter_exit_sound',
       'background',
-      'meeting_info',
-      'share_link',
-      'fullscreen',
-      'picture_in_picture',
+      'captions',
+      'whiteboard',
       'polls',
       'qna',
       'breakout_rooms',
+      'meeting_info',
+      'invite',
+      'share_link',
+      'fullscreen',
+      'picture_in_picture',
       'host_tools',
     ])
   })

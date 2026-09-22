@@ -4,7 +4,7 @@
   "build": {
     "env": {
       "NODE_OPTIONS": "--max-old-space-size=6144",
-      "ONE_CACHE_KEY": "202608011",
+      "ONE_CACHE_KEY": "202609181",
       "ONE_SERVER_URL": "https://sheconomy.in",
       "EXPO_PUBLIC_WEB_APP_URL": "https://sheconomy.in"
     }

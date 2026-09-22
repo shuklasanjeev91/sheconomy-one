@@ -2,7 +2,13 @@
 import '~/lib/polyfills/install-dom-exception'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Platform, Pressable, ScrollView as NativeScrollView, useWindowDimensions } from 'react-native'
+import {
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView as NativeScrollView,
+  useWindowDimensions,
+} from 'react-native'
 import { ConnectionState, DisconnectReason, RoomEvent, Track, VideoQuality } from 'livekit-client'
 import type { RemoteTrackPublication } from 'livekit-client'
 import {
@@ -16,8 +22,10 @@ import {
 
 import { Avatar, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import {
+  useMeetingLiveSignals,
   useParticipantHandRaised,
   useParticipantMeetingRole,
+  useParticipantNonverbal,
 } from '~/co-work/components/MeetingLiveSignalsContext'
 import { MeetingRoleBadge } from '~/co-work/components/MeetingRoleBadge'
 import {
@@ -46,18 +54,29 @@ import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
 import { bindRemoteScreenShareQuality } from '~/co-work/lib/livekit-screen-share'
 import { resolveNativeVideoStreamAttachId } from '~/co-work/lib/native-video-stream-ready'
+import {
+  meetingVideoTrackRemountKey,
+  nextMeetingVideoSurfaceSize,
+} from '~/co-work/lib/meeting-video-surface'
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
 import { screenShareRoleLabel } from '~/co-work/lib/meeting-lifecycle'
 import { shouldMirrorMeetingVideo } from '~/co-work/lib/meeting-video-mirror'
+import { meetingNonverbalEmoji } from '~/co-work/lib/meeting-nonverbal'
+import {
+  meetingTileActionLabel,
+  meetingTileMenuActions,
+} from '~/co-work/lib/meeting-tile-actions'
 import {
   getIosPipVideoRef,
   registerIosPipVideoRef,
 } from '~/lib/session/ios-pip-registry'
 import {
   capFilmstripTracks,
+  MEETING_GALLERY_FOLLOW_RESUME_MS,
   meetingGalleryLayout,
   meetingGalleryPageForIndex,
   meetingGalleryPages,
+  meetingGalleryPrefetchIdentities,
   paginateMeetingGallery,
   resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
@@ -438,6 +457,29 @@ function NativeLiveKitMeetingContent({
           // Routing is best-effort; AEC still works on the default path.
         }
         await syncAvatarMetadata()
+
+        // Dev helper: auto-start screen share when a global flag is set.
+        try {
+          // Only run in development builds.
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          if (typeof __DEV__ !== 'undefined' && __DEV__ && (globalThis as any).__AUTO_SCREEN_SHARE) {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            const flag = (globalThis as any).__AUTO_SCREEN_SHARE
+            if (flag && typeof liveKit?.toggleScreenShare === 'function') {
+              await liveKit.toggleScreenShare()
+            }
+            // Clear the flag so it doesn't re-run on reconnects.
+            try {
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-ignore
+              delete (globalThis as any).__AUTO_SCREEN_SHARE
+            } catch {}
+          }
+        } catch {
+          // Ignore dev-only failures.
+        }
       })()
     }
 
@@ -476,17 +518,32 @@ function NativeLiveKitMeetingContent({
       {mediaMode === 'audio' ? null : <NativeMeetingVideoStage />}
       <MeetingLifecycleBanner notice={lifecycleNotice} topOffset={90} />
       <NativeScreenCapturePicker />
-      <YStack
-        position="absolute"
-        top={0}
-        left={0}
-        right={0}
-        bottom={0}
-        pointerEvents="box-none"
-        zIndex={100}
-      >
-        {overlay?.(liveKit)}
-      </YStack>
+      <NativeMeetingOverlayHost overlay={overlay} liveKit={liveKit} />
+    </YStack>
+  )
+}
+
+function NativeMeetingOverlayHost({
+  overlay,
+  liveKit,
+}: {
+  overlay?: NativeLiveKitMeetingRoomProps['overlay']
+  liveKit: LiveKitMediaControls
+}) {
+  const { blockVideoSurfaces } = useMeetingLiveSignals()
+  return (
+    <YStack
+      position="absolute"
+      top={0}
+      left={0}
+      right={0}
+      bottom={0}
+      pointerEvents={blockVideoSurfaces ? 'auto' : 'box-none'}
+      zIndex={blockVideoSurfaces ? 200_000 : 100}
+      elevation={blockVideoSurfaces ? 48 : 0}
+      collapsable={false}
+    >
+      {overlay?.(liveKit)}
     </YStack>
   )
 }
@@ -494,8 +551,15 @@ function NativeLiveKitMeetingContent({
 function NativeMeetingVideoStage() {
   const { ui: coworkUi } = useCoWorkTheme()
   const { state, dispatch } = useMeetingMachine()
+  const { stageTrailingInset, spotlightUserId, pinnedUserIds } = useMeetingLiveSignals()
   const { width, height } = useWindowDimensions()
   const { isDesktop, isTablet, safeTop, safeBottom, safeLeft, safeRight } = useAppLayout()
+  const [hdVideoPref, setHdVideoPref] = useState(true)
+  useEffect(() => {
+    void import('~/co-work/lib/meeting-media-prefs').then(({ loadMeetingMediaPrefs }) =>
+      loadMeetingMediaPrefs().then((prefs) => setHdVideoPref(prefs.hdVideo !== false)),
+    )
+  }, [])
   const chrome = useMemo(() => {
     const base = resolveMeetingChromeLayout({
       width,
@@ -543,7 +607,8 @@ function NativeMeetingVideoStage() {
   const activeSpeakerIdentity = useMeetingActiveSpeaker({
     room,
     tracks,
-    enabled: state.viewMode === 'speaker' || state.viewMode === 'screen-share',
+    // Gallery uses speaking for highlight + ordering; speaker/share for focus tile.
+    enabled: true,
   })
   const layoutState = useMemo(
     () =>
@@ -552,13 +617,31 @@ function NativeMeetingVideoStage() {
         localParticipant.identity,
         state.viewMode,
         activeSpeakerIdentity,
-        state.hideSelfView,
+        {
+          hideSelfView: state.hideSelfView,
+          hideNonVideoParticipants: state.hideNonVideoParticipants,
+          activeSpeakersOnly: state.activeSpeakersOnly,
+          spotlightIdentity: spotlightUserId,
+          pinnedIdentities: pinnedUserIds,
+        },
       ),
-    [activeSpeakerIdentity, localParticipant.identity, state.hideSelfView, state.viewMode, tracks],
+    [
+      activeSpeakerIdentity,
+      localParticipant.identity,
+      pinnedUserIds,
+      spotlightUserId,
+      state.activeSpeakersOnly,
+      state.hideNonVideoParticipants,
+      state.hideSelfView,
+      state.viewMode,
+      tracks,
+    ],
   )
 
   const [page, setPage] = useState(0)
+  const [screenShareBannerVisible, setScreenShareBannerVisible] = useState(false)
   const galleryPagerRef = useRef<NativeScrollView | null>(null)
+  const followSpeakerUntilRef = useRef(0)
   const pageSize = resolveMeetingGalleryPageSize({
     basePageSize: chrome.pageSize,
     denseGallery: state.denseGallery,
@@ -585,9 +668,10 @@ function NativeMeetingVideoStage() {
   const isLocalScreenSharing = layoutState.isLocalScreenSharing
   const previousScreenShare = useRef(false)
 
-  // Zoom-style: jump to the page that holds the active speaker when they speak off-page.
+  // Zoom-style: follow active speaker only while the user is not manually paging.
   useEffect(() => {
     if (state.viewMode !== 'gallery' || !activeSpeakerIdentity) return
+    if (Date.now() < followSpeakerUntilRef.current) return
     const index = layoutState.stageTracks.findIndex(
       (track) => track.participant.identity === activeSpeakerIdentity,
     )
@@ -597,29 +681,42 @@ function NativeMeetingVideoStage() {
   }, [activeSpeakerIdentity, layoutState.stageTracks, page, pageSize, state.viewMode])
 
   useEffect(() => {
-    const identities = new Set<string>()
-    for (const track of stageTracks) identities.add(track.participant.identity)
+    const identities = new Set<string>(
+      meetingGalleryPrefetchIdentities(layoutState.stageTracks, paged.page, pageSize),
+    )
     for (const track of filmstripTracks) identities.add(track.participant.identity)
     for (const track of layoutState.stageTracks) {
       if (track.participant.isSpeaking) identities.add(track.participant.identity)
     }
     applyMeetingSelectiveCameraSubscribe(room, identities)
-  }, [filmstripTracks, layoutState.stageTracks, room, stageTracks])
+  }, [filmstripTracks, layoutState.stageTracks, paged.page, pageSize, room])
 
   useEffect(() => {
     if (hasScreenShare && !previousScreenShare.current) {
       dispatch({ type: 'SET_VIEW', viewMode: 'screen-share' })
+      setScreenShareBannerVisible(true)
     } else if (!hasScreenShare && state.viewMode === 'screen-share') {
       dispatch({ type: 'SET_VIEW', viewMode: 'gallery' })
+      setScreenShareBannerVisible(false)
+    } else if (!hasScreenShare) {
+      setScreenShareBannerVisible(false)
     }
     previousScreenShare.current = hasScreenShare
   }, [dispatch, hasScreenShare, state.viewMode])
+
+  useEffect(() => {
+    if (!hasScreenShare || !screenShareBannerVisible) return
+    const timer = setTimeout(() => setScreenShareBannerVisible(false), 4500)
+    return () => clearTimeout(timer)
+  }, [hasScreenShare, screenShareBannerVisible])
 
   const showFilmstrip = layoutState.filmstripTracks.length > 0
   const speakerMode = state.viewMode === 'speaker'
   // Speaker view always keeps a filmstrip of the other participants (side on
   // wide layouts, bottom strip on portrait phones).
-  const filmstripBeside = speakerMode ? chrome.filmstripBeside || width >= 700 : chrome.filmstripBeside
+  const filmstripBeside = speakerMode
+    ? chrome.filmstripBeside || width >= 700 || state.sideBySideShare
+    : chrome.filmstripBeside || state.sideBySideShare
   const filmstripExpanded = showFilmstrip && !state.participantStripMinimized
   const screenLayout = state.viewMode === 'screen-share' && hasScreenShare
   const galleryMode = state.viewMode === 'gallery' || (!screenLayout && !speakerMode)
@@ -635,6 +732,7 @@ function NativeMeetingVideoStage() {
         }
       : chrome,
     filmstripExpanded,
+    stageTrailingInset,
   })
   const gallery = meetingGalleryLayout(stageTracks.length, {
     width: mainWidth,
@@ -649,6 +747,7 @@ function NativeMeetingVideoStage() {
 
   const goToPage = (nextPage: number) => {
     const safe = Math.min(Math.max(0, nextPage), Math.max(paged.pageCount - 1, 0))
+    followSpeakerUntilRef.current = Date.now() + MEETING_GALLERY_FOLLOW_RESUME_MS
     setPage(safe)
     if (mainWidth > 0) {
       galleryPagerRef.current?.scrollTo({ x: safe * mainWidth, animated: true })
@@ -696,6 +795,7 @@ function NativeMeetingVideoStage() {
               height={Math.max(tileHeight, chrome.policy === 'landscape-phone' ? 72 : 100)}
               radius={14}
               mirrorLocalVideo={state.mirrorLocalVideo}
+              hdVideo={hdVideoPref}
               activeSpeaker={
                 !isScreen &&
                 (trackRef.participant.isSpeaking ||
@@ -717,7 +817,7 @@ function NativeMeetingVideoStage() {
       paddingTop={chrome.stagePaddingTop}
       paddingBottom={chrome.stagePaddingBottom}
       paddingLeft={chrome.stagePaddingLeft}
-      paddingRight={chrome.stagePaddingRight}
+      paddingRight={chrome.stagePaddingRight + stageTrailingInset}
     >
       {stageTracks.length === 0 ? (
         <YStack
@@ -751,7 +851,10 @@ function NativeMeetingVideoStage() {
               style={{ width: mainWidth, height: mainHeight }}
               onMomentumScrollEnd={(event) => {
                 const next = Math.round(event.nativeEvent.contentOffset.x / Math.max(mainWidth, 1))
-                if (next !== page) setPage(next)
+                if (next !== page) {
+                  followSpeakerUntilRef.current = Date.now() + MEETING_GALLERY_FOLLOW_RESUME_MS
+                  setPage(next)
+                }
               }}
             >
               {galleryPages.map((pageTracks, pageIndex) => renderGalleryPage(pageTracks, pageIndex))}
@@ -800,6 +903,7 @@ function NativeMeetingVideoStage() {
                     height={Math.max(tileHeight, chrome.policy === 'landscape-phone' ? 72 : 100)}
                     radius={screenLayout && index === 0 ? coworkUi.radius.tile : 14}
                     mirrorLocalVideo={state.mirrorLocalVideo}
+                    hdVideo={hdVideoPref}
                     activeSpeaker={
                       !isScreen &&
                       (trackRef.participant.isSpeaking ||
@@ -837,6 +941,7 @@ function NativeMeetingVideoStage() {
                     radius={10}
                     compact
                     mirrorLocalVideo={state.mirrorLocalVideo}
+                    hdVideo={hdVideoPref}
                     activeSpeaker={trackRef.participant.isSpeaking}
                   />
                 ))}
@@ -951,6 +1056,9 @@ function NativeMeetingVideoStage() {
               </XStack>
               <Text color="#fff" fontSize={12} fontWeight="700">
                 {paged.page + 1}/{paged.pageCount}
+                {layoutState.totalTiles > 0
+                  ? ` · ${layoutState.totalTiles} people`
+                  : ''}
               </Text>
               <Pressable
                 disabled={paged.page === paged.pageCount - 1}
@@ -974,6 +1082,7 @@ function NativeMeetingVideoStage() {
         </YStack>
       )}
       {(() => {
+        if (!screenShareBannerVisible) return null
         const label = screenShareRoleLabel(
           isLocalScreenSharing ? 'sharing' : hasScreenShare ? 'viewing' : 'none',
         )
@@ -981,11 +1090,12 @@ function NativeMeetingVideoStage() {
           <YStack
             position="absolute"
             top={chrome.stagePaddingTop + 8}
-            alignSelf="center"
+            left={chrome.stagePaddingLeft + 8}
+            maxWidth={320}
             zIndex={30}
             paddingHorizontal="$3"
             paddingVertical="$2"
-            borderRadius={999}
+            borderRadius={12}
             backgroundColor={
               isLocalScreenSharing ? 'rgba(5,150,105,0.94)' : 'rgba(37,99,235,0.92)'
             }
@@ -1014,6 +1124,7 @@ function NativeVideoTile({
   radius,
   compact,
   mirrorLocalVideo,
+  hdVideo = true,
   activeSpeaker,
 }: {
   trackRef: import('@livekit/components-core').TrackReferenceOrPlaceholder
@@ -1024,30 +1135,97 @@ function NativeVideoTile({
   radius: number
   compact?: boolean
   mirrorLocalVideo: boolean
+  hdVideo?: boolean
   activeSpeaker: boolean
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const {
+    blockVideoSurfaces,
+    stopIncomingVideo,
+    localUserId,
+    spotlightUserId,
+    pinnedUserIds,
+    togglePinnedUserId,
+    tileHostActions,
+  } = useMeetingLiveSignals()
+  const [surfacesAllowed, setSurfacesAllowed] = useState(!blockVideoSurfaces)
+  useEffect(() => {
+    if (blockVideoSurfaces) {
+      setSurfacesAllowed(false)
+      return
+    }
+    const timer = setTimeout(() => setSurfacesAllowed(true), 80)
+    return () => clearTimeout(timer)
+  }, [blockVideoSurfaces])
   const avatarUrl = getParticipantAvatarUrl(trackRef.participant)
   const handRaised = useParticipantHandRaised(trackRef.participant.identity)
+  const nonverbal = useParticipantNonverbal(trackRef.participant.identity)
   const meetingRole = useParticipantMeetingRole(trackRef.participant.identity)
+  const identity = trackRef.participant.identity
+  const isSelf = identity === localUserId
+  const isPinned = pinnedUserIds.includes(identity)
+  const isSpotlighted = spotlightUserId === identity
   const micMuted = !isScreen && trackRef.participant.isMicrophoneEnabled === false
+  const stopRemoteCamera =
+    stopIncomingVideo && !trackRef.participant.isLocal && !isScreen
   const cameraOff =
-    !isScreen &&
-    isCameraTileOff({
-      source: trackRef.source,
-      publication: isTrackReference(trackRef) ? trackRef.publication : null,
-      isPlaceholder: !isTrackReference(trackRef),
+    stopRemoteCamera ||
+    (!isScreen &&
+      isCameraTileOff({
+        source: trackRef.source,
+        publication: isTrackReference(trackRef) ? trackRef.publication : null,
+        isPlaceholder: !isTrackReference(trackRef),
+      }))
+
+  const openTileMenu = () => {
+    const actions = meetingTileMenuActions({
+      isSelf,
+      isScreen,
+      canModerate: !!tileHostActions?.canModerate,
+      isPinned,
+      isSpotlighted,
+      handRaised,
     })
+    if (actions.length === 0) return
+    Alert.alert(
+      name,
+      undefined,
+      [
+        ...actions.map((action) => ({
+          text: meetingTileActionLabel(action),
+          onPress: () => {
+            if (action === 'pin' || action === 'unpin') {
+              togglePinnedUserId(identity)
+              return
+            }
+            if (action === 'spotlight') {
+              tileHostActions?.setSpotlight(identity)
+              return
+            }
+            if (action === 'remove_spotlight') {
+              tileHostActions?.setSpotlight(null)
+              return
+            }
+            if (action === 'lower_hand') {
+              tileHostActions?.lowerHandFor(identity)
+            }
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ],
+      { cancelable: true },
+    )
+  }
 
   // Android RTCView often never recovers from a 0×0 first layout ("Dropping frame - No surface").
   // Gate the VideoTrack until we have real pixel size, then mount with explicit dimensions.
   const [surfaceSize, setSurfaceSize] = useState<{ w: number; h: number } | null>(
-    width > 1 && height > 1 ? { w: Math.floor(width), h: Math.floor(height) } : null,
+    width > 1 && height > 1 ? nextMeetingVideoSurfaceSize(null, { w: width, h: height }) : null,
   )
 
   useEffect(() => {
     if (width > 1 && height > 1) {
-      setSurfaceSize({ w: Math.floor(width), h: Math.floor(height) })
+      setSurfaceSize((prev) => nextMeetingVideoSurfaceSize(prev, { w: width, h: height }))
     }
   }, [width, height])
 
@@ -1060,14 +1238,15 @@ function NativeVideoTile({
   // track identity change — mounting RTCView with empty toURL() permanently blanks.
   // Wait for mediaStream.id, then remount VideoTrack with that token.
   const [streamAttachId, setStreamAttachId] = useState<string | null>(
-    () => resolveNativeVideoStreamAttachId(mediaTrack),
+    () => resolveNativeVideoStreamAttachId(mediaTrack, { allowTrackIdFallback: !isScreen }),
   )
   useEffect(() => {
     if (!mediaTrack) {
       setStreamAttachId(null)
       return
     }
-    const readId = () => resolveNativeVideoStreamAttachId(mediaTrack)
+    const readId = () =>
+      resolveNativeVideoStreamAttachId(mediaTrack, { allowTrackIdFallback: !isScreen })
     const immediate = readId()
     if (immediate) {
       setStreamAttachId(immediate)
@@ -1083,13 +1262,11 @@ function NativeVideoTile({
     // Screen share: if MediaStream never appears, still unlock render after a beat
     // once a MediaStreamTrack exists (ensureNativeVideoMediaStream will wrap it).
     const forceReady = setTimeout(() => {
-      if (resolveNativeVideoStreamAttachId(mediaTrack)) return
-      const trackId = mediaTrack.mediaStreamTrack?.id || trackSid
-      if (isScreen && trackId) {
-        resolveNativeVideoStreamAttachId(mediaTrack)
-        setStreamAttachId(String(trackId))
-      }
-    }, isScreen ? 900 : 2500)
+      const wrapped = resolveNativeVideoStreamAttachId(mediaTrack, {
+        allowTrackIdFallback: !isScreen,
+      })
+      if (wrapped) setStreamAttachId(wrapped)
+    }, isScreen ? 1200 : 2500)
     const stop = setTimeout(() => clearInterval(poll), 30_000)
     return () => {
       clearInterval(poll)
@@ -1100,17 +1277,6 @@ function NativeVideoTile({
 
   // Only treat the surface as ready once MediaStream exists — never use track.sid alone.
   const mediaReadyToken = streamAttachId
-  const trackDims = (() => {
-    try {
-      const settings = mediaTrack?.mediaStreamTrack?.getSettings?.()
-      const w = Number(settings?.width) || 0
-      const h = Number(settings?.height) || 0
-      if (w > 1 && h > 1) return `${w}x${h}`
-    } catch {
-      // ignore
-    }
-    return isScreen ? '1280x720' : 'pending'
-  })()
   const mirrored = shouldMirrorMeetingVideo({
     mirrorLocalVideo,
     isLocal: trackRef.participant.isLocal,
@@ -1136,6 +1302,8 @@ function NativeVideoTile({
       ? { w: Math.max(Math.floor(width), 2), h: Math.max(Math.floor(height), 2) }
       : null)
   const shouldRenderVideo =
+    !blockVideoSurfaces &&
+    surfacesAllowed &&
     !!mediaTrack &&
     !!mediaReadyToken &&
     !!effectiveSurface &&
@@ -1173,36 +1341,54 @@ function NativeVideoTile({
     }
   }, [isScreen, publication, mediaReadyToken, trackRef.participant.isLocal])
 
+  // Prefer HIGH camera quality when HD video is enabled (Zoom-style).
+  useEffect(() => {
+    if (!hdVideo || isScreen || trackRef.participant.isLocal || !publication) return
+    if (trackRef.source !== Track.Source.Camera) return
+    const remote = publication as RemoteTrackPublication
+    try {
+      if (!remote.isSubscribed) remote.setSubscribed(true)
+      remote.setVideoQuality(VideoQuality.HIGH)
+    } catch {
+      // soft-fail
+    }
+  }, [hdVideo, isScreen, publication, trackRef.participant.isLocal, trackRef.source])
+
   return (
+    <Pressable onLongPress={openTileMenu} delayLongPress={420} style={{ width, height, maxWidth: '100%' }}>
     <YStack
-      width={width}
-      height={height}
+      width="100%"
+      height="100%"
       maxWidth="100%"
       borderRadius={radius}
       overflow="hidden"
-      borderWidth={(handRaised || activeSpeaker) && !isScreen ? 2 : 1}
+      // Keep border width constant — toggling 1↔2 on speak remounted Android video.
+      borderWidth={2}
       borderColor={
-        (handRaised || activeSpeaker) && !isScreen
-          ? coworkUi.brandLight
+        (handRaised || activeSpeaker || isSpotlighted || isPinned) && !isScreen
+          ? coworkUi.brand
           : 'rgba(255,255,255,0.12)'
       }
-      backgroundColor="#1a1216"
+      backgroundColor={coworkUi.tileBg}
       position="relative"
       collapsable={false}
       onLayout={(event) => {
         const { width: layoutW, height: layoutH } = event.nativeEvent.layout
         if (layoutW > 1 && layoutH > 1) {
-          const next = { w: Math.floor(layoutW), h: Math.floor(layoutH) }
-          setSurfaceSize((prev) =>
-            prev && prev.w === next.w && prev.h === next.h ? prev : next,
-          )
+          setSurfaceSize((prev) => nextMeetingVideoSurfaceSize(prev, { w: layoutW, h: layoutH }))
         }
       }}
     >
       {shouldRenderVideo && effectiveSurface && isTrackReference(trackRef) ? (
         <VideoTrack
           // Remount when MediaStream attaches (stream id), size, or mirror changes.
-          key={`${trackSid ?? 'track'}-${mediaReadyToken}-${effectiveSurface.w}x${effectiveSurface.h}-${trackDims}-${isScreen ? 'ss' : 'cam'}-${mirrored ? 'm' : 'u'}`}
+          key={meetingVideoTrackRemountKey({
+            trackSid,
+            streamId: mediaReadyToken,
+            surface: effectiveSurface,
+            isScreen,
+            mirrored,
+          })}
           ref={videoRef}
           trackRef={trackRef}
           style={{
@@ -1215,9 +1401,12 @@ function NativeVideoTile({
           }}
           // cover + elevated zOrder: Android MediaProjection and iOS receivers both
           // blank with contain / zOrder 0 on cross-platform screen share.
-          objectFit="cover"
+          objectFit={isScreen ? 'contain' : 'cover'}
           mirror={mirrored}
-          zOrder={isScreen ? 2 : compact ? 1 : 0}
+          // Camera tiles must stay at zOrder 0. Compact zOrder 1 puts Android
+          // SurfaceViews above the More/security Modal so participant taps no-op.
+          // Screen share still needs a higher layer so the share is visible.
+          zOrder={isScreen ? 2 : 0}
           iosPIP={
             Platform.OS === 'ios' && !isScreen
               ? {
@@ -1239,7 +1428,7 @@ function NativeVideoTile({
               <Avatar name={name} src={avatarUrl ?? undefined} size={compact ? '$5' : '$8'} />
               {!compact ? (
                 <Text fontSize={12} color="rgba(255,255,255,0.55)" fontWeight="600">
-                  Camera off
+                  {stopRemoteCamera ? 'Video paused' : 'Camera off'}
                 </Text>
               ) : null}
             </>
@@ -1264,11 +1453,71 @@ function NativeVideoTile({
           <Text fontSize={compact ? 14 : 16}>✋</Text>
         </YStack>
       ) : null}
-      {!isScreen && (meetingRole === 'host' || meetingRole === 'co_host') && !compact ? (
+      {!isScreen && (isPinned || isSpotlighted) ? (
+        <XStack
+          position="absolute"
+          top={compact ? 6 : 10}
+          alignSelf="center"
+          gap={6}
+          zIndex={5}
+          pointerEvents="none"
+        >
+          {isSpotlighted ? (
+            <YStack
+              width={compact ? 26 : 30}
+              height={compact ? 26 : 30}
+              borderRadius={999}
+              alignItems="center"
+              justifyContent="center"
+              backgroundColor="rgba(12, 8, 10, 0.82)"
+              borderWidth={1}
+              borderColor="rgba(245,197,66,0.55)"
+            >
+              <Text fontSize={compact ? 12 : 14} color="#F5C542">
+                ★
+              </Text>
+            </YStack>
+          ) : null}
+          {isPinned ? (
+            <YStack
+              width={compact ? 26 : 30}
+              height={compact ? 26 : 30}
+              borderRadius={999}
+              alignItems="center"
+              justifyContent="center"
+              backgroundColor="rgba(12, 8, 10, 0.82)"
+              borderWidth={1}
+              borderColor="rgba(255,255,255,0.22)"
+            >
+              <Text fontSize={compact ? 11 : 13}>📌</Text>
+            </YStack>
+          ) : null}
+        </XStack>
+      ) : null}
+      {nonverbal && !isScreen ? (
+        <YStack
+          position="absolute"
+          top={compact ? 6 : 10}
+          left={compact ? 6 : 10}
+          width={compact ? 28 : 34}
+          height={compact ? 28 : 34}
+          borderRadius={999}
+          alignItems="center"
+          justifyContent="center"
+          backgroundColor="rgba(12, 8, 10, 0.78)"
+          borderWidth={1}
+          borderColor="rgba(255,255,255,0.22)"
+          zIndex={4}
+        >
+          <Text fontSize={compact ? 13 : 15}>{meetingNonverbalEmoji(nonverbal)}</Text>
+        </YStack>
+      ) : null}
+      {!isScreen && (meetingRole === 'host' || meetingRole === 'co_host') && !compact && !nonverbal ? (
         <YStack position="absolute" top={10} left={10} zIndex={5}>
           <MeetingRoleBadge role={meetingRole} size="sm" />
         </YStack>
       ) : null}
+      {/* elevation keeps the name chip above Android SurfaceView video */}
       <YStack
         position="absolute"
         left={compact ? 6 : 10}
@@ -1276,21 +1525,26 @@ function NativeVideoTile({
         paddingHorizontal={compact ? 8 : 12}
         paddingVertical={compact ? 3 : 5}
         borderRadius={999}
-        backgroundColor="rgba(12, 8, 10, 0.72)"
+        backgroundColor="rgba(12, 8, 10, 0.82)"
         borderWidth={1}
-        borderColor="rgba(255,255,255,0.12)"
+        borderColor="rgba(255,255,255,0.18)"
         maxWidth="90%"
-        zIndex={5}
+        zIndex={8}
+        elevation={Platform.OS === 'android' ? 8 : undefined}
+        pointerEvents="none"
+        collapsable={false}
+        renderToHardwareTextureAndroid
       >
         <XStack alignItems="center" gap={6} maxWidth="100%">
           {micMuted ? <Icons.MicOff size={compact ? 11 : 13} color="#fda4af" /> : null}
           <Text fontSize={compact ? 10 : 12} fontWeight="700" color="#fff" numberOfLines={1} flexShrink={1}>
-            {cameraOff && !isScreen ? name : name}
+            {name}
             {isScreen ? ' · Screen' : ''}
             {handRaised && !isScreen ? ' · ✋' : ''}
           </Text>
         </XStack>
       </YStack>
     </YStack>
+    </Pressable>
   )
 }

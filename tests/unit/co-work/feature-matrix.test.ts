@@ -20,7 +20,7 @@ import type { TrackReferenceOrPlaceholder } from '@livekit/components-core'
  * Pure helpers only — no LiveKit/DOM. Guards Zoom-like 1–N room behavior.
  */
 describe('co-work feature matrix (web + native)', () => {
-  it('exposes host primary controls including security, captions, share, leave, end', () => {
+  it('exposes host primary controls including security, share, leave, end', () => {
     const keys = meetingToolbarPrimaryKeys({
       viewerRole: 'host',
       supportsVideo: true,
@@ -35,16 +35,17 @@ describe('co-work feature matrix (web + native)', () => {
       'participants',
       'chat',
       'reactions',
-      'raise_hand',
       'share_screen',
-      'captions',
-      'invite',
       'record',
       'more',
       'leave',
       'end_meeting',
     ] as const) {
       expect(keys).toContain(key)
+    }
+    // Secondary Zoom actions live under More — not the primary dock.
+    for (const key of ['raise_hand', 'whiteboard', 'captions', 'invite', 'browse'] as const) {
+      expect(keys).not.toContain(key)
     }
   })
 
@@ -84,7 +85,7 @@ describe('co-work feature matrix (web + native)', () => {
     expect(mapMeetingSecurityJoinError('MEETING_FULL')).toMatch(/full/i)
   })
 
-  it('paginates dense gallery for large rooms while keeping phone at 9', () => {
+  it('paginates gallery with denser mobile pages so large rooms need fewer swipes', () => {
     expect(
       resolveMeetingGalleryPageSize({
         basePageSize: 9,
@@ -98,12 +99,19 @@ describe('co-work feature matrix (web + native)', () => {
         denseGallery: true,
         breakpoint: 'large-desktop',
       }),
-    ).toBe(49)
+    ).toBe(25)
+    expect(
+      resolveMeetingGalleryPageSize({
+        basePageSize: 9,
+        denseGallery: true,
+        breakpoint: 'mobile',
+      }),
+    ).toBe(12)
 
     const tiles = Array.from({ length: 100 }, (_, i) => i)
-    const page = paginateMeetingGallery(tiles, 0, 25)
-    expect(page.items).toHaveLength(25)
-    expect(page.pageCount).toBe(4)
+    const page = paginateMeetingGallery(tiles, 0, 12)
+    expect(page.items).toHaveLength(12)
+    expect(page.pageCount).toBe(9)
   })
 
   it('composes gallery stage with every remote + local camera (1–N peers)', () => {

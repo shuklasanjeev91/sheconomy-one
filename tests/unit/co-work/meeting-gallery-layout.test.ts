@@ -6,6 +6,7 @@ import {
   meetingGalleryLayout,
   meetingGalleryPageForIndex,
   meetingGalleryPages,
+  meetingGalleryPrefetchIdentities,
   paginateMeetingGallery,
   resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
@@ -86,36 +87,76 @@ describe('Zoom-style meeting gallery', () => {
     expect(capFilmstripTracks(Array.from({ length: 40 }, (_, i) => i)).overflow).toBe(28)
     expect(
       resolveMeetingGalleryPageSize({
-        basePageSize: 25,
+        basePageSize: 9,
         denseGallery: true,
         breakpoint: 'large-desktop',
       }),
-    ).toBe(49)
+    ).toBe(25)
   })
 
-  it('raises dense gallery page size on phone and tablet', () => {
+  it('scales gallery pages by breakpoint and dense mode', () => {
     expect(
       resolveMeetingGalleryPageSize({
         basePageSize: 9,
         denseGallery: true,
         breakpoint: 'mobile',
       }),
-    ).toBe(16)
+    ).toBe(12)
     expect(
       resolveMeetingGalleryPageSize({
         basePageSize: 16,
         denseGallery: true,
         breakpoint: 'tablet',
       }),
+    ).toBe(16)
+    expect(
+      resolveMeetingGalleryPageSize({
+        basePageSize: 4,
+        denseGallery: false,
+        breakpoint: 'mobile',
+      }),
+    ).toBe(4)
+    expect(
+      resolveMeetingGalleryPageSize({
+        basePageSize: 25,
+        denseGallery: false,
+        breakpoint: 'large-desktop',
+      }),
     ).toBe(25)
   })
 
   it('maps indexes to gallery pages for swipe paging', () => {
-    expect(meetingGalleryPageForIndex(0, 9)).toBe(0)
-    expect(meetingGalleryPageForIndex(9, 9)).toBe(1)
-    expect(meetingGalleryPages([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 9)).toEqual([
-      [0, 1, 2, 3, 4, 5, 6, 7, 8],
-      [9, 10],
+    expect(meetingGalleryPageForIndex(0, 6)).toBe(0)
+    expect(meetingGalleryPageForIndex(6, 6)).toBe(1)
+    expect(meetingGalleryPages([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 6)).toEqual([
+      [0, 1, 2, 3, 4, 5],
+      [6, 7, 8, 9, 10],
+    ])
+  })
+
+  it('prefetches neighboring gallery pages for smooth Prev/Next video', () => {
+    const tracks = Array.from({ length: 20 }, (_, index) => ({
+      participant: { identity: `u${index}` },
+    }))
+    expect(meetingGalleryPrefetchIdentities(tracks, 1, 6)).toEqual([
+      'u0',
+      'u1',
+      'u2',
+      'u3',
+      'u4',
+      'u5',
+      'u6',
+      'u7',
+      'u8',
+      'u9',
+      'u10',
+      'u11',
+      'u12',
+      'u13',
+      'u14',
+      'u15',
+      'u16',
+      'u17',
     ])
   })
 })

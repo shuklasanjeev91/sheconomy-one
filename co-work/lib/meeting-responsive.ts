@@ -1,7 +1,11 @@
 /**
  * Meeting responsive breakpoints (web + native viewport width).
  *
- * Mobile → Tablet → Laptop → Desktop → Large Desktop
+ * Zoom mapping:
+ * - phone only (<661 web, native shortest <600) → Zoom mobile chrome
+ *   (bottom sheets, compact Mute·Video·Chat·More·End dock)
+ * - tablet / iPad + laptop+ (≥661 web, native tablet) → Zoom desktop / iPad chrome
+ *   (side panels, roomy Mute·Video·Participants·Chat·Share·Reactions·More·Leave dock)
  */
 
 export type MeetingBreakpoint =
@@ -14,7 +18,7 @@ export type MeetingBreakpoint =
 export type MeetingPanelPresentation = 'bottom-sheet' | 'side'
 
 export const MEETING_BREAKPOINTS = {
-  /** ≥ tablet */
+  /** ≥ tablet / iPad — Zoom desktop·iPad chrome starts here */
   tablet: 661,
   /** ≥ laptop */
   laptop: 861,
@@ -47,7 +51,7 @@ export function resolveMeetingBreakpoint(
 ): MeetingBreakpoint {
   const w = Math.max(width, 1)
   if (options?.isNative) {
-    // Native chrome stays touch-first: phones = mobile, tablets = tablet.
+    // Phones stay Zoom-mobile; native tablets (iPad) use Zoom desktop/iPad chrome.
     const shortest = options.shortestSide ?? w
     return shortest >= 600 ? 'tablet' : 'mobile'
   }
@@ -58,13 +62,26 @@ export function resolveMeetingBreakpoint(
   return 'mobile'
 }
 
+/**
+ * Keyboard / mobile-browser chrome can shrink height below width on a
+ * still-portrait phone (e.g. 412×380). Treat as landscape only with a clear
+ * wide aspect so chat does not unmount from a bottom sheet into a side dock.
+ */
+export function meetingViewportIsLandscape(width: number, height: number): boolean {
+  const w = Math.max(width, 1)
+  const h = Math.max(height, 1)
+  return w / h >= 1.2
+}
+
+/**
+ * Zoom desktop / iPad side panels from tablet up.
+ * Phones always use bottom sheets (Zoom mobile).
+ */
 export function meetingPanelPresentation(
   breakpoint: MeetingBreakpoint,
-  options?: { isLandscape?: boolean },
+  _options?: { isLandscape?: boolean },
 ): MeetingPanelPresentation {
   if (breakpoint === 'mobile') return 'bottom-sheet'
-  // Tablet portrait stays sheet-based so chat/people don't crush the stage.
-  if (breakpoint === 'tablet' && !options?.isLandscape) return 'bottom-sheet'
   return 'side'
 }
 
@@ -75,7 +92,7 @@ export function resolveMeetingResponsiveLayout(input: {
 }): MeetingResponsiveLayout {
   const width = Math.max(input.width, 1)
   const height = Math.max(input.height, 1)
-  const isLandscape = width > height
+  const isLandscape = meetingViewportIsLandscape(width, height)
   const breakpoint = resolveMeetingBreakpoint(width, {
     isNative: input.isNative,
     shortestSide: Math.min(width, height),
@@ -94,22 +111,22 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: 1,
         sidePanelMaxWidth: width,
         compactControls: true,
-        // Default gallery page (3×3). Dense toggle raises to 16 on native phones.
-        pageSize: 9,
+        // Prefer denser pages so large meetings need fewer swipes.
+        pageSize: height < 640 ? 6 : height < 780 ? 9 : 12,
       }
     case 'tablet':
+      // Zoom desktop / iPad chrome — side panels + roomy dock (not phone Mute·Chat·More).
       return {
         breakpoint,
-        panelPresentation,
+        panelPresentation: 'side',
         toolbarPlacement: 'bottom',
-        filmstripPlacement: isLandscape || width >= 900 ? 'side' : 'bottom',
+        filmstripPlacement: isLandscape ? 'side' : 'bottom',
         stageMode: 'chrome-inset',
         galleryPreferWide: true,
-        sidePanelWidthFraction: isLandscape ? 0.4 : 0.48,
-        sidePanelMaxWidth: 420,
+        sidePanelWidthFraction: 0.4,
+        sidePanelMaxWidth: 360,
         compactControls: false,
-        // Default 3×3; dense gallery raises to 25 on tablets.
-        pageSize: 16,
+        pageSize: 12,
       }
     case 'laptop':
       return {
@@ -122,8 +139,7 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: 0.34,
         sidePanelMaxWidth: 380,
         compactControls: false,
-        // Zoom-like density for ~100-person rooms (paginated).
-        pageSize: 16,
+        pageSize: 12,
       }
     case 'desktop':
       return {
@@ -136,7 +152,7 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: 0.32,
         sidePanelMaxWidth: 400,
         compactControls: false,
-        pageSize: 25,
+        pageSize: 16,
       }
     case 'large-desktop':
       return {

@@ -51,6 +51,32 @@ export function isMeetingJoinable(meeting: Pick<Meeting, 'status'>): boolean {
   return meeting.status !== 'cancelled'
 }
 
+type ScheduledStartFields = Pick<Meeting, 'status' | 'scheduled_at' | 'started_at'>
+
+/**
+ * Guests should wait (Zoom-style) until the scheduled start. Hosts can start
+ * early. Once the host has started (`started_at` or live status), anyone can join.
+ */
+export function isWaitingForScheduledStart(
+  meeting: ScheduledStartFields,
+  now = Date.now(),
+): boolean {
+  if (meeting.status === 'active' || meeting.status === 'instant') return false
+  if (meeting.started_at) return false
+  if (meeting.status !== 'scheduled') return false
+  const start = meeting.scheduled_at ? Date.parse(meeting.scheduled_at) : Number.NaN
+  return Number.isFinite(start) && start > now
+}
+
+export function canEnterLiveMeeting(
+  meeting: ScheduledStartFields,
+  options: { isHost: boolean; now?: number },
+): boolean {
+  if (!isMeetingJoinable(meeting)) return false
+  if (options.isHost) return true
+  return !isWaitingForScheduledStart(meeting, options.now)
+}
+
 function parseJson<T>(value: unknown): T | null {
   if (!value || typeof value !== 'object') return null
   return value as T
@@ -701,6 +727,19 @@ export async function removeMeetingParticipant(
   if (error) throw new Error(error.message)
 }
 
+/** Send an admitted participant back to the waiting room (Zoom-style). */
+export async function putMeetingParticipantInWaitingRoom(
+  meetingId: string,
+  targetUserId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('moderate_meeting_participants', {
+    meeting_id_input: meetingId,
+    action_input: 'put_in_waiting_room',
+    target_user_id_input: targetUserId,
+  })
+  if (error) throw new Error(error.message)
+}
+
 export async function allowMeetingParticipantRejoin(participantId: string): Promise<void> {
   const { error } = await supabase.rpc('review_meeting_participant', {
     participant_id_input: participantId,
@@ -782,6 +821,18 @@ export async function updateMeetingLiveSettings(
           ? {
               waitingRoom: patch.securitySettings.waitingRoom,
               waiting_room: patch.securitySettings.waitingRoom,
+            }
+          : {}),
+        ...(typeof patch.securitySettings.muteOnJoin === 'boolean'
+          ? {
+              muteOnJoin: patch.securitySettings.muteOnJoin,
+              mute_on_join: patch.securitySettings.muteOnJoin,
+            }
+          : {}),
+        ...(typeof patch.securitySettings.videoOffOnJoin === 'boolean'
+          ? {
+              videoOffOnJoin: patch.securitySettings.videoOffOnJoin,
+              video_off_on_join: patch.securitySettings.videoOffOnJoin,
             }
           : {}),
         ...(typeof patch.securitySettings.allowPrivateChat === 'boolean'

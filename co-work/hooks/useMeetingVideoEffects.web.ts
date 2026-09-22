@@ -143,6 +143,13 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
       setError(null)
 
       if (next.mode !== 'off' && capability !== 'supported') {
+        if (capability === 'checking') {
+          // Keep the user's pick so the camera/processor race can re-apply it.
+          selectionRef.current = next
+          setSelection(next)
+          await saveVirtualBackgroundPreference(next)
+          return true
+        }
         setError(
           unavailableReasonRef.current || virtualBackgroundUnavailableMessage('web'),
         )
@@ -152,30 +159,50 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
 
       setStatus('loading')
       try {
-        if (next.mode === 'image' && !next.imageUrl) {
+        const resolved =
+          next.mode === 'image' ? await resolveVirtualBackgroundSelection(next) : next
+        if (resolved.mode === 'image' && !resolved.imageUrl) {
           throw new Error('The selected background image is not available.')
         }
 
         const processor = await ensureProcessor()
         if (processor) {
-          await withTimeout(processor.switchTo(processorOptions(next)), PROCESSOR_INIT_TIMEOUT_MS)
+          await withTimeout(
+            processor.switchTo(processorOptions(resolved)),
+            PROCESSOR_INIT_TIMEOUT_MS,
+          )
         } else if (next.mode !== 'off' && isCameraEnabled) {
-          throw new Error('Start the camera before applying a virtual background.')
+          // Track not ready yet (camera toggle / device switch). Keep selection
+          // so the re-apply effect can finish once LocalVideoTrack exists.
+          selectionRef.current = resolved
+          setSelection(resolved)
+          await saveVirtualBackgroundPreference(resolved)
+          setStatus('loading')
+          return false
         }
 
-        selectionRef.current = next
-        setSelection(next)
-        setStatus(next.mode === 'off' ? 'idle' : 'active')
-        await saveVirtualBackgroundPreference(next)
+        selectionRef.current = resolved
+        setSelection(resolved)
+        setStatus(resolved.mode === 'off' ? 'idle' : 'active')
+        await saveVirtualBackgroundPreference(resolved)
         return true
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : 'Could not apply background effect.'
+        const transient =
+          /too long|not ready|Start the camera|timed out|Timeout/i.test(message) &&
+          next.mode !== 'off'
         setError(message)
         setStatus('error')
         try {
           await processorRef.current?.switchTo({ mode: 'disabled' })
         } catch {
           // Raw-camera fallback is best-effort.
+        }
+        if (transient) {
+          // Do not wipe the preference — the track-replace effect will retry.
+          selectionRef.current = next
+          setSelection(next)
+          return false
         }
         selectionRef.current = OFF_BACKGROUND
         setSelection(OFF_BACKGROUND)

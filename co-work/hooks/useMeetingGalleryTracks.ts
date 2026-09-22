@@ -5,6 +5,7 @@ import { useLocalParticipant, useRoomContext, useTracks } from '@livekit/compone
 
 import { useMeetingActiveSpeaker } from '~/co-work/hooks/useMeetingActiveSpeaker'
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
+import { useMeetingLiveSignals } from '~/co-work/components/MeetingLiveSignalsContext'
 import { useMeetingMachine } from '~/co-work/components/MeetingProvider'
 
 /** Stage tiles + filmstrip for gallery / speaker / screen-share — web. */
@@ -12,6 +13,7 @@ export function useMeetingGalleryTracks() {
   const { localParticipant } = useLocalParticipant()
   const room = useRoomContext()
   const { state } = useMeetingMachine()
+  const { spotlightUserId, pinnedUserIds } = useMeetingLiveSignals()
   const tracks = useTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: true },
@@ -23,18 +25,29 @@ export function useMeetingGalleryTracks() {
   const activeSpeakerIdentity = useMeetingActiveSpeaker({
     room,
     tracks,
-    enabled: state.viewMode === 'speaker' || state.viewMode === 'screen-share',
+    // Gallery uses speaking for highlight + ordering; speaker/share for focus tile.
+    enabled: true,
   })
 
   return useMemo(
     () =>
-      composeMeetingStageTracks(
-        tracks,
-        localParticipant.identity,
-        state.viewMode,
-        activeSpeakerIdentity,
-        state.hideSelfView,
-      ),
-    [activeSpeakerIdentity, localParticipant.identity, state.hideSelfView, state.viewMode, tracks],
+      composeMeetingStageTracks(tracks, localParticipant.identity, state.viewMode, activeSpeakerIdentity, {
+        hideSelfView: state.hideSelfView,
+        hideNonVideoParticipants: state.hideNonVideoParticipants,
+        activeSpeakersOnly: state.activeSpeakersOnly,
+        spotlightIdentity: spotlightUserId,
+        pinnedIdentities: pinnedUserIds,
+      }),
+    [
+      activeSpeakerIdentity,
+      localParticipant.identity,
+      pinnedUserIds,
+      spotlightUserId,
+      state.activeSpeakersOnly,
+      state.hideNonVideoParticipants,
+      state.hideSelfView,
+      state.viewMode,
+      tracks,
+    ],
   )
 }

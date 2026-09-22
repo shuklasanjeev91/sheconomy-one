@@ -35,5 +35,20 @@ export const CALL_AUDIO_CAPTURE = {
   echoCancellation: true,
   noiseSuppression: true,
   autoGainControl: true,
-  voiceIsolation: true,
 } as const
+
+/** Resolve mic capture constraints from persisted meeting media prefs (Original Sound). */
+export async function resolveCallAudioCapture(): Promise<{
+  echoCancellation: boolean
+  noiseSuppression: boolean
+  autoGainControl: boolean
+}> {
+  try {
+    const { loadMeetingMediaPrefs, meetingAudioCaptureConstraints } = await import(
+      '~/co-work/lib/meeting-media-prefs'
+    )
+    return meetingAudioCaptureConstraints(await loadMeetingMediaPrefs())
+  } catch {
+    return { ...CALL_AUDIO_CAPTURE }
+  }
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { reinforceCallMediaOnConnect } from '~/co-work/lib/livekit-call-media'
+import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
 
 describe('reinforceCallMediaOnConnect', () => {
   it('does not republish mic when already enabled without forceMic', async () => {
@@ -32,5 +33,10 @@ describe('reinforceCallMediaOnConnect', () => {
 
     await reinforceCallMediaOnConnect(room as never, 'meeting', { forceMicEnable: true })
     expect(setMicrophoneEnabled).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the mic track live while muted so unmute is instant', () => {
+    expect(getLiveKitRoomOptions('web').publishDefaults?.stopMicTrackOnMute).toBe(false)
+    expect(getLiveKitRoomOptions('native').publishDefaults?.stopMicTrackOnMute).toBe(false)
   })
 })

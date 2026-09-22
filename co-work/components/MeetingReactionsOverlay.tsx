@@ -53,6 +53,13 @@ function FloatingReaction({
       expiredRef.current = true
       onExpire(reaction.id)
     })
+    // Backup expire — React Native animation cancel previously left emoji stuck.
+    const backup = setTimeout(() => {
+      if (expiredRef.current) return
+      expiredRef.current = true
+      onExpire(reaction.id)
+    }, MEETING_REACTION_TTL_MS + 200)
+    return () => clearTimeout(backup)
   }, [onExpire, progress, reaction.id])
 
   const translateY = progress.interpolate({

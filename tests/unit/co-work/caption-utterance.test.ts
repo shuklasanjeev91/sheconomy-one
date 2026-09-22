@@ -24,6 +24,22 @@ describe('mergeCaptionHypothesis', () => {
   it('does not duplicate when the new chunk is already contained', () => {
     expect(mergeCaptionHypothesis('Hello how are you', 'how')).toBe('Hello how are you')
   })
+
+  it('replaces instead of stacking when the utterance restarts', () => {
+    const long =
+      'Hello hello hello How are you I am fine today Hello hello hello How are you I am'
+    expect(mergeCaptionHypothesis(long, 'Hello hello how are you doing now')).toBe(
+      'Hello hello how are you doing now',
+    )
+  })
+
+  it('trims looping repeated clauses', () => {
+    const looping =
+      'Hello how are you I am Hello how are you I am Hello how are you I am'
+    const merged = mergeCaptionHypothesis(looping, 'still speaking now about this')
+    expect(merged.split(/\s+/).length).toBeLessThanOrEqual(28)
+    expect(merged.toLowerCase().includes('hello how are you i am hello how')).toBe(false)
+  })
 })
 
 describe('isLikelyCaptionFragment', () => {

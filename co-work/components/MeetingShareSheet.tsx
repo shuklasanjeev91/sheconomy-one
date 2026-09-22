@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Platform } from 'react-native'
 
 import { ShareSheet } from '~/components/share/ShareSheet'
 import { ShareActionRow } from '~/components/share/ShareActionRow'
@@ -120,7 +119,7 @@ export function MeetingShareSheet({
     toast.show(copied ? 'Invitation copied' : 'Could not copy invitation', {
       tone: copied ? 'success' : 'danger',
       message: copied
-        ? 'Paste into WhatsApp, email, Slack, or any chat. Use Calendar icons here to add the event.'
+        ? 'Paste into WhatsApp, email, Slack, or any chat.'
         : undefined,
     })
     if (copied) onOpenChange(false)
@@ -132,7 +131,7 @@ export function MeetingShareSheet({
       onOpenChange={onOpenChange}
       title="Share meeting"
       copyLabel="Copy meeting link"
-      copyToastMessage="Meeting link copied. Recipients can join and add it to their calendar."
+      copyToastMessage="Meeting link copied."
       payload={buildMeetingSharePayload(meeting)}
       extraActions={
         <YStack gap="$1">
@@ -142,11 +141,7 @@ export function MeetingShareSheet({
           </Text>
           <ShareActionRow
             icon={Icons.CalendarPlus}
-            label={
-              Platform.OS === 'web'
-                ? 'Add to calendar (Google / ICS)'
-                : 'Add to default calendar'
-            }
+            label="Add to calendar"
             onPress={() => void handleAddToDefaultCalendar()}
           />
           <ShareActionRow

@@ -112,6 +112,36 @@ describe('meeting stage tracks', () => {
     ])
   })
 
+  it('prioritizes video-on participants ahead of camera-off in gallery order', () => {
+    const localCamera = track('local', Track.Source.Camera)
+    const cameraOff = {
+      ...track('remote-off', Track.Source.Camera),
+      participant: { identity: 'remote-off', isCameraEnabled: false },
+    } as TrackReferenceOrPlaceholder
+    const cameraOn = {
+      ...track('remote-on', Track.Source.Camera),
+      participant: { identity: 'remote-on', isCameraEnabled: true },
+    } as TrackReferenceOrPlaceholder
+    const speakingOff = {
+      ...track('remote-speaking', Track.Source.Camera),
+      participant: { identity: 'remote-speaking', isCameraEnabled: false, isSpeaking: true },
+    } as TrackReferenceOrPlaceholder
+
+    const result = composeMeetingStageTracks(
+      [localCamera, cameraOff, speakingOff, cameraOn],
+      'local',
+      'gallery',
+      'remote-speaking',
+    )
+
+    expect(result.stageTracks.map((item) => item.participant.identity)).toEqual([
+      'remote-on',
+      'remote-speaking',
+      'remote-off',
+      'local',
+    ])
+  })
+
   it('does not collapse gallery when a remote screen share is also present', () => {
     const localCamera = track('local', Track.Source.Camera)
     const remoteCamera = track('remote', Track.Source.Camera)

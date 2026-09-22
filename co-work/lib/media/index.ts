@@ -2,7 +2,6 @@ import {
   getRuntimePlatform,
   hasDisplayMedia,
   hasMediaRecorder,
-  hasSpeechRecognition,
   isNativeRuntime,
   supportsLiveKitVideo,
 } from '~/lib/platform/capabilities'
@@ -16,12 +15,12 @@ export function getMediaCapabilities(): MediaCapabilities {
   return {
     platform,
     supportsVideo: liveKit,
-    // Production meetings use LiveKit SFU (getDisplayMedia / native broadcast),
-    // never a peer-to-peer mesh. iOS uses ReplayKit picker; Android uses
-    // MediaProjection via livekit-react-native-webrtc.
+    // Production meetings use LiveKit SFU (getDisplayMedia / native broadcast).
+    // iOS: ReplayKit. Android: MediaProjection from store build 182+.
     supportsScreenShare: hasDisplayMedia() || platform === 'ios' || platform === 'android',
     supportsRecording: hasMediaRecorder() || isNativeRuntime(),
-    supportsLiveCaptions: hasSpeechRecognition() || isNativeRuntime(),
+    // Viewing shared captions is always available; publishing still needs STT.
+    supportsLiveCaptions: true,
   }
 }
 

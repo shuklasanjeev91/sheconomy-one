@@ -15,6 +15,7 @@ describe('meeting participant actions', () => {
     ).toEqual([
       'mute',
       'stop_video',
+      'put_in_waiting_room',
       'remove',
       'ask_to_mute',
       'make_co_host',
@@ -29,7 +30,7 @@ describe('meeting participant actions', () => {
         isMuted: true,
         isVideoOff: true,
       }),
-    ).toEqual(['ask_to_unmute', 'remove', 'ask_to_mute', 'make_co_host', 'make_host'])
+    ).toEqual(['ask_to_unmute', 'put_in_waiting_room', 'remove', 'ask_to_mute', 'make_co_host', 'make_host'])
   })
 
   it('hides self-actions and blocks co-host peer moderation', () => {
@@ -61,7 +62,7 @@ describe('meeting participant actions', () => {
         isMuted: false,
         isVideoOff: false,
       }),
-    ).toEqual(['mute', 'stop_video', 'remove', 'ask_to_mute'])
+    ).toEqual(['mute', 'stop_video', 'put_in_waiting_room', 'remove', 'ask_to_mute'])
   })
 
   it('limits bulk host controls by role', () => {

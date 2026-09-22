@@ -58,11 +58,14 @@ export function resolveNativeVideoStreamAttachId(
       }
     | null
     | undefined,
+  options?: { allowTrackIdFallback?: boolean },
 ): string | null {
   const ensured = ensureNativeVideoMediaStream(track)
   const streamId = ensured?.id ?? track?.mediaStream?.id
   if (typeof streamId === 'string' && streamId.length > 0) return streamId
-  // Last resort: track id — still remounts VideoTrack once a MediaStreamTrack exists.
+  if (options?.allowTrackIdFallback === false) return null
+  // Last resort for cameras only — screen share RTCView blanks forever if we
+  // mount with a track id before MediaStream exists.
   const trackId = track?.mediaStreamTrack?.id
   if (typeof trackId === 'string' && trackId.length > 0) {
     ensureNativeVideoMediaStream(track)

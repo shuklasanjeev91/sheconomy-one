@@ -123,11 +123,36 @@ export async function revokeCurrentLoginSession(): Promise<{ error: string | nul
   return revokeLoginSession(id)
 }
 
-/** Throttled last-seen heartbeat for the current device. */
+const HEARTBEAT_STORAGE_KEY = 'sheconomy.auth.last_heartbeat'
+
 let lastHeartbeat = 0
+
+function getStoredHeartbeat(): number {
+  if (lastHeartbeat > 0) return lastHeartbeat
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      const stored = window.sessionStorage.getItem(HEARTBEAT_STORAGE_KEY)
+      if (stored) {
+        lastHeartbeat = Number(stored) || 0
+      }
+    } catch {}
+  }
+  return lastHeartbeat
+}
+
+function setStoredHeartbeat(ts: number) {
+  lastHeartbeat = ts
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.setItem(HEARTBEAT_STORAGE_KEY, String(ts))
+    } catch {}
+  }
+}
+
+/** Throttled last-seen heartbeat for the current device (5-minute cooldown). */
 export async function heartbeatLoginSession(): Promise<void> {
   const now = Date.now()
-  if (now - lastHeartbeat < 5 * 60 * 1000) return
-  lastHeartbeat = now
+  if (now - getStoredHeartbeat() < 5 * 60 * 1000) return
+  setStoredHeartbeat(now)
   await recordLoginSession()
 }

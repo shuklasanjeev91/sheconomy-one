@@ -79,7 +79,7 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
       const result = await publishRecordingAsClassLesson({
         userId: user.id,
         recordingId,
-        meetingTitle: 'Co-Work meeting recording',
+        meetingTitle: 'Meeting recording',
       })
       if (result.error) {
         toast.show('Could not publish lesson', { tone: 'danger', message: result.error })
@@ -126,7 +126,7 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
           {error}
         </Text>
         <Button tone="outline" borderRadius={999} onPress={() => navigateApp(coWorkRoutes.home)}>
-          Back to Co-Work
+          Back to Meetings
         </Button>
       </ScreenCenter>
     )
@@ -141,7 +141,7 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
 
   return (
     <ScreenFill backgroundColor="#0c080a" padding="$4" gap="$4">
-      <YStack gap="$2" maxWidth={960} width="100%" alignSelf="center">
+      <YStack gap="$2" width="100%" maxWidth="100%" alignSelf="stretch">
         <Text fontSize={22} fontWeight="800" color="#fff">
           Meeting recording
         </Text>
@@ -159,8 +159,8 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
       <YStack
         flex={1}
         width="100%"
-        maxWidth={960}
-        alignSelf="center"
+        maxWidth="100%"
+        alignSelf="stretch"
         borderRadius={18}
         overflow="hidden"
         backgroundColor="#1a1216"
@@ -192,7 +192,7 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
         )}
       </YStack>
 
-      <XStack maxWidth={960} width="100%" alignSelf="center" gap="$2" flexWrap="wrap">
+      <XStack width="100%" maxWidth="100%" alignSelf="stretch" gap="$2" flexWrap="wrap">
         {Platform.OS === 'web' ? (
           <Button
             tone="outline"

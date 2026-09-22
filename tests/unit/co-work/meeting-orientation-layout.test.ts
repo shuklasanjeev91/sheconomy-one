@@ -83,5 +83,22 @@ describe('meeting orientation layout', () => {
     expect(withStrip.width).toBeLessThan(withoutStrip.width)
     expect(withStrip.height).toBe(withoutStrip.height)
     expect(withStrip.width + chrome.filmstripWidth).toBeLessThanOrEqual(withoutStrip.width + chrome.filmstripWidth + 10)
+
+    const desk = resolveMeetingChromeLayout({ width: 1280, height: 800 })
+    const withPanel = meetingStageContentBox({
+      viewportWidth: 1280,
+      viewportHeight: 800,
+      chrome: desk,
+      filmstripExpanded: false,
+      stageTrailingInset: 400,
+    })
+    const withoutPanel = meetingStageContentBox({
+      viewportWidth: 1280,
+      viewportHeight: 800,
+      chrome: desk,
+      filmstripExpanded: false,
+      stageTrailingInset: 0,
+    })
+    expect(withPanel.width).toBe(withoutPanel.width - 400)
   })
 })

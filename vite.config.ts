@@ -76,6 +76,8 @@ export default defineConfig(({ mode }) => {
         '@tamagui/core',
         '@tamagui/web',
         '@tamagui/config',
+        '@tamagui/helpers-icon',
+        '@tamagui/sizable-context',
         '@tamagui/lucide-icons',
         'react',
         'react-native',
@@ -121,6 +123,12 @@ export default defineConfig(({ mode }) => {
         tamagui: fromProjectRoot('./node_modules/tamagui'),
         '@tamagui/web': fromProjectRoot('./node_modules/@tamagui/web'),
         '@tamagui/core': fromProjectRoot('./node_modules/@tamagui/core'),
+        // Lucide icons call themed() → usePropsAndStyle from helpers-icon.
+        // Async meeting chunks must share this copy or Join paints "Missing theme.".
+        '@tamagui/helpers-icon': fromProjectRoot('./node_modules/@tamagui/helpers-icon'),
+        '@tamagui/sizable-context': fromProjectRoot('./node_modules/@tamagui/sizable-context'),
+        // `loglevel` ships legacy UMD (`root.log = definition()`) which crashes Vite SSR.
+        loglevel: fromProjectRoot('./lib/stubs/loglevel.ts'),
         zod: fromProjectRoot('./lib/zod.ts'),
       },
     },
@@ -599,6 +607,10 @@ if (typeof g.Response !== 'function') {
       include: [
         '@tamagui/config',
         'tamagui',
+        '@tamagui/core',
+        '@tamagui/helpers-icon',
+        '@tamagui/sizable-context',
+        '@tamagui/lucide-icons',
         'date-fns',
         // LiveKit only — do not prebundle expo-* here; those thrash deps_ssr and
         // throw "new version of the pre-bundle … page reload" on meeting routes.

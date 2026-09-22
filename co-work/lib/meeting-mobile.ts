@@ -1,3 +1,5 @@
+import { ANDROID_PRESENT_UNAVAILABLE_MESSAGE } from '~/co-work/lib/android-present-build'
+
 /**
  * Mobile-specific meeting requirements helpers (Android / iOS).
  * Pure policy + copy — never throws; callers must treat denials as soft failures.
@@ -28,7 +30,7 @@ export function meetingPermissionDenialMessage(
     case 'microphone':
       return blocked
         ? 'Microphone access is blocked. Enable it in Settings → SHEconomy, then try again.'
-        : 'Microphone permission is required to join with audio.'
+        : 'Allow microphone access to unmute and speak in this meeting.'
     case 'camera':
       return blocked
         ? 'Camera access is blocked. Enable it in Settings → SHEconomy to show video.'
@@ -66,18 +68,32 @@ export function canJoinMeetingWithoutScreenShare(): true {
 export function softMediaToggleFailure(
   action: 'microphone' | 'camera' | 'screen_share' | 'speaker',
   cause?: unknown,
+  options?: { blockedInSettings?: boolean },
 ): string {
   const raw = cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : ''
-  if (/NotAllowed|Permission|denied|unauthorized/i.test(raw)) {
-    if (action === 'microphone') return meetingPermissionDenialMessage('microphone')
-    if (action === 'camera') return meetingPermissionDenialMessage('camera')
-    if (action === 'screen_share') return meetingPermissionDenialMessage('screen_broadcast')
+  const blockedInSettings = !!options?.blockedInSettings
+  if (
+    blockedInSettings ||
+    /NotAllowed|Permission|denied|unauthorized|RECORD_AUDIO/i.test(raw)
+  ) {
+    if (action === 'microphone') {
+      return meetingPermissionDenialMessage('microphone', { blockedInSettings })
+    }
+    if (action === 'camera') {
+      return meetingPermissionDenialMessage('camera', { blockedInSettings })
+    }
+    if (action === 'screen_share') {
+      return meetingPermissionDenialMessage('screen_broadcast', { blockedInSettings })
+    }
   }
   if (action === 'speaker') {
     return 'Could not switch speaker / earpiece. Check Bluetooth permissions if using a headset.'
   }
   if (action === 'screen_share') {
-    if (/without video frames|did not start|MediaProjection|foreground|build 17/i.test(raw)) {
+    if (
+      raw === ANDROID_PRESENT_UNAVAILABLE_MESSAGE ||
+      /without video frames|did not start|MediaProjection|foreground|build 17/i.test(raw)
+    ) {
       return raw
     }
     return meetingPermissionDenialMessage('screen_broadcast')
@@ -85,7 +101,7 @@ export function softMediaToggleFailure(
   if (action === 'camera') {
     return 'Could not toggle camera. Check camera permission in Settings.'
   }
-  return 'Could not update microphone. Check microphone permission in Settings.'
+  return 'Could not change microphone state. Check microphone permission and try again.'
 }
 
 export type MeetingMobileInterruptionKind =
@@ -110,6 +126,22 @@ export function meetingMobileInterruptionNotice(
     case 'none':
       return null
   }
+}
+
+export const MEETING_BACKGROUND_CAMERA_PAUSE_DEBOUNCE_MS = 1_200
+
+/**
+ * Android camera / mic permission sheets often flip AppState to `background`
+ * for under a second. Pausing the camera immediately shows a false
+ * "Camera is paused while Sheconomy is in the background" banner and fights
+ * the Start Video tap. Debounce so only a sustained background pauses media.
+ */
+export function shouldConfirmNativeBackgroundPause(
+  stillBackground: boolean,
+  elapsedMs: number,
+  debounceMs = MEETING_BACKGROUND_CAMERA_PAUSE_DEBOUNCE_MS,
+): boolean {
+  return stillBackground && elapsedMs >= debounceMs
 }
 
 /** Classify AppState transitions for interruption UX.

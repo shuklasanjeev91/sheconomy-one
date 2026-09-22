@@ -30,7 +30,7 @@ type MenuTile = {
 
 /**
  * Secondary destinations only — never repeat APP_CENTER_NAV hubs
- * (Marketplace / Community / Chat / Classes / Co-Work).
+ * (Commerce / Community / Chat / Class / Co-Work).
  */
 function useExploreTiles(): MenuTile[] {
   const { canAccessFeature } = useAccess()

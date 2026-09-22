@@ -11,6 +11,8 @@ describe('live caption viewer preferences', () => {
       collapsed: false,
       size: 'comfortable',
       placement: 'bottom',
+      offsetX: 0,
+      offsetY: 0,
     })
   })
 
@@ -32,6 +34,8 @@ describe('live caption viewer preferences', () => {
       collapsed: true,
       size: 'large',
       placement: 'top',
+      offsetX: 0,
+      offsetY: 0,
     })
   })
 
@@ -52,6 +56,8 @@ describe('live caption viewer preferences', () => {
       collapsed: false,
       size: 'comfortable',
       placement: 'bottom',
+      offsetX: 0,
+      offsetY: 0,
     })
   })
 

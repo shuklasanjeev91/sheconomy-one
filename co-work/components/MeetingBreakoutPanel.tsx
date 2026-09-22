@@ -33,6 +33,10 @@ type MeetingBreakoutPanelProps = {
   onOpenBreakouts?: () => void
   onCloseBreakouts?: () => void
   onJoinBreakoutRoom?: (liveKitRoomName: string) => void
+  /** Host broadcast message into open breakouts (chat notice). */
+  onBroadcastToBreakouts?: (message: string) => void
+  /** Host sets breakout end timestamp (ms) for participant countdown. */
+  onBreakoutTimerSet?: (endsAt: number | null) => void
   fullWidth?: boolean
 }
 
@@ -65,15 +69,23 @@ export function MeetingBreakoutPanel({
   onOpenBreakouts,
   onCloseBreakouts,
   onJoinBreakoutRoom,
+  onBroadcastToBreakouts,
+  onBreakoutTimerSet,
   fullWidth,
 }: MeetingBreakoutPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const toast = useAppToast()
-  const { rooms, loading, refresh, createRooms, autoAssign, setStatus } = useMeetingBreakouts({
-    meetingId,
-  })
+  const { rooms, loading, refresh, createRooms, autoAssign, assignUser, setStatus } =
+    useMeetingBreakouts({
+      meetingId,
+    })
   const [roomCount, setRoomCount] = useState('3')
+  const [timerMinutes, setTimerMinutes] = useState('10')
+  const [broadcastText, setBroadcastText] = useState('')
+  const [moveUserId, setMoveUserId] = useState('')
+  const [moveRoomId, setMoveRoomId] = useState('')
   const [busy, setBusy] = useState(false)
+  const [endsAt, setEndsAt] = useState<number | null>(null)
 
   const assignableUserIds = useMemo(
     () => participants.map((p) => p.user_id).filter(Boolean),
@@ -122,8 +134,15 @@ export function MeetingBreakoutPanel({
     setBusy(true)
     try {
       await setStatus('open')
+      const minutes = Math.min(Math.max(parseInt(timerMinutes, 10) || 0, 0), 180)
+      const nextEndsAt = minutes > 0 ? Date.now() + minutes * 60_000 : null
+      setEndsAt(nextEndsAt)
+      onBreakoutTimerSet?.(nextEndsAt)
       onOpenBreakouts?.()
-      toast.show('Breakouts opened', { tone: 'success' })
+      toast.show('Breakouts opened', {
+        tone: 'success',
+        message: minutes > 0 ? `Timer set for ${minutes} min` : undefined,
+      })
     } catch (err) {
       toast.show('Could not open breakouts', {
         tone: 'danger',
@@ -134,10 +153,52 @@ export function MeetingBreakoutPanel({
     }
   }
 
+  async function handleManualAssign() {
+    if (!moveUserId || !moveRoomId) {
+      toast.show('Pick a participant and a room', { tone: 'info' })
+      return
+    }
+    setBusy(true)
+    try {
+      await assignUser({
+        breakoutId: moveRoomId,
+        userId: moveUserId,
+        assignedBy: userId,
+      })
+      toast.show('Participant moved', { tone: 'success' })
+      setMoveUserId('')
+    } catch (err) {
+      toast.show('Could not move participant', {
+        tone: 'danger',
+        message: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function handleBroadcast() {
+    const message = broadcastText.trim()
+    if (!message) {
+      toast.show('Enter a broadcast message', { tone: 'info' })
+      return
+    }
+    onBroadcastToBreakouts?.(message)
+    setBroadcastText('')
+    toast.show('Broadcast sent', { tone: 'success' })
+  }
+
+  const remainingLabel =
+    endsAt && endsAt > Date.now()
+      ? `${Math.max(1, Math.ceil((endsAt - Date.now()) / 60_000))} min left`
+      : null
+
   async function handleCloseAll() {
     setBusy(true)
     try {
       await setStatus('closed')
+      setEndsAt(null)
+      onBreakoutTimerSet?.(null)
       onCloseBreakouts?.()
       toast.show('Breakouts closed', { tone: 'success' })
     } catch (err) {
@@ -204,6 +265,23 @@ export function MeetingBreakoutPanel({
                   borderRadius={14}
                 />
               </Field>
+              <Field label="Timer (minutes, optional)">
+                <Input
+                  value={timerMinutes}
+                  onChangeText={setTimerMinutes}
+                  keyboardType="number-pad"
+                  placeholder="10"
+                  backgroundColor="rgba(255,255,255,0.05)"
+                  borderColor={coworkUi.borderSoft}
+                  color={coworkUi.text}
+                  borderRadius={14}
+                />
+              </Field>
+              {remainingLabel ? (
+                <Text fontSize={12} color={coworkUi.brandLight} fontWeight="700">
+                  {remainingLabel}
+                </Text>
+              ) : null}
               <Text fontSize={12} color={coworkUi.textMuted}>
                 {assignableUserIds.length} admitted participant
                 {assignableUserIds.length === 1 ? '' : 's'} will be auto-assigned evenly.
@@ -238,6 +316,70 @@ export function MeetingBreakoutPanel({
                   Close all
                 </Button>
               </XStack>
+
+              {rooms.length ? (
+                <YStack gap="$2" paddingTop="$2">
+                  <CoWorkSectionLabel>Manual assign</CoWorkSectionLabel>
+                  <Text fontSize={12} color={coworkUi.textMuted}>
+                    Tap a participant, then a room.
+                  </Text>
+                  <XStack gap="$2" flexWrap="wrap">
+                    {participants.map((participant) => (
+                      <Button
+                        key={participant.user_id}
+                        tone={moveUserId === participant.user_id ? 'primary' : 'outline'}
+                        size="$2"
+                        borderRadius={999}
+                        onPress={() => setMoveUserId(participant.user_id)}
+                      >
+                        {participant.display_name || participant.user_id.slice(0, 8)}
+                      </Button>
+                    ))}
+                  </XStack>
+                  <XStack gap="$2" flexWrap="wrap">
+                    {rooms.map((room) => (
+                      <Button
+                        key={room.id}
+                        tone={moveRoomId === room.id ? 'primary' : 'outline'}
+                        size="$2"
+                        borderRadius={999}
+                        onPress={() => setMoveRoomId(room.id)}
+                      >
+                        {room.title}
+                      </Button>
+                    ))}
+                  </XStack>
+                  <Button
+                    tone="outline"
+                    size="$2"
+                    borderRadius={12}
+                    disabled={busy}
+                    onPress={() => void handleManualAssign()}
+                  >
+                    Move to selected room
+                  </Button>
+                  <Field label="Broadcast to breakouts">
+                    <Input
+                      value={broadcastText}
+                      onChangeText={setBroadcastText}
+                      placeholder="Return to the main room in 2 minutes…"
+                      backgroundColor="rgba(255,255,255,0.05)"
+                      borderColor={coworkUi.borderSoft}
+                      color={coworkUi.text}
+                      borderRadius={14}
+                    />
+                  </Field>
+                  <Button
+                    tone="outline"
+                    size="$2"
+                    borderRadius={12}
+                    disabled={!onBroadcastToBreakouts}
+                    onPress={handleBroadcast}
+                  >
+                    Broadcast
+                  </Button>
+                </YStack>
+              ) : null}
             </YStack>
           ) : null}
 

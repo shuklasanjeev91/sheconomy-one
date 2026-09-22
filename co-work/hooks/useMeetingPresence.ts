@@ -16,6 +16,7 @@ import {
   joinMeetingParticipant,
   leaveMeetingParticipant,
   removeMeetingParticipant,
+  putMeetingParticipantInWaitingRoom,
   removeMeetingCoHost,
   sendMeetingControl,
   sendMeetingChatMessage,
@@ -46,9 +47,25 @@ import type {
 } from '~/co-work/lib/types'
 import type { LiveCaptionLine } from '~/co-work/lib/live-captions'
 import type { FloatingMeetingReaction } from '~/co-work/lib/meeting-reactions'
+import {
+  isMeetingNonverbalStatusId,
+  type MeetingNonverbalStatusId,
+} from '~/co-work/lib/meeting-nonverbal'
 import { canManageMeeting } from '~/co-work/lib/meeting-role-permissions'
 import type { MeetingChatAudience } from '~/co-work/lib/meeting-role-permissions'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
+import {
+  applyWhiteboardEvent,
+  emptyWhiteboardSession,
+  type WhiteboardStroke,
+} from '~/co-work/lib/meeting-whiteboard'
+import {
+  meetingPresenceHealDelayMs,
+  meetingPresencePollIntervalMs,
+  shouldShowMeetingJoiningOverlay,
+  shouldSkipStackedPresenceConnect,
+  type MeetingPresencePollMode,
+} from '~/co-work/lib/meeting-presence-refresh'
 
 type UseMeetingPresenceOptions = {
   meeting: Meeting
@@ -67,10 +84,6 @@ type MediaHandlers = {
   onMeetingEnded?: () => void
 }
 
-const POLL_INTERVAL_MS = 4000
-const POLL_INTERVAL_LARGE_MS = 12_000
-const LARGE_ROOM_PARTICIPANT_THRESHOLD = 40
-
 /** Supabase-backed meeting presence + chat (signaling / participant state). Media is SFU-only via MeetingProvider. */
 export function useMeetingPresence({
   meeting,
@@ -87,8 +100,13 @@ export function useMeetingPresence({
   const controlsSinceRef = useRef(new Date().toISOString())
   const seenControlIdsRef = useRef(new Set<string>())
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollModeRef = useRef<MeetingPresencePollMode | 'off'>('off')
   const realtimeActiveRef = useRef(false)
   const intentionalDisconnectRef = useRef(false)
+  const connectInFlightRef = useRef(false)
+  const hasJoinedRef = useRef(false)
+  const healAttemptRef = useRef(0)
+  const participantsInFlightRef = useRef(false)
 
   const [participants, setParticipants] = useState<MeetingParticipant[]>([])
   const [moderationSettings, setModerationSettings] = useState<MeetingModerationSettings | null>(null)
@@ -106,6 +124,7 @@ export function useMeetingPresence({
     | 'polls'
     | 'qna'
     | 'breakouts'
+    | 'notes'
   >('none')
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(true)
@@ -130,6 +149,37 @@ export function useMeetingPresence({
     message: string
   } | null>(null)
   const [floatingReactions, setFloatingReactions] = useState<FloatingMeetingReaction[]>([])
+  const [nonverbalByUserId, setNonverbalByUserId] = useState<
+    Record<string, MeetingNonverbalStatusId>
+  >({})
+  const [localNonverbal, setLocalNonverbal] = useState<MeetingNonverbalStatusId | null>(null)
+  const [liveTopic, setLiveTopic] = useState<string | null>(null)
+  const [whiteboard, setWhiteboard] = useState(emptyWhiteboardSession)
+  /** Host spotlight for everyone — synced via realtime broadcast. */
+  const [spotlightUserId, setSpotlightUserId] = useState<string | null>(null)
+  const [webinarMode, setWebinarMode] = useState(false)
+  const [interpretationChannelId, setInterpretationChannelId] = useState<string | null>('floor')
+  const [breakoutBroadcast, setBreakoutBroadcast] = useState<{
+    id: string
+    message: string
+  } | null>(null)
+  const [breakoutEndsAt, setBreakoutEndsAt] = useState<number | null>(null)
+  const [remoteControlRequest, setRemoteControlRequest] = useState<{
+    from: string
+    name: string
+    timestamp: number
+  } | null>(null)
+  const [annotationStrokes, setAnnotationStrokes] = useState<
+    Array<{
+      id: string
+      color: string
+      width: number
+      points: Array<{ x: number; y: number }>
+      from: string
+      createdAt: number
+    }>
+  >([])
+  const [annotationOpen, setAnnotationOpen] = useState(false)
   const displayNameByUserRef = useRef<Record<string, string>>({})
   const participantsCountRef = useRef(0)
 
@@ -157,19 +207,25 @@ export function useMeetingPresence({
     (!isRealtimeConnected && hostParticipant?.status === 'admitted')
 
   const refreshParticipants = useCallback(async () => {
-    const rows = await fetchMeetingParticipants(meeting.id)
-    setParticipants(rows)
-    displayNameByUserRef.current = Object.fromEntries(
-      rows.map((row) => {
-        const name = safeMeetingDisplayName(
-          row.display_name?.trim() ||
-            row.profile?.full_name?.trim() ||
-            row.profile?.username?.trim(),
-          'Participant',
-        )
-        return [row.user_id, name]
-      }),
-    )
+    if (participantsInFlightRef.current) return
+    participantsInFlightRef.current = true
+    try {
+      const rows = await fetchMeetingParticipants(meeting.id)
+      setParticipants(rows)
+      displayNameByUserRef.current = Object.fromEntries(
+        rows.map((row) => {
+          const name = safeMeetingDisplayName(
+            row.display_name?.trim() ||
+              row.profile?.full_name?.trim() ||
+              row.profile?.username?.trim(),
+            'Participant',
+          )
+          return [row.user_id, name]
+        }),
+      )
+    } finally {
+      participantsInFlightRef.current = false
+    }
   }, [meeting.id])
 
   const refreshModerationSettings = useCallback(async () => {
@@ -221,6 +277,24 @@ export function useMeetingPresence({
 
       if (!isNew || panelRef.current === 'chat') return
 
+      // Join/leave system lines stay in chat history only — no toast over the stage.
+      if (
+        message.audience === 'system' ||
+        message.message_type === 'system' ||
+        message.system_event_type
+      ) {
+        const event = message.system_event_type
+        const text = message.message_text || ''
+        if (
+          event === 'participant_left' ||
+          event === 'participant_joined' ||
+          event === 'participant_admitted' ||
+          / (left|joined|was admitted)$/i.test(text.trim())
+        ) {
+          return
+        }
+      }
+
       setUnreadChatCount((count) => count + 1)
       const senderName =
         message.audience === 'system' || message.message_type === 'system'
@@ -243,22 +317,28 @@ export function useMeetingPresence({
       clearInterval(pollRef.current)
       pollRef.current = null
     }
+    pollModeRef.current = 'off'
   }, [])
 
-  const startPolling = useCallback(() => {
-    if (pollRef.current) return
+  const startPolling = useCallback((mode: MeetingPresencePollMode) => {
+    if (pollRef.current && pollModeRef.current === mode) return
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+    pollModeRef.current = mode
     const tick = () => {
       void refreshParticipants().catch(() => undefined)
       void refreshModerationSettings().catch(() => undefined)
       void refreshControls().catch(() => undefined)
-      if (!realtimeActiveRef.current) {
+      if (mode === 'degraded' || !realtimeActiveRef.current) {
         void refreshChat().catch(() => undefined)
       }
     }
-    // Large rooms: slower reconciliation; realtime events remain primary.
-    const admittedGuess = participantsCountRef.current
-    const interval =
-      admittedGuess >= LARGE_ROOM_PARTICIPANT_THRESHOLD ? POLL_INTERVAL_LARGE_MS : POLL_INTERVAL_MS
+    const interval = meetingPresencePollIntervalMs({
+      mode,
+      participantCount: participantsCountRef.current,
+    })
     pollRef.current = setInterval(tick, interval)
   }, [refreshChat, refreshControls, refreshModerationSettings, refreshParticipants])
 
@@ -268,12 +348,25 @@ export function useMeetingPresence({
     return true
   }, [])
 
-  const handleConnectionState = useCallback((connected: boolean) => {
-    if (intentionalDisconnectRef.current) return
-    realtimeActiveRef.current = connected
-    setIsRealtimeConnected(connected)
-    if (!connected) setRealtimeDegraded(true)
-  }, [])
+  const handleConnectionState = useCallback(
+    (connected: boolean) => {
+      if (intentionalDisconnectRef.current) return
+      console.debug(
+        `[presence] handleConnectionState meeting=${meeting.id} user=${userId} connected=${connected} time=${new Date().toISOString()}`,
+      )
+      realtimeActiveRef.current = connected
+      setIsRealtimeConnected(connected)
+      if (!connected) {
+        setRealtimeDegraded(true)
+        startPolling('degraded')
+      } else {
+        setRealtimeDegraded(false)
+        healAttemptRef.current = 0
+        startPolling('healthy')
+      }
+    },
+    [meeting.id, startPolling, userId],
+  )
 
   const pushFloatingReaction = useCallback(
     (input: { from: string; emoji: string; name?: string; timestamp?: number }) => {
@@ -317,12 +410,60 @@ export function useMeetingPresence({
         })
         return
       }
+      if (payload.type === 'nonverbal-feedback') {
+        const status = payload.status
+        setNonverbalByUserId((prev) => {
+          if (status == null) {
+            if (!(payload.from in prev)) return prev
+            const next = { ...prev }
+            delete next[payload.from]
+            return next
+          }
+          if (!isMeetingNonverbalStatusId(status)) return prev
+          if (prev[payload.from] === status) return prev
+          return { ...prev, [payload.from]: status }
+        })
+        return
+      }
+      if (payload.type === 'lower-all-hands') {
+        handRaisedRef.current = false
+        setHandRaised(false)
+        setRaisedHands({})
+        return
+      }
+      if (payload.type === 'lower-hand' && payload.targetUserId) {
+        const target = payload.targetUserId
+        if (target === userId) {
+          handRaisedRef.current = false
+          setHandRaised(false)
+        }
+        setRaisedHands((prev) => {
+          if (!prev[target]) return prev
+          const next = { ...prev }
+          delete next[target]
+          return next
+        })
+        return
+      }
+      if (payload.type === 'clear-all-feedback') {
+        setLocalNonverbal(null)
+        setNonverbalByUserId({})
+        return
+      }
+      if (payload.type === 'meeting-topic' && payload.title?.trim()) {
+        setLiveTopic(payload.title.trim())
+        return
+      }
       // Moderation controls are intentionally not trusted from broadcast
       // payloads. Only server-authorized meeting_control_events are applied.
       // Live captions: accept finals + interim so peers see Zoom-style live text.
       if (payload.type === 'caption' && payload.from !== userId) {
+        // Stable interim id per speaker so viewers can cache/translate without
+        // cancelling work on every STT partial (timestamp churn).
         const nextLine: LiveCaptionLine = {
-          id: `${payload.from}-${payload.timestamp}-${payload.isFinal ? 'f' : 'i'}`,
+          id: payload.isFinal
+            ? `${payload.from}-${payload.timestamp}-f`
+            : `${payload.from}-interim`,
           userId: payload.from,
           speaker: payload.speaker,
           text: payload.text,
@@ -358,6 +499,92 @@ export function useMeetingPresence({
         mediaHandlersRef.current.onMeetingEnded?.()
         return
       }
+      if (payload.type === 'whiteboard-open') {
+        setWhiteboard((current) => applyWhiteboardEvent(current, { type: 'open', from: payload.from }))
+        return
+      }
+      if (payload.type === 'whiteboard-close') {
+        setWhiteboard((current) => applyWhiteboardEvent(current, { type: 'close' }))
+        return
+      }
+      if (payload.type === 'whiteboard-stroke' && payload.stroke) {
+        setWhiteboard((current) => applyWhiteboardEvent(current, { type: 'stroke', stroke: payload.stroke }))
+        return
+      }
+      if (payload.type === 'whiteboard-undo') {
+        setWhiteboard((current) =>
+          applyWhiteboardEvent(current, { type: 'undo', strokeId: payload.strokeId, from: payload.from }),
+        )
+        return
+      }
+      if (payload.type === 'whiteboard-clear') {
+        setWhiteboard((current) => applyWhiteboardEvent(current, { type: 'clear' }))
+        return
+      }
+      if (payload.type === 'spotlight') {
+        setSpotlightUserId(payload.targetUserId ? String(payload.targetUserId) : null)
+        return
+      }
+      if (payload.type === 'webinar-mode') {
+        setWebinarMode(!!payload.enabled)
+        return
+      }
+      if (payload.type === 'interpretation-channel') {
+        setInterpretationChannelId(payload.channelId ? String(payload.channelId) : 'floor')
+        return
+      }
+      if (payload.type === 'breakout-broadcast') {
+        setBreakoutBroadcast({
+          id: `bo-bcast-${payload.timestamp}`,
+          message: payload.message,
+        })
+        setLatestChatNotice({
+          id: `bo-bcast-${payload.timestamp}`,
+          title: 'Breakout broadcast',
+          message: payload.message,
+        })
+        return
+      }
+      if (payload.type === 'breakout-timer') {
+        setBreakoutEndsAt(typeof payload.endsAt === 'number' ? payload.endsAt : null)
+        return
+      }
+      if (payload.type === 'annotation-open') {
+        setAnnotationOpen(true)
+        return
+      }
+      if (payload.type === 'annotation-close') {
+        setAnnotationOpen(false)
+        setAnnotationStrokes([])
+        return
+      }
+      if (payload.type === 'annotation-clear') {
+        setAnnotationStrokes([])
+        return
+      }
+      if (payload.type === 'annotation-stroke' && payload.stroke) {
+        setAnnotationOpen(true)
+        setAnnotationStrokes((current) => [...current, payload.stroke].slice(-200))
+        return
+      }
+      if (payload.type === 'remote-control-request' && payload.to === userId) {
+        setRemoteControlRequest({
+          from: payload.from,
+          name: payload.name || 'Someone',
+          timestamp: payload.timestamp,
+        })
+        return
+      }
+      if (payload.type === 'remote-control-response' && payload.to === userId) {
+        setLatestChatNotice({
+          id: `remote-control-res-${payload.timestamp}`,
+          title: 'Remote control',
+          message: payload.accepted
+            ? 'Your remote control request was accepted.'
+            : 'Your remote control request was denied.',
+        })
+        return
+      }
       if (payload.type !== 'presence' || payload.from === userId) return
 
       const handUp = !!payload.hand
@@ -378,33 +605,98 @@ export function useMeetingPresence({
     [ingestRemoteChatMessage, pushFloatingReaction, userId],
   )
 
-  const connect = useCallback(async () => {
-    if (!enabled) return
+  const waitingRoomEnabled = !isHost && !!meeting.security_settings?.waitingRoom
 
+  const connect = useCallback(async (opts?: { heal?: boolean }) => {
+    if (!enabled) return
+    if (shouldSkipStackedPresenceConnect(connectInFlightRef.current)) return
+
+    const heal = !!opts?.heal && hasJoinedRef.current
+    const showJoining = shouldShowMeetingJoiningOverlay({
+      heal,
+      hasJoined: hasJoinedRef.current,
+    })
+    connectInFlightRef.current = true
     const generation = ++connectGenerationRef.current
     intentionalDisconnectRef.current = false
-    setIsConnecting(true)
     setError(null)
     setConnectionFailed(false)
-    setRemovedByHost(false)
-    setIsRealtimeConnected(false)
+    if (showJoining) {
+      setRemovedByHost(false)
+      setIsConnecting(true)
+    }
+    if (heal) {
+      healAttemptRef.current += 1
+    }
 
     try {
-      const waitingRoom = !isHost && !!meeting.security_settings?.waitingRoom
-      await joinMeetingParticipant(
-        meeting.id,
-        userId,
-        isHost,
-        waitingRoom,
-        sessionIdRef.current,
-        displayName,
-      )
-      // Host reopen: startMeeting refreshes DB status (ignore stale client cache).
-      if (isHost) {
-        await startMeeting(meeting.id)
+      if (!heal) {
+        await joinMeetingParticipant(
+          meeting.id,
+          userId,
+          isHost,
+          waitingRoomEnabled,
+          sessionIdRef.current,
+          displayName,
+        )
+        // Host reopen: startMeeting refreshes DB status (ignore stale client cache).
+        if (isHost) {
+          await startMeeting(meeting.id)
+        }
+        if (generation !== connectGenerationRef.current) return
+        await refreshParticipants()
+        await refreshModerationSettings()
+        hasJoinedRef.current = true
+        setIsConnecting(false)
       }
-      await refreshParticipants()
-      await refreshModerationSettings()
+
+      try {
+        const channel = await joinMeetingChannel(meeting.id, userId, {
+          onSignal: handleSignal,
+          onParticipantChange: () => void refreshParticipants(),
+          onPresenceSync: setOnlineUserIds,
+          onConnectionState: handleConnectionState,
+          onChatMessage: (row) => {
+            if (row?.id && !row.is_deleted) {
+              ingestRemoteChatMessage({
+                id: row.id,
+                meeting_id: row.meeting_id,
+                sender_id: row.sender_id,
+                message_text: row.message_text,
+                message_type: row.message_type,
+                created_at: row.created_at,
+                audience: (row.audience as MeetingChatMessage['audience']) ?? 'everyone',
+                recipient_id: row.recipient_id ?? null,
+                system_event_type: row.system_event_type ?? null,
+                sender: null,
+              })
+              return
+            }
+            void refreshChat()
+          },
+        })
+
+        if (generation !== connectGenerationRef.current) {
+          await unsubscribeMeetingChannel(channel)
+          return
+        }
+
+        channelRef.current = channel
+        realtimeActiveRef.current = true
+        setIsRealtimeConnected(true)
+        setRealtimeDegraded(false)
+        healAttemptRef.current = 0
+        startPolling('healthy')
+        await refreshChat()
+      } catch {
+        if (generation !== connectGenerationRef.current) return
+
+        realtimeActiveRef.current = false
+        setIsRealtimeConnected(false)
+        setRealtimeDegraded(true)
+        startPolling('degraded')
+        await refreshChat()
+      }
     } catch (joinError) {
       if (generation !== connectGenerationRef.current) return
       const message = joinError instanceof Error ? joinError.message : 'Failed to join meeting'
@@ -412,62 +704,11 @@ export function useMeetingPresence({
       setRemovedByHost(/removed from this meeting/i.test(message))
       setConnectionFailed(!/removed from this meeting/i.test(message))
       setIsConnecting(false)
-      return
-    }
-
-    // Unlock the room UI as soon as DB join succeeds. Realtime can stall
-    // (Strict Mode remount / channel timeout) and must not block "Joining…".
-    if (generation === connectGenerationRef.current) {
-      setIsConnecting(false)
-    }
-
-    try {
-      const channel = await joinMeetingChannel(meeting.id, userId, {
-        onSignal: handleSignal,
-        onParticipantChange: () => void refreshParticipants(),
-        onPresenceSync: setOnlineUserIds,
-        onConnectionState: handleConnectionState,
-        onChatMessage: (row) => {
-          if (row?.id && !row.is_deleted) {
-            ingestRemoteChatMessage({
-              id: row.id,
-              meeting_id: row.meeting_id,
-              sender_id: row.sender_id,
-              message_text: row.message_text,
-              message_type: row.message_type,
-              created_at: row.created_at,
-              audience: (row.audience as MeetingChatMessage['audience']) ?? 'everyone',
-              recipient_id: row.recipient_id ?? null,
-              system_event_type: row.system_event_type ?? null,
-              sender: null,
-            })
-          }
-          void refreshChat()
-        },
-      })
-
-      if (generation !== connectGenerationRef.current) {
-        await unsubscribeMeetingChannel(channel)
-        return
+    } finally {
+      connectInFlightRef.current = false
+      if (showJoining && generation === connectGenerationRef.current) {
+        setIsConnecting(false)
       }
-
-      channelRef.current = channel
-      realtimeActiveRef.current = true
-      setIsRealtimeConnected(true)
-      setRealtimeDegraded(false)
-      // Realtime events can be dropped while an app sleeps or changes network.
-      // Keep a cheap participant reconciliation poll so waiting-room decisions
-      // are observed within a few seconds instead of leaving guests stuck.
-      startPolling()
-      await refreshChat()
-    } catch {
-      if (generation !== connectGenerationRef.current) return
-
-      realtimeActiveRef.current = false
-      setIsRealtimeConnected(false)
-      setRealtimeDegraded(true)
-      startPolling()
-      await refreshChat()
     }
   }, [
     enabled,
@@ -476,20 +717,22 @@ export function useMeetingPresence({
     handleConnectionState,
     ingestRemoteChatMessage,
     isHost,
-    meeting,
+    meeting.id,
     refreshChat,
     refreshModerationSettings,
     refreshParticipants,
     startPolling,
-    stopPolling,
     userId,
+    waitingRoomEnabled,
   ])
 
   const disconnect = useCallback(async () => {
     intentionalDisconnectRef.current = true
+    connectInFlightRef.current = false
     stopPolling()
     realtimeActiveRef.current = false
     setIsRealtimeConnected(false)
+    setWhiteboard(emptyWhiteboardSession())
     setOnlineUserIds([])
     const channel = channelRef.current
     channelRef.current = null
@@ -510,10 +753,15 @@ export function useMeetingPresence({
   useEffect(() => {
     if (!enabled) return
 
+    hasJoinedRef.current = false
+    healAttemptRef.current = 0
+    connectInFlightRef.current = false
     void connect()
 
     return () => {
       connectGenerationRef.current += 1
+      hasJoinedRef.current = false
+      connectInFlightRef.current = false
       void disconnect()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -572,6 +820,75 @@ export function useMeetingPresence({
     [pushFloatingReaction, sendSignal, userId],
   )
 
+  const setNonverbalFeedback = useCallback(
+    (status: MeetingNonverbalStatusId | null) => {
+      setLocalNonverbal(status)
+      setNonverbalByUserId((prev) => {
+        if (status == null) {
+          if (!(userId in prev)) return prev
+          const next = { ...prev }
+          delete next[userId]
+          return next
+        }
+        return { ...prev, [userId]: status }
+      })
+      sendSignal({
+        type: 'nonverbal-feedback',
+        from: userId,
+        status,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
+
+  const lowerAllHands = useCallback(() => {
+    handRaisedRef.current = false
+    setHandRaised(false)
+    setRaisedHands({})
+    sendSignal({ type: 'lower-all-hands', from: userId, timestamp: Date.now() })
+  }, [sendSignal, userId])
+
+  const lowerHandFor = useCallback(
+    (targetUserId: string) => {
+      const target = String(targetUserId || '').trim()
+      if (!target) return
+      if (target === userId) {
+        handRaisedRef.current = false
+        setHandRaised(false)
+      }
+      setRaisedHands((prev) => {
+        if (!prev[target]) return prev
+        const next = { ...prev }
+        delete next[target]
+        return next
+      })
+      sendSignal({
+        type: 'lower-hand',
+        from: userId,
+        targetUserId: target,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
+
+  const clearAllFeedback = useCallback(() => {
+    setLocalNonverbal(null)
+    setNonverbalByUserId({})
+    sendSignal({ type: 'clear-all-feedback', from: userId, timestamp: Date.now() })
+  }, [sendSignal, userId])
+
+  const setMeetingTopicLive = useCallback(
+    (title: string) => {
+      const next = title.trim()
+      if (!next) return
+      setLiveTopic(next)
+      sendSignal({ type: 'meeting-topic', from: userId, title: next, timestamp: Date.now() })
+    },
+    [sendSignal, userId],
+  )
+
   const admit = useCallback(
     async (participantId: string) => {
       await admitParticipant(participantId)
@@ -599,6 +916,22 @@ export function useMeetingPresence({
       const participant = participants.find((row) => row.id === participantId)
       if (!participant || participant.is_host) return
       await removeMeetingParticipant(meeting.id, participant.user_id)
+      try {
+        if (meeting.room_id) {
+          await disconnectLiveKitParticipant(meeting.id, meeting.room_id, participant.user_id)
+        }
+      } finally {
+        await refreshParticipants()
+      }
+    },
+    [meeting.id, meeting.room_id, participants, refreshParticipants],
+  )
+
+  const putInWaitingRoom = useCallback(
+    async (participantId: string) => {
+      const participant = participants.find((row) => row.id === participantId)
+      if (!participant || participant.is_host) return
+      await putMeetingParticipantInWaitingRoom(meeting.id, participant.user_id)
       try {
         if (meeting.room_id) {
           await disconnectLiveKitParticipant(meeting.id, meeting.room_id, participant.user_id)
@@ -817,7 +1150,8 @@ export function useMeetingPresence({
         | 'host_tools'
         | 'polls'
         | 'qna'
-        | 'breakouts',
+        | 'breakouts'
+        | 'notes',
     ) => {
     setPanel((current) => {
       const opening = current !== next
@@ -843,7 +1177,8 @@ export function useMeetingPresence({
         | 'host_tools'
         | 'polls'
         | 'qna'
-        | 'breakouts',
+        | 'breakouts'
+        | 'notes',
     ) => {
       if (next === 'chat') {
         setUnreadChatCount(0)
@@ -856,23 +1191,217 @@ export function useMeetingPresence({
 
   const retryRealtime = useCallback(() => {
     setError(null)
-    void connect()
+    healAttemptRef.current = 0
+    void connect({ heal: hasJoinedRef.current })
   }, [connect])
 
-  // Auto-heal Supabase realtime after brief network blips so chat/participants
-  // do not stay stuck on "Live updates paused" until the user taps Reconnect.
+  const connectRef = useRef(connect)
+  connectRef.current = connect
+
+  // Auto-heal the realtime channel after a drop. Never remount the room UI
+  // (heal skips isConnecting) and never stack on an in-flight join/retry.
   useEffect(() => {
     if (!enabled || !realtimeDegraded || isRealtimeConnected) return
-    const handle = setTimeout(() => {
-      void connect()
-    }, 3500)
-    return () => clearTimeout(handle)
-  }, [connect, enabled, isRealtimeConnected, realtimeDegraded])
+    let cancelled = false
+    let handle: ReturnType<typeof setTimeout> | null = null
+
+    const schedule = () => {
+      if (handle) clearTimeout(handle)
+      const delay = meetingPresenceHealDelayMs(healAttemptRef.current)
+      handle = setTimeout(() => {
+        if (cancelled) return
+        void connectRef.current({ heal: true }).finally(() => {
+          if (cancelled || realtimeActiveRef.current) return
+          schedule()
+        })
+      }, delay)
+    }
+
+    schedule()
+    return () => {
+      cancelled = true
+      if (handle) clearTimeout(handle)
+    }
+  }, [enabled, isRealtimeConnected, realtimeDegraded])
 
   const retryJoinRequest = useCallback(async () => {
     setError(null)
     await connect()
   }, [connect])
+
+  const openWhiteboard = useCallback(() => {
+    setWhiteboard((current) => applyWhiteboardEvent(current, { type: 'open', from: userId }))
+    sendSignal({ type: 'whiteboard-open', from: userId, name: displayName })
+  }, [displayName, sendSignal, userId])
+
+  const closeWhiteboard = useCallback(
+    (stopForEveryone = false) => {
+      if (!stopForEveryone) return
+      setWhiteboard(emptyWhiteboardSession())
+      sendSignal({ type: 'whiteboard-close', from: userId })
+    },
+    [sendSignal, userId],
+  )
+
+  const addWhiteboardStroke = useCallback(
+    (stroke: WhiteboardStroke) => {
+      setWhiteboard((current) => applyWhiteboardEvent(current, { type: 'stroke', stroke }))
+      sendSignal({ type: 'whiteboard-stroke', from: userId, stroke })
+    },
+    [sendSignal, userId],
+  )
+
+  const undoWhiteboardStroke = useCallback(
+    (strokeId: string) => {
+      setWhiteboard((current) => applyWhiteboardEvent(current, { type: 'undo', strokeId, from: userId }))
+      sendSignal({ type: 'whiteboard-undo', from: userId, strokeId })
+    },
+    [sendSignal, userId],
+  )
+
+  const clearWhiteboard = useCallback(() => {
+    setWhiteboard((current) => applyWhiteboardEvent(current, { type: 'clear' }))
+    sendSignal({ type: 'whiteboard-clear', from: userId })
+  }, [sendSignal, userId])
+
+  const setSpotlight = useCallback(
+    (targetUserId: string | null) => {
+      const next = targetUserId ? String(targetUserId) : null
+      setSpotlightUserId(next)
+      sendSignal({
+        type: 'spotlight',
+        from: userId,
+        targetUserId: next,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
+
+  const setWebinarModeLive = useCallback(
+    (enabled: boolean) => {
+      setWebinarMode(enabled)
+      sendSignal({
+        type: 'webinar-mode',
+        from: userId,
+        enabled,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
+
+  const setInterpretationChannelLive = useCallback(
+    (channelId: string | null) => {
+      const next = channelId ? String(channelId) : 'floor'
+      setInterpretationChannelId(next)
+      sendSignal({
+        type: 'interpretation-channel',
+        from: userId,
+        channelId: next,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
+
+  const broadcastToBreakouts = useCallback(
+    (message: string) => {
+      const text = message.trim()
+      if (!text) return
+      sendSignal({
+        type: 'breakout-broadcast',
+        from: userId,
+        message: text,
+        timestamp: Date.now(),
+      })
+      setBreakoutBroadcast({ id: `bo-bcast-local-${Date.now()}`, message: text })
+    },
+    [sendSignal, userId],
+  )
+
+  const setBreakoutTimer = useCallback(
+    (endsAt: number | null) => {
+      setBreakoutEndsAt(endsAt)
+      sendSignal({
+        type: 'breakout-timer',
+        from: userId,
+        endsAt,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
+
+  const requestRemoteControl = useCallback(
+    (toUserId: string) => {
+      sendSignal({
+        type: 'remote-control-request',
+        from: userId,
+        to: toUserId,
+        name: displayName,
+        timestamp: Date.now(),
+      })
+    },
+    [displayName, sendSignal, userId],
+  )
+
+  const respondRemoteControl = useCallback(
+    (toUserId: string, accepted: boolean) => {
+      sendSignal({
+        type: 'remote-control-response',
+        from: userId,
+        to: toUserId,
+        accepted,
+        timestamp: Date.now(),
+      })
+      setRemoteControlRequest(null)
+    },
+    [sendSignal, userId],
+  )
+
+  const clearRemoteControlRequest = useCallback(() => {
+    setRemoteControlRequest(null)
+  }, [])
+
+  const publishAnnotationStroke = useCallback(
+    (stroke: {
+      id: string
+      color: string
+      width: number
+      points: Array<{ x: number; y: number }>
+      from: string
+      createdAt: number
+    }) => {
+      setAnnotationOpen(true)
+      setAnnotationStrokes((current) => [...current, stroke].slice(-200))
+      sendSignal({
+        type: 'annotation-stroke',
+        from: userId,
+        stroke,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
+
+  const clearAnnotations = useCallback(() => {
+    setAnnotationStrokes([])
+    sendSignal({ type: 'annotation-clear', from: userId, timestamp: Date.now() })
+  }, [sendSignal, userId])
+
+  const setAnnotationSessionOpen = useCallback(
+    (open: boolean) => {
+      setAnnotationOpen(open)
+      sendSignal({
+        type: open ? 'annotation-open' : 'annotation-close',
+        from: userId,
+        timestamp: Date.now(),
+      })
+      if (!open) setAnnotationStrokes([])
+    },
+    [sendSignal, userId],
+  )
 
   return {
     participants,
@@ -904,6 +1433,14 @@ export function useMeetingPresence({
     floatingReactions,
     expireFloatingReaction,
     sendReaction,
+    nonverbalByUserId,
+    localNonverbal,
+    setNonverbalFeedback,
+    lowerAllHands,
+    lowerHandFor,
+    clearAllFeedback,
+    liveTopic,
+    setMeetingTopicLive,
     setPanel: setPanelSafe,
     togglePanel,
     sendChat,
@@ -912,6 +1449,7 @@ export function useMeetingPresence({
     reject,
     admitAllWaiting,
     remove,
+    putInWaitingRoom,
     allowRejoin,
     leave,
     hostEnd,
@@ -935,5 +1473,30 @@ export function useMeetingPresence({
     retryRealtime,
     retryJoinRequest,
     refreshParticipants,
+    whiteboard,
+    openWhiteboard,
+    closeWhiteboard,
+    addWhiteboardStroke,
+    undoWhiteboardStroke,
+    clearWhiteboard,
+    spotlightUserId,
+    setSpotlight,
+    webinarMode,
+    setWebinarModeLive,
+    interpretationChannelId,
+    setInterpretationChannelLive,
+    breakoutBroadcast,
+    breakoutEndsAt,
+    broadcastToBreakouts,
+    setBreakoutTimer,
+    requestRemoteControl,
+    respondRemoteControl,
+    clearRemoteControlRequest,
+    remoteControlRequest,
+    annotationOpen,
+    annotationStrokes,
+    publishAnnotationStroke,
+    clearAnnotations,
+    setAnnotationSessionOpen,
   }
 }

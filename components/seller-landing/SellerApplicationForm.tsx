@@ -29,6 +29,7 @@ import { generateShopSlug } from '~/lib/shop/shop.utils'
 import { shopNameValidator } from '~/lib/shop/shop.validation'
 import { useAppDispatch } from '~/lib/store/hooks'
 import { supabase } from '~/lib/supabase'
+import { sendEmailOtp, sendPhoneOtp } from '~/lib/supabase/auth'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import {
   clearLandingUrlFromStorage,
@@ -478,15 +479,13 @@ export function SellerApplicationForm() {
     setIsSendingOtp(true)
     try {
       if (signupMethod === 'email') {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: formData.email.trim(),
-          options: { shouldCreateUser: true, data: { full_name: formData.full_name } },
+        const { error } = await sendEmailOtp(formData.email.trim(), {
+          fullName: formData.full_name,
         })
         if (error) throw error
       } else {
-        const { error } = await supabase.auth.signInWithOtp({
-          phone: formData.phone,
-          options: { shouldCreateUser: true, data: { full_name: formData.full_name } },
+        const { error } = await sendPhoneOtp(formData.phone, {
+          fullName: formData.full_name,
         })
         if (error) throw error
       }

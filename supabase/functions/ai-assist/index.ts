@@ -1376,15 +1376,21 @@ function captionLooksLikeTargetLang(text: string, targetLang: string): boolean {
   const hasDevanagari = /[\u0900-\u097F]/.test(text)
   const hasArabic = /[\u0600-\u06FF]/.test(text)
   const hasCjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(text)
-  if (INDIC_LANGS.has(base)) return hasDevanagari || !hasLatin
-  if (base === 'ar' || base === 'ur' || base === 'fa') return hasArabic || !hasLatin
-  if (base === 'zh' || base === 'ja' || base === 'ko') return hasCjk || !hasLatin
+  if (INDIC_LANGS.has(base)) return hasDevanagari
+  if (base === 'ar' || base === 'ur' || base === 'fa') return hasArabic
+  if (base === 'zh' || base === 'ja' || base === 'ko') return hasCjk
   if (base === 'en' || base === 'es' || base === 'fr' || base === 'de' || base === 'pt' || base === 'it') {
-    // Latin targets: reject if still only Devanagari/CJK with no Latin letters.
     if ((hasDevanagari || hasCjk || hasArabic) && !hasLatin) return false
-    return true
+    return hasLatin || !hasDevanagari
   }
   return true
+}
+
+function myMemoryLangCode(code: string): string {
+  const base = (code.split('-')[0] || code).toLowerCase()
+  if (base === 'zh') return 'zh-CN'
+  if (base === 'pt') return 'pt-BR'
+  return base
 }
 
 async function translateViaMyMemory(
@@ -1392,8 +1398,11 @@ async function translateViaMyMemory(
   targetLang: string,
   sourceLang: string,
 ): Promise<{ translatedText: string; detectedSourceLang: string | null } | null> {
-  const target = targetLang.split('-')[0] || 'en'
-  const source = sourceLang === 'auto' ? 'autodetect' : sourceLang.split('-')[0] || 'autodetect'
+  const target = myMemoryLangCode(targetLang)
+  const source =
+    sourceLang === 'auto' || sourceLang === 'autodetect'
+      ? 'autodetect'
+      : myMemoryLangCode(sourceLang)
   try {
     const url = new URL('https://api.mymemory.translated.net/get')
     url.searchParams.set('q', text.slice(0, 450))
@@ -1410,7 +1419,7 @@ async function translateViaMyMemory(
     if (/PLEASE SELECT|INVALID|MYMEMORY/i.test(translated)) return null
     return {
       translatedText: translated,
-      detectedSourceLang: source === 'autodetect' ? null : source,
+      detectedSourceLang: source === 'autodetect' ? null : source.split('-')[0] || source,
     }
   } catch {
     return null
@@ -2149,13 +2158,11 @@ Deno.serve(async (req) => {
       const completion = await callGemini(systemPrompt, [], text)
       const parsed = parseTranslateJson(completion.answer)
       const geminiText = parsed?.translatedText?.trim() || ''
+      // Require target-script match — a lightly rewritten English string is NOT a Hindi/Chinese caption.
       const geminiLooksGood =
-        !!geminiText &&
-        (geminiText !== text
-          ? true
-          : captionLooksLikeTargetLang(geminiText, targetBase))
+        !!geminiText && captionLooksLikeTargetLang(geminiText, targetBase)
 
-      if (geminiLooksGood && !(geminiText === text && !captionLooksLikeTargetLang(text, targetBase))) {
+      if (geminiLooksGood) {
         return json({
           text,
           translatedText: geminiText,
@@ -2166,8 +2173,15 @@ Deno.serve(async (req) => {
         })
       }
 
-      const memory = await translateViaMyMemory(text, targetBase, sourceBase)
-      if (memory?.translatedText && memory.translatedText !== text) {
+      // Prefer auto-detect → target for MyMemory when Gemini missed the script.
+      const memory =
+        (await translateViaMyMemory(text, targetBase, 'auto')) ||
+        (await translateViaMyMemory(text, targetBase, sourceBase === 'auto' ? 'en' : sourceBase))
+      if (
+        memory?.translatedText &&
+        memory.translatedText !== text &&
+        captionLooksLikeTargetLang(memory.translatedText, targetBase)
+      ) {
         return json({
           text,
           translatedText: memory.translatedText,

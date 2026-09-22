@@ -13,6 +13,8 @@ export type ParticipantRowActionKey =
   | 'stop_video'
   | 'make_co_host'
   | 'remove'
+  | 'put_in_waiting_room'
+  | 'lower_hand'
   | 'ask_to_mute'
   | 'remove_co_host'
   | 'make_host'
@@ -26,8 +28,9 @@ export function participantRowActions(input: {
   isSelf: boolean
   isMuted: boolean
   isVideoOff: boolean
+  handRaised?: boolean
 }): ParticipantRowActionKey[] {
-  const { viewerRole, targetRole, isSelf, isMuted, isVideoOff } = input
+  const { viewerRole, targetRole, isSelf, isMuted, isVideoOff, handRaised } = input
   if (isSelf) return []
 
   const actions: ParticipantRowActionKey[] = []
@@ -37,6 +40,8 @@ export function participantRowActions(input: {
     if (!isMuted) actions.push('mute')
     if (isMuted) actions.push('ask_to_unmute')
     if (!isVideoOff) actions.push('stop_video')
+    if (handRaised) actions.push('lower_hand')
+    actions.push('put_in_waiting_room')
     actions.push('remove')
     actions.push('ask_to_mute')
   }

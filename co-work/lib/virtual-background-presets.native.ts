@@ -28,6 +28,20 @@ const PRESET_ASSETS = [
   },
 ] as const
 
+/** Unpack a Metro/drawable preset into a real file the Android processor can decode. */
+export async function resolveNativePresetFileUri(id: string | undefined): Promise<string | null> {
+  const row = PRESET_ASSETS.find((item) => item.id === id)
+  if (!row) return null
+  const { Asset } = await import('expo-asset')
+  const asset = Asset.fromModule(row.asset)
+  await asset.downloadAsync()
+  const uri = asset.localUri || asset.uri
+  if (!uri) return null
+  if (uri.startsWith('file:') || uri.startsWith('content:')) return uri
+  if (uri.startsWith('/') && !uri.startsWith('//')) return `file://${uri}`
+  return uri
+}
+
 export function getVirtualBackgroundPresets(): VirtualBackgroundPreset[] {
   return PRESET_ASSETS.map(({ id, name, asset }) => ({
     id,

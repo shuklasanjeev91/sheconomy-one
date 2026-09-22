@@ -2,6 +2,10 @@ import { fetchLiveKitConfig } from '~/lib/livekit/config'
 import { supabase } from '~/lib/supabase/client'
 import { supabaseConfig } from '~/lib/supabase/env'
 import { readSupabaseFunctionError } from '~/lib/supabase/function-error'
+import {
+  MEETING_LIVEKIT_CREDENTIAL_MAX_ATTEMPTS,
+  meetingLiveKitCredentialRetryDelayMs,
+} from '~/co-work/lib/meeting-media-reconnect'
 
 export type LiveKitCredentials = {
   token: string
@@ -17,8 +21,7 @@ type LiveKitTokenResponse = {
   error?: string
 }
 
-/** Fetch LiveKit token + server URL from sheconomy_db edge functions. */
-export async function fetchLiveKitCredentials(
+async function fetchLiveKitCredentialsOnce(
   meetingId: string,
   roomName: string,
   displayName: string,
@@ -71,6 +74,30 @@ export async function fetchLiveKitCredentials(
     serverUrl,
     roomName: payload.roomName || roomName,
   }
+}
+
+/** Fetch LiveKit token + server URL — retries transient network / edge failures. */
+export async function fetchLiveKitCredentials(
+  meetingId: string,
+  roomName: string,
+  displayName: string,
+  avatarUrl?: string | null,
+): Promise<LiveKitCredentials> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < MEETING_LIVEKIT_CREDENTIAL_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await fetchLiveKitCredentialsOnce(meetingId, roomName, displayName, avatarUrl)
+    } catch (cause) {
+      lastError = cause
+      if (attempt >= MEETING_LIVEKIT_CREDENTIAL_MAX_ATTEMPTS - 1) break
+      await new Promise((resolve) =>
+        setTimeout(resolve, meetingLiveKitCredentialRetryDelayMs(attempt)),
+      )
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Could not join the video room. Check your connection and try again.')
 }
 
 export async function disconnectLiveKitParticipant(

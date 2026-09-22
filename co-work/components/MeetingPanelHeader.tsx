@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Platform } from 'react-native'
 
 import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
+import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 
 type MeetingPanelHeaderProps = {
@@ -9,10 +10,18 @@ type MeetingPanelHeaderProps = {
   subtitle?: string
   icon?: ReactNode
   onClose: () => void
+  /** Optional trailing control before the close button (e.g. Save chat). */
+  trailing?: ReactNode
 }
 
-export function MeetingPanelHeader({ title, subtitle, icon, onClose }: MeetingPanelHeaderProps) {
-  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+export function MeetingPanelHeader({
+  title,
+  subtitle,
+  icon,
+  onClose,
+  trailing,
+}: MeetingPanelHeaderProps) {
+  const { ui: coworkUi } = useCoWorkTheme()
   return (
     <XStack
       paddingHorizontal="$4"
@@ -21,9 +30,10 @@ export function MeetingPanelHeader({ title, subtitle, icon, onClose }: MeetingPa
       justifyContent="space-between"
       borderBottomWidth={1}
       borderBottomColor={coworkUi.borderSoft}
+      zIndex={4}
       style={coworkGlassStyle(coworkUi, true)}
     >
-      <XStack alignItems="center" gap="$3" flex={1}>
+      <XStack alignItems="center" gap="$3" flex={1} pointerEvents="none">
         {icon ? (
           <YStack
             width={38}
@@ -49,16 +59,34 @@ export function MeetingPanelHeader({ title, subtitle, icon, onClose }: MeetingPa
           ) : null}
         </YStack>
       </XStack>
-      <Button
-        tone="ghost"
-        size="$2"
-        borderRadius={999}
-        width={36}
-        height={36}
-        padding={0}
-        onPress={onClose}
-        icon={<Icons.X size={18} color={coworkUi.textSecondary} />}
-      />
+      <XStack alignItems="center" gap="$1.5">
+        {trailing}
+        {Platform.OS === 'web' ? (
+          <Button
+            tone="ghost"
+            size="$2"
+            borderRadius={999}
+            width={36}
+            height={36}
+            padding={0}
+            onPress={onClose}
+            icon={<Icons.X size={18} color={coworkUi.textSecondary} />}
+          />
+        ) : (
+          <MeetingSheetButton
+            accessibilityLabel="Close panel"
+            onPress={onClose}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 999,
+              backgroundColor: 'rgba(255,255,255,0.08)',
+            }}
+          >
+            <Icons.X size={18} color={coworkUi.textSecondary} />
+          </MeetingSheetButton>
+        )}
+      </XStack>
     </XStack>
   )
 }

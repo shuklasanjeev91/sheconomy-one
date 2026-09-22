@@ -131,7 +131,7 @@ export const appUiDark: AppUiTokens = {
   text: sheconomyDark.sheconomy12,
   textSecondary: '#f0d4e0',
   textMuted: '#d9b8c8',
-  background: sheconomyDark.sheconomy1,
+  background: sheconomyDark.sheconomy2,
   surface: sheconomyDark.sheconomy3,
   surfaceMuted: sheconomyDark.sheconomy4,
   surfaceHover: sheconomyDark.sheconomy5,

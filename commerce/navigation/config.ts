@@ -51,7 +51,7 @@ export const COMMERCE_FOOTER_COLUMNS: { title: string; links: NavLinkItem[] }[] 
       { href: communityRoutes.jobs, label: 'Careers' },
       { href: communityRoutes.companies, label: 'Companies' },
       { href: communityRoutes.events, label: 'Events' },
-      { href: classRoutes.home, label: 'Classes' },
+      { href: classRoutes.home, label: 'Class' },
       { href: coWorkRoutes.home, label: 'Co-Work' },
     ],
   },

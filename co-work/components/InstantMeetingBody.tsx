@@ -15,6 +15,8 @@ export function InstantMeetingBody({ session, onExit }: InstantMeetingBodyProps)
       autoJoin={session.autoJoin || session.enteredRoom}
       resumeEnteredRoom={session.enteredRoom}
       resumeDisplayName={session.displayName}
+      initialAudioEnabled={session.audioEnabled}
+      initialVideoEnabled={session.videoEnabled}
       onExit={onExit}
     />
   )

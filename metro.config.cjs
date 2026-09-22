@@ -123,6 +123,13 @@ function withTamaguiDedupe(config) {
           }
         }
 
+        if (moduleName === 'loglevel') {
+          return {
+            type: 'sourceFile',
+            filePath: path.join(projectRoot, 'lib/stubs/loglevel.ts'),
+          }
+        }
+
         const datetimepickerStub = datetimepickerSpecStub(
           moduleName,
           context.originModulePath,

@@ -107,7 +107,9 @@ export function AutomaticUpdateManager() {
     let timer: ReturnType<typeof setTimeout> | null = null
     const interaction = InteractionManager.runAfterInteractions(() => {
       timer = setTimeout(() => {
-        if (!cancelled) void check(false)
+        // Force the first check so a cooldown from a previous session cannot
+        // leave App Store iOS on the embedded bundle after a production OTA.
+        if (!cancelled) void check(true)
       }, UPDATE_CHECK_STARTUP_DELAY_MS)
     })
 

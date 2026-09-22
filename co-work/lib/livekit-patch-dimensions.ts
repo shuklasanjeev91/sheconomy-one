@@ -77,17 +77,41 @@ export function patchLiveKitWaitForDimensions(): void {
  * After native getDisplayMedia attaches, force getSettings() to report 720p when
  * the OS still returns 0×0 — LiveKit and RTCView then have real dimensions.
  */
+type PatchedMediaStreamTrack = MediaStreamTrack & {
+  __sheconomyOriginalGetSettings?: () => MediaTrackSettings
+}
+
+/** Real capture size — ignores the 720p fallback we inject for LiveKit publish. */
+export function peekUnpatchedVideoSize(
+  mediaStreamTrack: MediaStreamTrack | null | undefined,
+): { width: number; height: number } {
+  if (!mediaStreamTrack) return { width: 0, height: 0 }
+  try {
+    const patched = mediaStreamTrack as PatchedMediaStreamTrack
+    const settings = (patched.__sheconomyOriginalGetSettings ?? mediaStreamTrack.getSettings)?.call(
+      mediaStreamTrack,
+    ) ?? {}
+    return { width: Number(settings.width) || 0, height: Number(settings.height) || 0 }
+  } catch {
+    return { width: 0, height: 0 }
+  }
+}
+
 export function forceScreenShareTrackSettings(
   mediaStreamTrack: MediaStreamTrack | null | undefined,
 ): void {
   if (!mediaStreamTrack || mediaStreamTrack.kind !== 'video') return
   try {
-    const settings = mediaStreamTrack.getSettings?.() ?? {}
+    const patched = mediaStreamTrack as PatchedMediaStreamTrack
+    if (!patched.__sheconomyOriginalGetSettings) {
+      patched.__sheconomyOriginalGetSettings = mediaStreamTrack.getSettings.bind(mediaStreamTrack)
+    }
+    const original = patched.__sheconomyOriginalGetSettings
+    const settings = original()
     const width = Number(settings.width) || 0
     const height = Number(settings.height) || 0
     if (width > 1 && height > 1) return
 
-    const original = mediaStreamTrack.getSettings.bind(mediaStreamTrack)
     mediaStreamTrack.getSettings = () => {
       const live = original()
       const w = Number(live.width) || 0

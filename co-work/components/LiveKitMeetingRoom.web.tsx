@@ -22,6 +22,7 @@ import { coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import { meetingViewportStyle } from '~/lib/platform/viewport'
 import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks'
 import { useMeetingLifecycle } from '~/co-work/hooks/useMeetingLifecycle.web'
+import { unlockWebAudioPlayback } from '~/co-work/lib/meeting-web'
 
 export type { LiveKitMediaControls, LiveKitMeetingRoomProps } from '~/co-work/lib/livekit-media-controls'
 export { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls.web'
@@ -56,19 +57,22 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
   }
   .sheconomy-screen-share-status {
     position: absolute;
-    top: 96px;
-    left: 50%;
+    top: 12px;
+    left: 12px;
+    right: auto;
     z-index: 20;
-    transform: translateX(-50%);
+    transform: none;
+    max-width: min(360px, calc(100% - 24px));
     padding: 8px 14px;
-    border-radius: 999px;
+    border-radius: 12px;
     color: #ecfdf5;
     background: rgba(5, 150, 105, 0.92);
     border: 1px solid rgba(167, 243, 208, 0.48);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
     font-size: 12px;
     font-weight: 700;
-    white-space: nowrap;
+    white-space: normal;
+    line-height: 1.35;
     pointer-events: none;
   }
   .sheconomy-screen-share-status--viewing {
@@ -423,6 +427,11 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
   .sheconomy-video-gallery .lk-participant-placeholder {
     background: #1a1216;
   }
+  /* LiveKit's default placeholder name/icon stacks on our avatar during remounts. */
+  .sheconomy-participant-tile .lk-participant-placeholder > svg,
+  .sheconomy-participant-tile .lk-participant-placeholder > .lk-participant-name {
+    display: none;
+  }
   .sheconomy-participant-tile .lk-participant-placeholder[data-camera-off='true'] {
     opacity: 1;
   }
@@ -439,7 +448,8 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     height: 100%;
     position: absolute;
     inset: 0;
-    z-index: 0;
+    z-index: 3;
+    pointer-events: none;
   }
   .sheconomy-participant-avatar-wrap {
     display: flex;
@@ -478,15 +488,50 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
   .sheconomy-hand-raised-inline {
     margin-left: 6px;
   }
+  .sheconomy-nonverbal {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 4;
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    background: rgba(12, 8, 10, 0.78);
+    border: 1px solid rgba(255,255,255,0.22);
+  }
+  .sheconomy-nonverbal-inline {
+    margin-left: 6px;
+  }
   .sheconomy-participant-tile .lk-participant-metadata {
-    background: linear-gradient(180deg, transparent 0%, rgba(12, 8, 10, 0.88) 100%);
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    background: linear-gradient(180deg, transparent 0%, rgba(12, 8, 10, 0.92) 55%);
     padding: 12px 14px;
     backdrop-filter: blur(8px);
+    pointer-events: none;
   }
   .sheconomy-participant-tile .lk-participant-metadata-item {
     color: ${ui.text};
     font-size: 12px;
     font-weight: 600;
+  }
+  /* Keep the name chip readable over live video (not only camera-off). */
+  .sheconomy-participant-tile .lk-participant-name {
+    display: inline !important;
+    opacity: 1 !important;
+    color: #fff !important;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
   }
   .sheconomy-participant-tile .lk-focus-toggle-button {
     display: none !important;
@@ -502,13 +547,91 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     left: 10px;
     z-index: 5;
   }
+  .sheconomy-tile-focus-badges {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    display: flex;
+    gap: 6px;
+    pointer-events: none;
+  }
+  .sheconomy-tile-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    background: rgba(12, 8, 10, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+  }
+  .sheconomy-tile-badge--spotlight {
+    color: #f5c542;
+    border-color: rgba(245, 197, 66, 0.55);
+  }
+  .sheconomy-tile-menu {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 8;
+  }
+  .sheconomy-tile-menu-trigger {
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(12, 8, 10, 0.78);
+    color: #fff;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .sheconomy-participant-tile:hover .sheconomy-tile-menu-trigger,
+  .sheconomy-tile-menu-trigger:focus-visible,
+  .sheconomy-tile-menu[data-open='true'] .sheconomy-tile-menu-trigger {
+    opacity: 1;
+  }
+  .sheconomy-tile-menu-popover {
+    position: absolute;
+    top: 34px;
+    right: 0;
+    min-width: 176px;
+    padding: 6px;
+    border-radius: 12px;
+    background: rgba(20, 15, 18, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .sheconomy-tile-menu-item {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #fff;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .sheconomy-tile-menu-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
   .sheconomy-speaking-indicator {
     position: absolute;
     inset: 0;
     z-index: 3;
     pointer-events: none;
     border-radius: inherit;
-    box-shadow: inset 0 0 0 3px ${ui.brandLight};
+    box-shadow: inset 0 0 0 3px ${ui.live};
   }
   .sheconomy-mic-muted {
     margin-right: 4px;
@@ -755,6 +878,7 @@ function useWebAudioPlaybackUnlock(room: Room | undefined) {
 
   const unlockAudio = useCallback(() => {
     if (!room) return
+    unlockWebAudioPlayback()
     void room.startAudio().catch(() => {
       // Still blocked — the banner stays visible for another explicit tap.
     })
@@ -858,6 +982,27 @@ function WebLiveKitMeetingContent({
       void reinforceCallMediaOnConnect(room, mediaMode, { forceMicEnable: forceMic })
       void syncAvatarMetadata()
       void room.startAudio().catch(() => {})
+      // Dev helper: auto-start screen share when a global flag is set.
+      try {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        if (typeof __DEV__ !== 'undefined' && __DEV__ && (globalThis as any).__AUTO_SCREEN_SHARE) {
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          const flag = (globalThis as any).__AUTO_SCREEN_SHARE
+          if (flag && typeof liveKit?.toggleScreenShare === 'function') {
+            // fire-and-forget — UI will update when screen share track arrives
+            void liveKit.toggleScreenShare()
+          }
+          try {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            delete (globalThis as any).__AUTO_SCREEN_SHARE
+          } catch {}
+        }
+      } catch {
+        // ignore
+      }
     }
 
     room.on(RoomEvent.Connected, onConnected)
@@ -883,33 +1028,44 @@ function WebLiveKitMeetingContent({
         pointerEvents="none"
       >
         {mediaMode === 'audio' ? null : <MeetingVideoStage />}
-        <RoomAudioRenderer />
+        <RoomAudioRenderer volume={1} />
       </YStack>
       <MeetingLifecycleBanner notice={lifecycleNotice} topOffset={80} />
       {audioBlocked ? (
         <XStack
           position="absolute"
-          top={16}
-          alignSelf="center"
-          zIndex={300}
+          top={0}
+          left={0}
+          right={0}
+          zIndex={400}
           alignItems="center"
-          gap="$2"
-          paddingVertical="$2"
+          justifyContent="center"
+          gap="$3"
+          paddingVertical="$2.5"
           paddingHorizontal="$4"
-          borderRadius={999}
-          backgroundColor="rgba(12, 8, 10, 0.9)"
-          borderWidth={1}
-          borderColor="rgba(255,255,255,0.25)"
+          backgroundColor="rgba(24, 24, 24, 0.96)"
+          borderBottomWidth={1}
+          borderBottomColor="rgba(255,255,255,0.12)"
           cursor="pointer"
           pointerEvents="auto"
           onPress={unlockAudio}
           role="button"
-          aria-label="Enable meeting audio"
+          aria-label="Join computer audio"
         >
           <Icons.Volume2 size={16} color="#fff" />
-          <Text fontSize={13} fontWeight="700" color="#fff">
-            Tap to enable audio
+          <Text fontSize={13} fontWeight="600" color="#fff" flexShrink={1}>
+            Click Join Audio to hear others
           </Text>
+          <XStack
+            paddingHorizontal="$3"
+            paddingVertical="$1.5"
+            borderRadius={8}
+            backgroundColor="#0E72ED"
+          >
+            <Text fontSize={13} fontWeight="800" color="#fff">
+              Join Audio
+            </Text>
+          </XStack>
         </XStack>
       ) : null}
       <YStack

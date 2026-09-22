@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import {
+  assignUserToBreakout,
   autoAssignMeetingBreakouts,
   createMeetingBreakouts,
   fetchMeetingBreakouts,
@@ -73,6 +74,19 @@ export function useMeetingBreakouts({ meetingId, enabled = true }: UseMeetingBre
     [meetingId, refresh],
   )
 
+  const assignUser = useCallback(
+    async (input: { breakoutId: string; userId: string; assignedBy: string }) => {
+      await assignUserToBreakout({
+        meetingId,
+        breakoutId: input.breakoutId,
+        userId: input.userId,
+        assignedBy: input.assignedBy,
+      })
+      await refresh()
+    },
+    [meetingId, refresh],
+  )
+
   return {
     rooms,
     loading,
@@ -80,6 +94,7 @@ export function useMeetingBreakouts({ meetingId, enabled = true }: UseMeetingBre
     refresh,
     createRooms,
     autoAssign,
+    assignUser,
     setStatus,
   }
 }

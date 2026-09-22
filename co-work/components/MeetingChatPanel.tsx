@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Platform, Pressable, View } from 'react-native'
 
-import { Avatar, Button, Icons, Input, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { AppTextField } from '~/components/forms/AppTextField'
+import { Avatar, Button, Icons, Input, ScrollView, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { CoWorkPanelShell } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
-import type { MeetingChatMessage, MeetingParticipant, MeetingParticipantChatWith } from '~/co-work/lib/types'
+import { useComposerKeyboardInset } from '~/hooks/useKeyboardVisible'
+import type {
+  MeetingChatMessage,
+  MeetingParticipant,
+  MeetingParticipantChatWith,
+  MeetingRole,
+} from '~/co-work/lib/types'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import type { MeetingChatAudience } from '~/co-work/lib/meeting-role-permissions'
 import {
@@ -12,7 +21,12 @@ import {
   isMeetingSystemChatMessage,
   meetingChatComposerAudiences,
 } from '~/co-work/lib/meeting-chat'
-import type { MeetingRole } from '~/co-work/lib/types'
+import {
+  buildMeetingChatArchive,
+  chatArchiveToPlainText,
+  copyMeetingChatText,
+  downloadMeetingChatText,
+} from '~/co-work/lib/meeting-chat-archive'
 
 type MeetingChatPanelProps = {
   messages: MeetingChatMessage[]
@@ -28,6 +42,10 @@ type MeetingChatPanelProps = {
   participantChatWith?: MeetingParticipantChatWith | null
   canManageChat?: boolean
   participantDisplayNames?: Record<string, string>
+  /** Used for Zoom-style Save chat export filename. */
+  meetingId?: string
+  /** Opens Zoom-style share content / attachment picker. */
+  onAttach?: () => void
 }
 
 export function MeetingChatPanel({
@@ -44,8 +62,12 @@ export function MeetingChatPanel({
   participantChatWith = 'everyone',
   canManageChat = false,
   participantDisplayNames = {},
+  meetingId,
+  onAttach,
 }: MeetingChatPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const toast = useAppToast()
+  const keyboardInset = useComposerKeyboardInset()
   const [draft, setDraft] = useState('')
   const [audience, setAudience] = useState<MeetingChatAudience>('everyone')
   const [recipientId, setRecipientId] = useState<string | null>(null)
@@ -133,10 +155,51 @@ export function MeetingChatPanel({
     setDraft('')
   }
 
+  const composerPlaceholder = !chatEnabled
+    ? 'Chat is disabled'
+    : audience === 'hosts'
+      ? 'Message hosts and co-hosts…'
+      : audience === 'private'
+        ? recipientId
+          ? 'Write a private message…'
+          : 'Choose a participant…'
+        : 'Message everyone…'
+  const sendDisabled = !chatEnabled || (audience === 'private' && !recipientId)
+
+  async function handleSaveChat() {
+    if (messages.length === 0) {
+      toast.show('No messages to save', { tone: 'info' })
+      return
+    }
+    const archive = buildMeetingChatArchive(
+      meetingId || 'meeting',
+      messages,
+      participantDisplayNames,
+    )
+    const text = chatArchiveToPlainText(archive)
+    if (!text.trim()) {
+      toast.show('No messages to save', { tone: 'info' })
+      return
+    }
+    const downloaded = downloadMeetingChatText({
+      meetingId: meetingId || 'meeting',
+      text,
+    })
+    if (downloaded) {
+      toast.show('Chat saved', { tone: 'success', message: 'Downloaded as a text file.' })
+      return
+    }
+    const copied = await copyMeetingChatText(text)
+    toast.show(copied ? 'Chat copied' : 'Could not save chat', {
+      tone: copied ? 'success' : 'danger',
+      message: copied ? 'Paste into Notes, email, or any editor.' : undefined,
+    })
+  }
+
   return (
     <CoWorkPanelShell fullWidth={fullWidth}>
       <MeetingPanelHeader
-        title="Meeting Chat"
+        title="Everyone"
         subtitle={
           chatEnabled
             ? `${messages.length} message${messages.length === 1 ? '' : 's'} · This meeting only`
@@ -144,12 +207,79 @@ export function MeetingChatPanel({
         }
         icon={<Icons.MessageSquare size={18} color={coworkUi.brandLight} />}
         onClose={onClose}
+        trailing={
+          messages.length > 0 ? (
+            Platform.OS === 'web' ? (
+              <Button
+                tone="ghost"
+                size="$2"
+                borderRadius={999}
+                width={36}
+                height={36}
+                padding={0}
+                onPress={() => void handleSaveChat()}
+                icon={<Icons.Download size={16} color={coworkUi.textSecondary} />}
+                accessibilityLabel="Save chat"
+              />
+            ) : (
+              <MeetingSheetButton
+                accessibilityLabel="Save chat"
+                onPress={() => void handleSaveChat()}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 999,
+                  backgroundColor: 'rgba(255,255,255,0.08)',
+                }}
+              >
+                <Icons.Download size={16} color={coworkUi.textSecondary} />
+              </MeetingSheetButton>
+            )
+          ) : null
+        }
       />
+
+      {chatEnabled && messages.length === 0 ? (
+        <YStack
+          marginHorizontal="$3"
+          marginTop="$3"
+          padding="$3"
+          borderRadius={12}
+          backgroundColor="rgba(216, 27, 96, 0.12)"
+          borderWidth={1}
+          borderColor="rgba(216, 27, 96, 0.28)"
+          gap="$1.5"
+        >
+          <XStack alignItems="center" gap="$2">
+            <YStack
+              paddingHorizontal="$1.5"
+              paddingVertical={2}
+              borderRadius={6}
+              backgroundColor={coworkUi.brand}
+            >
+              <Text color="#fff" fontSize={10} fontWeight="800">
+                NEW
+              </Text>
+            </YStack>
+            <Text color="#fff" fontSize={13} fontWeight="800">
+              New chat
+            </Text>
+          </XStack>
+          <Text color={coworkUi.textSecondary} fontSize={12} lineHeight={17}>
+            Direct message someone or chat with hosts — switch the recipient above the composer.
+          </Text>
+        </YStack>
+      ) : null}
 
       <ScrollView
         flex={1}
+        minHeight={0}
         padding="$3"
         ref={listRef as never}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
         onContentSizeChange={() => listRef.current?.scrollToEnd?.({ animated: false })}
       >
         <YStack gap="$3">
@@ -292,11 +422,15 @@ export function MeetingChatPanel({
       </ScrollView>
 
       <YStack
+        flexShrink={0}
         padding="$3"
         gap="$2"
         borderTopWidth={1}
         borderTopColor={coworkUi.borderSoft}
-        backgroundColor="rgba(0,0,0,0.15)"
+        backgroundColor={coworkUi.surfaceElevated}
+        pointerEvents="auto"
+        zIndex={6}
+        paddingBottom={fullWidth ? undefined : Math.max(12, keyboardInset)}
       >
         {chatEnabled && audiences.length > 1 ? (
           <YStack gap="$2">
@@ -304,19 +438,41 @@ export function MeetingChatPanel({
               <Text fontSize={12} fontWeight="700" color={coworkUi.meetingIconMuted}>
                 To:
               </Text>
-              <Button
-                tone="outline"
-                size="$2"
-                borderRadius={12}
-                flex={1}
-                justifyContent="space-between"
-                borderColor={coworkUi.glassBorder}
-                backgroundColor={coworkUi.meetingControl}
-                iconAfter={<Icons.ChevronDown size={14} color={coworkUi.textMuted} />}
-                onPress={() => setToMenuOpen((open) => !open)}
-              >
-                {toLabel}
-              </Button>
+              {Platform.OS === 'web' ? (
+                <Button
+                  tone="outline"
+                  size="$2"
+                  borderRadius={12}
+                  flex={1}
+                  justifyContent="space-between"
+                  borderColor={coworkUi.glassBorder}
+                  backgroundColor={coworkUi.meetingControl}
+                  iconAfter={<Icons.ChevronDown size={14} color={coworkUi.textMuted} />}
+                  onPress={() => setToMenuOpen((open) => !open)}
+                >
+                  {toLabel}
+                </Button>
+              ) : (
+                <MeetingSheetButton
+                  accessibilityLabel={`Chat audience, ${toLabel}`}
+                  onPress={() => setToMenuOpen((open) => !open)}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    backgroundColor: coworkUi.meetingControl,
+                    borderWidth: 1,
+                    borderColor: coworkUi.glassBorder,
+                  }}
+                >
+                  <Text fontSize={13} fontWeight="700" color={coworkUi.text}>
+                    {toLabel}
+                  </Text>
+                  <Icons.ChevronDown size={14} color={coworkUi.textMuted} />
+                </MeetingSheetButton>
+              )}
             </XStack>
             {toMenuOpen ? (
               <YStack
@@ -328,32 +484,83 @@ export function MeetingChatPanel({
                 backgroundColor={coworkUi.meetingBarElevated}
               >
                 {audiences.includes('everyone') ? (
-                  <Button
-                    tone={audience === 'everyone' ? 'primary' : 'ghost'}
-                    size="$2"
-                    borderRadius={10}
-                    justifyContent="flex-start"
-                    onPress={() => {
-                      setAudience('everyone')
-                      setToMenuOpen(false)
-                    }}
-                  >
-                    Everyone
-                  </Button>
+                  Platform.OS === 'web' ? (
+                    <Button
+                      tone={audience === 'everyone' ? 'primary' : 'ghost'}
+                      size="$2"
+                      borderRadius={10}
+                      justifyContent="flex-start"
+                      onPress={() => {
+                        setAudience('everyone')
+                        setToMenuOpen(false)
+                      }}
+                    >
+                      Everyone
+                    </Button>
+                  ) : (
+                    <MeetingSheetButton
+                      accessibilityLabel="Message everyone"
+                      onPress={() => {
+                        setAudience('everyone')
+                        setToMenuOpen(false)
+                      }}
+                      style={{
+                        minHeight: 40,
+                        borderRadius: 10,
+                        justifyContent: 'flex-start',
+                        paddingHorizontal: 12,
+                        backgroundColor:
+                          audience === 'everyone' ? coworkUi.brand : 'transparent',
+                      }}
+                    >
+                      <Text
+                        fontSize={13}
+                        fontWeight="700"
+                        color={audience === 'everyone' ? '#fff' : coworkUi.text}
+                      >
+                        Everyone
+                      </Text>
+                    </MeetingSheetButton>
+                  )
                 ) : null}
                 {audiences.includes('hosts') ? (
-                  <Button
-                    tone={audience === 'hosts' ? 'primary' : 'ghost'}
-                    size="$2"
-                    borderRadius={10}
-                    justifyContent="flex-start"
-                    onPress={() => {
-                      setAudience('hosts')
-                      setToMenuOpen(false)
-                    }}
-                  >
-                    Hosts only
-                  </Button>
+                  Platform.OS === 'web' ? (
+                    <Button
+                      tone={audience === 'hosts' ? 'primary' : 'ghost'}
+                      size="$2"
+                      borderRadius={10}
+                      justifyContent="flex-start"
+                      onPress={() => {
+                        setAudience('hosts')
+                        setToMenuOpen(false)
+                      }}
+                    >
+                      Hosts only
+                    </Button>
+                  ) : (
+                    <MeetingSheetButton
+                      accessibilityLabel="Message hosts only"
+                      onPress={() => {
+                        setAudience('hosts')
+                        setToMenuOpen(false)
+                      }}
+                      style={{
+                        minHeight: 40,
+                        borderRadius: 10,
+                        justifyContent: 'flex-start',
+                        paddingHorizontal: 12,
+                        backgroundColor: audience === 'hosts' ? coworkUi.brand : 'transparent',
+                      }}
+                    >
+                      <Text
+                        fontSize={13}
+                        fontWeight="700"
+                        color={audience === 'hosts' ? '#fff' : coworkUi.text}
+                      >
+                        Hosts only
+                      </Text>
+                    </MeetingSheetButton>
+                  )
                 ) : null}
                 {audiences.includes('private') ? (
                   <>
@@ -382,32 +589,69 @@ export function MeetingChatPanel({
                         No matching participants.
                       </Text>
                     ) : (
-                      filteredPrivateTargets.slice(0, 8).map((row) => {
-                        const name = safeMeetingDisplayName(
-                          participantDisplayNames[row.user_id] ||
-                            row.display_name ||
-                            row.profile?.full_name ||
-                            row.profile?.username,
-                        )
-                        return (
-                          <Button
-                            key={row.user_id}
-                            tone={recipientId === row.user_id ? 'primary' : 'ghost'}
-                            size="$2"
-                            borderRadius={10}
-                            justifyContent="flex-start"
-                            onPress={() => {
-                              setAudience('private')
-                              setRecipientId(row.user_id)
-                              lastPrivateRecipientRef.current = row.user_id
-                              setToMenuOpen(false)
-                              setRecipientQuery('')
-                            }}
-                          >
-                            {name}
-                          </Button>
-                        )
-                      })
+                      <ScrollView
+                        maxHeight={180}
+                        showsVerticalScrollIndicator
+                        nestedScrollEnabled
+                        keyboardShouldPersistTaps="handled"
+                      >
+                        <YStack gap={2}>
+                          {filteredPrivateTargets.map((row) => {
+                            const name = safeMeetingDisplayName(
+                              participantDisplayNames[row.user_id] ||
+                                row.display_name ||
+                                row.profile?.full_name ||
+                                row.profile?.username,
+                            )
+                            return Platform.OS === 'web' ? (
+                              <Button
+                                key={row.user_id}
+                                tone={recipientId === row.user_id ? 'primary' : 'ghost'}
+                                size="$2"
+                                borderRadius={10}
+                                justifyContent="flex-start"
+                                onPress={() => {
+                                  setAudience('private')
+                                  setRecipientId(row.user_id)
+                                  lastPrivateRecipientRef.current = row.user_id
+                                  setToMenuOpen(false)
+                                  setRecipientQuery('')
+                                }}
+                              >
+                                {name}
+                              </Button>
+                            ) : (
+                              <MeetingSheetButton
+                                key={row.user_id}
+                                accessibilityLabel={`Private message ${name}`}
+                                onPress={() => {
+                                  setAudience('private')
+                                  setRecipientId(row.user_id)
+                                  lastPrivateRecipientRef.current = row.user_id
+                                  setToMenuOpen(false)
+                                  setRecipientQuery('')
+                                }}
+                                style={{
+                                  minHeight: 40,
+                                  borderRadius: 10,
+                                  justifyContent: 'flex-start',
+                                  paddingHorizontal: 12,
+                                  backgroundColor:
+                                    recipientId === row.user_id ? coworkUi.brand : 'transparent',
+                                }}
+                              >
+                                <Text
+                                  fontSize={13}
+                                  fontWeight="700"
+                                  color={recipientId === row.user_id ? '#fff' : coworkUi.text}
+                                >
+                                  {name}
+                                </Text>
+                              </MeetingSheetButton>
+                            )
+                          })}
+                        </YStack>
+                      </ScrollView>
                     )}
                   </>
                 ) : null}
@@ -415,40 +659,134 @@ export function MeetingChatPanel({
             ) : null}
           </YStack>
         ) : null}
-        <XStack gap="$2">
-          <Input
-            flex={1}
-            value={draft}
-            onChangeText={setDraft}
-            editable={chatEnabled}
-            placeholder={
-              !chatEnabled
-                ? 'Chat is disabled'
-                : audience === 'hosts'
-                  ? 'Message hosts and co-hosts…'
-                  : audience === 'private'
-                    ? recipientId
-                      ? 'Write a private message…'
-                      : 'Choose a participant…'
-                    : 'Message everyone…'
-            }
-            backgroundColor="rgba(255,255,255,0.05)"
-            borderColor={coworkUi.borderSoft}
-            color={coworkUi.text}
-            placeholderTextColor={coworkUi.textMuted}
-            borderRadius={14}
-            onSubmitEditing={send}
-          />
-          <Button
-            tone="primary"
-            size="$3"
-            borderRadius={14}
-            disabled={!chatEnabled || (audience === 'private' && !recipientId)}
-            onPress={send}
+        <View
+          collapsable={false}
+          pointerEvents="auto"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            zIndex: 8,
+            elevation: 12,
+          }}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Chat attachments"
+            disabled={!chatEnabled}
+            onPress={() => {
+              if (onAttach) {
+                onAttach()
+                return
+              }
+              toast.show('Attachments coming soon', {
+                tone: 'info',
+                message: 'Share files from the meeting Share menu for now.',
+              })
+            }}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: coworkUi.meetingControl,
+              opacity: chatEnabled ? 1 : 0.45,
+            }}
           >
-            Send
-          </Button>
-        </XStack>
+            <Icons.Plus size={18} color={coworkUi.textSecondary} />
+          </Pressable>
+          {Platform.OS === 'web' ? (
+            <Input
+              flex={1}
+              value={draft}
+              onChangeText={setDraft}
+              editable={chatEnabled}
+              placeholder={composerPlaceholder}
+              backgroundColor="rgba(255,255,255,0.05)"
+              borderColor={coworkUi.borderSoft}
+              color={coworkUi.text}
+              placeholderTextColor={coworkUi.textMuted}
+              borderRadius={14}
+              onSubmitEditing={send}
+            />
+          ) : (
+            <AppTextField
+              value={draft}
+              onChangeText={setDraft}
+              editable={chatEnabled}
+              placeholder={composerPlaceholder}
+              placeholderTextColor={coworkUi.textMuted}
+              color={coworkUi.text}
+              returnKeyType="send"
+              enterKeyHint="send"
+              autoCorrect
+              autoCapitalize="sentences"
+              accessibilityLabel="Meeting chat message"
+              onSubmitEditing={send}
+              containerStyle={{
+                flex: 1,
+                minWidth: 0,
+                height: 48,
+                minHeight: 48,
+                backgroundColor: coworkUi.meetingControl,
+                borderColor: coworkUi.border,
+              }}
+            />
+          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Insert emoji"
+            disabled={!chatEnabled}
+            onPress={() => {
+              if (!chatEnabled) return
+              setDraft((value) => `${value}👍`)
+            }}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: coworkUi.meetingControl,
+              opacity: chatEnabled ? 1 : 0.45,
+            }}
+          >
+            <Icons.Smile size={18} color={coworkUi.textSecondary} />
+          </Pressable>
+          {Platform.OS === 'web' ? (
+            <Button
+              tone="primary"
+              size="$3"
+              borderRadius={14}
+              disabled={sendDisabled}
+              onPress={send}
+            >
+              Send
+            </Button>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send chat message"
+              disabled={sendDisabled}
+              onPress={send}
+              style={{
+                minHeight: 48,
+                minWidth: 72,
+                paddingHorizontal: 16,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: sendDisabled ? coworkUi.meetingControl : coworkUi.brand,
+                opacity: sendDisabled ? 0.55 : 1,
+              }}
+            >
+              <Text fontWeight="700" color="#fff">
+                Send
+              </Text>
+            </Pressable>
+          )}
+        </View>
       </YStack>
     </CoWorkPanelShell>
   )

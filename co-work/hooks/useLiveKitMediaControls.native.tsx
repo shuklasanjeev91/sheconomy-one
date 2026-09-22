@@ -8,13 +8,19 @@ import { useLocalParticipant, useRoomContext } from '@livekit/react-native'
 import { ScreenCapturePickerView } from '@livekit/react-native-webrtc'
 
 import {
-  CALL_AUDIO_CAPTURE,
+  resolveCallAudioCapture,
+  configureLiveKitCallAudio,
+  getActiveCallMediaMode,
   toggleCallSpeaker,
   type CallAudioRoute,
 } from '~/co-work/lib/livekit-call-audio'
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
 import { softMediaToggleFailure } from '~/co-work/lib/meeting-mobile'
+import { ensureNativeMicrophonePermission } from '~/co-work/lib/meeting-media-permissions'
+import { setMeetingCameraIntent } from '~/co-work/lib/meeting-camera-intent'
 import { setLocalScreenShareEnabled } from '~/co-work/lib/livekit-screen-share'
+import { flipLocalParticipantCamera } from '~/co-work/lib/livekit-flip-camera'
+import { androidPresentUnavailable, ANDROID_PRESENT_UNAVAILABLE_MESSAGE } from '~/co-work/lib/android-present-build'
 import { useMeetingVideoEffects } from '~/co-work/hooks/useMeetingVideoEffects.native'
 import { useMeetingAudioQuality } from '~/co-work/hooks/useMeetingAudioQuality.native'
 
@@ -79,6 +85,8 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } =
     useLocalParticipant()
   const [speakerOn, setSpeakerOn] = useState(preferSpeaker)
+  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user')
+  const cameraFacingRef = useRef<'user' | 'environment'>('user')
   const videoEffects = useMeetingVideoEffects()
   const audioQuality = useMeetingAudioQuality(
     room,
@@ -87,6 +95,7 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
     speakerOn,
   )
   const muteInFlightRef = useRef(false)
+  const flipInFlightRef = useRef(false)
 
   useEffect(() => {
     setSpeakerOn(preferSpeaker)
@@ -95,10 +104,13 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
   const screenSharingRef = useRef(isScreenShareEnabled)
   screenSharingRef.current = isScreenShareEnabled
 
-  const toggleScreenShare = useCallback(async () => {
+  const toggleScreenShare = useCallback(async (options?: import('~/co-work/lib/livekit-screen-share').ScreenShareStartOptions | null) => {
     const enabling = !screenSharingRef.current
 
     try {
+      if (enabling && androidPresentUnavailable()) {
+        throw new Error(ANDROID_PRESENT_UNAVAILABLE_MESSAGE)
+      }
       if (enabling && Platform.OS === 'ios') {
         if (isIosSimulator()) {
           throw new Error('Screen sharing requires a physical iPhone or iPad.')
@@ -110,7 +122,12 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
       // iOS connects to ScreenShareExtension through the app-group socket.
       // Android opens the MediaProjection consent sheet and keeps capture alive
       // through the configured foreground screen-share service.
-      await setLocalScreenShareEnabled(localParticipant, enabling, 'native')
+      await setLocalScreenShareEnabled(
+        localParticipant,
+        enabling,
+        'native',
+        enabling ? options : null,
+      )
     } catch (error) {
       if (isAbortOrCancelError(error)) {
         if (Platform.OS === 'ios') {
@@ -150,20 +167,74 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
     if (muteInFlightRef.current) return
     const next = !isMicrophoneEnabled
     muteInFlightRef.current = true
-    void localParticipant
-      .setMicrophoneEnabled(next, { ...CALL_AUDIO_CAPTURE })
-      .catch((cause) => {
+    audioQuality.clearError()
+    void (async () => {
+      try {
+        if (next) {
+          const permission = await ensureNativeMicrophonePermission()
+          if (!permission.granted) {
+            audioQuality.reportError(
+              permission.message ??
+                softMediaToggleFailure('microphone', undefined, {
+                  blockedInSettings: permission.blockedInSettings,
+                }),
+            )
+            return
+          }
+          // Re-assert the call audio session before first publish after a muted join.
+          await configureLiveKitCallAudio(getActiveCallMediaMode()).catch(() => {})
+        }
+        try {
+          const capture = await resolveCallAudioCapture()
+          await localParticipant.setMicrophoneEnabled(next, capture)
+        } catch (advanced) {
+          if (!next) throw advanced
+          // Fallback without capture constraints — some Android devices reject AEC/NS opts.
+          await localParticipant.setMicrophoneEnabled(true)
+        }
+      } catch (cause) {
         audioQuality.reportError(softMediaToggleFailure('microphone', cause))
-      })
-      .finally(() => {
+      } finally {
         muteInFlightRef.current = false
-      })
+      }
+    })()
   }, [audioQuality, isMicrophoneEnabled, localParticipant])
 
   const toggleVideo = useCallback(() => {
-    void localParticipant.setCameraEnabled(!isCameraEnabled).catch((cause) => {
+    const next = !isCameraEnabled
+    setMeetingCameraIntent(next)
+    audioQuality.clearError()
+    void localParticipant
+      .setCameraEnabled(next, next ? { facingMode: cameraFacingRef.current } : undefined)
+      .catch((cause) => {
+        // Revert intent if the OS denied camera so lifecycle doesn't keep restoring.
+        setMeetingCameraIntent(isCameraEnabled)
+        audioQuality.reportError(softMediaToggleFailure('camera', cause))
+      })
+  }, [audioQuality, isCameraEnabled, localParticipant])
+
+  const flipCamera = useCallback(async () => {
+    if (flipInFlightRef.current) return cameraFacingRef.current
+    flipInFlightRef.current = true
+    audioQuality.clearError()
+    try {
+      if (!isCameraEnabled) {
+        setMeetingCameraIntent(true)
+      }
+      const nextFacing = await flipLocalParticipantCamera(
+        localParticipant,
+        cameraFacingRef.current,
+      )
+      cameraFacingRef.current = nextFacing
+      setCameraFacing(nextFacing)
+      setMeetingCameraIntent(true)
+      return nextFacing
+    } catch (cause) {
       audioQuality.reportError(softMediaToggleFailure('camera', cause))
-    })
+      throw cause instanceof Error ? cause : new Error(String(cause))
+    } finally {
+      flipInFlightRef.current = false
+    }
   }, [audioQuality, isCameraEnabled, localParticipant])
 
   return useMemo(
@@ -176,10 +247,12 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
       videoEffects,
       audioQuality,
       speakerOn,
+      cameraFacing,
       toggleAudio,
       toggleVideo,
       toggleScreenShare,
       toggleSpeaker,
+      flipCamera,
     }),
     [
       room,
@@ -190,10 +263,12 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
       videoEffects,
       audioQuality,
       speakerOn,
+      cameraFacing,
       toggleAudio,
       toggleVideo,
       toggleScreenShare,
       toggleSpeaker,
+      flipCamera,
     ],
   )
 }

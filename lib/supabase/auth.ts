@@ -1,4 +1,5 @@
 import { supabase } from '~/lib/supabase/client'
+import { requestGoTrueOtp, withAuthTimeout } from '~/lib/supabase/gotrue-otp'
 
 /**
  * Passwordless auth only — no separate sign-up flow.
@@ -53,21 +54,22 @@ export function buildPhoneIdentifier(input: PhoneAuthInput) {
 
 /** Sends email OTP. Creates a new Supabase user on first successful verification. */
 export async function sendEmailOtp(email: string, metadata?: { fullName?: string }) {
-  return supabase.auth.signInWithOtp({
+  return requestGoTrueOtp({
     email: email.trim().toLowerCase(),
-    options: {
-      shouldCreateUser: true,
-      data: metadata?.fullName ? { full_name: metadata.fullName.trim() } : undefined,
-    },
+    create_user: true,
+    data: metadata?.fullName ? { full_name: metadata.fullName.trim() } : undefined,
   })
 }
 
 export async function verifyEmailOtp(email: string, token: string) {
-  return supabase.auth.verifyOtp({
-    email: email.trim().toLowerCase(),
-    token: token.trim(),
-    type: 'email',
-  })
+  return withAuthTimeout(
+    supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: token.trim(),
+      type: 'email',
+    }),
+    'Verifying the code is taking too long. Please try again.',
+  )
 }
 
 /** Sends SMS OTP. Pass E.164 phone or country + national number. */
@@ -90,12 +92,11 @@ export async function sendPhoneOtp(
     }
   }
 
-  return supabase.auth.signInWithOtp({
+  return requestGoTrueOtp({
     phone: normalized,
-    options: {
-      shouldCreateUser: true,
-      data: metadata?.fullName ? { full_name: metadata.fullName.trim() } : undefined,
-    },
+    create_user: true,
+    data: metadata?.fullName ? { full_name: metadata.fullName.trim() } : undefined,
+    channel: 'sms',
   })
 }
 
@@ -108,11 +109,14 @@ export async function verifyPhoneOtp(phone: string | PhoneAuthInput, token: stri
           return result.ok ? result.e164 : ''
         })()
 
-  return supabase.auth.verifyOtp({
-    phone: normalized,
-    token: token.trim(),
-    type: 'sms',
-  })
+  return withAuthTimeout(
+    supabase.auth.verifyOtp({
+      phone: normalized,
+      token: token.trim(),
+      type: 'sms',
+    }),
+    'Verifying the code is taking too long. Please try again.',
+  )
 }
 
 export async function sendOtp(

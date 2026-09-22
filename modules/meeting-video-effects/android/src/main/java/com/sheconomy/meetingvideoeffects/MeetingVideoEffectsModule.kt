@@ -19,10 +19,10 @@ class MeetingVideoEffectsModule : Module() {
     Name("MeetingVideoEffects")
 
     Function("registerProcessor") {
-      val context = appContext.reactContext ?: return@Function false
+      val context = resolveAppContext() ?: return@Function false
       ProcessorProvider.addProcessor(
         "sheconomyVirtualBackground",
-        MeetingBackgroundProcessorFactory(context.applicationContext),
+        MeetingBackgroundProcessorFactory(context),
       )
       true
     }
@@ -34,22 +34,18 @@ class MeetingVideoEffectsModule : Module() {
     }
 
     Function("isSupported") {
-      val context = appContext.reactContext
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return@Function false
+      val context = resolveAppContext() ?: return@Function true
       val lowRam = context
-        ?.getSystemService(Context.ACTIVITY_SERVICE)
+        .getSystemService(Context.ACTIVITY_SERVICE)
         ?.let { it as? ActivityManager }
-        ?.isLowRamDevice ?: true
-      val thermalConstrained =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-          context
-            ?.getSystemService(Context.POWER_SERVICE)
-            ?.let { it as? PowerManager }
-            ?.currentThermalStatus
-            ?.let { it >= PowerManager.THERMAL_STATUS_SEVERE } ?: true
-        } else {
-          false
-        }
-      Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !lowRam && !thermalConstrained
+        ?.isLowRamDevice == true
+      !lowRam
     }
+  }
+
+  private fun resolveAppContext(): Context? {
+    return appContext.reactContext?.applicationContext
+      ?: appContext.currentActivity?.applicationContext
   }
 }

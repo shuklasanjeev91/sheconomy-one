@@ -1,12 +1,18 @@
+import { useEffect, useState } from 'react'
 import { Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { Platform } from 'react-native'
 import { CoWorkPanelShell, CoWorkSectionLabel, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
+import { ScheduleToggleRow } from '~/co-work/components/ScheduleFormFields'
 import {
   connectionStatusLabel,
   type MeetingAudioDevice,
   type MeetingAudioQuality,
 } from '~/co-work/lib/meeting-audio-quality'
+import {
+  loadMeetingMediaPrefs,
+  saveMeetingMediaPrefs,
+} from '~/co-work/lib/meeting-media-prefs'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 type MeetingAudioPanelProps = {
@@ -29,6 +35,16 @@ export function MeetingAudioPanel({
   fullWidth,
 }: MeetingAudioPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const [originalSound, setOriginalSound] = useState(false)
+  const [noiseSuppression, setNoiseSuppression] = useState(true)
+
+  useEffect(() => {
+    void loadMeetingMediaPrefs().then((prefs) => {
+      setOriginalSound(!!prefs.originalSound)
+      setNoiseSuppression(prefs.noiseSuppression !== false)
+    })
+  }, [])
+
   const statusTone =
     audio.connectionStatus === 'excellent'
       ? 'live'
@@ -221,25 +237,53 @@ export function MeetingAudioPanel({
 
           <YStack gap="$2">
             <CoWorkSectionLabel>Voice processing</CoWorkSectionLabel>
+            <ScheduleToggleRow
+              label="Original sound"
+              description="Relax noise suppression for music and instruments"
+              checked={originalSound}
+              onCheckedChange={(checked) => {
+                setOriginalSound(checked)
+                void loadMeetingMediaPrefs().then((prefs) =>
+                  saveMeetingMediaPrefs({
+                    ...prefs,
+                    originalSound: checked,
+                    noiseSuppression: !checked && noiseSuppression,
+                  }),
+                )
+              }}
+            />
+            <ScheduleToggleRow
+              label="Noise suppression"
+              description="Reduce background noise on your microphone"
+              checked={!originalSound && noiseSuppression}
+              onCheckedChange={(checked) => {
+                setNoiseSuppression(checked)
+                void loadMeetingMediaPrefs().then((prefs) =>
+                  saveMeetingMediaPrefs({
+                    ...prefs,
+                    originalSound: false,
+                    noiseSuppression: checked,
+                  }),
+                )
+              }}
+            />
             <XStack gap="$2" flexWrap="wrap">
-              {['Noise suppression', 'Echo cancellation', 'Automatic gain', 'Opus adaptive audio'].map(
-                (label) => (
-                  <XStack
-                    key={label}
-                    gap={5}
-                    alignItems="center"
-                    paddingHorizontal="$2"
-                    paddingVertical={6}
-                    borderRadius={999}
-                    backgroundColor={coworkUi.liveMuted}
-                  >
-                    <Icons.Check size={12} color={coworkUi.live} />
-                    <Text fontSize={11} color={coworkUi.textSecondary}>
-                      {label}
-                    </Text>
-                  </XStack>
-                ),
-              )}
+              {['Echo cancellation', 'Opus adaptive audio'].map((label) => (
+                <XStack
+                  key={label}
+                  gap={5}
+                  alignItems="center"
+                  paddingHorizontal="$2"
+                  paddingVertical={6}
+                  borderRadius={999}
+                  backgroundColor={coworkUi.liveMuted}
+                >
+                  <Icons.Check size={12} color={coworkUi.live} />
+                  <Text fontSize={11} color={coworkUi.textSecondary}>
+                    {label}
+                  </Text>
+                </XStack>
+              ))}
             </XStack>
           </YStack>
 

@@ -1,10 +1,11 @@
 # Google Play — Foreground Services + Target API 36
 
-Play previously rejected unused FGS types (`phoneCall`, `microphone`,
-`camera`, `location`). Those stay stripped.
+Play previously rejected unused FGS types (`phoneCall`, `microphone`). Android
+**Present** needs **mediaProjection** only: the user taps Present, Android shows
+the system screen-capture prompt, and an ongoing notification stays visible
+while sharing.
 
-**MediaProjection is re-enabled** for Co-Work Present on Android:
-user taps Present → system capture consent → ongoing share notification.
+Target SDK is **36**.
 
 | Platform | Calls | Screen share (Present) |
 |----------|-------|------------------------|
@@ -15,23 +16,25 @@ user taps Present → system capture consent → ongoing share notification.
 ## Engineering checklist (in repo)
 
 - [`app.json`](../../app.json) — `targetSdkVersion` **36**, `compileSdkVersion` **36**
-  - Declare `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_MEDIA_PROJECTION` only
   - LiveKit / expo-livekit-screen-share Android screen-share flags **true**
+  - Do **not** declare phoneCall / microphone / camera / location FGS
 - [`plugins/withCallKeep.cjs`](../../plugins/withCallKeep.cjs) — **iOS only**
 - [`plugins/withAndroidFgsCompliance.cjs`](../../plugins/withAndroidFgsCompliance.cjs) — last plugin:
-  - `tools:node=remove` for CallKeep / location / mic / phoneCall FGS
-  - Keep MediaProjectionService + `ENABLE_SCREEN_SHARE_SERVICE=true`
+  - `tools:node=remove` for CallKeep + location FGS
+  - Keep `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_MEDIA_PROJECTION`
+  - `ENABLE_SCREEN_SHARE_SERVICE=true`
 - Verify: `yarn verify:android-fgs`
 
 ## Play Console steps
 
-1. Upload production AAB with a bumped `versionCode`.
+1. Upload production AAB with `versionCode` **182+**.
 2. App bundle explorer: confirm **Target SDK = 36**.
 3. Foreground service permissions: declare **mediaProjection** only.
-4. Attach a short demo: user taps Present → system capture sheet → share notification visible.
+   - Use: video / screen sharing in Co-Work meetings
+   - Started by the user tapping Present
+   - System MediaProjection consent + ongoing Present notification
+4. Do **not** declare phoneCall, microphone, camera, or location FGS.
 5. Submit for review.
 
-OTA cannot ship MediaProjection — Android Present needs this native AAB.
-
-Build **171+** also patches a MediaProjection race (FGS must be foreground
-before `startCapture`) that otherwise published blank tracks ~40–60% of the time.
+OTA cannot add MediaProjection to older Play binaries — users on those builds
+must install this native update.

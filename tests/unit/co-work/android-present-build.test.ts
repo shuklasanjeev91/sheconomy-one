@@ -1,37 +1,39 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
-describe('androidPresentNeedsNativeUpdate', () => {
+describe('androidPresentUnavailable', () => {
   beforeEach(() => {
     vi.resetModules()
   })
 
   afterEach(() => {
     vi.doUnmock('react-native')
-    vi.doUnmock('expo-constants')
     vi.resetModules()
   })
 
-  it('flags store builds below MediaProjection versionCode 170', async () => {
+  it('blocks Present on older Android binaries without MediaProjection FGS', async () => {
     vi.doMock('react-native', () => ({ Platform: { OS: 'android' } }))
-    vi.doMock('expo-constants', () => ({ default: { nativeBuildVersion: '167' } }))
-    const { androidPresentNeedsNativeUpdate, ANDROID_PRESENT_MIN_VERSION_CODE } = await import(
+    const { androidPresentUnavailable, ANDROID_PRESENT_UNAVAILABLE_MESSAGE } = await import(
       '~/co-work/lib/android-present-build'
     )
-    expect(ANDROID_PRESENT_MIN_VERSION_CODE).toBe(170)
-    expect(androidPresentNeedsNativeUpdate()).toBe(true)
+    expect(androidPresentUnavailable(177)).toBe(true)
+    expect(ANDROID_PRESENT_UNAVAILABLE_MESSAGE).toMatch(/Play Store/i)
   })
 
-  it('allows versionCode 170+', async () => {
+  it('allows Present on Android binaries that ship MediaProjection', async () => {
     vi.doMock('react-native', () => ({ Platform: { OS: 'android' } }))
-    vi.doMock('expo-constants', () => ({ default: { nativeBuildVersion: '170' } }))
-    const { androidPresentNeedsNativeUpdate } = await import('~/co-work/lib/android-present-build')
-    expect(androidPresentNeedsNativeUpdate()).toBe(false)
+    const { androidPresentUnavailable } = await import('~/co-work/lib/android-present-build')
+    expect(androidPresentUnavailable(182)).toBe(false)
+  })
+
+  it('blocks Present when the native versionCode cannot be read', async () => {
+    vi.doMock('react-native', () => ({ Platform: { OS: 'android' } }))
+    const { androidPresentUnavailable } = await import('~/co-work/lib/android-present-build')
+    expect(androidPresentUnavailable(null)).toBe(true)
   })
 
   it('is false on iOS', async () => {
     vi.doMock('react-native', () => ({ Platform: { OS: 'ios' } }))
-    vi.doMock('expo-constants', () => ({ default: { nativeBuildVersion: '1' } }))
-    const { androidPresentNeedsNativeUpdate } = await import('~/co-work/lib/android-present-build')
-    expect(androidPresentNeedsNativeUpdate()).toBe(false)
+    const { androidPresentUnavailable } = await import('~/co-work/lib/android-present-build')
+    expect(androidPresentUnavailable(100)).toBe(false)
   })
 })

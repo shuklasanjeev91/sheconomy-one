@@ -1,6 +1,6 @@
 import type { Room } from 'livekit-client'
 
-import { CALL_AUDIO_CAPTURE } from '~/co-work/lib/livekit-call-audio'
+import { resolveCallAudioCapture } from '~/co-work/lib/livekit-call-audio'
 import type { LiveKitMediaMode } from '~/co-work/lib/livekit-media-controls'
 import { shouldRestoreCameraAfterForeground } from '~/co-work/lib/meeting-lifecycle'
 
@@ -31,11 +31,11 @@ export async function reinforceCallMediaOnConnect(
       await local.setCameraEnabled(true)
     }
 
-    // Only publish/republish when we must enable a muted mic on first join.
-    // Re-calling setMicrophoneEnabled(true) while already live republishes the
-    // track (stopMicTrackOnMute) and looks like auto mute/unmute on Android.
+    // Only publish when we must enable a muted mic on first join.
+    // Skip re-enable while already live — avoids mute flicker on Android.
     if (forceMic && !local.isMicrophoneEnabled) {
-      await local.setMicrophoneEnabled(true, { ...CALL_AUDIO_CAPTURE })
+      const capture = await resolveCallAudioCapture()
+      await local.setMicrophoneEnabled(true, capture)
     }
   } catch {
     // Permission denial / missing device — leave the room connected.

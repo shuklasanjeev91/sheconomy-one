@@ -10,7 +10,7 @@ describe('getMediaCapabilities cross-platform', () => {
     vi.resetModules()
   })
 
-  it('enables screen share on Android (MediaProjection path)', async () => {
+  it('enables screen share on Android (MediaProjection Present)', async () => {
     vi.doMock('react-native', () => ({
       Platform: { OS: 'android' },
     }))

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -11,6 +12,7 @@ import {
 } from 'react-native'
 
 import { Icons } from '~/components/ui'
+import { captionLooksLikeTargetLang } from '~/co-work/lib/caption-translate'
 import { type LiveCaptionLine } from '~/co-work/lib/live-captions'
 import {
   captionOverlayLayout,
@@ -25,6 +27,7 @@ type CaptionLanguageOption = { code: string; label: string }
 type MeetingLiveCaptionsProps = {
   active: boolean
   currentCaption: string
+  liveSpeaker?: string
   lines: LiveCaptionLine[]
   error?: string | null
   targetLang?: string
@@ -36,16 +39,21 @@ type MeetingLiveCaptionsProps = {
   collapsed?: boolean
   size?: CaptionOverlaySize
   placement?: CaptionOverlayPlacement
+  offsetX?: number
+  offsetY?: number
   presentationSafe?: boolean
   wideLayout?: boolean
   topOffset?: number
   bottomOffset?: number
   sideInset?: number
+  /** Extra inset on the trailing edge when a Zoom-web side panel is open. */
+  trailingInset?: number
   onTargetLangChange?: (language: string) => void
   onSpokenLangChange?: (language: string) => void
   onCollapsedChange?: (collapsed: boolean) => void
   onSizeChange?: (size: CaptionOverlaySize) => void
   onPlacementChange?: (placement: CaptionOverlayPlacement) => void
+  onOffsetChange?: (offsetX: number, offsetY: number) => void
 }
 
 const SIZE_ORDER: CaptionOverlaySize[] = ['compact', 'comfortable', 'large']
@@ -65,12 +73,12 @@ const CAPTION_SPEAKER = '#F9A8D4'
 
 /**
  * Zoom-style captions for web + iOS + Android.
- * Pure RN View/Text/StyleSheet only — Tamagui theme tokens previously painted a
- * near-white surface over white text on iPad (empty white caption bar).
+ * Draggable overlay; shows only the latest live line (replaces previous).
  */
 export function MeetingLiveCaptions({
   active,
   currentCaption,
+  liveSpeaker,
   lines,
   error,
   targetLang,
@@ -82,16 +90,20 @@ export function MeetingLiveCaptions({
   collapsed = false,
   size = 'comfortable',
   placement = 'bottom',
+  offsetX = 0,
+  offsetY = 0,
   presentationSafe = false,
   wideLayout,
   topOffset,
   bottomOffset,
   sideInset,
+  trailingInset = 0,
   onTargetLangChange,
   onSpokenLangChange,
   onCollapsedChange,
   onSizeChange,
   onPlacementChange,
+  onOffsetChange,
 }: MeetingLiveCaptionsProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions()
@@ -110,29 +122,88 @@ export function MeetingLiveCaptions({
   const sizeIndex = SIZE_ORDER.indexOf(size)
   const canShrink = sizeIndex > 0
   const canGrow = sizeIndex < SIZE_ORDER.length - 1
-  const top = layout.placement === 'top' ? topOffset ?? (presentationSafe ? 96 : 72) : undefined
-  const bottom =
+  const baseTop = layout.placement === 'top' ? topOffset ?? (presentationSafe ? 96 : 72) : undefined
+  const baseBottom =
     layout.placement === 'bottom' ? bottomOffset ?? (presentationSafe ? 140 : 112) : undefined
   const horizontalInset = sideInset ?? 12
+  const trailingEdgeInset = horizontalInset + Math.max(0, trailingInset)
   const showSettings = !collapsed && settingsOpen
 
-  const finalLines = useMemo(
-    () => lines.filter((line) => line.isFinal && line.text.trim()).slice(-3),
-    [lines],
-  )
-  const interimLine = useMemo(
-    () => [...lines].reverse().find((line) => !line.isFinal && line.text.trim()),
-    [lines],
-  )
-  const liveText = (currentCaption.trim() || interimLine?.text || '').trim()
-  const liveIsNew =
-    !!liveText &&
-    liveText !== '…' &&
-    liveText !== finalLines[finalLines.length - 1]?.text?.trim()
-  const hasBody = finalLines.length > 0 || liveIsNew
-  const liveSpeaker = interimLine?.speaker || finalLines[finalLines.length - 1]?.speaker || 'Speaking'
+  // Free-drag: horizontal always; vertical shifts top or bottom anchor.
+  const dragX = offsetX
+  const dragY = offsetY
+  const offsetRef = useRef({ x: dragX, y: dragY })
+  offsetRef.current = { x: dragX, y: dragY }
+  const grantRef = useRef({ x: 0, y: 0 })
+  const onOffsetChangeRef = useRef(onOffsetChange)
+  onOffsetChangeRef.current = onOffsetChange
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_evt, gesture) =>
+        Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6,
+      onPanResponderGrant: () => {
+        grantRef.current = { ...offsetRef.current }
+      },
+      onPanResponderMove: (_evt, gesture) => {
+        onOffsetChangeRef.current?.(
+          grantRef.current.x + gesture.dx,
+          grantRef.current.y + gesture.dy,
+        )
+      },
+      onPanResponderRelease: (_evt, gesture) => {
+        onOffsetChangeRef.current?.(
+          Math.round(grantRef.current.x + gesture.dx),
+          Math.round(grantRef.current.y + gesture.dy),
+        )
+      },
+      onPanResponderTerminate: (_evt, gesture) => {
+        onOffsetChangeRef.current?.(
+          Math.round(grantRef.current.x + gesture.dx),
+          Math.round(grantRef.current.y + gesture.dy),
+        )
+      },
+    }),
+  ).current
+
+  // Only the latest line — never stack previous captions. Prefer translated/currentCaption.
+  const latestFinal = useMemo(() => {
+    const finals = lines.filter((line) => line.isFinal && line.text.trim())
+    return finals.length > 0 ? finals[finals.length - 1] : null
+  }, [lines])
+  const liveText = currentCaption.trim()
+  const fallbackFinal =
+    latestFinal &&
+    (!targetLang ||
+      latestFinal.translated ||
+      captionLooksLikeTargetLang(latestFinal.text, targetLang))
+      ? latestFinal.text.trim()
+      : ''
+  const displayText = liveText || fallbackFinal
+  // Hold the last non-empty line so STT gaps do not flash "Listening…"
+  const stickyCaptionRef = useRef('')
+  if (displayText) stickyCaptionRef.current = displayText
+  if (!active) stickyCaptionRef.current = ''
+  const stableText = displayText || stickyCaptionRef.current
+  const displaySpeaker =
+    liveSpeaker ||
+    lines.find((line) => !line.isFinal)?.speaker ||
+    latestFinal?.speaker ||
+    'Speaking'
+  const hasBody = !!stableText && stableText !== '…'
 
   if (!active && !error) return null
+
+  const positionStyle =
+    layout.placement === 'top'
+      ? {
+          top: (baseTop ?? 72) + dragY,
+          bottom: undefined as number | undefined,
+        }
+      : {
+          bottom: Math.max(8, (baseBottom ?? 112) - dragY),
+          top: undefined as number | undefined,
+        }
 
   return (
     <View
@@ -140,10 +211,9 @@ export function MeetingLiveCaptions({
       style={[
         styles.wrap,
         {
-          left: horizontalInset,
-          right: horizontalInset,
-          top,
-          bottom,
+          left: Math.max(4, horizontalInset + dragX),
+          right: Math.max(4, trailingEdgeInset - Math.min(0, dragX)),
+          ...positionStyle,
           zIndex: MEETING_CAPTIONS_Z_INDEX,
           elevation: MEETING_CAPTIONS_Z_INDEX,
           alignItems:
@@ -167,25 +237,24 @@ export function MeetingLiveCaptions({
             styles.surface,
             {
               width: layout.maxWidth,
-              maxHeight: collapsed ? 58 : layout.maxHeight,
+              maxHeight: collapsed ? 58 : Math.min(layout.maxHeight, 160),
               paddingVertical: collapsed ? 10 : 14,
+              transform: [{ translateX: 0 }],
             },
           ]}
           pointerEvents="auto"
-          // iOS: prevent parent theme / blending from washing the bar white.
           collapsable={false}
+          {...panResponder.panHandlers}
         >
-          <View style={styles.header}>
+          <View style={styles.header} accessibilityLabel="Drag to move captions">
             <RNText
               style={[styles.status, { fontSize: fonts.status }]}
               numberOfLines={1}
               allowFontScaling
             >
               {collapsed
-                ? liveText ||
-                  finalLines[finalLines.length - 1]?.text ||
-                  `CC · ${targetLangName || 'On'}`
-                : `CC · ${targetLangName || 'Captions'}`}
+                ? stableText || `CC · ${targetLangName || 'On'}`
+                : `CC · ${targetLangName || 'Captions'} · Drag`}
             </RNText>
             <View style={styles.headerActions}>
               {!collapsed ? (
@@ -212,22 +281,12 @@ export function MeetingLiveCaptions({
           {!collapsed ? (
             hasBody ? (
               <View style={styles.body}>
-                {finalLines.map((line) => (
-                  <CaptionLineRow
-                    key={line.id}
-                    speaker={line.speaker}
-                    text={line.text}
-                    fonts={fonts}
-                  />
-                ))}
-                {liveIsNew ? (
-                  <CaptionLineRow
-                    speaker={liveSpeaker}
-                    text={liveText}
-                    fonts={fonts}
-                    live
-                  />
-                ) : null}
+                <CaptionLineRow
+                  speaker={displaySpeaker}
+                  text={stableText}
+                  fonts={fonts}
+                  live={!!liveText}
+                />
               </View>
             ) : (
               <RNText style={[styles.listening, { fontSize: fonts.body }]} allowFontScaling>
@@ -254,9 +313,10 @@ export function MeetingLiveCaptions({
                   {onPlacementChange && !presentationSafe ? (
                     <CaptionIconButton
                       label={`Move captions to ${layout.placement === 'top' ? 'bottom' : 'top'}`}
-                      onPress={() =>
+                      onPress={() => {
+                        onOffsetChange?.(0, 0)
                         onPlacementChange(layout.placement === 'top' ? 'bottom' : 'top')
-                      }
+                      }}
                     >
                       {layout.placement === 'top' ? (
                         <Icons.ChevronDown size={16} color={CAPTION_MUTED} />
@@ -299,8 +359,8 @@ export function MeetingLiveCaptions({
                 <RNText style={styles.settingsHint}>I speak · {spokenLangName}</RNText>
               ) : null}
               <RNText style={styles.settingsHint}>
-                You see captions in your display language. Speech recognition follows what you speak
-                so peers can read you in theirs.
+                Drag the caption box to move it. Only the latest line is shown, translated into your
+                Show language.
               </RNText>
             </View>
           ) : null}

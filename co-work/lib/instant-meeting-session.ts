@@ -18,6 +18,8 @@ export type InstantMeetingSession = {
   enteredRoom: boolean
   /** Display name used when the room was entered (resume without confirm). */
   displayName: string | null
+  audioEnabled?: boolean
+  videoEnabled?: boolean
 }
 
 let session: InstantMeetingSession | null = null
@@ -67,6 +69,8 @@ export function openInstantMeetingSession(input: {
   /** Mark that the caller is already in the live room (minimize handoff). */
   enteredRoom?: boolean
   displayName?: string | null
+  audioEnabled?: boolean
+  videoEnabled?: boolean
 }) {
   const code = normalizeCode(input.code)
   if (!code) return
@@ -87,12 +91,16 @@ export function openInstantMeetingSession(input: {
     const nextEnteredRoom = prev.enteredRoom || !!input.enteredRoom
     const nextDisplayName =
       (input.displayName && input.displayName.trim()) || prev.displayName || null
+    const nextAudioEnabled = input.audioEnabled ?? prev.audioEnabled
+    const nextVideoEnabled = input.videoEnabled ?? prev.videoEnabled
     if (
       nextMeeting !== prev.meeting ||
       nextCode !== prev.code ||
       nextAutoJoin !== prev.autoJoin ||
       nextEnteredRoom !== prev.enteredRoom ||
-      nextDisplayName !== prev.displayName
+      nextDisplayName !== prev.displayName ||
+      nextAudioEnabled !== prev.audioEnabled ||
+      nextVideoEnabled !== prev.videoEnabled
     ) {
       session = {
         ...prev,
@@ -101,6 +109,8 @@ export function openInstantMeetingSession(input: {
         autoJoin: nextAutoJoin,
         enteredRoom: nextEnteredRoom,
         displayName: nextDisplayName,
+        audioEnabled: nextAudioEnabled,
+        videoEnabled: nextVideoEnabled,
       }
       emit()
     }
@@ -118,6 +128,8 @@ export function openInstantMeetingSession(input: {
     autoJoin,
     enteredRoom: !!input.enteredRoom,
     displayName: input.displayName?.trim() || null,
+    audioEnabled: input.audioEnabled,
+    videoEnabled: input.videoEnabled,
   }
   emit()
   // Always expand — a leftover minimized/pip presentation from a prior session

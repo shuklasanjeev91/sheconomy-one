@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocalParticipant } from '@livekit/react-native'
 import type { LocalVideoTrack } from 'livekit-client'
-import { AppState } from 'react-native'
+import { AppState, Platform } from 'react-native'
 
 import MeetingVideoEffectsNative from '~/modules/meeting-video-effects'
 import type { MeetingVideoEffects } from '~/co-work/lib/meeting-video-effects'
+import {
+  captureNeedsUpdate,
+  EFFECT_CAPTURE,
+  nativeProcessorCanDecodeImageUri,
+  VIRTUAL_BACKGROUND_EFFECT_NAME,
+  waitForNativeVideoEffects,
+} from '~/co-work/lib/native-video-effects'
 import { resolveVirtualBackgroundSelection } from '~/co-work/lib/virtual-background-storage'
 import {
   loadVirtualBackgroundPreference,
@@ -17,17 +24,34 @@ import {
   type VirtualBackgroundSelection,
 } from '~/co-work/lib/virtual-backgrounds'
 
-const EFFECT_NAME = 'sheconomyVirtualBackground'
-const EFFECT_CAPTURE = { width: 640, height: 360, frameRate: 15 }
-const NORMAL_CAPTURE = { width: 1280, height: 720, frameRate: 24 }
-
 type EffectMediaStreamTrack = MediaStreamTrack & {
   _setVideoEffects(names: string[]): void
+  getSettings?: () => { width?: number; height?: number }
+  applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>
 }
 
 function getNativeTrack(track: LocalVideoTrack | undefined): EffectMediaStreamTrack | null {
-  const mediaTrack = track?.mediaStreamTrack as EffectMediaStreamTrack | undefined
-  return mediaTrack && typeof mediaTrack._setVideoEffects === 'function' ? mediaTrack : null
+  const candidates: unknown[] = [track?.mediaStreamTrack]
+  try {
+    const fromStream = track?.mediaStream?.getVideoTracks?.() ?? []
+    candidates.push(...fromStream)
+  } catch {
+    // ignore
+  }
+  for (const media of candidates) {
+    const native = media as EffectMediaStreamTrack | undefined
+    if (native && typeof native._setVideoEffects === 'function') return native
+  }
+  return null
+}
+
+async function maybeApplyCapture(track: EffectMediaStreamTrack, target: { width: number; height: number; frameRate: number }) {
+  if (Platform.OS === 'android' && !captureNeedsUpdate(track.getSettings?.(), target)) return
+  try {
+    await track.applyConstraints?.(target)
+  } catch {
+    // Keep the current camera rather than restarting into a frozen tile.
+  }
 }
 
 export function useMeetingVideoEffects(): MeetingVideoEffects {
@@ -38,30 +62,31 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
   const [error, setError] = useState<string | null>(null)
   const selectionRef = useRef(selection)
   selectionRef.current = selection
-  const registeredRef = useRef(false)
+  const appliedKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
-    let supported = false
-    try {
-      supported = !!MeetingVideoEffectsNative?.isSupported?.()
-      if (supported && !registeredRef.current) {
-        registeredRef.current = !!MeetingVideoEffectsNative?.registerProcessor?.()
+    let cancelled = false
+    void (async () => {
+      const ready = await waitForNativeVideoEffects(MeetingVideoEffectsNative)
+      if (cancelled) return
+      if (!ready) {
+        setCapability('unavailable')
+        setError(virtualBackgroundUnavailableMessage('native'))
+        setSelection(OFF_BACKGROUND)
+        return
       }
-    } catch {
-      supported = false
-      registeredRef.current = false
+      setCapability('supported')
+      setError(null)
+      try {
+        const value = await resolveVirtualBackgroundSelection(await loadVirtualBackgroundPreference())
+        if (!cancelled) setSelection(value)
+      } catch {
+        if (!cancelled) setSelection(OFF_BACKGROUND)
+      }
+    })()
+    return () => {
+      cancelled = true
     }
-    setCapability(supported && registeredRef.current ? 'supported' : 'unavailable')
-    if (!(supported && registeredRef.current)) {
-      setError(virtualBackgroundUnavailableMessage('native'))
-    }
-    void loadVirtualBackgroundPreference()
-      .then(resolveVirtualBackgroundSelection)
-      .then((value) => {
-        // Never leave a remembered effect active when the processor is missing.
-        setSelection(supported && registeredRef.current ? value : OFF_BACKGROUND)
-      })
-      .catch(() => setSelection(OFF_BACKGROUND))
   }, [])
 
   const apply = useCallback(
@@ -70,6 +95,12 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
       setError(null)
 
       if (next.mode !== 'off' && capability !== 'supported') {
+        if (capability === 'checking') {
+          selectionRef.current = next
+          setSelection(next)
+          await saveVirtualBackgroundPreference(next)
+          return true
+        }
         setError(virtualBackgroundUnavailableMessage('native'))
         setStatus('error')
         return false
@@ -77,8 +108,12 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
 
       const track = getNativeTrack(cameraTrack?.track as LocalVideoTrack | undefined)
       if (!track && next.mode !== 'off' && isCameraEnabled) {
-        setError('Start the camera before applying a virtual background.')
-        setStatus('error')
+        // Camera is on but LiveKit track is still attaching — keep the pick so
+        // the track-appear effect can apply blur/image without another tap.
+        selectionRef.current = next
+        setSelection(next)
+        await saveVirtualBackgroundPreference(next)
+        setStatus('loading')
         return false
       }
 
@@ -91,6 +126,12 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
         if (resolved.mode === 'image' && !resolved.imageUrl) {
           throw new Error('The selected background image is not available offline.')
         }
+        if (
+          resolved.mode === 'image' &&
+          !nativeProcessorCanDecodeImageUri(resolved.imageUrl)
+        ) {
+          throw new Error('Could not prepare this background for the camera on this device.')
+        }
         MeetingVideoEffectsNative?.configure?.({
           mode: resolved.mode,
           imagePath: resolved.imageUrl,
@@ -99,12 +140,16 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
         if (track) {
           if (resolved.mode === 'off') {
             track._setVideoEffects([])
-            await track.applyConstraints(NORMAL_CAPTURE)
+            appliedKeyRef.current = 'off'
           } else {
-            await track.applyConstraints(EFFECT_CAPTURE)
-            // Bounce so a new imagePath always reloads (native caches by path).
+            // Always re-attach on the current capturer. Skipping when appliedKeyRef
+            // was already "on" left a new LiveKit track unfiltered (blurry 320p / no VB).
+            if (Platform.OS !== 'android') {
+              await maybeApplyCapture(track, EFFECT_CAPTURE)
+            }
             track._setVideoEffects([])
-            track._setVideoEffects([EFFECT_NAME])
+            track._setVideoEffects([VIRTUAL_BACKGROUND_EFFECT_NAME])
+            appliedKeyRef.current = 'on'
           }
         }
         selectionRef.current = resolved
@@ -115,10 +160,10 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
       } catch (cause) {
         try {
           track?._setVideoEffects([])
-          await track?.applyConstraints(NORMAL_CAPTURE)
         } catch {
-          // Preserve the camera even if restoring capture constraints fails.
+          // Preserve the camera even if restoring effects fails.
         }
+        appliedKeyRef.current = 'off'
         setError(cause instanceof Error ? cause.message : 'Could not apply background effect.')
         selectionRef.current = OFF_BACKGROUND
         setSelection(OFF_BACKGROUND)
@@ -139,12 +184,13 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
     isCameraEnabled,
     selection.mode,
     selection.id,
-    selection.imageUrl,
+    selection.storagePath,
     selection.blurRadius,
   ])
 
   useEffect(
     () => () => {
+      appliedKeyRef.current = null
       const track = getNativeTrack(cameraTrack?.track as LocalVideoTrack | undefined)
       try {
         track?._setVideoEffects([])
@@ -156,40 +202,18 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
   )
 
   useEffect(() => {
-    const disableForResources = (message: string) => {
+    const memorySubscription = AppState.addEventListener('memoryWarning', () => {
+      if (selectionRef.current.mode === 'off') return
+      const message =
+        'Background effect was turned off because memory is low. Your camera stays unfiltered.'
       setError(message)
       void apply(OFF_BACKGROUND).then(() => {
         setError(message)
         setStatus('error')
       })
-    }
-    const memorySubscription = AppState.addEventListener('memoryWarning', () => {
-      if (selectionRef.current.mode === 'off') return
-      disableForResources(
-        'Background effect was turned off because memory is low. Your camera stays unfiltered.',
-      )
     })
-    const stateSubscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active' || capability !== 'supported') return
-      try {
-        if (!MeetingVideoEffectsNative?.isSupported()) {
-          setCapability('unavailable')
-          disableForResources(
-            'Background effect was turned off to protect device performance. Your camera stays unfiltered.',
-          )
-        }
-      } catch {
-        setCapability('unavailable')
-        disableForResources(
-          'Background effects became unavailable. Your camera stays unfiltered.',
-        )
-      }
-    })
-    return () => {
-      memorySubscription.remove()
-      stateSubscription.remove()
-    }
-  }, [apply, capability])
+    return () => memorySubscription.remove()
+  }, [apply])
 
   const retry = useCallback(() => apply(selectionRef.current), [apply])
   return { capability, status, selection, error, apply, retry }

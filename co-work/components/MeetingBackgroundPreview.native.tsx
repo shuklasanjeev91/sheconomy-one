@@ -1,10 +1,16 @@
 import '~/lib/polyfills/install-dom-exception'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createLocalVideoTrack, type LocalVideoTrack } from 'livekit-client'
 import { MediaStream, RTCView } from '@livekit/react-native-webrtc'
 
 import MeetingVideoEffectsNative from '~/modules/meeting-video-effects'
+import {
+  EFFECT_CAPTURE,
+  nativeProcessorCanDecodeImageUri,
+  VIRTUAL_BACKGROUND_EFFECT_NAME,
+  waitForNativeVideoEffects,
+} from '~/co-work/lib/native-video-effects'
 import {
   MeetingBackgroundQuickPicker,
   type MeetingBackgroundQuickCustomItem,
@@ -35,13 +41,19 @@ type NativeEffectTrack = MediaStreamTrack & {
 
 type MeetingBackgroundPreviewProps = {
   userId?: string | null
+  /**
+   * When false, stop the local camera / effects so Join can open LiveKit without
+   * racing the lobby RTCView (Android EglThread refcount crash).
+   */
+  active?: boolean
+  videoOverlay?: ReactNode
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewProps = {}) {
+export function MeetingBackgroundPreview({
+  userId,
+  active = true,
+  videoOverlay,
+}: MeetingBackgroundPreviewProps = {}) {
   const toast = useAppToast()
   const trackRef = useRef<LocalVideoTrack | null>(null)
   const effectsSupportedRef = useRef(false)
@@ -52,6 +64,22 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
   const [error, setError] = useState<string | null>(null)
   const [effectsAvailable, setEffectsAvailable] = useState(true)
   const [customs, setCustoms] = useState<MeetingBackgroundQuickCustomItem[]>([])
+
+  const stopPreviewTrack = useCallback(() => {
+    const track = trackRef.current
+    trackRef.current = null
+    setStreamUrl(null)
+    try {
+      ;(track?.mediaStreamTrack as NativeEffectTrack | undefined)?._setVideoEffects([])
+    } catch {
+      // Track may already be closed.
+    }
+    try {
+      track?.stop()
+    } catch {
+      // ignore
+    }
+  }, [])
 
   const refreshCustoms = useCallback(async () => {
     if (!userId) {
@@ -92,15 +120,14 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
     if (!track || typeof track._setVideoEffects !== 'function') return false
     if (!effectsSupportedRef.current) return false
 
-    // Bounce the processor so a new imagePath always reloads (native caches by path).
-    track._setVideoEffects([])
-    await sleep(30)
-    MeetingVideoEffectsNative?.configure({
+    if (next.mode === 'image' && !nativeProcessorCanDecodeImageUri(next.imageUrl)) return false
+
+    MeetingVideoEffectsNative?.configure?.({
       mode: next.mode,
       imagePath: next.imageUrl,
       blurRadius: next.blurRadius,
     })
-    track._setVideoEffects(next.mode === 'off' ? [] : ['sheconomyVirtualBackground'])
+    track._setVideoEffects(next.mode === 'off' ? [] : [VIRTUAL_BACKGROUND_EFFECT_NAME])
     return true
   }, [])
 
@@ -201,21 +228,19 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
   }, [refreshCustoms])
 
   useEffect(() => {
+    if (!active) {
+      stopPreviewTrack()
+      setBusy(false)
+      return
+    }
+
     let cancelled = false
     void (async () => {
       try {
-        try {
-          effectsSupportedRef.current = !!MeetingVideoEffectsNative?.isSupported()
-          if (effectsSupportedRef.current) MeetingVideoEffectsNative?.registerProcessor()
-        } catch {
-          effectsSupportedRef.current = false
-        }
-        if (!cancelled) setEffectsAvailable(effectsSupportedRef.current)
-
         const track = await createLocalVideoTrack({
-          resolution: { width: 640, height: 360, frameRate: 15 },
+          resolution: EFFECT_CAPTURE,
         })
-        if (cancelled) {
+        if (cancelled || !active) {
           track.stop()
           return
         }
@@ -224,8 +249,13 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
         setStreamUrl(stream.toURL())
         setBusy(false)
 
+        const ready = await waitForNativeVideoEffects(MeetingVideoEffectsNative)
+        if (cancelled || !active) return
+        effectsSupportedRef.current = ready
+        setEffectsAvailable(ready)
+
         const saved = await loadVirtualBackgroundPreference()
-        if (!cancelled) await apply(saved)
+        if (!cancelled && active) await apply(saved)
       } catch (cause) {
         if (!cancelled) {
           setError(cause instanceof Error ? cause.message : 'Could not start camera preview.')
@@ -235,17 +265,10 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
     })()
     return () => {
       cancelled = true
-      const track = trackRef.current
-      trackRef.current = null
+      stopPreviewTrack()
       effectsSupportedRef.current = false
-      try {
-        ;(track?.mediaStreamTrack as NativeEffectTrack | undefined)?._setVideoEffects([])
-      } catch {
-        // Track may already be closed.
-      }
-      track?.stop()
     }
-  }, [apply])
+  }, [active, apply, stopPreviewTrack])
 
   const previewImageUri =
     selection.mode === 'image' && selection.imageUrl ? selection.imageUrl : null
@@ -261,6 +284,7 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
       uploadBusy={uploadBusy}
       customItems={customs}
       selectedImageUri={previewImageUri}
+      videoOverlay={videoOverlay}
       preview={
         streamUrl ? (
           <RTCView

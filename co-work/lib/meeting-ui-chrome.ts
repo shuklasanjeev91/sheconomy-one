@@ -4,7 +4,7 @@ import type { MeetingViewMode } from '~/co-work/lib/meeting-state-machine'
 export type MeetingUiMode = 'normal' | 'maximized'
 
 /** Idle delay before chrome auto-hides in immersive layouts. */
-export const MEETING_CONTROLS_IDLE_MS = 3500
+export const MEETING_CONTROLS_IDLE_MS = 6_000
 
 export type MeetingChromeVisibilityInput = {
   uiMode: MeetingUiMode

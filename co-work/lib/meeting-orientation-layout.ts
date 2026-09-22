@@ -6,6 +6,7 @@
  */
 
 import {
+  meetingViewportIsLandscape,
   resolveMeetingResponsiveLayout,
   type MeetingBreakpoint,
 } from '~/co-work/lib/meeting-responsive'
@@ -74,7 +75,7 @@ export function resolveMeetingOrientationPolicy(
   // Phone-class viewports (including landscape phones ~844×390) stay on phone
   // policies even when the long edge crosses the tablet width breakpoint.
   if (shortest < 500) {
-    return width > height ? 'landscape-phone' : 'portrait-phone'
+    return meetingViewportIsLandscape(width, height) ? 'landscape-phone' : 'portrait-phone'
   }
 
   const responsive = resolveMeetingResponsiveLayout({
@@ -85,7 +86,7 @@ export function resolveMeetingOrientationPolicy(
 
   switch (responsive.breakpoint) {
     case 'mobile':
-      return width > height ? 'landscape-phone' : 'portrait-phone'
+      return meetingViewportIsLandscape(width, height) ? 'landscape-phone' : 'portrait-phone'
     case 'tablet':
       return 'tablet'
     case 'laptop':
@@ -111,70 +112,57 @@ export function resolveMeetingChromeLayout(input: MeetingChromeLayoutInput): Mee
     isNative: input.isNative,
   })
   const policy = resolveMeetingOrientationPolicy(input)
-  const isLandscape = width > height
-  // Phone landscape still uses sheets so chat/people don't cover the stage.
+  const isLandscape = meetingViewportIsLandscape(width, height)
+  // Zoom mobile (phones only): bottom sheets.
+  // Zoom desktop / iPad (tablet+) and Zoom web (laptop+): side panels.
   const panelPresentation =
     policy === 'portrait-phone' || policy === 'landscape-phone'
       ? 'bottom-sheet'
       : responsive.panelPresentation
   const panelFullWidth = panelPresentation === 'bottom-sheet'
 
-  if (policy === 'large-desktop' || policy === 'desktop' || policy === 'laptop') {
-    const filmstripWidth = policy === 'large-desktop' ? 200 : policy === 'desktop' ? 176 : 156
-    const horizontalPad = policy === 'laptop' ? 20 : 24
-    const controlsClearance = 120
-    return {
-      policy,
-      breakpoint: responsive.breakpoint,
-      isLandscape,
-      filmstripBeside: true,
-      filmstripWidth,
-      filmstripHeight: Math.max(height - 200, 180),
-      pipWidth: Math.max(filmstripWidth - 20, 140),
-      pipHeight: 88,
-      headerClearance: 72,
-      controlsClearance,
-      horizontalPad,
-      stagePaddingTop: Math.max(safeTop, 12) + 72,
-      stagePaddingBottom: controlsClearance + safeBottom,
-      stagePaddingLeft: horizontalPad + safeLeft,
-      stagePaddingRight: horizontalPad + safeRight,
-      panelTop: Math.max(safeTop, 8) + 68,
-      panelBottom: controlsClearance + safeBottom,
-      panelTrailingInset: 12 + safeRight,
-      panelMaxWidthFraction: responsive.sidePanelWidthFraction,
-      panelFullWidth,
-      panelPresentation,
-      compactControls: false,
-      captionWideLayout: true,
-      captionTopOffset: 80,
-      captionBottomOffset: 136,
-      captionSideInset: 16 + safeLeft,
-      galleryPreferWide: true,
-      pageSize: responsive.pageSize,
-    }
-  }
-
-  if (policy === 'tablet') {
-    const filmstripBeside = responsive.filmstripPlacement === 'side'
-    const controlsClearance = isLandscape ? 104 : 120
+  if (
+    policy === 'large-desktop' ||
+    policy === 'desktop' ||
+    policy === 'laptop' ||
+    policy === 'tablet'
+  ) {
+    const filmstripBeside =
+      policy === 'tablet' ? responsive.filmstripPlacement === 'side' : true
+    const filmstripWidth =
+      policy === 'large-desktop'
+        ? 200
+        : policy === 'desktop'
+          ? 176
+          : policy === 'laptop'
+            ? 156
+            : filmstripBeside
+              ? 148
+              : width - 40
+    const horizontalPad = policy === 'tablet' ? 16 : policy === 'laptop' ? 20 : 24
+    const controlsClearance = policy === 'tablet' ? (isLandscape ? 112 : 120) : 120
+    const headerClearance = policy === 'tablet' ? (isLandscape ? 60 : 68) : 72
     return {
       policy,
       breakpoint: responsive.breakpoint,
       isLandscape,
       filmstripBeside,
-      filmstripWidth: filmstripBeside ? 148 : width - 40,
-      filmstripHeight: filmstripBeside ? Math.max(height - 220, 160) : 92,
-      pipWidth: filmstripBeside ? 140 : 132,
-      pipHeight: 78,
-      headerClearance: isLandscape ? 60 : 72,
+      filmstripWidth,
+      filmstripHeight: filmstripBeside
+        ? Math.max(height - 200, 180)
+        : policy === 'tablet'
+          ? 96
+          : Math.max(height - 200, 180),
+      pipWidth: Math.max(filmstripWidth - 20, 132),
+      pipHeight: filmstripBeside ? 88 : 78,
+      headerClearance,
       controlsClearance,
-      horizontalPad: 20,
-      stagePaddingTop: Math.max(safeTop, 10) + (isLandscape ? 60 : 72),
+      horizontalPad,
+      stagePaddingTop: Math.max(safeTop, 12) + headerClearance,
       stagePaddingBottom: controlsClearance + safeBottom,
-      stagePaddingLeft: 20 + safeLeft,
-      stagePaddingRight: 20 + safeRight,
-      panelTop: Math.max(safeTop, 8) + (isLandscape ? 56 : 68),
+      stagePaddingLeft: horizontalPad + safeLeft,
+      stagePaddingRight: horizontalPad + safeRight,
+      panelTop: Math.max(safeTop, 8) + (policy === 'tablet' ? 60 : 68),
       panelBottom: controlsClearance + safeBottom,
       panelTrailingInset: 12 + safeRight,
       panelMaxWidthFraction: responsive.sidePanelWidthFraction,
@@ -182,9 +170,9 @@ export function resolveMeetingChromeLayout(input: MeetingChromeLayoutInput): Mee
       panelPresentation,
       compactControls: false,
       captionWideLayout: true,
-      captionTopOffset: isLandscape ? 68 : 80,
-      captionBottomOffset: controlsClearance + 20,
-      captionSideInset: 14 + safeLeft,
+      captionTopOffset: policy === 'tablet' ? (isLandscape ? 68 : 76) : 80,
+      captionBottomOffset: controlsClearance + 16,
+      captionSideInset: 16 + safeLeft,
       galleryPreferWide: true,
       pageSize: responsive.pageSize,
     }
@@ -259,16 +247,19 @@ export function resolveMeetingChromeLayout(input: MeetingChromeLayoutInput): Mee
   }
 }
 
-/** Usable stage box after chrome + optional side filmstrip. */
+/** Usable stage box after chrome + optional side filmstrip + Zoom-web side panel. */
 export function meetingStageContentBox(input: {
   viewportWidth: number
   viewportHeight: number
   chrome: MeetingChromeLayout
   filmstripExpanded: boolean
+  /** Extra trailing inset when a Zoom-web side panel (chat/people) is open. */
+  stageTrailingInset?: number
 }): { width: number; height: number } {
   const chrome = input.chrome
+  const trailingInset = Math.max(input.stageTrailingInset ?? 0, 0)
   const availableWidth = Math.max(
-    input.viewportWidth - chrome.stagePaddingLeft - chrome.stagePaddingRight,
+    input.viewportWidth - chrome.stagePaddingLeft - chrome.stagePaddingRight - trailingInset,
     160,
   )
   const availableHeight = Math.max(

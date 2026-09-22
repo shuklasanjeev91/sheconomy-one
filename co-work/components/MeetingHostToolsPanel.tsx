@@ -11,9 +11,9 @@ import {
 import { updateMeetingLiveSettings } from '~/co-work/lib/meetings'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting, MeetingParticipantChatWith, MeetingRole } from '~/co-work/lib/types'
-import { Button, Icons, ScrollView, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Field, Icons, Input, ScrollView, Text, XStack, YStack, useAppToast } from '~/components/ui'
 
-type HostToolsPage = 'root' | 'security' | 'participants' | 'general' | 'chat_with'
+type HostToolsPage = 'root' | 'security' | 'participants' | 'general' | 'chat_with' | 'notes'
 
 type MeetingHostToolsPanelProps = {
   meeting: Meeting
@@ -30,6 +30,18 @@ type MeetingHostToolsPanelProps = {
   onOpenPolls?: () => void
   onOpenQa?: () => void
   onOpenBreakouts?: () => void
+  onOpenNotes?: () => void
+  onSaveTranscript?: () => void
+  onSummarizeMeeting?: () => void
+  /** When host enables mute-on-entry mid-meeting, mute everyone already in the room. */
+  onMuteOnJoinEnabled?: () => void
+  onLowerAllHands?: () => void
+  onClearAllFeedback?: () => void
+  onRenameTopic?: (title: string) => void
+  webinarMode?: boolean
+  onToggleWebinarMode?: (enabled: boolean) => void
+  interpretationChannelId?: string
+  onInterpretationChannelChange?: (channelId: string) => void
   onMuteAll?: () => void
   onAskAllToMute?: () => void
   fullWidth?: boolean
@@ -107,6 +119,17 @@ export function MeetingHostToolsPanel({
   onOpenPolls,
   onOpenQa,
   onOpenBreakouts,
+  onOpenNotes,
+  onSaveTranscript,
+  onSummarizeMeeting,
+  onMuteOnJoinEnabled,
+  onLowerAllHands,
+  onClearAllFeedback,
+  onRenameTopic,
+  webinarMode = false,
+  onToggleWebinarMode,
+  interpretationChannelId = 'floor',
+  onInterpretationChannelChange,
   onMuteAll,
   onAskAllToMute,
   fullWidth,
@@ -115,6 +138,7 @@ export function MeetingHostToolsPanel({
   const toast = useAppToast()
   const [page, setPage] = useState<HostToolsPage>('root')
   const [saving, setSaving] = useState(false)
+  const [topicDraft, setTopicDraft] = useState(meeting.title || '')
 
   const canOpen = canOpenHostTools(viewerRole)
   const canEditPermissions = canChangeParticipantPermissions(viewerRole)
@@ -138,21 +162,23 @@ export function MeetingHostToolsPanel({
 
   if (!canOpen) return null
 
-  async function patchSecurity(patch: Partial<NonNullable<Meeting['security_settings']>>) {
+  async function patchSecurity(patch: Partial<NonNullable<Meeting['security_settings']>>): Promise<boolean> {
     if (!canEditPermissions) {
       toast.show('Only the host can change participant permissions', { tone: 'info' })
-      return
+      return false
     }
-    if (saving) return
+    if (saving) return false
     setSaving(true)
     try {
       const next = await updateMeetingLiveSettings(meeting.id, { securitySettings: patch })
       onMeetingUpdated(next)
       toast.show('Meeting settings updated', { tone: 'success' })
+      return true
     } catch (error) {
       toast.show(error instanceof Error ? error.message : 'Could not update settings', {
         tone: 'danger',
       })
+      return false
     } finally {
       setSaving(false)
     }
@@ -287,13 +313,52 @@ export function MeetingHostToolsPanel({
               <HostToolsRow
                 label="My Notes"
                 icon={Icons.FileText}
-                onPress={() =>
-                  toast.show('Notes coming soon', {
-                    tone: 'info',
-                    message: 'Personal meeting notes will land in a future update.',
-                  })
-                }
+                onPress={() => {
+                  if (onOpenNotes) onOpenNotes()
+                  else toast.show('Notes unavailable', { tone: 'danger' })
+                }}
               />
+              {onLowerAllHands ? (
+                <HostToolsRow
+                  label="Lower all hands"
+                  icon={Icons.Hand}
+                  onPress={() => {
+                    onLowerAllHands()
+                    toast.show('All hands lowered', { tone: 'success' })
+                  }}
+                />
+              ) : null}
+              {onClearAllFeedback ? (
+                <HostToolsRow
+                  label="Clear all feedback"
+                  icon={Icons.Eraser}
+                  onPress={() => {
+                    onClearAllFeedback()
+                    toast.show('Feedback cleared', { tone: 'success' })
+                  }}
+                />
+              ) : null}
+              {onMuteAll ? (
+                <HostToolsRow
+                  label="Mute all"
+                  icon={Icons.MicOff}
+                  onPress={onMuteAll}
+                />
+              ) : null}
+              {onSaveTranscript ? (
+                <HostToolsRow
+                  label="Save transcript"
+                  icon={Icons.Download}
+                  onPress={onSaveTranscript}
+                />
+              ) : null}
+              {onSummarizeMeeting ? (
+                <HostToolsRow
+                  label="AI meeting summary"
+                  icon={Icons.Sparkles}
+                  onPress={onSummarizeMeeting}
+                />
+              ) : null}
             </YStack>
 
             {canEditPermissions ? (
@@ -339,6 +404,22 @@ export function MeetingHostToolsPanel({
                 checked={security?.waitingRoom !== false}
                 onCheckedChange={(checked) => void patchSecurity({ waitingRoom: checked })}
               />
+              <ScheduleToggleRow
+                label="Mute participants on entry"
+                description="Guests join muted"
+                checked={!!security?.muteOnJoin}
+                onCheckedChange={(checked) => {
+                  void patchSecurity({ muteOnJoin: checked }).then((ok) => {
+                    if (ok && checked) onMuteOnJoinEnabled?.()
+                  })
+                }}
+              />
+              <ScheduleToggleRow
+                label="Stop video on entry"
+                description="Guests join with camera off"
+                checked={!!security?.videoOffOnJoin}
+                onCheckedChange={(checked) => void patchSecurity({ videoOffOnJoin: checked })}
+              />
             </YStack>
             <Button tone="outline" borderRadius={999} onPress={() => setPage('participants')}>
               Participant permissions
@@ -359,9 +440,70 @@ export function MeetingHostToolsPanel({
             >
               Open meeting info
             </Button>
+            {onRenameTopic && canEditPermissions ? (
+              <YStack
+                borderRadius={16}
+                borderWidth={1}
+                borderColor={coworkUi.borderSoft}
+                padding="$3"
+                gap="$2"
+              >
+                <CoWorkSectionLabel>Meeting topic</CoWorkSectionLabel>
+                <Field label="Rename for everyone">
+                  <Input
+                    value={topicDraft}
+                    onChangeText={setTopicDraft}
+                    placeholder={meeting.title || 'Meeting topic'}
+                    backgroundColor="rgba(255,255,255,0.05)"
+                    borderColor={coworkUi.borderSoft}
+                    color={coworkUi.text}
+                    borderRadius={14}
+                  />
+                </Field>
+                <Button
+                  tone="outline"
+                  borderRadius={999}
+                  disabled={!topicDraft.trim() || topicDraft.trim() === meeting.title}
+                  onPress={() => {
+                    onRenameTopic(topicDraft.trim())
+                    toast.show('Topic updated', { tone: 'success' })
+                  }}
+                >
+                  Update topic
+                </Button>
+              </YStack>
+            ) : null}
             <Button tone="outline" borderRadius={999} onPress={onOpenParticipants}>
               Manage participants
             </Button>
+            <YStack
+              borderRadius={16}
+              borderWidth={1}
+              borderColor={coworkUi.borderSoft}
+              padding="$3"
+              gap="$2"
+            >
+              <ScheduleToggleRow
+                label="Webinar mode"
+                description="Attendees stay muted with raised-hand privileges"
+                checked={webinarMode}
+                onCheckedChange={(checked) => onToggleWebinarMode?.(checked)}
+              />
+              <CoWorkSectionLabel>Interpretation channel</CoWorkSectionLabel>
+              <XStack gap="$2" flexWrap="wrap">
+                {(['floor', 'en', 'hi', 'es'] as const).map((channelId) => (
+                  <Button
+                    key={channelId}
+                    tone={interpretationChannelId === channelId ? 'primary' : 'outline'}
+                    size="$2"
+                    borderRadius={999}
+                    onPress={() => onInterpretationChannelChange?.(channelId)}
+                  >
+                    {channelId === 'floor' ? 'Floor' : channelId.toUpperCase()}
+                  </Button>
+                ))}
+              </XStack>
+            </YStack>
           </YStack>
         ) : null}
 

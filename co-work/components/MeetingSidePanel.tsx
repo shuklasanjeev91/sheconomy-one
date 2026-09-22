@@ -42,6 +42,9 @@ export function MeetingSidePanel({ children, fullWidth }: MeetingSidePanelProps)
       pointerEvents="auto"
       height="100%"
       maxHeight="100%"
+      flex={1}
+      minHeight={0}
+      overflow="hidden"
       zIndex={30}
       alignSelf="stretch"
       borderLeftWidth={1}

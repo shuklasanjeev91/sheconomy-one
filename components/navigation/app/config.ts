@@ -123,7 +123,7 @@ export const APP_CENTER_NAV: AppCenterNavItem[] = [
   },
   {
     href: classRoutes.home,
-    label: 'Classes',
+    label: 'Class',
     icon: Icons.Radio,
     feature: 'class',
     match: (path) => isClassPath(path),

@@ -1,5 +1,7 @@
 import { Platform } from 'react-native'
 
+import { shouldReuseMaterializedBackground, nativeProcessorCanDecodeImageUri } from '~/co-work/lib/native-video-effects'
+
 import { readPickedImageBytes, type PickedImage } from '~/lib/media/pick-image'
 import {
   STORAGE_BUCKETS,
@@ -47,56 +49,93 @@ function isLocalImageUri(uri: string) {
     uri.startsWith('content:') ||
     uri.startsWith('ph://') ||
     uri.startsWith('assets-library:') ||
+    uri.startsWith('asset:') ||
+    uri.startsWith('res:') ||
+    uri.startsWith('android.resource:') ||
     (uri.startsWith('/') && !uri.startsWith('//'))
   )
 }
 
+function asFileUri(uri: string): string {
+  if (uri.startsWith('file:') || uri.startsWith('content:')) return uri
+  if (uri.startsWith('/') && !uri.startsWith('//')) return `file://${uri}`
+  return uri
+}
+
 /**
- * Give native processors a stable file:// path. HTTPS signed URLs are downloaded
- * first — iOS/Android background processors cannot open remote URLs reliably.
- * Always copy into our cache (even for file://) so ImageManipulator / picker temps
- * are not deleted out from under the processor, and so each apply gets a fresh path
- * the native cache can invalidate.
+ * Android BitmapFactory cannot open Metro / android_res / HTTPS packager URIs.
+ * RN <Image> can, which is why the chip shows "Background selected" while the
+ * camera stays unfiltered. Transcode through ImageManipulator into a real JPEG.
+ */
+async function transcodeBackgroundJpeg(uri: string, destination: string): Promise<string | null> {
+  try {
+    const ImageManipulator = await import('expo-image-manipulator')
+    const jpeg = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1280 } }],
+      { compress: 0.88, format: ImageManipulator.SaveFormat.JPEG },
+    )
+    if (!jpeg.uri) return null
+    const FileSystem = await import('expo-file-system/legacy')
+    try {
+      await FileSystem.copyAsync({ from: jpeg.uri, to: destination })
+      return asFileUri(destination)
+    } catch {
+      return asFileUri(jpeg.uri)
+    }
+  } catch {
+    return null
+  }
+}
+
+async function unpackExpoAsset(uri: string): Promise<string | null> {
+  try {
+    const { Asset } = await import('expo-asset')
+    const asset = Asset.fromURI(uri)
+    await asset.downloadAsync()
+    const local = asset.localUri || asset.uri
+    return local ? asFileUri(local) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Give native processors a stable file:// JPEG. HTTPS signed URLs and packed
+ * Android drawable URIs are unpacked first — the frame processor cannot open them.
  */
 async function materializeLocalImage(uri: string, cacheKey: string): Promise<string> {
   if (Platform.OS === 'web') return uri
+  if (shouldReuseMaterializedBackground(uri, cacheKey) && nativeProcessorCanDecodeImageUri(uri)) {
+    return uri
+  }
 
   const FileSystem = await import('expo-file-system/legacy')
   const safeKey = cacheKey.replace(/[^a-zA-Z0-9_-]/g, '-')
-  // Unique filename so native processors never keep a stale decoded bitmap/CIImage
-  // when the same logical background id is replaced.
   const destination = `${FileSystem.cacheDirectory}meeting-background-${safeKey}-${Date.now()}.jpg`
+
+  const transcoded = await transcodeBackgroundJpeg(uri, destination)
+  if (transcoded && nativeProcessorCanDecodeImageUri(transcoded)) return transcoded
+
+  const unpacked = await unpackExpoAsset(uri)
+  if (unpacked) {
+    const fromAsset = await transcodeBackgroundJpeg(unpacked, destination)
+    if (fromAsset && nativeProcessorCanDecodeImageUri(fromAsset)) return fromAsset
+    if (nativeProcessorCanDecodeImageUri(unpacked)) return unpacked
+  }
 
   if (uri.startsWith('http://') || uri.startsWith('https://')) {
     const result = await FileSystem.downloadAsync(uri, destination)
     if (result.status < 200 || result.status >= 300) {
       throw new Error('Could not cache the background image.')
     }
-    return result.uri.startsWith('file:') ? result.uri : `file://${result.uri}`
+    const downloaded = asFileUri(result.uri)
+    const jpeg = await transcodeBackgroundJpeg(downloaded, destination)
+    if (jpeg && nativeProcessorCanDecodeImageUri(jpeg)) return jpeg
+    if (nativeProcessorCanDecodeImageUri(downloaded)) return downloaded
   }
 
-  const from =
-    uri.startsWith('file:') || uri.startsWith('/')
-      ? uri
-      : uri
-  try {
-    await FileSystem.copyAsync({ from, to: destination })
-  } catch {
-    try {
-      const result = await FileSystem.downloadAsync(uri, destination)
-      if (result.status < 200 || result.status >= 300) {
-        throw new Error('Could not cache the background image.')
-      }
-      return result.uri.startsWith('file:') ? result.uri : `file://${result.uri}`
-    } catch (cause) {
-      // Last resort — return the original URI (may still work for file://).
-      if (uri.startsWith('file:') || (uri.startsWith('/') && !uri.startsWith('//'))) {
-        return uri.startsWith('file:') ? uri : `file://${uri}`
-      }
-      throw cause instanceof Error ? cause : new Error('Could not cache the background image.')
-    }
-  }
-  return destination.startsWith('file:') ? destination : `file://${destination}`
+  throw new Error('Could not prepare this background for the camera on this device.')
 }
 
 export async function listCustomVirtualBackgrounds(
@@ -212,7 +251,17 @@ export async function resolveVirtualBackgroundSelection(
   if (selection.mode !== 'image') return selection
 
   const cacheKey = selection.id ?? selection.storagePath ?? 'preset'
-  const existing = selection.imageUrl?.trim()
+  let existing = selection.imageUrl?.trim()
+
+  if (Platform.OS !== 'web') {
+    try {
+      const { resolveNativePresetFileUri } = await import('~/co-work/lib/virtual-background-presets')
+      const presetFile = await resolveNativePresetFileUri(selection.id)
+      if (presetFile) existing = presetFile
+    } catch {
+      // Fall through to imageUrl / signed storage.
+    }
+  }
 
   // Prefer a ready local/blob URI (fresh upload) — avoid HTTPS for native processors.
   if (existing && isLocalImageUri(existing)) {

@@ -1,11 +1,13 @@
 /**
- * Google Play FGS compliance (narrow strip):
+ * Google Play FGS compliance:
  *
- * Keep MediaProjection FGS — required for Co-Work Present on Android
- * (user taps Present → system capture prompt → ongoing share notification).
+ * Keep **only** MediaProjection so Android Present (user-tapped screen share)
+ * works. Strip phoneCall / microphone / camera / location FGS — Play rejected
+ * those as unused for this marketplace listing.
  *
- * Strip unused FGS types Play rejected for this listing:
- * phoneCall / microphone / camera / location / CallKeep ConnectionService.
+ * Play Console: declare **mediaProjection** for this AAB (user starts Present
+ * → system capture prompt → ongoing share notification). Do not declare
+ * phoneCall or microphone.
  *
  * iOS CallKit / Broadcast Extension are unchanged.
  */
@@ -31,16 +33,16 @@ const PERMISSIONS_TO_REMOVE = [
   'android.permission.USE_FULL_SCREEN_INTENT',
   'android.permission.READ_PHONE_STATE',
   'android.permission.READ_PHONE_NUMBERS',
-  // KEEP FOREGROUND_SERVICE + FOREGROUND_SERVICE_MEDIA_PROJECTION
+]
+
+const SCREEN_SHARE_PERMISSIONS = [
+  'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
 ]
 
 const SCREEN_SHARE_SERVICE_META = 'io.livekit.reactnative.expo.ENABLE_SCREEN_SHARE_SERVICE'
-const MEDIA_PROJECTION_SERVICE = 'com.oney.WebRTCModule.MediaProjectionService'
 
 function ensureToolsNamespace(doc) {
-  // modResults is { manifest: { $: attrs, ... } }. Putting `$` on the document
-  // itself serializes as invalid `<root xmlns:tools>` and breaks EAS
-  // "Configure expo-updates".
   const manifest = doc?.manifest
   if (!manifest) return
   if (!manifest.$) manifest.$ = {}
@@ -62,7 +64,6 @@ function ensureRemoveService(application, name) {
 
 function ensureRemovePermission(manifest, name) {
   if (!manifest['uses-permission']) manifest['uses-permission'] = []
-  // Drop any prior positive declarations so only the remove marker remains.
   manifest['uses-permission'] = manifest['uses-permission'].filter(
     (entry) => entry?.$?.['android:name'] !== name,
   )
@@ -74,35 +75,16 @@ function ensureRemovePermission(manifest, name) {
   })
 }
 
-function ensureMediaProjectionService(application) {
-  if (!application.service) application.service = []
-  // Drop remove markers + prior declarations so we pin a single positive entry.
-  application.service = application.service.filter(
-    (service) => service?.$?.['android:name'] !== MEDIA_PROJECTION_SERVICE,
+function ensurePermission(manifest, name) {
+  if (!manifest['uses-permission']) manifest['uses-permission'] = []
+  manifest['uses-permission'] = manifest['uses-permission'].filter(
+    (entry) => entry?.$?.['android:name'] !== name,
   )
-  application.service.push({
+  manifest['uses-permission'].push({
     $: {
-      'android:name': MEDIA_PROJECTION_SERVICE,
-      'android:exported': 'false',
-      'android:foregroundServiceType': 'mediaProjection',
+      'android:name': name,
     },
   })
-}
-
-function ensurePermissionPresent(manifest, name) {
-  if (!manifest['uses-permission']) manifest['uses-permission'] = []
-  const existing = manifest['uses-permission'].filter((entry) => entry?.$?.['android:name'] === name)
-  const hasPositive = existing.some((entry) => entry?.$?.['tools:node'] !== 'remove')
-  // Drop remove markers for this permission.
-  manifest['uses-permission'] = manifest['uses-permission'].filter((entry) => {
-    if (entry?.$?.['android:name'] !== name) return true
-    return entry?.$?.['tools:node'] !== 'remove'
-  })
-  if (!hasPositive) {
-    manifest['uses-permission'].push({
-      $: { 'android:name': name },
-    })
-  }
 }
 
 function withAndroidFgsCompliance(config) {
@@ -121,8 +103,10 @@ function withAndroidFgsCompliance(config) {
       ensureRemovePermission(manifest, name)
     }
 
-    // Force LiveKit MediaProjection foreground service ON for Android Present.
-    // LiveKit / expo-livekit-screen-share plugins also set this; pin true last.
+    for (const name of SCREEN_SHARE_PERMISSIONS) {
+      ensurePermission(manifest, name)
+    }
+
     if (!application['meta-data']) application['meta-data'] = []
     application['meta-data'] = application['meta-data'].filter(
       (item) => item?.$?.['android:name'] !== SCREEN_SHARE_SERVICE_META,
@@ -134,10 +118,6 @@ function withAndroidFgsCompliance(config) {
       },
     })
 
-    ensurePermissionPresent(manifest, 'android.permission.FOREGROUND_SERVICE')
-    ensurePermissionPresent(manifest, 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION')
-    ensureMediaProjectionService(application)
-
     return mod
   })
 }
@@ -145,5 +125,5 @@ function withAndroidFgsCompliance(config) {
 module.exports = createRunOncePlugin(
   withAndroidFgsCompliance,
   'withAndroidFgsCompliance',
-  '5.1.0',
+  '6.1.0',
 )

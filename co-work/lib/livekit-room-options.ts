@@ -22,7 +22,6 @@ export function getLiveKitRoomOptions(platform: LiveKitRoomPlatform = 'web'): Ro
     audioCaptureDefaults: {
       ...CALL_AUDIO_CAPTURE,
       channelCount: 1,
-      ...(platform === 'web' ? { voiceIsolation: true } : {}),
     },
     videoCaptureDefaults: {
       resolution: { width: 1280, height: 720, frameRate: 24 },
@@ -32,7 +31,9 @@ export function getLiveKitRoomOptions(platform: LiveKitRoomPlatform = 'web'): Ro
       audioPreset: AudioPresets.speech,
       dtx: true,
       red: true,
-      stopMicTrackOnMute: true,
+      // Keep the capture track while muted so Unmute is instant (Zoom-style).
+      // Stopping on mute forces a second getUserMedia and often fails with NotReadable.
+      stopMicTrackOnMute: false,
       // Camera can still simulcast; screen share uses screenShareSimulcastLayers: [].
       simulcast: true,
       screenShareEncoding: ScreenSharePresets.h720fps15.encoding,

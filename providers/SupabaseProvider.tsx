@@ -29,6 +29,8 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
             if (isMounted) setIsLoading(false)
           }, 1_500)
 
+    let lastHandledUserId: string | null = null
+
     supabase.auth
       .getSession()
       .then(({ data: { session } }) => {
@@ -36,6 +38,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         setSession(session)
         setIsLoading(false)
         if (session?.user) {
+          lastHandledUserId = session.user.id
           void heartbeatLoginSession()
         }
       })
@@ -51,12 +54,19 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession)
       setIsLoading(false)
+      const currentUserId = nextSession?.user?.id ?? null
       if (event === 'SIGNED_IN' && nextSession?.user) {
-        const provider =
-          (nextSession.user.app_metadata?.provider as string | undefined) ?? null
-        void recordLoginSession({ provider })
-        void enrichProfileFromAuth(nextSession.user)
-        void applyPendingReferralForUser(nextSession.user.id)
+        const isNewUserSignIn = lastHandledUserId !== currentUserId
+        lastHandledUserId = currentUserId
+        if (isNewUserSignIn) {
+          const provider =
+            (nextSession.user.app_metadata?.provider as string | undefined) ?? null
+          void recordLoginSession({ provider })
+          void enrichProfileFromAuth(nextSession.user)
+          void applyPendingReferralForUser(nextSession.user.id)
+        }
+      } else if (event === 'SIGNED_OUT') {
+        lastHandledUserId = null
       }
     })
 

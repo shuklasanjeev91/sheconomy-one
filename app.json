@@ -3,7 +3,7 @@
     "name": "SHEconomy",
     "slug": "sheconomy",
     "owner": "sheconomy",
-    "version": "6.0.11",
+    "version": "6.0.18",
     "scheme": "sheconomy",
     "newArchEnabled": true,
     "platforms": [
@@ -148,7 +148,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "154",
+      "buildNumber": "167",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -164,7 +164,6 @@
         "CFBundleDisplayName": "SHEconomy",
         "UIBackgroundModes": [
           "audio",
-          "picture-in-picture",
           "remote-notification"
         ],
         "NSFaceIDUsageDescription": "Unlock SHEconomy with Face ID when biometric unlock is enabled.",
@@ -211,7 +210,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 172,
+      "versionCode": 188,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon-adaptive.png",
@@ -256,8 +255,6 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.USE_BIOMETRIC",

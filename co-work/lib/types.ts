@@ -1,3 +1,5 @@
+import type { WhiteboardStroke } from '~/co-work/lib/meeting-whiteboard'
+
 export type MeetingStatus = 'scheduled' | 'instant' | 'active' | 'ended' | 'cancelled'
 
 export type ParticipantStatus = 'waiting' | 'admitted' | 'rejected' | 'left' | 'removed'
@@ -136,6 +138,7 @@ export type MeetingControlAction =
   | 'removed'
   | 'remove_all_except_host'
   | 'meeting_ended'
+  | 'put_in_waiting_room'
 
 export type MeetingControlEvent = {
   id: string
@@ -220,7 +223,58 @@ export type SignalPayload =
   | { type: 'caption-wanted'; from: string; wanted: boolean; timestamp: number }
   | { type: 'chat'; from: string; message: MeetingChatMessage }
   | { type: 'reaction'; from: string; emoji: string; name: string; timestamp: number }
+  /** Zoom nonverbal feedback — sticky yes/no/slow/faster/break/away. */
+  | {
+      type: 'nonverbal-feedback'
+      from: string
+      status: 'yes' | 'no' | 'slow' | 'faster' | 'break' | 'away' | null
+      name?: string
+      timestamp: number
+    }
+  /** Host: lower every raised hand in the room. */
+  | { type: 'lower-all-hands'; from: string; timestamp: number }
+  /** Host: lower one participant's raised hand. */
+  | { type: 'lower-hand'; from: string; targetUserId: string; timestamp: number }
+  /** Host: clear nonverbal feedback for everyone. */
+  | { type: 'clear-all-feedback'; from: string; timestamp: number }
+  /** Host: live topic/title rename (UI sync). */
+  | { type: 'meeting-topic'; from: string; title: string; timestamp: number }
   | { type: 'meeting-ended'; from: string; timestamp: number }
+  | { type: 'whiteboard-open'; from: string; name?: string }
+  | { type: 'whiteboard-close'; from: string }
+  | { type: 'whiteboard-stroke'; from: string; stroke: WhiteboardStroke }
+  | { type: 'whiteboard-undo'; from: string; strokeId?: string }
+  | { type: 'whiteboard-clear'; from: string }
+  /** Host/co-host spotlight — every viewer focuses this participant. */
+  | { type: 'spotlight'; from: string; targetUserId: string | null; timestamp: number }
+  /** Request remote control of a screen share (ack is UI-only). */
+  | { type: 'remote-control-request'; from: string; to: string; name?: string; timestamp: number }
+  | { type: 'remote-control-response'; from: string; to: string; accepted: boolean; timestamp: number }
+  /** Live interpretation channel hint (UI routing). */
+  | { type: 'interpretation-channel'; from: string; channelId: string | null; timestamp: number }
+  /** Host webinar mode — attendees stay muted with hand-raise privileges. */
+  | { type: 'webinar-mode'; from: string; enabled: boolean; timestamp: number }
+  /** Host broadcast into open breakout rooms. */
+  | { type: 'breakout-broadcast'; from: string; message: string; timestamp: number }
+  /** Host breakout timer end — participants should return to main room. */
+  | { type: 'breakout-timer'; from: string; endsAt: number | null; timestamp: number }
+  /** Screen-share annotation stroke (synced to viewers). */
+  | {
+      type: 'annotation-stroke'
+      from: string
+      stroke: {
+        id: string
+        color: string
+        width: number
+        points: Array<{ x: number; y: number }>
+        from: string
+        createdAt: number
+      }
+      timestamp: number
+    }
+  | { type: 'annotation-clear'; from: string; timestamp: number }
+  | { type: 'annotation-open'; from: string; timestamp: number }
+  | { type: 'annotation-close'; from: string; timestamp: number }
 
 export type MediaCapabilities = {
   supportsVideo: boolean

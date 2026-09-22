@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getMeetingAnchorAt, isMeetingJoinable } from '~/co-work/lib/meetings'
+import { getMeetingAnchorAt, isMeetingJoinable, isWaitingForScheduledStart, canEnterLiveMeeting } from '~/co-work/lib/meetings'
 
 describe('meeting display anchor', () => {
   it('uses scheduled_at, then started_at, then created_at', () => {
@@ -50,5 +50,38 @@ describe('meetings stay joinable until the host cancels', () => {
 
   it('closes a meeting only once it is cancelled', () => {
     expect(isMeetingJoinable({ status: 'cancelled' })).toBe(false)
+  })
+})
+
+describe('scheduled meeting wait (Zoom-style)', () => {
+  const upcoming = {
+    status: 'scheduled' as const,
+    scheduled_at: '2026-09-19T10:30:00.000Z',
+    started_at: null,
+  }
+  const now = Date.parse('2026-09-19T07:00:00.000Z')
+
+  it('holds guests until the scheduled start', () => {
+    expect(isWaitingForScheduledStart(upcoming, now)).toBe(true)
+    expect(canEnterLiveMeeting(upcoming, { isHost: false, now })).toBe(false)
+  })
+
+  it('lets the host start early', () => {
+    expect(canEnterLiveMeeting(upcoming, { isHost: true, now })).toBe(true)
+  })
+
+  it('lets guests join after the start time', () => {
+    const later = Date.parse('2026-09-19T10:31:00.000Z')
+    expect(isWaitingForScheduledStart(upcoming, later)).toBe(false)
+    expect(canEnterLiveMeeting(upcoming, { isHost: false, now: later })).toBe(true)
+  })
+
+  it('lets guests join once the host has started', () => {
+    expect(
+      isWaitingForScheduledStart(
+        { ...upcoming, started_at: '2026-09-19T07:05:00.000Z' },
+        now,
+      ),
+    ).toBe(false)
   })
 })

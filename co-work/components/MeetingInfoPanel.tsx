@@ -4,6 +4,7 @@ import { Button, Icons, ScrollView, Switch, Text, XStack, YStack, useAppToast } 
 import { CoWorkPanelShell, CoWorkSectionLabel, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
+import { MeetingCalendarIconButton } from '~/co-work/components/MeetingCalendarIconButton'
 import { formatMeetingCode, getMeetingShareUrl } from '~/co-work/lib/meetings'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting } from '~/co-work/lib/types'
@@ -201,7 +202,7 @@ export function MeetingInfoPanel({
                 </Text>
                 <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
                   Pick someone who has joined this meeting. They become the host; you stay as a
-                  co-host — same as Zoom.
+                  co-host.
                 </Text>
                 <Button
                   size="$3"
@@ -314,24 +315,18 @@ export function MeetingInfoPanel({
       </ScrollView>
 
       <YStack padding="$3" gap="$2" borderTopWidth={1} borderTopColor={coworkUi.borderSoft}>
-        <Button
-          tone="primary"
-          borderRadius={999}
-          icon={<Icons.Share2 size={16} color="white" />}
-          onPress={() => setShareOpen(true)}
-        >
-          Share invite link
-        </Button>
-        <Button
-          tone="outline"
-          borderRadius={999}
-          borderColor={coworkUi.glassBorder}
-          color={coworkUi.text}
-          icon={<Icons.Calendar size={16} color={coworkUi.brand} />}
-          onPress={() => void addToCalendar()}
-        >
-          Add to calendar
-        </Button>
+        <XStack gap="$2" alignItems="center">
+          <Button
+            flex={1}
+            tone="primary"
+            borderRadius={999}
+            icon={<Icons.Share2 size={16} color="white" />}
+            onPress={() => setShareOpen(true)}
+          >
+            Share invite link
+          </Button>
+          <MeetingCalendarIconButton onPress={() => void addToCalendar()} />
+        </XStack>
         {isHost && onOpenRecordings ? (
           <Button
             tone="outline"

@@ -77,11 +77,22 @@ export function mapAuthErrorMessage(
     raw.includes('otp expired') ||
     raw.includes('invalid token') ||
     raw.includes('token has expired') ||
+    raw.includes('token is invalid') ||
     (raw.includes('invalid') && raw.includes('code'))
   ) {
-    return { text: 'That code is incorrect. Please try again.', code: 'invalid' }
+    return {
+      text: 'That code is incorrect or no longer valid. Request a new one and try again.',
+      code: 'invalid',
+    }
   }
-  if (raw.includes('network') || raw.includes('fetch') || raw.includes('offline')) {
+  if (
+    raw.includes('network') ||
+    raw.includes('fetch') ||
+    raw.includes('offline') ||
+    raw.includes('abort') ||
+    raw.includes('timeout') ||
+    raw.includes('taking too long')
+  ) {
     return { text: 'You appear to be offline. Check your connection and retry.', code: 'network' }
   }
   if (message?.trim()) {

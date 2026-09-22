@@ -1,23 +1,34 @@
-import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 
 /**
- * Android Present needs MediaProjection FGS in the native binary.
- * Store builds before versionCode 170 stripped that service — OTA cannot restore it.
- * Build 171+ also includes the MediaProjection startCapture race fix.
+ * Store binaries below this versionCode shipped without MediaProjection FGS
+ * (Play policy strip). Present works on Android from this build onward.
  */
-export const ANDROID_PRESENT_MIN_VERSION_CODE = 170
+export const ANDROID_PRESENT_MIN_VERSION_CODE = 182
 
-export function getAndroidNativeVersionCode(): number | null {
+export const ANDROID_PRESENT_UNAVAILABLE_MESSAGE =
+  'Update SHEconomy from the Play Store to Present from this Android phone. Until then, share from iPhone or the web. You can still view others’ shared screens.'
+
+function readAndroidNativeVersionCode(): number | null {
   if (Platform.OS !== 'android') return null
-  const raw = Constants.nativeBuildVersion
-  const code = Number(raw)
-  return Number.isFinite(code) && code > 0 ? code : null
+  try {
+    // Native APK versionCode — not the OTA expoConfig version.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Constants = require('expo-constants').default as { nativeBuildVersion?: string | number }
+    const n = Number(Constants?.nativeBuildVersion)
+    return Number.isFinite(n) && n > 0 ? n : null
+  } catch {
+    return null
+  }
 }
 
-/** True when this installed Android binary cannot publish real screen-share frames. */
-export function androidPresentNeedsNativeUpdate(): boolean {
-  const code = getAndroidNativeVersionCode()
-  if (code == null) return false
-  return code < ANDROID_PRESENT_MIN_VERSION_CODE
+/**
+ * True on older Play binaries that stripped MediaProjection.
+ * Unknown versionCode is treated as unavailable so FGS-stripped 6.0.11
+ * cannot publish a black Present track.
+ */
+export function androidPresentUnavailable(versionCode = readAndroidNativeVersionCode()): boolean {
+  if (Platform.OS !== 'android') return false
+  if (versionCode == null) return true
+  return versionCode < ANDROID_PRESENT_MIN_VERSION_CODE
 }

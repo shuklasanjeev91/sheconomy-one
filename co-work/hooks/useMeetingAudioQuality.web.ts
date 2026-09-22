@@ -339,9 +339,11 @@ export function useMeetingAudioQuality(
     selectVideoDevice,
     reportError: (cause) =>
       setError(
-        cause instanceof Error
-          ? cause.message || messageForMediaError(cause)
-          : 'Could not change media devices.',
+        typeof cause === 'string'
+          ? cause
+          : cause instanceof Error
+            ? cause.message || messageForMediaError(cause)
+            : 'Could not change media devices.',
       ),
     clearError: () => setError(null),
     retryConnection,

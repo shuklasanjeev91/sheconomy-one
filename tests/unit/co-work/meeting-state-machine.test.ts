@@ -53,7 +53,7 @@ describe('meeting state machine', () => {
     expect(sharing.lifecycle).toBe('SCREEN_SHARING')
     expect(sharing.viewMode).toBe('screen-share')
     expect(sharing.uiMode).toBe('maximized')
-    expect(sharing.participantStripMinimized).toBe(true)
+    expect(sharing.participantStripMinimized).toBe(false)
     const stopped = meetingStateReducer(sharing, { type: 'SHARE_STOPPED' })
     expect(stopped.viewMode).toBe('gallery')
     expect(stopped.uiMode).toBe('normal')

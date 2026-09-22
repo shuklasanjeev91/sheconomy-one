@@ -8,7 +8,10 @@ import {
 } from '~/co-work/lib/meetings'
 import { canEditOrCancelMeetingForUser } from '~/co-work/lib/meeting-role-permissions'
 import { buildMeetingInvitationText } from '~/co-work/lib/meeting-share'
-import { ensureMeetingMobilePermissions } from '~/co-work/lib/meeting-media-permissions'
+import {
+  ensureMeetingMobilePermissions,
+  meetingJoinMediaFromPermissions,
+} from '~/co-work/lib/meeting-media-permissions'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting } from '~/co-work/lib/types'
@@ -71,14 +74,17 @@ export function MeetingCardOverflowMenu({
   async function startMeeting() {
     const perms = await ensureMeetingMobilePermissions({ requestNotifications: true })
     if (!perms.ok) {
-      toast.show('Microphone required', { tone: 'error', message: perms.message })
+      toast.show('Cannot start meeting', { tone: 'error', message: perms.message })
       return
     }
+    const media = meetingJoinMediaFromPermissions(perms)
     if (preferInstantSession) {
       openInstantMeetingSession({
         code: meeting.meeting_code,
         meeting,
         autoJoin: true,
+        audioEnabled: media.audioEnabled,
+        videoEnabled: media.videoEnabled,
       })
       return
     }

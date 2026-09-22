@@ -102,25 +102,55 @@ export function capFilmstripTracks<T>(tracks: T[], cap = MEETING_FILMSTRIP_VISIB
   return { visible: tracks.slice(0, limit), overflow: tracks.length - limit }
 }
 
-/** Dense gallery page sizes — Zoom-like for phones through desktop. */
-export const MEETING_DENSE_GALLERY_PAGE_SIZE = 49
-export const MEETING_DENSE_GALLERY_PAGE_SIZE_TABLET = 25
-export const MEETING_DENSE_GALLERY_PAGE_SIZE_MOBILE = 16
+/**
+ * Zoom-style max tiles per gallery page. Larger rooms still paginate;
+ * desktop dense mode can show a full 5×5 page.
+ */
+export const MEETING_GALLERY_MAX_VISIBLE = 25
+
+/** Dense gallery page sizes by breakpoint (Zoom-style). */
+export const MEETING_DENSE_GALLERY_PAGE_SIZE = 25
+export const MEETING_DENSE_GALLERY_PAGE_SIZE_TABLET = 16
+export const MEETING_DENSE_GALLERY_PAGE_SIZE_MOBILE = 12
+
+/**
+ * How long manual Prev/Next / swipe should pause auto-follow of the active
+ * speaker. Without this pause, speaking keeps yanking the user back to page 1.
+ */
+export const MEETING_GALLERY_FOLLOW_RESUME_MS = 12_000
 
 export function resolveMeetingGalleryPageSize(input: {
   basePageSize: number
   denseGallery?: boolean
   breakpoint?: string
 }): number {
-  if (!input.denseGallery) return Math.max(1, input.basePageSize)
-  if (input.breakpoint === 'desktop' || input.breakpoint === 'large-desktop') {
-    return MEETING_DENSE_GALLERY_PAGE_SIZE
+  const base = Math.max(1, Math.min(MEETING_GALLERY_MAX_VISIBLE, Math.floor(input.basePageSize)))
+  if (!input.denseGallery) return base
+  const bp = input.breakpoint ?? ''
+  if (bp === 'mobile') return Math.min(MEETING_DENSE_GALLERY_PAGE_SIZE_MOBILE, MEETING_GALLERY_MAX_VISIBLE)
+  if (bp === 'tablet' || bp === 'laptop') {
+    return Math.min(MEETING_DENSE_GALLERY_PAGE_SIZE_TABLET, MEETING_GALLERY_MAX_VISIBLE)
   }
-  if (input.breakpoint === 'laptop' || input.breakpoint === 'tablet') {
-    return MEETING_DENSE_GALLERY_PAGE_SIZE_TABLET
+  return Math.min(MEETING_DENSE_GALLERY_PAGE_SIZE, MEETING_GALLERY_MAX_VISIBLE)
+}
+
+/** Identities on the current page plus neighbors so swipe/prev-next has video ready. */
+export function meetingGalleryPrefetchIdentities<T extends { participant: { identity: string } }>(
+  tracks: T[],
+  page: number,
+  pageSize: number,
+): string[] {
+  const size = Math.max(1, Math.floor(pageSize))
+  const pageCount = Math.max(1, Math.ceil(tracks.length / size))
+  const safePage = Math.min(Math.max(0, Math.floor(page)), pageCount - 1)
+  const start = Math.max(0, (safePage - 1) * size)
+  const end = Math.min(tracks.length, (safePage + 2) * size)
+  const identities = new Set<string>()
+  for (let i = start; i < end; i += 1) {
+    const track = tracks[i]
+    if (track) identities.add(track.participant.identity)
   }
-  // Phone / mobile dense — 4×4 Zoom-style page.
-  return MEETING_DENSE_GALLERY_PAGE_SIZE_MOBILE
+  return [...identities]
 }
 
 /** Split participants into visual rows for an explicit Meet-style grid. */

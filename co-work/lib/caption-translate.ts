@@ -22,18 +22,82 @@ export function captionLooksLikeTargetLang(text: string, targetLang: string): bo
   const base = baseLang(targetLang) || 'en'
   const hasLatin = /[A-Za-z]{2,}/.test(text)
   const hasDevanagari = /[\u0900-\u097F]/.test(text)
+  const hasBengali = /[\u0980-\u09FF]/.test(text)
+  const hasGurmukhi = /[\u0A00-\u0A7F]/.test(text)
+  const hasGujarati = /[\u0A80-\u0AFF]/.test(text)
+  const hasOriya = /[\u0B00-\u0B7F]/.test(text)
+  const hasTamil = /[\u0B80-\u0BFF]/.test(text)
+  const hasTelugu = /[\u0C00-\u0C7F]/.test(text)
+  const hasKannada = /[\u0C80-\u0CFF]/.test(text)
+  const hasMalayalam = /[\u0D00-\u0D7F]/.test(text)
+  const hasSinhala = /[\u0D80-\u0DFF]/.test(text)
   const hasArabic = /[\u0600-\u06FF]/.test(text)
   const hasCjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(text)
-  // Indic targets: only treat as already-localized when Devanagari (or similar) is present.
-  // Do not treat "no Latin" as Hindi — that wrongly skipped English→Hindi translation.
-  if (INDIC_LANGS.has(base)) return hasDevanagari
+
+  const indicScriptByLang: Record<string, boolean> = {
+    hi: hasDevanagari,
+    mr: hasDevanagari,
+    ne: hasDevanagari,
+    bn: hasBengali,
+    gu: hasGujarati,
+    pa: hasGurmukhi,
+    or: hasOriya,
+    ta: hasTamil,
+    te: hasTelugu,
+    kn: hasKannada,
+    ml: hasMalayalam,
+    si: hasSinhala,
+  }
+  if (base in indicScriptByLang) return !!indicScriptByLang[base]
+  if (INDIC_LANGS.has(base)) return hasDevanagari || hasBengali || hasTamil || hasTelugu
   if (base === 'ar' || base === 'ur' || base === 'fa') return hasArabic
   if (base === 'zh' || base === 'ja' || base === 'ko') return hasCjk
   if (['en', 'es', 'fr', 'de', 'pt', 'it'].includes(base)) {
-    if ((hasDevanagari || hasCjk || hasArabic) && !hasLatin) return false
+    if ((hasDevanagari || hasCjk || hasArabic || hasTamil || hasTelugu) && !hasLatin) return false
     return hasLatin || !hasDevanagari
   }
   return true
+}
+
+/**
+ * Choose live overlay text for the viewer's Show language.
+ * Prefer translated text when available; fall back to original so the overlay
+ * never blanks when translation fails or script heuristics miss.
+ */
+export function resolveLiveCaptionDisplay(input: {
+  targetLang: string
+  localInterimRaw?: string | null
+  localInterimTranslated?: string | null
+  lastGoodLocalTranslated?: string | null
+  remoteInterimText?: string | null
+  remoteInterimTranslated?: boolean | null
+  fallbackFinalText?: string | null
+}): string {
+  const target = input.targetLang
+  const raw = (input.localInterimRaw || '').trim()
+  const translated = (input.localInterimTranslated || '').trim()
+  const lastGood = (input.lastGoodLocalTranslated || '').trim()
+
+  if (raw) {
+    if (captionLooksLikeTargetLang(raw, target)) {
+      return translated || raw
+    }
+    // Keep showing something while translation catches up / fails.
+    return translated || lastGood || raw
+  }
+
+  const remote = (input.remoteInterimText || '').trim()
+  if (remote) {
+    if (
+      captionLooksLikeTargetLang(remote, target) ||
+      input.remoteInterimTranslated === true
+    ) {
+      return remote
+    }
+    return (input.fallbackFinalText || '').trim() || remote
+  }
+
+  return (input.fallbackFinalText || '').trim()
 }
 
 /**
@@ -169,21 +233,24 @@ export async function translateCaptionText(input: {
           ? payload.translatedText.trim()
           : text
 
+      const looksTranslated =
+        captionLooksLikeTargetLang(translated, targetLang) ||
+        (translated !== text && Boolean(payload?.skipped))
+
       const result: TranslateTextResult = {
         text,
         translatedText: translated,
         detectedSourceLang:
           typeof payload?.detectedSourceLang === 'string' ? payload.detectedSourceLang : null,
         targetLang,
-        usedFallback: Boolean(payload?.usedFallback),
+        usedFallback: Boolean(payload?.usedFallback) || (!looksTranslated && translated === text),
         skipped: Boolean(payload?.skipped),
       }
 
       // Do not cache failed echoes — retry on the next caption tick.
       const shouldCache =
-        !result.usedFallback ||
-        result.translatedText !== text ||
-        captionLooksLikeTargetLang(result.translatedText, targetLang)
+        !result.usedFallback &&
+        (result.translatedText !== text || captionLooksLikeTargetLang(result.translatedText, targetLang))
       if (shouldCache) {
         cache.set(key, result)
         if (cache.size > 200) {

@@ -10,29 +10,67 @@ function randomId(): string {
   return `dev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
 }
 
+let cachedDeviceId: string | null = null
+
 /** Stable per-install device id used for multi-device session sync. */
 export async function getOrCreateDeviceId(): Promise<string> {
+  if (cachedDeviceId) {
+    return cachedDeviceId
+  }
+
   try {
+    // 1. Web: prioritize synchronous localStorage for instant, rock-solid persistence
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const existing = window.localStorage.getItem(STORAGE_KEY)
+        if (existing) {
+          cachedDeviceId = existing
+          return existing
+        }
+        const next = randomId()
+        window.localStorage.setItem(STORAGE_KEY, next)
+        cachedDeviceId = next
+        // Best-effort sync to AsyncStorage
+        void AsyncStorage.setItem(STORAGE_KEY, next).catch(() => {})
+        return next
+      } catch {
+        // Fall through to AsyncStorage if localStorage throws (e.g. private browsing quota)
+      }
+    }
+
+    // 2. Native: use SecureStore when available
     if (Platform.OS !== 'web') {
       try {
         const SecureStore = await import('expo-secure-store')
         const existing = await SecureStore.getItemAsync(STORAGE_KEY)
-        if (existing) return existing
+        if (existing) {
+          cachedDeviceId = existing
+          return existing
+        }
         const next = randomId()
         await SecureStore.setItemAsync(STORAGE_KEY, next)
+        cachedDeviceId = next
         return next
       } catch {
         // Fall through to AsyncStorage.
       }
     }
 
+    // 3. Fallback: AsyncStorage
     const existing = await AsyncStorage.getItem(STORAGE_KEY)
-    if (existing) return existing
+    if (existing) {
+      cachedDeviceId = existing
+      return existing
+    }
     const next = randomId()
     await AsyncStorage.setItem(STORAGE_KEY, next)
+    cachedDeviceId = next
     return next
   } catch {
-    return randomId()
+    if (!cachedDeviceId) {
+      cachedDeviceId = randomId()
+    }
+    return cachedDeviceId
   }
 }
 
