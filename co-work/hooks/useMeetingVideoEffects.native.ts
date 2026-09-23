@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocalParticipant } from '@livekit/react-native'
 import type { LocalVideoTrack } from 'livekit-client'
-import { AppState, Platform } from 'react-native'
+import { AppState, NativeModules, Platform } from 'react-native'
 
 import MeetingVideoEffectsNative from '~/modules/meeting-video-effects'
 import type { MeetingVideoEffects } from '~/co-work/lib/meeting-video-effects'
@@ -45,13 +45,65 @@ function getNativeTrack(track: LocalVideoTrack | undefined): EffectMediaStreamTr
   return null
 }
 
-async function maybeApplyCapture(track: EffectMediaStreamTrack, target: { width: number; height: number; frameRate: number }) {
+/** Detach the WebRTC video processor without touching MeetingBackgroundConfig. */
+function detachTrackProcessor(track: EffectMediaStreamTrack | null) {
+  if (!track) return
+  try {
+    if (Platform.OS === 'android') {
+      // CRITICAL: `_setVideoEffects([])` still installed VideoEffectProcessor and
+      // froze Camera2 within ~6s ("Client must return video buffers"). Pass null
+      // (or rely on the GetUserMediaImpl empty-array patch) to remove the processor.
+      const id = (track as { id?: string }).id
+      const webrtc = NativeModules.WebRTCModule as
+        | { mediaStreamTrackSetVideoEffects?: (trackId: string, names: string[] | null) => void }
+        | undefined
+      if (id && typeof webrtc?.mediaStreamTrackSetVideoEffects === 'function') {
+        webrtc.mediaStreamTrackSetVideoEffects(id, null)
+        return
+      }
+    }
+    track._setVideoEffects([])
+  } catch {
+    // ignore
+  }
+}
+
+function clearTrackEffects(track: EffectMediaStreamTrack | null) {
+  try {
+    MeetingVideoEffectsNative?.configure?.({ mode: 'off', imagePath: null, blurRadius: 12 })
+  } catch {
+    // ignore
+  }
+  detachTrackProcessor(track)
+}
+
+async function maybeApplyCapture(
+  track: EffectMediaStreamTrack,
+  target: { width: number; height: number; frameRate: number },
+) {
   if (Platform.OS === 'android' && !captureNeedsUpdate(track.getSettings?.(), target)) return
   try {
     await track.applyConstraints?.(target)
   } catch {
     // Keep the current camera rather than restarting into a frozen tile.
   }
+}
+
+/**
+ * Android: switching blur ↔ image while the processor is attached must NOT
+ * detach/reattach VideoEffectProcessor — that freezes Camera2
+ * ("Client must return video buffers"). Only configure() when already on.
+ */
+function applyBackgroundConfig(selection: {
+  mode: string
+  imageUrl?: string | null
+  blurRadius?: number
+}) {
+  MeetingVideoEffectsNative?.configure?.({
+    mode: selection.mode,
+    imagePath: selection.imageUrl ?? null,
+    blurRadius: selection.blurRadius ?? 12,
+  })
 }
 
 export function useMeetingVideoEffects(): MeetingVideoEffects {
@@ -63,6 +115,10 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
   const selectionRef = useRef(selection)
   selectionRef.current = selection
   const appliedKeyRef = useRef<string | null>(null)
+  /** User must explicitly pick a background — auto-restore freezes Camera2. */
+  const userAppliedRef = useRef(false)
+  /** Preserve user intent across track remounts (clear effect resets appliedKey). */
+  const pendingSelectionRef = useRef<VirtualBackgroundSelection | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -78,6 +134,7 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
       setCapability('supported')
       setError(null)
       try {
+        // Load preference for the picker UI only — do not attach the processor yet.
         const value = await resolveVirtualBackgroundSelection(await loadVirtualBackgroundPreference())
         if (!cancelled) setSelection(value)
       } catch {
@@ -89,10 +146,25 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
     }
   }, [])
 
+  // Every new camera track must start unfiltered. Attaching sheconomyVirtualBackground
+  // before the first stable frames (or restoring a saved blur/image) holds Camera2
+  // buffers through toI420/composite and triggers:
+  //   Camera freezed — Client must return video buffers
+  useEffect(() => {
+    if (!isCameraEnabled) return
+    const track = getNativeTrack(cameraTrack?.track as LocalVideoTrack | undefined)
+    clearTrackEffects(track)
+    appliedKeyRef.current = 'off'
+    // Do not clear userAppliedRef here — re-apply effect restores after remount.
+    setStatus('idle')
+  }, [cameraTrack?.track, isCameraEnabled])
+
   const apply = useCallback(
     async (nextValue: VirtualBackgroundSelection): Promise<boolean> => {
       const next = normalizeVirtualBackground(nextValue)
       setError(null)
+      userAppliedRef.current = next.mode !== 'off'
+      pendingSelectionRef.current = next.mode === 'off' ? null : next
 
       if (next.mode !== 'off' && capability !== 'supported') {
         if (capability === 'checking') {
@@ -108,8 +180,6 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
 
       const track = getNativeTrack(cameraTrack?.track as LocalVideoTrack | undefined)
       if (!track && next.mode !== 'off' && isCameraEnabled) {
-        // Camera is on but LiveKit track is still attaching — keep the pick so
-        // the track-appear effect can apply blur/image without another tap.
         selectionRef.current = next
         setSelection(next)
         await saveVirtualBackgroundPreference(next)
@@ -119,35 +189,54 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
 
       setStatus('loading')
       try {
-        const resolved =
-          next.mode === 'image'
-            ? await resolveVirtualBackgroundSelection(next)
-            : next
-        if (resolved.mode === 'image' && !resolved.imageUrl) {
-          throw new Error('The selected background image is not available offline.')
+        let resolved = next
+        if (next.mode === 'image') {
+          try {
+            resolved = await resolveVirtualBackgroundSelection(next)
+          } catch (cause) {
+            // Soft Android path only needs the preset id; keep selection without a cache file.
+            if (Platform.OS !== 'android') throw cause
+          }
         }
-        if (
-          resolved.mode === 'image' &&
-          !nativeProcessorCanDecodeImageUri(resolved.imageUrl)
-        ) {
-          throw new Error('Could not prepare this background for the camera on this device.')
+
+        // Android uses soft UI preview only — skip processor image decode checks.
+        if (Platform.OS !== 'android') {
+          if (resolved.mode === 'image' && !resolved.imageUrl) {
+            throw new Error('The selected background image is not available offline.')
+          }
+          if (
+            resolved.mode === 'image' &&
+            !nativeProcessorCanDecodeImageUri(resolved.imageUrl)
+          ) {
+            throw new Error('Could not prepare this background for the camera on this device.')
+          }
         }
-        MeetingVideoEffectsNative?.configure?.({
-          mode: resolved.mode,
-          imagePath: resolved.imageUrl,
-          blurRadius: resolved.blurRadius,
-        })
-        if (track) {
-          if (resolved.mode === 'off') {
-            track._setVideoEffects([])
-            appliedKeyRef.current = 'off'
-          } else {
-            // Always re-attach on the current capturer. Skipping when appliedKeyRef
-            // was already "on" left a new LiveKit track unfiltered (blurry 320p / no VB).
-            if (Platform.OS !== 'android') {
-              await maybeApplyCapture(track, EFFECT_CAPTURE)
-            }
-            track._setVideoEffects([])
+
+        if (resolved.mode === 'off') {
+          clearTrackEffects(track)
+          appliedKeyRef.current = 'off'
+          pendingSelectionRef.current = null
+        } else if (Platform.OS === 'android') {
+          // Android Camera2 freezes when VideoEffectProcessor runs toI420 on the
+          // capturer path ("Client must return video buffers"). Save + configure
+          // only — never install the processor. Join UI uses a soft image preview.
+          if (track) detachTrackProcessor(track)
+          try {
+            applyBackgroundConfig(resolved)
+          } catch {
+            // Soft path still saves the preference below.
+          }
+          appliedKeyRef.current = 'off'
+        } else if (track && appliedKeyRef.current === 'on') {
+          // Already processing — hot-swap config only (no processor tear-down).
+          applyBackgroundConfig(resolved)
+        } else {
+          if (track) {
+            await maybeApplyCapture(track, EFFECT_CAPTURE)
+            detachTrackProcessor(track)
+          }
+          applyBackgroundConfig(resolved)
+          if (track) {
             track._setVideoEffects([VIRTUAL_BACKGROUND_EFFECT_NAME])
             appliedKeyRef.current = 'on'
           }
@@ -158,12 +247,10 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
         await saveVirtualBackgroundPreference(resolved)
         return true
       } catch (cause) {
-        try {
-          track?._setVideoEffects([])
-        } catch {
-          // Preserve the camera even if restoring effects fails.
-        }
+        clearTrackEffects(track)
         appliedKeyRef.current = 'off'
+        userAppliedRef.current = false
+        pendingSelectionRef.current = null
         setError(cause instanceof Error ? cause.message : 'Could not apply background effect.')
         selectionRef.current = OFF_BACKGROUND
         setSelection(OFF_BACKGROUND)
@@ -174,29 +261,26 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
     [cameraTrack?.track, capability, isCameraEnabled],
   )
 
+  // Re-apply ONLY after an explicit user pick when the LiveKit track remounts mid-call.
+  // Android never re-attaches the processor (see apply() — soft/config-only path).
   useEffect(() => {
     if (!isCameraEnabled || capability !== 'supported') return
-    void apply(selectionRef.current)
-  }, [
-    apply,
-    cameraTrack?.track,
-    capability,
-    isCameraEnabled,
-    selection.mode,
-    selection.id,
-    selection.storagePath,
-    selection.blurRadius,
-  ])
+    if (!userAppliedRef.current) return
+    if (Platform.OS === 'android') return
+    const pending = pendingSelectionRef.current ?? selectionRef.current
+    if (pending.mode === 'off') return
+    const timer = setTimeout(() => {
+      void apply(pending)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [apply, cameraTrack?.track, capability, isCameraEnabled])
 
   useEffect(
     () => () => {
       appliedKeyRef.current = null
-      const track = getNativeTrack(cameraTrack?.track as LocalVideoTrack | undefined)
-      try {
-        track?._setVideoEffects([])
-      } catch {
-        // Camera may already be disposed with the room.
-      }
+      userAppliedRef.current = false
+      pendingSelectionRef.current = null
+      clearTrackEffects(getNativeTrack(cameraTrack?.track as LocalVideoTrack | undefined))
     },
     [cameraTrack?.track],
   )
@@ -218,3 +302,4 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
   const retry = useCallback(() => apply(selectionRef.current), [apply])
   return { capability, status, selection, error, apply, retry }
 }
+

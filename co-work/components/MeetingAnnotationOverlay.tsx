@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Platform, Pressable, View } from 'react-native'
+import { Platform, View } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
 import {

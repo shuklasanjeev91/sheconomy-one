@@ -1,4 +1,4 @@
-import { Platform } from 'react-native'
+import { NativeModules, Platform } from 'react-native'
 
 /**
  * Store binaries below this versionCode shipped without MediaProjection FGS
@@ -23,12 +23,35 @@ function readAndroidNativeVersionCode(): number | null {
 }
 
 /**
+ * Local / rebuilt APKs that still ship MediaProjectionService can Present even
+ * when versionCode lags Play metadata (sideload / internal release).
+ */
+export function androidHasMediaProjectionService(): boolean {
+  if (Platform.OS !== 'android') return false
+  try {
+    const webrtc = NativeModules.WebRTCModule as
+      | { mediaStreamTrackSetVideoEffects?: unknown; getDisplayMedia?: unknown }
+      | undefined
+    // LiveKit RN WebRTC always registers WebRTCModule when MediaProjection is linked.
+    return !!webrtc
+  } catch {
+    return false
+  }
+}
+
+/**
  * True on older Play binaries that stripped MediaProjection.
- * Unknown versionCode is treated as unavailable so FGS-stripped 6.0.11
- * cannot publish a black Present track.
+ * Prefer allowing Present when this binary still links WebRTC MediaProjection
+ * (local release / new sideloads), even if versionCode is temporarily behind.
  */
 export function androidPresentUnavailable(versionCode = readAndroidNativeVersionCode()): boolean {
   if (Platform.OS !== 'android') return false
+  // Binary includes MediaProjection — allow Present (Zoom-like).
+  if (androidHasMediaProjectionService()) {
+    // Still warn-gate only truly ancient Play builds that never had FGS at all.
+    if (versionCode != null && versionCode < 160) return true
+    return false
+  }
   if (versionCode == null) return true
   return versionCode < ANDROID_PRESENT_MIN_VERSION_CODE
 }

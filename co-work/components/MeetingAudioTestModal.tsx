@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Modal, Platform, Pressable, ScrollView, useWindowDimensions } from 'react-native'
+import { Platform, ScrollView, useWindowDimensions } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { ViewportOverlay } from '~/components/layout'
-import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
-import { MEETING_PORTAL_Z_INDEX } from '~/co-work/lib/meeting-toolbar'
+import { AppBottomSheet, Button, Icons, Text, XStack, YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 type DeviceItem = {
@@ -483,59 +482,17 @@ export function MeetingAudioTestModal({ open, onClose, onOpenChange }: MeetingAu
     </YStack>
   )
 
-  if (Platform.OS === 'web') {
-    return (
-      <ViewportOverlay>
-        <YStack
-          position={'fixed' as never}
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          alignItems="center"
-          justifyContent="center"
-          padding="$4"
-          zIndex={MEETING_PORTAL_Z_INDEX + 50}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: MEETING_PORTAL_Z_INDEX + 50,
-            backgroundColor: 'rgba(0,0,0,0.72)',
-          }}
-        >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close audio test backdrop"
-            onPress={close}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-          />
-          <YStack width="100%" maxWidth={440} zIndex={1} pointerEvents="auto">
-            {card}
-          </YStack>
-        </YStack>
-      </ViewportOverlay>
-    )
-  }
-
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
-      <YStack
-        flex={1}
-        backgroundColor="rgba(0,0,0,0.72)"
-        justifyContent="center"
-        alignItems="center"
-        padding={16}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close audio test backdrop"
-          onPress={close}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-        />
-        <YStack width="100%" maxWidth={440} zIndex={1}>
-          {card}
-        </YStack>
-      </YStack>
-    </Modal>
+    <AppBottomSheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close()
+      }}
+      title="Test speaker and microphone"
+      showHandle
+      scrollable
+    >
+      {card}
+    </AppBottomSheet>
   )
 }

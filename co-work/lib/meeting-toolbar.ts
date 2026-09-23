@@ -7,11 +7,11 @@ import {
 } from '~/co-work/lib/meeting-role-permissions'
 
 /**
- * Toolbar chrome mirrors Zoom product surfaces:
+ * Toolbar mode mirrors Zoom product surfaces:
  * - `web` → Zoom iPad / desktop dock (tablet+ and laptop+)
  * - `mobile` → Zoom phone dock only
  */
-export type MeetingToolbarChrome = 'web' | 'mobile'
+export type MeetingToolbarMode = 'web' | 'mobile'
 
 /** Primary dock controls — lean Zoom-style set; everything else lives in More. */
 export type MeetingToolbarPrimaryKey =
@@ -92,11 +92,11 @@ export type MeetingToolbarMoreSection = {
   keys: MeetingToolbarOverflowKey[]
 }
 
-export function meetingToolbarChrome(input: {
+export function meetingToolbarMode(input: {
   compact?: boolean
-  chrome?: MeetingToolbarChrome
-}): MeetingToolbarChrome {
-  if (input.chrome === 'web' || input.chrome === 'mobile') return input.chrome
+  mode?: MeetingToolbarMode
+}): MeetingToolbarMode {
+  if (input.mode === 'web' || input.mode === 'mobile') return input.mode
   return input.compact ? 'mobile' : 'web'
 }
 
@@ -117,10 +117,10 @@ export function meetingToolbarPrimaryKeys(input: {
   supportsLiveCaptions?: boolean
   /** @deprecated Minimize always lives in More (Zoom-style). */
   hasBrowse?: boolean
-  /** Phone only → Zoom mobile chrome. Tablet/desktop use web chrome. */
+  /** Phone only → Zoom mobile UI. Tablet/desktop use web UI. */
   compact?: boolean
-  /** Explicit chrome override (tests / special surfaces). */
-  chrome?: MeetingToolbarChrome
+  /** Explicit mode override (tests / special surfaces). */
+  mode?: MeetingToolbarMode
   /** Host/co-host may start cloud recording. */
   supportsRecording?: boolean
   /** Actively recording — keep Stop on the primary dock. */
@@ -131,11 +131,11 @@ export function meetingToolbarPrimaryKeys(input: {
   hasDocs?: boolean
   hasApps?: boolean
 }): MeetingToolbarPrimaryKey[] {
-  const chrome = meetingToolbarChrome(input)
+  const mode = meetingToolbarMode(input)
   const keys: MeetingToolbarPrimaryKey[] = ['mic']
   if (input.supportsVideo !== false) keys.push('camera')
 
-  if (chrome === 'mobile') {
+  if (mode === 'mobile') {
     keys.push('chat')
     if (input.supportsRecording && input.recording) keys.push('stop_record')
     keys.push('more', 'leave')
@@ -146,6 +146,7 @@ export function meetingToolbarPrimaryKeys(input: {
   // Zoom iPad / large dock — Security & Record live under More / Host tools.
   keys.push('participants', 'chat')
   if (input.hasReactions !== false) keys.push('reactions')
+  if (input.hasRaiseHand !== false) keys.push('raise_hand')
   if (input.supportsScreenShare) keys.push('share_screen')
   if (input.supportsLiveCaptions !== false) keys.push('captions')
   if (input.hasWhiteboard !== false) keys.push('whiteboard')
@@ -157,8 +158,8 @@ export function meetingToolbarPrimaryKeys(input: {
   return keys
 }
 
-/** Flat Zoom-iPad More popover order (above the dock). */
-export function meetingToolbarIpadMoreKeys(input: {
+/** Overflow keys for tablet / desktop More (web + native). */
+export function meetingToolbarWideMoreKeys(input: {
   viewerRole: MeetingRole
   hasHostTools?: boolean
   hasAudioSettings?: boolean
@@ -166,9 +167,11 @@ export function meetingToolbarIpadMoreKeys(input: {
   hasSettings?: boolean
   hasVideoEffects?: boolean
   hasDisconnectAudio?: boolean
+  hasRaiseHand?: boolean
 }): MeetingToolbarOverflowKey[] {
   const keys: MeetingToolbarOverflowKey[] = []
   if (input.hasHostTools ?? canOpenHostTools(input.viewerRole)) keys.push('host_tools')
+  if (input.hasRaiseHand !== false) keys.push('raise_hand')
   if (input.hasAudioSettings !== false) keys.push('audio_settings')
   if (input.hasCaptions !== false) keys.push('captions')
   if (input.hasSettings !== false) keys.push('settings')
@@ -176,6 +179,9 @@ export function meetingToolbarIpadMoreKeys(input: {
   if (input.hasDisconnectAudio !== false) keys.push('disconnect_audio')
   return keys
 }
+
+/** @deprecated Prefer meetingToolbarWideMoreKeys — same behavior. */
+export const meetingToolbarIpadMoreKeys = meetingToolbarWideMoreKeys
 
 /**
  * Host Security flyout — lock + waiting room + mute/video on entry + room audio asks.
@@ -205,7 +211,7 @@ export function meetingToolbarMoreKeys(input: {
   hasMinimize?: boolean
   hasPictureInPicture?: boolean
   compact?: boolean
-  chrome?: MeetingToolbarChrome
+  mode?: MeetingToolbarMode
   supportsLiveCaptions?: boolean
   hasInvite?: boolean
   hasViewControls?: boolean
@@ -243,7 +249,7 @@ export function meetingToolbarMoreSections(input: {
   hasMinimize?: boolean
   hasPictureInPicture?: boolean
   compact?: boolean
-  chrome?: MeetingToolbarChrome
+  mode?: MeetingToolbarMode
   supportsLiveCaptions?: boolean
   hasInvite?: boolean
   hasViewControls?: boolean
@@ -266,8 +272,8 @@ export function meetingToolbarMoreSections(input: {
   hasKeyboardShortcuts?: boolean
   supportsScreenShare?: boolean
 }): MeetingToolbarMoreSection[] {
-  const chrome = meetingToolbarChrome(input)
-  const isMobile = chrome === 'mobile'
+  const mode = meetingToolbarMode(input)
+  const isMobile = mode === 'mobile'
 
   const view: MeetingToolbarOverflowKey[] = []
   if (input.hasViewControls !== false) {
@@ -391,7 +397,7 @@ export function meetingToolbarMoreSections(input: {
 export function meetingToolbarPrimaryLabel(
   key: MeetingToolbarPrimaryKey,
   input: {
-    chrome?: MeetingToolbarChrome
+    mode?: MeetingToolbarMode
     compact?: boolean
     audioEnabled?: boolean
     videoEnabled?: boolean
@@ -400,8 +406,8 @@ export function meetingToolbarPrimaryLabel(
     participantCount?: number
   },
 ): string {
-  const chrome = meetingToolbarChrome(input)
-  const mobile = chrome === 'mobile'
+  const mode = meetingToolbarMode(input)
+  const mobile = mode === 'mobile'
   switch (key) {
     case 'mic':
       return input.audioEnabled === false ? 'Unmute' : 'Mute'

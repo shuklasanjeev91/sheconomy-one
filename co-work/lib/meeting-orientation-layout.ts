@@ -19,7 +19,7 @@ export type MeetingOrientationPolicy =
   | 'desktop'
   | 'large-desktop'
 
-export type MeetingChromeLayout = {
+export type MeetingUiLayout = {
   policy: MeetingOrientationPolicy
   breakpoint: MeetingBreakpoint
   isLandscape: boolean
@@ -53,7 +53,7 @@ export type MeetingChromeLayout = {
   pageSize: number
 }
 
-export type MeetingChromeLayoutInput = {
+export type MeetingUiLayoutInput = {
   width: number
   height: number
   safeTop?: number
@@ -66,7 +66,7 @@ export type MeetingChromeLayoutInput = {
 }
 
 export function resolveMeetingOrientationPolicy(
-  input: MeetingChromeLayoutInput,
+  input: MeetingUiLayoutInput,
 ): MeetingOrientationPolicy {
   const width = Math.max(input.width, 1)
   const height = Math.max(input.height, 1)
@@ -99,7 +99,7 @@ export function resolveMeetingOrientationPolicy(
   }
 }
 
-export function resolveMeetingChromeLayout(input: MeetingChromeLayoutInput): MeetingChromeLayout {
+export function resolveMeetingUiLayout(input: MeetingUiLayoutInput): MeetingUiLayout {
   const width = Math.max(input.width, 1)
   const height = Math.max(input.height, 1)
   const safeTop = Math.max(input.safeTop ?? 0, 0)
@@ -247,36 +247,36 @@ export function resolveMeetingChromeLayout(input: MeetingChromeLayoutInput): Mee
   }
 }
 
-/** Usable stage box after chrome + optional side filmstrip + Zoom-web side panel. */
+/** Usable stage box after UI insets + optional side filmstrip + Zoom-web side panel. */
 export function meetingStageContentBox(input: {
   viewportWidth: number
   viewportHeight: number
-  chrome: MeetingChromeLayout
+  layout: MeetingUiLayout
   filmstripExpanded: boolean
   /** Extra trailing inset when a Zoom-web side panel (chat/people) is open. */
   stageTrailingInset?: number
 }): { width: number; height: number } {
-  const chrome = input.chrome
+  const layout = input.layout
   const trailingInset = Math.max(input.stageTrailingInset ?? 0, 0)
   const availableWidth = Math.max(
-    input.viewportWidth - chrome.stagePaddingLeft - chrome.stagePaddingRight - trailingInset,
+    input.viewportWidth - layout.stagePaddingLeft - layout.stagePaddingRight - trailingInset,
     160,
   )
   const availableHeight = Math.max(
-    input.viewportHeight - chrome.stagePaddingTop - chrome.stagePaddingBottom,
+    input.viewportHeight - layout.stagePaddingTop - layout.stagePaddingBottom,
     120,
   )
-  if (input.filmstripExpanded && chrome.filmstripBeside) {
+  if (input.filmstripExpanded && layout.filmstripBeside) {
     return {
-      width: Math.max(availableWidth - chrome.filmstripWidth - 10, 140),
+      width: Math.max(availableWidth - layout.filmstripWidth - 10, 140),
       height: availableHeight,
     }
   }
-  if (input.filmstripExpanded && !chrome.filmstripBeside) {
+  if (input.filmstripExpanded && !layout.filmstripBeside) {
     return {
       width: availableWidth,
-      // Extra gap so captions / share chrome clear the filmstrip strip.
-      height: Math.max(availableHeight - chrome.filmstripHeight - 14, 100),
+      // Extra gap so captions / share UI clear the filmstrip strip.
+      height: Math.max(availableHeight - layout.filmstripHeight - 14, 100),
     }
   }
   return { width: availableWidth, height: availableHeight }

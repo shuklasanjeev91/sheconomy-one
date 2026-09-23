@@ -3,13 +3,13 @@ import { useMemo, useRef, useState } from 'react'
 import {
   PanResponder,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text as RNText,
   View,
-  useWindowDimensions,
+  useWindowDimensions
 } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { Icons } from '~/components/ui'
 import { captionLooksLikeTargetLang } from '~/co-work/lib/caption-translate'
@@ -64,7 +64,7 @@ const FONT_BY_SIZE: Record<CaptionOverlaySize, { body: number; speaker: number; 
   large: { body: 26, speaker: 14, status: 15 },
 }
 
-/** Opaque Sheconomy caption chrome — never translucent (iPad washed translucent black to white). */
+/** Opaque Sheconomy caption overlay — never translucent (iPad washed translucent black to white). */
 const CAPTION_BG = '#0c080a'
 const CAPTION_BORDER = '#D81B60'
 const CAPTION_TEXT = '#FFFFFF'

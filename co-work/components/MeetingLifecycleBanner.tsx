@@ -2,7 +2,7 @@ import { Text, YStack } from '~/components/ui'
 
 type MeetingLifecycleBannerProps = {
   notice: string | null
-  /** Slightly lower under native status / web header chrome. */
+  /** Slightly lower under native status / web header layout. */
   topOffset?: number
 }
 

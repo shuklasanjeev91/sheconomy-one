@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { Platform, Pressable, type StyleProp, type ViewStyle } from 'react-native'
+import { Platform, type StyleProp, type ViewStyle } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 type MeetingSheetButtonProps = {
   onPress: () => void

@@ -108,7 +108,7 @@ const SUMMARY_WIDTH = 320
 export function CheckoutScreen() {
   const c = useCommercePalette()
   const ui = useAppUi()
-  const { hasSideRails } = useAppLayout()
+  const { hasSideRails, mobileTabBarOffset } = useAppLayout()
   const { user, isAuthenticated, profile } = useProfile()
   const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
   const { cart, items: cartItems, isLoading, refresh, error: cartError, updateQuantity, removeItem } =
@@ -1309,7 +1309,7 @@ export function CheckoutScreen() {
           backgroundColor={c.page}
           padding={hasSideRails ? '$4' : '$2'}
           borderRadius={12}
-          paddingBottom={showMobileBar ? checkoutBarHeight + 24 : undefined}
+          paddingBottom={showMobileBar ? checkoutBarHeight + mobileTabBarOffset + 24 : undefined}
         >
           <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
             <Icons.Lock size={16} color={c.brand} />

@@ -1,12 +1,15 @@
 /**
- * Zoom-mobile More sheet: reaction strip + icon grid (Sheconomy branding).
+ * Zoom-mobile More sheet grid — Sheconomy branded, fuller than stock Zoom.
+ *
+ * Zoom core row + Virtual background / Whiteboard / Record / Safe driving so
+ * hosts are not stuck hunting under Settings for everyday controls.
  */
 
 import type { MeetingRole } from '~/co-work/lib/types'
 import { canOpenHostTools } from '~/co-work/lib/meeting-role-permissions'
 import type { MeetingToolbarOverflowKey } from '~/co-work/lib/meeting-toolbar'
 
-/** Ordered Zoom-mobile More grid keys (3 columns). */
+/** Ordered More grid keys (3 columns). */
 export function meetingMobileMoreGridKeys(input: {
   viewerRole: MeetingRole
   supportsScreenShare?: boolean
@@ -14,18 +17,29 @@ export function meetingMobileMoreGridKeys(input: {
   hasWhiteboard?: boolean
   hasHostTools?: boolean
   hasApps?: boolean
+  supportsRecording?: boolean
+  hasBackground?: boolean
+  hasSafeDriving?: boolean
 }): MeetingToolbarOverflowKey[] {
-  const keys: MeetingToolbarOverflowKey[] = ['manage_participants']
-  if (input.supportsScreenShare !== false) keys.push('share_screen')
-  if (input.supportsLiveCaptions !== false) keys.push('captions')
-  // Zoom “Apps” row — polls / Q&A / whiteboard entry points.
-  if (input.hasApps !== false) keys.push('polls')
-  keys.push('disconnect_audio', 'meeting_info')
-  if (input.hasWhiteboard !== false) keys.push('whiteboard')
+  const keys: MeetingToolbarOverflowKey[] = [
+    'manage_participants',
+    'share_screen',
+    'captions',
+    'polls', // Apps
+    'disconnect_audio',
+    'meeting_info',
+  ]
+
   if (input.hasHostTools ?? canOpenHostTools(input.viewerRole)) {
     keys.push('host_tools')
   }
-  keys.push('settings', 'safe_driving')
+  keys.push('settings')
+
+  if (input.hasBackground !== false) keys.push('background')
+  if (input.hasWhiteboard !== false) keys.push('whiteboard')
+  if (input.supportsRecording === true) keys.push('record')
+  if (input.hasSafeDriving !== false) keys.push('safe_driving')
+
   return keys
 }
 
@@ -39,6 +53,10 @@ export function meetingMobileMoreGridLabel(key: MeetingToolbarOverflowKey): stri
       return 'Show captions'
     case 'whiteboard':
       return 'Whiteboard'
+    case 'background':
+      return 'Background'
+    case 'record':
+      return 'Record'
     case 'polls':
       return 'Apps'
     case 'disconnect_audio':

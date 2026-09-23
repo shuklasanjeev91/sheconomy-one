@@ -275,6 +275,10 @@ export type SignalPayload =
   | { type: 'annotation-clear'; from: string; timestamp: number }
   | { type: 'annotation-open'; from: string; timestamp: number }
   | { type: 'annotation-close'; from: string; timestamp: number }
+  /** Host: transferred host role to another participant. */
+  | { type: 'host-transferred'; from: string; newHostId: string; newHostName?: string; timestamp: number }
+  /** Host/recorder: immediate broadcast of active recording status. */
+  | { type: 'recording-status'; from: string; isRecording: boolean; timestamp: number }
 
 export type MediaCapabilities = {
   supportsVideo: boolean

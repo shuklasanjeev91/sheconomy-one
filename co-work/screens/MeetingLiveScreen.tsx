@@ -31,6 +31,7 @@ import { useSyncMeetingLifecycle } from '~/co-work/hooks/useMeetingStateManager'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { useProfile } from '~/hooks/useProfile'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
+import { ensureGuestUserSession } from '~/co-work/lib/guest-session'
 import { coWorkRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 import {
@@ -130,6 +131,21 @@ function MeetingLiveScreenBody({
     joining: phase === 'joining',
     locked: isLocked && !isHost && (phase === 'error' || phase === 'confirm'),
   })
+
+  const guestInitRef = useRef(false)
+  useEffect(() => {
+    if (!isLoading && !user && !isAuthenticated && !guestInitRef.current) {
+      guestInitRef.current = true
+      void (async () => {
+        try {
+          const remembered = await loadRememberedMeetingDisplayName()
+          await ensureGuestUserSession(resumeDisplayName || remembered || 'Guest')
+        } catch {
+          guestInitRef.current = false
+        }
+      })()
+    }
+  }, [isLoading, user, isAuthenticated, resumeDisplayName])
 
   const exitMeeting = useCallback(() => {
     onExit?.()
@@ -416,7 +432,14 @@ function MeetingLiveScreenBody({
   }
 
   if (!isAuthenticated || !user) {
-    return <AuthSignInFlow returnTo={String(coWorkRoutes.meetingLive(normalizedCode || code))} />
+    return (
+      <ScreenCenter backgroundColor={coworkUi.pageBg}>
+        <Spinner size="large" color={coworkUi.brand} />
+        <Text color={coworkUi.textSecondary} marginTop="$3">
+          Connecting to meeting as guest…
+        </Text>
+      </ScreenCenter>
+    )
   }
 
   if (phase === 'confirm' && meeting && !shouldResumeRoom && !resumedRoomRef.current) {

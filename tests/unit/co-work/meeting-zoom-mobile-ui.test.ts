@@ -9,7 +9,7 @@ import {
   meetingMobileMoreGridLabel,
 } from '~/co-work/lib/meeting-mobile-more'
 import {
-  meetingToolbarIpadMoreKeys,
+  meetingToolbarWideMoreKeys,
   meetingToolbarPrimaryKeys,
 } from '~/co-work/lib/meeting-toolbar'
 
@@ -25,7 +25,7 @@ describe('Zoom mobile UI branding helpers', () => {
     ).toEqual(['mic', 'camera', 'chat', 'more', 'leave', 'end_meeting'])
   })
 
-  it('uses Zoom iPad/large primary dock when not compact', () => {
+  it('uses tablet/desktop primary dock when not compact', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -41,6 +41,7 @@ describe('Zoom mobile UI branding helpers', () => {
       'participants',
       'chat',
       'reactions',
+      'raise_hand',
       'share_screen',
       'captions',
       'whiteboard',
@@ -51,9 +52,9 @@ describe('Zoom mobile UI branding helpers', () => {
     ])
   })
 
-  it('builds Zoom-iPad More popover keys', () => {
+  it('builds tablet/desktop More popover keys', () => {
     expect(
-      meetingToolbarIpadMoreKeys({
+      meetingToolbarWideMoreKeys({
         viewerRole: 'host',
         hasHostTools: true,
         hasAudioSettings: true,
@@ -64,6 +65,7 @@ describe('Zoom mobile UI branding helpers', () => {
       }),
     ).toEqual([
       'host_tools',
+      'raise_hand',
       'audio_settings',
       'captions',
       'settings',
@@ -79,6 +81,8 @@ describe('Zoom mobile UI branding helpers', () => {
       supportsLiveCaptions: true,
       hasWhiteboard: true,
       hasHostTools: true,
+      hasBackground: true,
+      supportsRecording: true,
     })
     expect(keys).toEqual([
       'manage_participants',
@@ -87,14 +91,18 @@ describe('Zoom mobile UI branding helpers', () => {
       'polls',
       'disconnect_audio',
       'meeting_info',
-      'whiteboard',
       'host_tools',
       'settings',
+      'background',
+      'whiteboard',
+      'record',
       'safe_driving',
     ])
     expect(meetingMobileMoreGridLabel('safe_driving')).toBe('Safe driving')
     expect(meetingMobileMoreGridLabel('share_screen')).toBe('Start share')
     expect(meetingMobileMoreGridLabel('polls')).toBe('Apps')
+    expect(meetingMobileMoreGridLabel('captions')).toBe('Show captions')
+    expect(meetingMobileMoreGridLabel('background')).toBe('Background')
   })
 
   it('uses Sheconomy copy for calendar onboarding', () => {

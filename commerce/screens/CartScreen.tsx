@@ -59,7 +59,7 @@ const SUMMARY_WIDTH = 300
 
 export function CartScreen() {
   const c = useCommercePalette()
-  const { hasSideRails } = useAppLayout()
+  const { hasSideRails, mobileTabBarOffset } = useAppLayout()
   const { user } = useSupabase()
   const {
     cart,
@@ -693,7 +693,7 @@ export function CartScreen() {
           backgroundColor={c.page}
           padding={hasSideRails ? '$4' : '$2'}
           borderRadius={12}
-          paddingBottom={showMobileBar ? checkoutBarHeight + 24 : undefined}
+          paddingBottom={showMobileBar ? checkoutBarHeight + mobileTabBarOffset + 24 : undefined}
         >
           {items.length === 0 ? (
             <YStack gap="$4" width="100%">

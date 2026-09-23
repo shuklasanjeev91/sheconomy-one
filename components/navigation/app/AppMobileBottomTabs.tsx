@@ -12,6 +12,7 @@ import { isCreateShopPath } from '~/lib/routes'
 import { mobileTabBarDockStyle } from '~/lib/theme/surfaces'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useKeyboardVisible } from '~/hooks/useKeyboardVisible'
 import { useStableMedia } from '~/hooks/useStableMedia'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
@@ -81,8 +82,9 @@ export function AppMobileBottomTabs() {
   }, [hasShops, isTierKnown, pathname, primaryShopId, tier, widthTier])
 
   const section = getMobileBottomTabSection(pathname)
+  const keyboardVisible = useKeyboardVisible()
 
-  if (tabs.length === 0) {
+  if (tabs.length === 0 || keyboardVisible) {
     return null
   }
 

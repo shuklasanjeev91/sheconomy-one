@@ -12,6 +12,8 @@ object MeetingBackgroundConfig {
   @Volatile var mode: String = "off"
   @Volatile var imagePath: String? = null
   @Volatile var blurRadius: Double = 12.0
+  /** Bumped on every configure() so the processor can drop stale async decodes. */
+  @Volatile var generation: Int = 0
 }
 
 class MeetingVideoEffectsModule : Module() {
@@ -31,6 +33,7 @@ class MeetingVideoEffectsModule : Module() {
       MeetingBackgroundConfig.mode = options["mode"] as? String ?: "off"
       MeetingBackgroundConfig.imagePath = options["imagePath"] as? String
       MeetingBackgroundConfig.blurRadius = (options["blurRadius"] as? Number)?.toDouble() ?: 12.0
+      MeetingBackgroundConfig.generation = MeetingBackgroundConfig.generation + 1
     }
 
     Function("isSupported") {

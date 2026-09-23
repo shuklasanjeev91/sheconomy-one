@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native'
 
 import { PostMediaSlide } from '~/community/components/PostMediaSlide'
 import type { PostMediaItem } from '~/community/lib/post-media'
@@ -7,7 +7,7 @@ import {
   ZoomableImage,
   type ZoomableImageHandle,
 } from '~/components/media/ZoomableImage'
-import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { AppBottomSheet, Icons, Text, XStack, YStack } from '~/components/ui'
 import { formatZoomPercent, IMAGE_ZOOM_MAX, IMAGE_ZOOM_MIN } from '~/lib/zoom/zoom-levels'
 
 export type MediaLightboxItem = {
@@ -109,15 +109,14 @@ export function MediaLightbox({ items, open, onOpenChange, initialIndex = 0 }: M
   const canZoomOut = scale > IMAGE_ZOOM_MIN + 0.02
 
   return (
-    <Modal
-      visible={open}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={() => onOpenChange(false)}
-      presentationStyle="overFullScreen"
+    <AppBottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Media"
+      showHandle
+      scrollable={false}
     >
-      <View style={styles.root} accessibilityViewIsModal>
+      <View style={[styles.root, { minHeight: Math.max(windowHeight - 140, 360) }]} accessibilityViewIsModal>
         <View style={[styles.stage, { width: windowWidth, height: windowHeight }]}>
           {slide?.kind === 'image' ? (
             <ZoomableImage
@@ -269,7 +268,7 @@ export function MediaLightbox({ items, open, onOpenChange, initialIndex = 0 }: M
           </XStack>
         ) : null}
       </View>
-    </Modal>
+    </AppBottomSheet>
   )
 }
 

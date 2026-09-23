@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { useMemo, useRef } from 'react'
-import { Platform, Pressable, useWindowDimensions } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { XStack, YStack } from 'tamagui'
 import { Text } from '~/components/ui/Text'

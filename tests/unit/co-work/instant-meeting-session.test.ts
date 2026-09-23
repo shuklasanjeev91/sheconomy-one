@@ -66,4 +66,41 @@ describe('instant meeting session', () => {
     expect(instantMeetingCodesMatch('ABC DEF GHI', 'abc-def-ghi')).toBe(true)
     closeInstantMeetingSession()
   })
+
+  it('expands on bubble Maximize even when enteredRoom is already true', async () => {
+    closeInstantMeetingSession()
+    const {
+      clearGlobalSession,
+      maximizeGlobalSession,
+      minimizeGlobalSession,
+      peekGlobalSession,
+      registerGlobalSession,
+    } = await import('~/lib/session/global-session')
+
+    clearGlobalSession()
+    openInstantMeetingSession({ code: 'ABC123XYZ', meeting, autoJoin: true })
+    markInstantMeetingEnteredRoom({ displayName: 'Sanjeev', meeting })
+    registerGlobalSession({
+      kind: 'meeting',
+      code: 'ABC123XYZ',
+      title: 'Standup',
+      maximizeHref: '/co-work/meeting/ABC123XYZ/live',
+      presentation: 'minimized',
+    })
+    minimizeGlobalSession()
+    expect(peekGlobalSession()?.presentation).toBe('minimized')
+
+    openInstantMeetingSession({
+      code: 'ABC123XYZ',
+      meeting,
+      autoJoin: true,
+      enteredRoom: true,
+      expand: true,
+    })
+    expect(peekGlobalSession()?.presentation).toBe('fullscreen')
+    maximizeGlobalSession()
+    expect(peekGlobalSession()?.presentation).toBe('fullscreen')
+    closeInstantMeetingSession()
+    clearGlobalSession()
+  })
 })

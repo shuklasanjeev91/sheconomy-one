@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from 'react'
-import { Modal, Platform, Pressable, ScrollView as RNScrollView } from 'react-native'
+import { Platform, ScrollView as RNScrollView } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import {
+  AppBottomSheet,
   Avatar,
   Button,
   Icons,
@@ -210,91 +212,66 @@ export function MeetingParticipantsPanel({
 
   return (
     <>
-      {/* Rename inline modal */}
-      <Modal
-        visible={!!renamingUserId}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRenamingUserId(null)}
-      >
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.65)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 20,
-          }}
-          onPress={() => setRenamingUserId(null)}
-        >
-          <Pressable
-            style={{ width: '100%', maxWidth: 380 }}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <YStack
-              backgroundColor={coworkUi.surface}
-              borderRadius={16}
-              borderWidth={1}
-              borderColor={coworkUi.borderSoft}
-              padding="$5"
-              gap="$4"
-              style={{ boxShadow: '0 16px 40px rgba(0,0,0,0.5)' }}
+      <AppBottomSheet
+        open={!!renamingUserId}
+        onOpenChange={(next) => {
+          if (!next) setRenamingUserId(null)
+        }}
+        title="Rename participant"
+        showHandle
+        scrollable={false}
+        footer={
+          <XStack gap="$2" width="100%">
+            <Button
+              tone="outline"
+              flex={1}
+              borderRadius={8}
+              onPress={() => setRenamingUserId(null)}
             >
-              <YStack gap="$1">
-                <Text fontSize={16} fontWeight="700" color={coworkUi.text}>
-                  Rename participant
-                </Text>
-                {renamingParticipant ? (
-                  <Text fontSize={12} color={coworkUi.textSecondary}>
-                    Renaming{' '}
-                    {safeMeetingDisplayName(
-                      renamingParticipant.display_name ||
-                        renamingParticipant.profile?.full_name ||
-                        renamingParticipant.profile?.username,
-                    )}{' '}
-                    — session only
-                  </Text>
-                ) : null}
-              </YStack>
-              <Input
-                value={renameValue}
-                onChangeText={setRenameValue}
-                placeholder="Enter new name"
-                autoFocus
-                backgroundColor={coworkUi.surfaceElevated}
-                borderColor={coworkUi.borderSoft}
-                color={coworkUi.text}
-                borderRadius={10}
-                maxLength={60}
-              />
-              <XStack gap="$2" justifyContent="flex-end">
-                <Button
-                  tone="outline"
-                  size="$3"
-                  borderRadius={8}
-                  onPress={() => setRenamingUserId(null)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  tone="primary"
-                  size="$3"
-                  borderRadius={8}
-                  disabled={!renameValue.trim()}
-                  onPress={() => {
-                    if (renamingUserId && renameValue.trim() && onRename) {
-                      onRename(renamingUserId, renameValue.trim())
-                    }
-                    setRenamingUserId(null)
-                  }}
-                >
-                  Rename
-                </Button>
-              </XStack>
-            </YStack>
-          </Pressable>
-        </Pressable>
-      </Modal>
+              Cancel
+            </Button>
+            <Button
+              tone="primary"
+              flex={1}
+              borderRadius={8}
+              disabled={!renameValue.trim()}
+              onPress={() => {
+                if (renamingUserId && renameValue.trim() && onRename) {
+                  onRename(renamingUserId, renameValue.trim())
+                }
+                setRenamingUserId(null)
+              }}
+            >
+              Rename
+            </Button>
+          </XStack>
+        }
+      >
+        <YStack gap="$3">
+          {renamingParticipant ? (
+            <Text fontSize={13} color={coworkUi.textSecondary}>
+              Renaming{' '}
+              {safeMeetingDisplayName(
+                renamingParticipant.display_name ||
+                  renamingParticipant.profile?.full_name ||
+                  renamingParticipant.profile?.username,
+              )}{' '}
+              — session only
+            </Text>
+          ) : null}
+          <Input
+            value={renameValue}
+            onChangeText={setRenameValue}
+            placeholder="Enter new name"
+            autoFocus
+            backgroundColor={coworkUi.surfaceElevated}
+            borderColor={coworkUi.borderSoft}
+            color={coworkUi.text}
+            borderRadius={10}
+            maxLength={60}
+          />
+        </YStack>
+      </AppBottomSheet>
 
       <CoWorkPanelShell fullWidth={fullWidth}>
       <MeetingPanelHeader

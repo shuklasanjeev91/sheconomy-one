@@ -42,7 +42,7 @@ export type CoWorkUiTokens = {
   chatBubbleSelf: string
   chatBubbleOther: string
   chipBg: string
-  /** Flat SHEconomy meeting chrome (live room + pre-join preview). */
+  /** Flat SHEconomy meeting UI (live room + pre-join preview). */
   meetingBar: string
   meetingBarElevated: string
   meetingControl: string
@@ -257,7 +257,7 @@ export function getCoWorkShadows(scheme: 'light' | 'dark'): CoWorkShadows {
   }
 }
 
-/** Flat meeting chrome (no heavy glass blur) for live room bars. */
+/** Flat meeting UI (no heavy glass blur) for live room bars. */
 export function meetingBarStyle(ui: CoWorkUiTokens, elevated = false) {
   return {
     backgroundColor: elevated ? ui.meetingBarElevated : ui.meetingBar,

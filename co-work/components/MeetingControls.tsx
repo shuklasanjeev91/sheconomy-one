@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Modal, Platform, Pressable, View, useWindowDimensions } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { ViewportOverlay } from '~/components/layout'
-import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { AppBottomSheet, Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { MeetingReactionTray } from '~/co-work/components/MeetingReactionTray'
 import { useMeetingLiveSignals } from '~/co-work/components/MeetingLiveSignalsContext'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { meetingChatToolbarLabel } from '~/co-work/lib/meeting-chat'
 import {
-  MEETING_PORTAL_Z_INDEX,
   MEETING_TOOLBAR_Z_INDEX,
-  meetingToolbarChrome,
-  meetingToolbarIpadMoreKeys,
+  meetingToolbarMode,
+  meetingToolbarWideMoreKeys,
   meetingToolbarMoreSections,
   meetingToolbarPrimaryKeys,
   meetingToolbarPrimaryLabel,
@@ -22,15 +21,15 @@ import {
 } from '~/co-work/lib/meeting-toolbar'
 import { resolveParticipantsToolbarBadge } from '~/co-work/lib/meeting-tile-actions'
 import type { MeetingViewMode } from '~/co-work/lib/meeting-state-machine'
-import { meetingBarStyle, useCoWorkTheme } from '~/co-work/lib/theme'
-import { controlGradientStyle, coworkBoxShadow } from '~/lib/platform/crossStyles'
+import { useCoWorkTheme } from '~/co-work/lib/theme'
+import { controlGradientStyle } from '~/lib/platform/crossStyles'
 import type { MediaCapabilities, MeetingRole } from '~/co-work/lib/types'
 import {
   MeetingAudioDeviceFlyout,
   MeetingVideoDeviceFlyout,
 } from '~/co-work/components/MeetingAudioDeviceMenu'
+import { MeetingMoreSheet } from '~/co-work/components/MeetingMoreSheet'
 import { MeetingEndDialog } from '~/co-work/components/MeetingEndDialog'
-import { MeetingMobileMoreSheet } from '~/co-work/components/MeetingMobileMoreSheet'
 import type { MeetingAudioQuality } from '~/co-work/lib/meeting-audio-quality'
 
 type MeetingControlsProps = {
@@ -153,242 +152,49 @@ type MeetingControlsProps = {
   onOpenApps?: () => void
   /** Orientation policy can force compact dock (e.g. landscape phone). */
   forceCompact?: boolean
+  /**
+   * Fired when More / device / security flyouts or the reaction tray open/close
+   * so the room can pause chrome auto-hide (Zoom keeps sheets up).
+   */
+  onOverlayOpenChange?: (open: boolean) => void
 }
 
 type ControlVariant = 'neutral' | 'brand' | 'danger' | 'off'
 type FlyoutKind = 'none' | 'more' | 'security' | 'audio_device' | 'video_device'
 
 /**
- * Overflow menu that stays inside the viewport on every platform.
- * - Web: `position: fixed` + body portal (clears InstantMeetingHost overflow/z-index)
- * - Native: transparent Modal (same overflow escape on iOS/Android)
+ * Overflow menu as AppBottomSheet (web + native) — escapes InstantMeetingHost overflow.
  */
-type FlyoutPos = {
-  bottom: number
-  left?: number
-  right?: number
-  maxHeight: number
-}
-
 function MeetingFlyoutPanel({
   open,
-  width,
-  maxHeight,
-  align,
   onRequestClose,
   children,
 }: {
   open: boolean
-  width: number
-  maxHeight: number
-  align: 'left' | 'right'
+  width?: number
+  maxHeight?: number
+  align?: 'left' | 'right'
   onRequestClose?: () => void
   children: ReactNode
 }) {
-  const { ui: coworkUi, shadows: coworkShadows } = useCoWorkTheme()
-  const insets = useSafeAreaInsets()
-  const { height: windowHeight } = useWindowDimensions()
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
-  const [pos, setPos] = useState<FlyoutPos | null>(null)
-
-  const bindAnchor = useCallback((node: unknown) => {
-    if (Platform.OS !== 'web') {
-      setAnchorEl(null)
-      return
-    }
-    // Tamagui may hand back a host object or the DOM node directly.
-    const candidate = node as { getBoundingClientRect?: () => DOMRect; host?: HTMLElement } | HTMLElement | null
-    let next: HTMLElement | null = null
-    if (candidate && typeof (candidate as HTMLElement).getBoundingClientRect === 'function') {
-      next = candidate as HTMLElement
-    } else {
-      const host = candidate?.host
-      next = host && typeof host.getBoundingClientRect === 'function' ? host : null
-    }
-    setAnchorEl((prev) => (prev === next ? prev : next))
-  }, [])
-
-  useEffect(() => {
-    if (!open) {
-      setPos(null)
-      return
-    }
-
-    if (Platform.OS !== 'web') return
-
-    const fallbackPos = (): FlyoutPos => ({
-      bottom: 96,
-      maxHeight: Math.min(
-        maxHeight,
-        Math.max(180, Math.round((typeof window !== 'undefined' ? window.innerHeight : 640) * 0.45)),
-      ),
-      ...(align === 'right' ? { right: 16 } : { left: 16 }),
-    })
-
-    const measure = () => {
-      if (typeof window === 'undefined') return
-      if (!anchorEl) {
-        setPos(fallbackPos())
-        return
-      }
-      const rect = anchorEl.getBoundingClientRect()
-      if (!rect.width && !rect.height && rect.top === 0 && rect.left === 0) {
-        setPos(fallbackPos())
-        return
-      }
-      const gap = 10
-      const spaceAbove = Math.max(120, Math.round(rect.top - gap - 8))
-      const next: FlyoutPos = {
-        bottom: Math.max(12, Math.round(window.innerHeight - rect.top + gap)),
-        maxHeight: Math.min(maxHeight, spaceAbove),
-      }
-      if (align === 'right') {
-        next.right = Math.max(8, Math.round(window.innerWidth - rect.right))
-      } else {
-        next.left = Math.max(8, Math.round(rect.left))
-      }
-      setPos(next)
-    }
-
-    const raf = requestAnimationFrame(measure)
-    window.addEventListener('resize', measure)
-    window.addEventListener('scroll', measure, true)
-    return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('resize', measure)
-      window.removeEventListener('scroll', measure, true)
-    }
-  }, [align, anchorEl, maxHeight, open])
-
-  const anchor = (
-    <YStack
-      ref={bindAnchor as never}
-      position="absolute"
-      top={0}
-      left={0}
-      right={0}
-      bottom={0}
-      opacity={0}
-      pointerEvents="none"
-    />
-  )
-
-  const panelBody = (panelMaxHeight: number) => (
-    <YStack
-      width={width}
-      maxHeight={panelMaxHeight}
-      borderRadius={coworkUi.radius.panel}
-      borderWidth={1}
-      borderColor={coworkUi.glassBorder}
-      paddingVertical="$2"
-      pointerEvents="auto"
-      overflow="hidden"
-      style={{
-        ...meetingBarStyle(coworkUi, true),
-        ...coworkBoxShadow(coworkShadows, 'dock'),
-        maxHeight: panelMaxHeight,
-      }}
-    >
-      <ScrollView
-        showsVerticalScrollIndicator
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled
-        style={{ maxHeight: panelMaxHeight - 12 }}
-        contentContainerStyle={{ paddingBottom: 8 }}
-      >
-        {children}
-      </ScrollView>
-    </YStack>
-  )
-
-  if (!open) return anchor
-
-  // Web: portal above InstantMeetingHost (z 90k).
-  if (Platform.OS === 'web') {
-    if (!pos) return anchor
-    return (
-      <>
-        {anchor}
-        <ViewportOverlay>
-          <YStack
-            position={'fixed' as never}
-            top={0}
-            left={0}
-            right={0}
-            bottom={0}
-            zIndex={MEETING_PORTAL_Z_INDEX - 1}
-            pointerEvents="auto"
-            style={{ position: 'fixed', inset: 0, zIndex: MEETING_PORTAL_Z_INDEX - 1 }}
-            onPress={onRequestClose}
-            accessibilityLabel="Close menu"
-          />
-          <YStack
-            position={'fixed' as never}
-            bottom={pos.bottom}
-            left={pos.left}
-            right={pos.right}
-            zIndex={MEETING_PORTAL_Z_INDEX}
-            pointerEvents="box-none"
-            style={{ position: 'fixed', zIndex: MEETING_PORTAL_Z_INDEX }}
-          >
-            {panelBody(pos.maxHeight)}
-          </YStack>
-        </ViewportOverlay>
-      </>
-    )
-  }
-
-  // Native: Modal escapes InstantMeetingHost overflow:hidden (iPad/Android).
-  // Tall enough that Browse (minimize) + View stay reachable without feeling clipped.
-  const nativeMaxHeight = Math.min(
-    Math.max(420, maxHeight),
-    Math.max(360, Math.round(windowHeight * 0.78)),
-  )
   return (
-    <>
-      {anchor}
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={onRequestClose}
-      >
-        <View style={{ flex: 1 }} collapsable={false}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close menu"
-            onPress={onRequestClose}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(12, 8, 10, 0.35)',
-            }}
-          />
-          <View
-            pointerEvents="box-none"
-            collapsable={false}
-            style={{
-              flex: 1,
-              justifyContent: 'flex-end',
-              alignItems: align === 'right' ? 'flex-end' : 'flex-start',
-              paddingHorizontal: 16,
-              paddingBottom: Math.max(insets.bottom, 12) + 72,
-            }}
-          >
-            <View pointerEvents="auto" collapsable={false}>
-              {panelBody(nativeMaxHeight)}
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </>
+    <AppBottomSheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onRequestClose?.()
+      }}
+      title="Menu"
+      showHandle
+      scrollable
+    >
+      {children}
+    </AppBottomSheet>
   )
 }
 
+/**
+ * Mic / camera control with a caret that opens the device menu.
+ */
 function SplitControlButton({
   label,
   icon: Icon,
@@ -422,7 +228,6 @@ function SplitControlButton({
         overflow="hidden"
         elevation={Platform.OS === 'android' ? 4 : undefined}
       >
-        {/* Main Action (Icon) */}
         <Pressable
           onPress={onPress}
           hitSlop={6}
@@ -443,10 +248,8 @@ function SplitControlButton({
           {Icon ? <Icon size={compact ? 19 : 21} color={isOff ? '#EF4444' : '#FFFFFF'} /> : null}
         </Pressable>
 
-        {/* Thin Divider */}
         <YStack width={1} height={20} backgroundColor="rgba(255, 255, 255, 0.2)" />
 
-        {/* Caret Button */}
         <Pressable
           onPress={onCaretPress}
           hitSlop={6}
@@ -469,11 +272,12 @@ function SplitControlButton({
       </XStack>
 
       <Text
-        fontSize={compact ? 9 : 10}
+        fontSize={compact ? 10 : 11}
         fontWeight="700"
-        color={isOff ? '#EF4444' : '#E2E8F0'}
+        color={isOff ? '#FCA5A5' : '#F8FAFC'}
         textAlign="center"
         numberOfLines={1}
+        style={{ textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}
       >
         {label}
       </Text>
@@ -514,8 +318,8 @@ function ControlButton({
   const labelColor = isBrand
     ? coworkUi.brandLight
     : isDanger || isOff
-      ? '#EF4444'
-      : '#CBD5E1'
+      ? '#FCA5A5'
+      : '#F8FAFC'
 
   const badge =
     badgeCount && badgeCount > 0
@@ -527,9 +331,9 @@ function ControlButton({
   return (
     <YStack
       alignItems="center"
-      gap={3}
-      minWidth={compact ? 52 : 52}
-      maxWidth={compact ? 72 : 76}
+      gap={4}
+      minWidth={compact ? 48 : 48}
+      maxWidth={compact ? 68 : 70}
       flexShrink={1}
       flexGrow={compact ? 1 : 0}
     >
@@ -543,10 +347,10 @@ function ControlButton({
             backgroundColor: bg !== 'transparent'
               ? bg
               : pressed
-                ? 'rgba(255, 255, 255, 0.16)'
+                ? 'rgba(255, 255, 255, 0.2)'
                 : hovered
-                  ? 'rgba(255, 255, 255, 0.09)'
-                  : 'transparent',
+                  ? 'rgba(255, 255, 255, 0.12)'
+                  : 'rgba(255, 255, 255, 0.06)',
             justifyContent: 'center',
             alignItems: 'center',
             borderWidth: 1,
@@ -554,13 +358,13 @@ function ControlButton({
               isBrand || isDanger
                 ? 'transparent'
                 : isOff
-                  ? 'rgba(239, 68, 68, 0.45)'
-                  : 'rgba(255, 255, 255, 0.08)',
+                  ? 'rgba(239, 68, 68, 0.55)'
+                  : 'rgba(255, 255, 255, 0.16)',
           })}
           accessibilityRole="button"
           accessibilityLabel={label}
         >
-          {Icon ? <Icon size={compact ? 17 : 19} color={iconColor} /> : null}
+          {Icon ? <Icon size={compact ? 18 : 20} color={iconColor} /> : null}
         </Pressable>
 
         {badge ? (
@@ -587,11 +391,12 @@ function ControlButton({
       </XStack>
 
       <Text
-        fontSize={compact ? 9 : 10}
+        fontSize={compact ? 10 : 11}
         fontWeight="700"
         color={labelColor}
         textAlign="center"
         numberOfLines={1}
+        style={{ textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}
       >
         {label}
       </Text>
@@ -616,12 +421,12 @@ function OverflowItem({
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
   const color = danger
-    ? coworkUi.danger
+    ? '#FCA5A5'
     : active
-      ? coworkUi.brand
+      ? coworkUi.brandLight
       : disabled
-        ? coworkUi.textMuted
-        : coworkUi.text
+        ? 'rgba(255,255,255,0.45)'
+        : '#FFFFFF'
   return (
     <Pressable
       disabled={!!disabled}
@@ -630,8 +435,8 @@ function OverflowItem({
       accessibilityLabel={label}
       accessibilityState={{ disabled: !!disabled, selected: !!active && !disabled }}
       style={({ pressed }) => ({
-        opacity: disabled ? 0.55 : pressed ? 0.8 : 1,
-        backgroundColor: active && !disabled ? 'rgba(216,27,96,0.12)' : 'transparent',
+        opacity: disabled ? 0.55 : pressed ? 0.85 : 1,
+        backgroundColor: active && !disabled ? 'rgba(216,27,96,0.22)' : pressed ? 'rgba(255,255,255,0.08)' : 'transparent',
         borderRadius: 12,
         minHeight: 44,
         paddingVertical: 8,
@@ -751,15 +556,17 @@ export function MeetingControls({
   onOpenDocs,
   onOpenApps,
   forceCompact,
+  onOverlayOpenChange,
 }: MeetingControlsProps) {
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const { isMobile, isTablet, isDesktop } = useAppLayout()
+  const insets = useSafeAreaInsets()
   const { height: windowHeight } = useWindowDimensions()
   const compact = forceCompact || (isMobile && !isTablet && !isDesktop)
   const roomy = !forceCompact && (isTablet || isDesktop)
-  const bottomPad = forceCompact ? '$1.5' : '$2'
-  // Zoom web ≥861 / Zoom mobile (phone, tablet, native) — see meetingToolbarChrome.
-  const toolbarChrome = meetingToolbarChrome({ compact })
+  const bottomPad = (forceCompact ? 6 : 8) + insets.bottom
+  // Zoom web ≥861 / Zoom mobile (phone, tablet, native) — see meetingToolbarMode.
+  const toolbarMode = meetingToolbarMode({ compact })
   const [flyout, setFlyout] = useState<FlyoutKind>('none')
   const [endDialogOpen, setEndDialogOpen] = useState(false)
   const { setExtraSurfaceBlock } = useMeetingLiveSignals()
@@ -772,6 +579,13 @@ export function MeetingControls({
     setExtraSurfaceBlock(needsSurfaceBlock)
     return () => setExtraSurfaceBlock(false)
   }, [flyout, setExtraSurfaceBlock])
+
+  useEffect(() => {
+    const open =
+      flyout !== 'none' || reactionTrayOpen || endDialogOpen
+    onOverlayOpenChange?.(open)
+    return () => onOverlayOpenChange?.(false)
+  }, [endDialogOpen, flyout, onOverlayOpenChange, reactionTrayOpen])
   // Keep More tall enough for Browse + Record + Host on phone / landscape.
   const flyoutMaxHeight = Math.max(
     240,
@@ -799,7 +613,7 @@ export function MeetingControls({
     supportsScreenShare: caps.supportsScreenShare,
     supportsLiveCaptions: caps.supportsLiveCaptions,
     hasBrowse: !!onMinimize,
-    chrome: toolbarChrome,
+    mode: toolbarMode,
     supportsRecording: caps.supportsRecording,
     recording,
     hasReactions,
@@ -825,7 +639,7 @@ export function MeetingControls({
     hasFullscreen: !!onToggleFullscreen,
     hasMinimize: !!onMinimize,
     hasPictureInPicture: !!onPictureInPicture,
-    chrome: toolbarChrome,
+    mode: toolbarMode,
     supportsLiveCaptions: caps.supportsLiveCaptions,
     hasInvite: !!(onToggleInvite || onShare),
     hasViewControls: !!(onSetViewMode || onToggleMirror || onToggleMaximize),
@@ -846,7 +660,7 @@ export function MeetingControls({
     hasRemoteControl: !!onRequestRemoteControl,
     hasKeyboardShortcuts: !!onShowKeyboardShortcuts,
   })
-  const ipadMoreKeys = meetingToolbarIpadMoreKeys({
+  const wideMoreKeys = meetingToolbarWideMoreKeys({
     viewerRole: role,
     hasHostTools: !!onToggleHostTools,
     hasAudioSettings: !!onOpenAudioSettings,
@@ -856,13 +670,13 @@ export function MeetingControls({
     hasDisconnectAudio: !!onDisconnectAudio,
   })
   // When captions are already on the dock, still offer Captions & translations in More.
-  if (captionsOnPrimary && caps.supportsLiveCaptions !== false && !ipadMoreKeys.includes('captions')) {
-    const audioIdx = ipadMoreKeys.indexOf('audio_settings')
-    ipadMoreKeys.splice(audioIdx >= 0 ? audioIdx + 1 : 1, 0, 'captions')
+  if (captionsOnPrimary && caps.supportsLiveCaptions !== false && !wideMoreKeys.includes('captions')) {
+    const audioIdx = wideMoreKeys.indexOf('audio_settings')
+    wideMoreKeys.splice(audioIdx >= 0 ? audioIdx + 1 : 1, 0, 'captions')
   }
   const primaryLabel = (key: MeetingToolbarPrimaryKey) =>
     meetingToolbarPrimaryLabel(key, {
-      chrome: toolbarChrome,
+      mode: toolbarMode,
       audioEnabled,
       videoEnabled,
       screenSharing,
@@ -1011,23 +825,19 @@ export function MeetingControls({
             }
           : null
       case 'whiteboard':
-        return onOpenWhiteboard
-          ? {
-              label: whiteboardActive ? 'Close whiteboard' : 'Whiteboard',
-              icon: Icons.PenTool,
-              active: whiteboardActive,
-              onPress: runFromFlyout(onOpenWhiteboard),
-            }
-          : null
+        return {
+          label: whiteboardActive ? 'Close whiteboard' : 'Whiteboard',
+          icon: Icons.PenTool,
+          active: whiteboardActive,
+          onPress: runFromFlyout(onOpenWhiteboard),
+        }
       case 'polls':
-        return onOpenApps || onTogglePolls
-          ? {
-              label: onOpenApps && !roomy ? 'Apps' : 'Polls',
-              icon: onOpenApps && !roomy ? Icons.LayoutGrid : Icons.BarChart3,
-              active: panel === 'polls',
-              onPress: runFromFlyout(onOpenApps ?? onTogglePolls),
-            }
-          : null
+        return {
+          label: onOpenApps && !roomy ? 'Apps' : 'Polls',
+          icon: onOpenApps && !roomy ? Icons.LayoutGrid : Icons.BarChart3,
+          active: panel === 'polls',
+          onPress: runFromFlyout(onOpenApps ?? onTogglePolls),
+        }
       case 'qna':
         return onToggleQa
           ? {
@@ -1072,14 +882,12 @@ export function MeetingControls({
             }
           : null
       case 'host_tools':
-        return onToggleHostTools
-          ? {
-              label: 'Host tools',
-              icon: Icons.ShieldCheck,
-              active: panel === 'host_tools',
-              onPress: runFromFlyout(onToggleHostTools),
-            }
-          : null
+        return {
+          label: 'Host tools',
+          icon: Icons.ShieldCheck,
+          active: panel === 'host_tools',
+          onPress: runFromFlyout(onToggleHostTools),
+        }
       case 'maximize':
         return onToggleMaximize
           ? {
@@ -1163,23 +971,19 @@ export function MeetingControls({
             }
           : null
       case 'record':
-        return caps.supportsRecording
-          ? {
-              label: recording ? 'Stop recording' : 'Record meeting',
-              icon: Icons.Circle,
-              active: recording,
-              onPress: runFromFlyout(onToggleRecord),
-            }
-          : null
+        return {
+          label: recording ? 'Stop recording' : 'Record meeting',
+          icon: Icons.Circle,
+          active: recording,
+          onPress: runFromFlyout(onToggleRecord),
+        }
       case 'background':
-        return onToggleBackgrounds
-          ? {
-              label: roomy ? 'Video & effects' : 'Background',
-              icon: Icons.Sparkles,
-              active: panel === 'backgrounds' || backgroundActive,
-              onPress: runFromFlyout(onToggleBackgrounds),
-            }
-          : null
+        return {
+          label: roomy ? 'Video & effects' : 'Background',
+          icon: Icons.Sparkles,
+          active: panel === 'backgrounds' || backgroundActive,
+          onPress: runFromFlyout(onToggleBackgrounds),
+        }
       case 'meeting_info':
         return {
           label: 'Meeting info',
@@ -1228,30 +1032,24 @@ export function MeetingControls({
           onPress: runFromFlyout(onToggleScreen),
         }
       case 'disconnect_audio':
-        return onDisconnectAudio
-          ? {
-              label: 'Disconnect audio',
-              icon: Icons.Headphones,
-              danger: true,
-              onPress: runFromFlyout(onDisconnectAudio),
-            }
-          : null
+        return {
+          label: 'Disconnect audio',
+          icon: Icons.Headphones,
+          danger: true,
+          onPress: runFromFlyout(onDisconnectAudio),
+        }
       case 'settings':
-        return onOpenSettings
-          ? {
-              label: roomy ? 'Meeting settings' : 'Settings',
-              icon: Icons.Settings,
-              onPress: runFromFlyout(onOpenSettings),
-            }
-          : null
+        return {
+          label: roomy ? 'Meeting settings' : 'Settings',
+          icon: Icons.Settings,
+          onPress: runFromFlyout(onOpenSettings),
+        }
       case 'safe_driving':
-        return onOpenSafeDriving
-          ? {
-              label: 'Safe driving mode',
-              icon: Icons.Car,
-              onPress: runFromFlyout(onOpenSafeDriving),
-            }
-          : null
+        return {
+          label: 'Safe driving mode',
+          icon: Icons.Car,
+          onPress: runFromFlyout(onOpenSafeDriving),
+        }
       case 'lock_meeting':
         return onToggleLock
           ? {
@@ -1322,7 +1120,18 @@ export function MeetingControls({
   const renderPrimary = (key: MeetingToolbarPrimaryKey) => {
     switch (key) {
       case 'mic':
-        return (
+        return roomy ? (
+          <SplitControlButton
+            key={key}
+            label={primaryLabel('mic')}
+            icon={audioEnabled ? Icons.Mic : Icons.MicOff}
+            variant={audioEnabled ? 'neutral' : 'off'}
+            onPress={onToggleAudio}
+            onCaretPress={() => toggleFlyout('audio_device')}
+            caretLabel="Audio settings and devices"
+            compact={compact}
+          />
+        ) : (
           <ControlButton
             key={key}
             label={primaryLabel('mic')}
@@ -1333,7 +1142,18 @@ export function MeetingControls({
           />
         )
       case 'camera':
-        return (
+        return roomy ? (
+          <SplitControlButton
+            key={key}
+            label={primaryLabel('camera')}
+            icon={videoEnabled ? Icons.Video : Icons.VideoOff}
+            variant={videoEnabled ? 'neutral' : 'off'}
+            onPress={onToggleVideo}
+            onCaretPress={() => toggleFlyout('video_device')}
+            caretLabel="Video settings and virtual backgrounds"
+            compact={compact}
+          />
+        ) : (
           <ControlButton
             key={key}
             label={primaryLabel('camera')}
@@ -1533,7 +1353,7 @@ export function MeetingControls({
     ? [
         {
           title: '',
-          items: ipadMoreKeys
+          items: wideMoreKeys
             .map(overflowLabel)
             .filter(Boolean) as NonNullable<ReturnType<typeof overflowLabel>>[],
         },
@@ -1569,16 +1389,16 @@ export function MeetingControls({
         position="relative"
         borderRadius={roomy ? 999 : 16}
         borderWidth={1}
-        borderColor="rgba(255, 255, 255, 0.14)"
+        borderColor={coworkUi.glassBorder}
         paddingVertical={roomy ? '$1.5' : '$1.5'}
         paddingHorizontal={roomy ? '$3' : '$2'}
         pointerEvents="auto"
         style={{
-          backgroundColor: roomy ? 'rgba(18, 12, 16, 0.88)' : 'rgba(26, 29, 36, 0.96)',
+          backgroundColor: roomy ? coworkUi.glass : coworkUi.meetingBarElevated,
           backdropFilter: 'blur(24px)',
           boxShadow: roomy
-            ? '0 10px 36px rgba(0, 0, 0, 0.5)'
-            : '0 8px 32px rgba(0, 0, 0, 0.45)',
+            ? coworkShadows.dock
+            : '0 8px 32px rgba(24, 13, 20, 0.55), 0 0 0 1px rgba(216, 27, 96, 0.12)',
           elevation: Platform.OS === 'android' ? 16 : undefined,
           zIndex: MEETING_TOOLBAR_Z_INDEX,
         }}
@@ -1590,6 +1410,8 @@ export function MeetingControls({
             onSelect={onSendReaction}
             onSelectNonverbal={onSelectNonverbal}
             activeNonverbal={activeNonverbal}
+            handRaised={handRaised}
+            onToggleHand={onToggleHand}
             onRequestClose={() => {
               onCloseReactions?.()
             }}
@@ -1737,7 +1559,7 @@ export function MeetingControls({
                   ) : null}
 
                   <ControlButton
-                    label="End"
+                    label={isHost || showEnd ? 'End' : 'Leave'}
                     icon={Icons.X}
                     variant="danger"
                     onPress={() => setEndDialogOpen(true)}
@@ -1773,7 +1595,7 @@ export function MeetingControls({
                 badgeCount={unreadChatCount}
               />
               <YStack position="relative" alignItems="center" justifyContent="center" zIndex={3}>
-                <MeetingMobileMoreSheet
+                <MeetingMoreSheet
                   open={flyout === 'more'}
                   onClose={closeFlyout}
                   viewerRole={role}
@@ -1782,7 +1604,13 @@ export function MeetingControls({
                   supportsScreenShare={caps.supportsScreenShare}
                   supportsLiveCaptions={caps.supportsLiveCaptions}
                   hasWhiteboard={!!onOpenWhiteboard}
-                  hasHostTools={!!onToggleHostTools}
+                  hasHostTools={!!onToggleHostTools || role === 'host' || role === 'cohost'}
+                  supportsRecording={caps.supportsRecording}
+                  recording={recording}
+                  screenSharing={screenSharing}
+                  captionsActive={captionsActive}
+                  hasBackground={caps.supportsVideo && !!onToggleBackgrounds}
+                  backgroundActive={backgroundActive}
                   onToggleHand={onToggleHand}
                   onOpenReactions={() => {
                     onToggleReactions?.()

@@ -59,6 +59,17 @@ describe('meeting video mirror policy', () => {
     ).toBe(false)
   })
 
+  it('never mirrors rear camera (environment)', () => {
+    expect(
+      shouldMirrorMeetingVideo({
+        mirrorLocalVideo: true,
+        isLocal: true,
+        source: 'camera',
+        cameraFacing: 'environment',
+      }),
+    ).toBe(false)
+  })
+
   it('exposes the web scaleX transform only when mirrored', () => {
     expect(meetingVideoMirrorTransform(true)).toBe('scaleX(-1)')
     expect(meetingVideoMirrorTransform(false)).toBeUndefined()

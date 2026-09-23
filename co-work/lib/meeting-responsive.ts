@@ -2,9 +2,9 @@
  * Meeting responsive breakpoints (web + native viewport width).
  *
  * Zoom mapping:
- * - phone only (<661 web, native shortest <600) → Zoom mobile chrome
+ * - phone only (<661 web, native shortest <600) → Zoom mobile UI
  *   (bottom sheets, compact Mute·Video·Chat·More·End dock)
- * - tablet / iPad + laptop+ (≥661 web, native tablet) → Zoom desktop / iPad chrome
+ * - tablet / iPad + laptop+ (≥661 web, native tablet) → Zoom desktop / tablet UI
  *   (side panels, roomy Mute·Video·Participants·Chat·Share·Reactions·More·Leave dock)
  */
 
@@ -18,7 +18,7 @@ export type MeetingBreakpoint =
 export type MeetingPanelPresentation = 'bottom-sheet' | 'side'
 
 export const MEETING_BREAKPOINTS = {
-  /** ≥ tablet / iPad — Zoom desktop·iPad chrome starts here */
+  /** ≥ tablet / iPad — Zoom desktop·tablet UI starts here */
   tablet: 661,
   /** ≥ laptop */
   laptop: 861,
@@ -36,8 +36,8 @@ export type MeetingResponsiveLayout = {
   toolbarPlacement: 'bottom'
   /** Participant filmstrip placement for speaker/share immersion. */
   filmstripPlacement: 'bottom' | 'side'
-  /** Mobile uses near-fullscreen stage; larger screens keep chrome insets. */
-  stageMode: 'fullscreen' | 'chrome-inset'
+  /** Mobile uses near-fullscreen stage; larger screens keep UI insets. */
+  stageMode: 'fullscreen' | 'inset'
   galleryPreferWide: boolean
   sidePanelWidthFraction: number
   sidePanelMaxWidth: number
@@ -51,7 +51,7 @@ export function resolveMeetingBreakpoint(
 ): MeetingBreakpoint {
   const w = Math.max(width, 1)
   if (options?.isNative) {
-    // Phones stay Zoom-mobile; native tablets (iPad) use Zoom desktop/iPad chrome.
+    // Phones stay Zoom-mobile; native tablets (iPad) use Zoom desktop/tablet UI.
     const shortest = options.shortestSide ?? w
     return shortest >= 600 ? 'tablet' : 'mobile'
   }
@@ -63,7 +63,7 @@ export function resolveMeetingBreakpoint(
 }
 
 /**
- * Keyboard / mobile-browser chrome can shrink height below width on a
+ * Keyboard / mobile-browser UI can shrink height below width on a
  * still-portrait phone (e.g. 412×380). Treat as landscape only with a clear
  * wide aspect so chat does not unmount from a bottom sheet into a side dock.
  */
@@ -115,13 +115,13 @@ export function resolveMeetingResponsiveLayout(input: {
         pageSize: height < 640 ? 6 : height < 780 ? 9 : 12,
       }
     case 'tablet':
-      // Zoom desktop / iPad chrome — side panels + roomy dock (not phone Mute·Chat·More).
+      // Zoom desktop / tablet UI — side panels + roomy dock (not phone Mute·Chat·More).
       return {
         breakpoint,
         panelPresentation: 'side',
         toolbarPlacement: 'bottom',
         filmstripPlacement: isLandscape ? 'side' : 'bottom',
-        stageMode: 'chrome-inset',
+        stageMode: 'inset',
         galleryPreferWide: true,
         sidePanelWidthFraction: 0.4,
         sidePanelMaxWidth: 360,
@@ -134,7 +134,7 @@ export function resolveMeetingResponsiveLayout(input: {
         panelPresentation: 'side',
         toolbarPlacement: 'bottom',
         filmstripPlacement: 'side',
-        stageMode: 'chrome-inset',
+        stageMode: 'inset',
         galleryPreferWide: true,
         sidePanelWidthFraction: 0.34,
         sidePanelMaxWidth: 380,
@@ -147,7 +147,7 @@ export function resolveMeetingResponsiveLayout(input: {
         panelPresentation: 'side',
         toolbarPlacement: 'bottom',
         filmstripPlacement: 'side',
-        stageMode: 'chrome-inset',
+        stageMode: 'inset',
         galleryPreferWide: true,
         sidePanelWidthFraction: 0.32,
         sidePanelMaxWidth: 400,
@@ -160,7 +160,7 @@ export function resolveMeetingResponsiveLayout(input: {
         panelPresentation: 'side',
         toolbarPlacement: 'bottom',
         filmstripPlacement: 'side',
-        stageMode: 'chrome-inset',
+        stageMode: 'inset',
         galleryPreferWide: true,
         sidePanelWidthFraction: 0.28,
         sidePanelMaxWidth: 440,

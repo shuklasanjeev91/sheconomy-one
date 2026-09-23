@@ -1,4 +1,4 @@
-import { Pressable } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { Text, XStack, YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 

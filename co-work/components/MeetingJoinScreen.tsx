@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Pressable } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { Avatar, Button, Checkbox, Field, Icons, Input, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { MeetingBackgroundPreview } from '~/co-work/components/MeetingBackgroundPreview'
@@ -162,7 +162,7 @@ export function MeetingJoinScreen({
         borderColor="rgba(255,255,255,0.12)"
         backgroundColor="#0a0a0c"
       >
-        <MeetingBackgroundPreview userId={userId} />
+        <MeetingBackgroundPreview userId={userId} joinChrome />
         <XStack
           position="absolute"
           left={0}

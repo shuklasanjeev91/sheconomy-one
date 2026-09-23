@@ -1,180 +1,97 @@
-import { Platform } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-
-import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
-import { getShadowStyle, radius } from '~/config/tokens'
+import { AppBottomSheet, Button, Icons, Text, XStack, YStack } from '~/components/ui'
+import { radius } from '~/config/tokens'
 import { BRAND_NAME } from '~/config/brand'
-import { useAppLayout } from '~/hooks/useAppLayout'
 import { HUMAN_VERIFICATION_DISCLAIMER } from '~/lib/gender-verification'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type GenderDeniedModalProps = {
   open: boolean
-  /** Acknowledge and dismiss ("I understand"). */
   onClose: () => void
-  /** Kick off Human verification instead. */
   onVerify: () => void
 }
 
-/**
- * "Access restricted" modal shown when someone reaches a women-first feature
- * outside the main Community / Chat / Create store entry points (e.g. account).
- * Offers a path into Human verification.
- */
+/** Access-restricted bottom sheet with a path into Human verification. */
 export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModalProps) {
   const ui = useAppUi()
-  const { isDesktop } = useAppLayout()
-  // Gives the real status-bar / notch height on every device (0 on web/desktop).
-  const insets = useSafeAreaInsets()
-
-  if (!open) return null
-
-  // On mobile the overlay starts at y=0 (covers the full screen) so we pad the
-  // inner card down by the top safe-area inset so it clears the status bar.
-  // On desktop (or web) we centre the card in the viewport so no top inset needed.
-  const safeTop = isDesktop ? 0 : insets.top
 
   return (
-    <YStack
-      position={Platform.OS === 'web' ? ('fixed' as never) : 'absolute'}
-      top={0}
-      left={0}
-      right={0}
-      bottom={0}
-      zIndex={200_010}
-      backgroundColor="rgba(0,0,0,0.55)"
-      alignItems="center"
-      justifyContent={isDesktop ? 'center' : 'flex-end'}
-      padding={isDesktop ? '$4' : 0}
+    <AppBottomSheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+      title="Access restricted"
+      showHandle
+      scrollable
+      footer={
+        <YStack gap="$2.5" width="100%">
+          <Button tone="primary" size="$4" borderRadius={radius.pill} onPress={onVerify}>
+            Start human verification
+          </Button>
+          <Button tone="outline" size="$4" borderRadius={radius.pill} onPress={onClose}>
+            Skip — continue browsing
+          </Button>
+        </YStack>
+      }
     >
-      <YStack
-        width="100%"
-        maxWidth={isDesktop ? 460 : undefined}
-        flex={isDesktop ? undefined : 1}
-        maxHeight={isDesktop ? '90%' : undefined}
-        backgroundColor={ui.surface}
-        borderRadius={isDesktop ? radius.card : 0}
-        borderWidth={isDesktop ? 1 : 0}
-        borderColor={ui.borderSubtle}
-        overflow="hidden"
-        // Push the whole card below the status bar using the real inset value.
-        // This keeps all touch targets aligned with what the user sees.
-        paddingTop={safeTop}
-        style={isDesktop ? getShadowStyle('lg') : undefined}
-      >
-        {/* ── Header ── */}
-        <XStack
-          alignItems="center"
-          justifyContent="space-between"
-          paddingHorizontal="$4"
-          paddingVertical="$3.5"
-          borderBottomWidth={1}
-          borderBottomColor={ui.borderSubtle}
-          backgroundColor={ui.background}
-        >
-          <XStack alignItems="center" gap="$3" flex={1}>
-            <YStack
-              width={40}
-              height={40}
-              borderRadius={999}
-              alignItems="center"
-              justifyContent="center"
-              backgroundColor={ui.roseSurface}
-            >
-              <Icons.AlertTriangle size={20} color={ui.brand} />
-            </YStack>
-            <YStack flex={1}>
-              <Text fontSize={16} fontWeight="800" color={ui.text}>
-                Access restricted
-              </Text>
-              <Text fontSize={12} color={ui.textMuted}>
-                Human verification required
-              </Text>
-            </YStack>
-          </XStack>
-
-          {/* Close button — touch target is exactly where the icon appears */}
-          <Button
-            size="$2"
-            circular
-            chromeless
-            onPress={onClose}
-            aria-label="Close"
-            icon={<Icons.X size={20} color={ui.textSecondary} />}
-          />
+      <YStack gap="$4">
+        <XStack alignItems="center" gap="$3">
+          <YStack
+            width={40}
+            height={40}
+            borderRadius={999}
+            alignItems="center"
+            justifyContent="center"
+            backgroundColor={ui.roseSurface}
+          >
+            <Icons.AlertTriangle size={20} color={ui.brand} />
+          </YStack>
+          <Text fontSize={13} color={ui.textMuted} flex={1}>
+            Human verification required
+          </Text>
         </XStack>
 
-        {/* ── Body ── */}
-        <ScrollView
-          contentContainerStyle={{ padding: 20, gap: 16 }}
-          showsVerticalScrollIndicator={false}
-        >
-          <YStack
-            padding="$3.5"
-            borderRadius={radius.chip}
-            backgroundColor={ui.roseSurface}
-            gap="$1.5"
-          >
-            <Text fontSize={15} fontWeight="700" color={ui.text}>
-              This space is for verified women
-            </Text>
-            <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-              Community, Chat, and some seller tools stay locked until you complete Human
-              verification. You can skip and still use Commerce, Classes, and Co-Work.
-            </Text>
-          </YStack>
-
-          <YStack
-            padding="$3.5"
-            borderRadius={radius.chip}
-            backgroundColor={ui.surfaceMuted}
-            gap="$2"
-          >
-            <Text fontSize={13} fontWeight="700" color={ui.text}>
-              Our commitment
-            </Text>
-            <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-              {HUMAN_VERIFICATION_DISCLAIMER}
-            </Text>
-          </YStack>
-
-          <YStack
-            padding="$3.5"
-            borderRadius={radius.chip}
-            backgroundColor={ui.surfaceMuted}
-            gap="$2"
-          >
-            <Text fontSize={13} fontWeight="700" color={ui.text}>
-              What you can still do
-            </Text>
-            {[
-              'Browse and purchase products',
-              'Join Classes and Co-Work sessions',
-              'Support women-owned businesses',
-            ].map((item) => (
-              <XStack key={item} gap="$2" alignItems="flex-start">
-                <Icons.Check size={15} color={ui.brand} />
-                <Text fontSize={13} color={ui.textSecondary} flex={1} lineHeight={19}>
-                  {item}
-                </Text>
-              </XStack>
-            ))}
-          </YStack>
-
-          <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={18}>
-            Thank you for understanding and supporting women in business on {BRAND_NAME}.
+        <YStack padding="$3.5" borderRadius={radius.chip} backgroundColor={ui.roseSurface} gap="$1.5">
+          <Text fontSize={15} fontWeight="700" color={ui.text}>
+            This space is for verified women
           </Text>
+          <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
+            Community, Chat, and some seller tools stay locked until you complete Human verification.
+            You can skip and still use Commerce, Classes, and Co-Work.
+          </Text>
+        </YStack>
 
-          <YStack gap="$2.5">
-            <Button tone="primary" size="$4" borderRadius={radius.pill} onPress={onVerify}>
-              Start human verification
-            </Button>
-            <Button tone="outline" size="$4" borderRadius={radius.pill} onPress={onClose}>
-              Skip — continue browsing
-            </Button>
-          </YStack>
-        </ScrollView>
+        <YStack padding="$3.5" borderRadius={radius.chip} backgroundColor={ui.surfaceMuted} gap="$2">
+          <Text fontSize={13} fontWeight="700" color={ui.text}>
+            Our commitment
+          </Text>
+          <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+            {HUMAN_VERIFICATION_DISCLAIMER}
+          </Text>
+        </YStack>
+
+        <YStack padding="$3.5" borderRadius={radius.chip} backgroundColor={ui.surfaceMuted} gap="$2">
+          <Text fontSize={13} fontWeight="700" color={ui.text}>
+            What you can still do
+          </Text>
+          {[
+            'Browse and purchase products',
+            'Join Classes and Co-Work sessions',
+            'Support women-owned businesses',
+          ].map((item) => (
+            <XStack key={item} gap="$2" alignItems="flex-start">
+              <Icons.Check size={15} color={ui.brand} />
+              <Text fontSize={13} color={ui.textSecondary} flex={1} lineHeight={19}>
+                {item}
+              </Text>
+            </XStack>
+          ))}
+        </YStack>
+
+        <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={18}>
+          Thank you for understanding and supporting women in business on {BRAND_NAME}.
+        </Text>
       </YStack>
-    </YStack>
+    </AppBottomSheet>
   )
 }

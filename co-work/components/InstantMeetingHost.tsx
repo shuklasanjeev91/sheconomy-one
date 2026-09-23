@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Platform, useWindowDimensions } from 'react-native'
-import { Theme, useThemeName } from 'tamagui'
+import { Theme } from 'tamagui'
 
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import { YStack } from '~/components/ui'
@@ -12,24 +12,23 @@ import {
 } from '~/co-work/lib/instant-meeting-session'
 import { useGlobalSession } from '~/lib/session/global-session'
 
-/** Above AppShell header/tabs (95k); below meeting portals / crop (100k+). */
+/** Above AppShell header/tabs (95k); below meeting portals / crop / sheets (100k+). */
 const INSTANT_MEETING_FULLSCREEN_Z = 96_000
 
 /**
- * Cross-platform instant meeting overlay (web + iOS + Android).
+ * Cross-platform instant meeting overlay (web + iOS + Android) — Zoom-style.
  *
- * Fullscreen is edge-to-edge (no app header / bottom tabs). When the global
- * session is minimized/pip, the LiveKit body stays mounted (hidden) so audio
- * continues while SessionMiniPlayer / other tabs are usable.
+ * Fullscreen is edge-to-edge. When the global session is minimized/pip, the
+ * LiveKit body stays mounted but parked off-screen so audio continues and
+ * SessionMiniPlayer Maximize restores the live room without remounting Join.
  *
- * InstantMeetingBody is a static import on purpose: a dynamic `import()` put
- * meeting chrome (lucide Icons → helpers-icon → core) in an async chunk that
- * could bind a second Tamagui Theme context and crash Join with "Missing theme.".
+ * Always use dark theme inside the meeting (Sheconomy plum palette). Following
+ * the app light theme made chat composer icons/placeholder white-on-white so
+ * the input looked "missing".
  */
 export function InstantMeetingHost() {
   const session = useInstantMeetingSession()
   const globalSession = useGlobalSession()
-  const themeName = useThemeName()
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
 
   const presentation = globalSession?.presentation ?? 'fullscreen'
@@ -38,19 +37,9 @@ export function InstantMeetingHost() {
     !!globalSession &&
     globalSession.kind === 'meeting' &&
     instantMeetingCodesMatch(globalSession.code, session.code)
-  // Only park off-screen when THIS meeting is in bubble/PiP. An unrelated
-  // minimized call must not collapse a live Co-Work overlay.
+  // Park off-screen only when THIS meeting is in the floating bubble / PiP.
   const collapsed =
     sameMeeting && (presentation === 'minimized' || presentation === 'pip')
-
-  // Instant overlay is the source of truth for LiveKit. Never tear it down just
-  // because global session code formatting briefly mismatches — that remounted
-  // MeetingLiveScreen on the Join confirm screen after Maximize.
-  //
-  // Important: do NOT hide this overlay (opacity 0) on a code-shape mismatch
-  // while fullscreen. Chromeless shell stays on whenever an instant session
-  // exists, so hiding the host left a blank white iPad viewport with only the
-  // AI FAB / stray chrome visible.
 
   useEffect(() => {
     if (!session || Platform.OS === 'web') return
@@ -65,72 +54,53 @@ export function InstantMeetingHost() {
 
   if (!session) return null
 
-  // Keep full layout size while minimized — only hide visually. Off-screen /
-  // shrunk surfaces disconnect LiveKit on iOS and remount Join on Maximize.
-  //
-  // Web desktop uses document flow (parent may not be 100dvh). Absolute fill
-  // then collapses to zero height — New meeting looked like a reload with no UI.
-  // Fixed inset covers the viewport regardless of shell chrome flips.
-  const overlayStyle =
-    Platform.OS === 'web'
-      ? ({
-          position: 'fixed',
-          inset: 0,
-          width: '100vw',
-          height: '100dvh',
-          maxHeight: '100dvh',
-        } as const)
-      : ({
-          // Explicit window box — parent flex alone can collapse to 0 on iPad
-          // landscape when the shell flips chromeless during join.
-          width: windowWidth,
-          height: windowHeight,
-        } as const)
-
-  // Keep the LiveKit surface "rendered" while minimized. `visibility:hidden`
-  // / opacity:0 can pause camera capture on web and native WebRTC. Park the
-  // overlay off-screen instead so publishing continues for the bubble.
-  const collapsedStyle =
-    Platform.OS === 'web'
-      ? ({
-          transform: collapsed ? 'translate3d(-120vw, 0, 0)' : 'translate3d(0, 0, 0)',
-          pointerEvents: collapsed ? ('none' as const) : ('auto' as const),
-        } as const)
-      : ({
-          transform: collapsed
-            ? [{ translateX: -Math.max(windowWidth, 1) * 1.2 }]
-            : [{ translateX: 0 }],
-        } as const)
+  // Keep full layout size while minimized — never shrink/unmount LiveKit
+  // (that disconnected iOS and remounted Join on Maximize).
+  const parkX = Math.max(windowWidth, 1) * 1.2
+  const boxWidth = Platform.OS === 'web' ? '100vw' : windowWidth
+  const boxHeight = Platform.OS === 'web' ? '100dvh' : windowHeight
 
   return (
-    <Theme name={themeName}>
+    <Theme name="dark">
       <YStack
-        position="absolute"
+        position={Platform.OS === 'web' ? ('fixed' as never) : 'absolute'}
         top={0}
-        left={0}
-        right={0}
-        bottom={0}
-        width="100%"
-        height="100%"
+        // Drive collapse with `left` (not transform alone). RN-web + Tamagui
+        // often drop or fight transform strings, which left Maximize looking
+        // like a no-op while the bubble stayed on Co-Work.
+        left={collapsed ? -parkX : 0}
+        width={boxWidth as never}
+        height={boxHeight as never}
+        maxWidth={boxWidth as never}
         zIndex={collapsed ? 1 : INSTANT_MEETING_FULLSCREEN_Z}
         opacity={1}
         pointerEvents={collapsed ? 'none' : 'auto'}
         overflow="hidden"
-        backgroundColor="#0c080a"
+        backgroundColor="#10070D"
         collapsable={false}
-        style={{
-          ...overlayStyle,
-          ...collapsedStyle,
-          ...(collapsed
-            ? null
-            : Platform.OS === 'web'
-              ? ({ width: '100vw', height: '100dvh', maxWidth: '100vw' } as const)
-              : ({ width: windowWidth, height: windowHeight, maxWidth: windowWidth } as const)),
-        }}
+        style={
+          Platform.OS === 'web'
+            ? ({
+                position: 'fixed',
+                top: 0,
+                left: collapsed ? -parkX : 0,
+                right: 'auto',
+                bottom: 0,
+                width: '100vw',
+                height: '100dvh',
+                maxHeight: '100dvh',
+                maxWidth: '100vw',
+              } as const)
+            : undefined
+        }
         accessibilityElementsHidden={collapsed}
         importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
       >
-        <AppErrorBoundary scope="InstantMeeting" alwaysShowError>
+        <AppErrorBoundary
+          scope="InstantMeeting"
+          alwaysShowError
+          onDismiss={closeInstantMeetingSession}
+        >
           <YStack flex={1} width="100%" height="100%" minHeight={0} collapsable={false}>
             <InstantMeetingBody session={session} onExit={closeInstantMeetingSession} />
           </YStack>

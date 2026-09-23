@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  applyMeetingUiChromeLayout,
+  applyMeetingUiLayout,
   meetingCriticalControlsAlwaysReachable,
-  resolveMeetingUiChromePadding,
+  resolveMeetingUiPadding,
   shouldAutoHideMeetingControls,
-} from '../../../co-work/lib/meeting-ui-chrome'
-import { resolveMeetingChromeLayout } from '../../../co-work/lib/meeting-orientation-layout'
+} from '../../../co-work/lib/meeting-ui-overlay'
+import { resolveMeetingUiLayout } from '../../../co-work/lib/meeting-orientation-layout'
 
-describe('meeting UI chrome', () => {
-  it('auto-hides only in maximized or screen-share immersion', () => {
+describe('meeting UI overlay', () => {
+  it('auto-hides meeting controls in normal, maximized, or screen-share immersion', () => {
     expect(
       shouldAutoHideMeetingControls({
         uiMode: 'normal',
@@ -17,7 +17,7 @@ describe('meeting UI chrome', () => {
         panelOpen: false,
         waitingCount: 0,
       }),
-    ).toBe(false)
+    ).toBe(true)
 
     expect(
       shouldAutoHideMeetingControls({
@@ -38,7 +38,7 @@ describe('meeting UI chrome', () => {
     ).toBe(true)
   })
 
-  it('never auto-hides while panels, waiting room, busy exit, or pin are active', () => {
+  it('never auto-hides while panels, modals, waiting room, busy exit, or pin are active', () => {
     const base = {
       uiMode: 'maximized' as const,
       viewMode: 'screen-share' as const,
@@ -46,31 +46,32 @@ describe('meeting UI chrome', () => {
       waitingCount: 0,
     }
     expect(shouldAutoHideMeetingControls({ ...base, panelOpen: true })).toBe(false)
+    expect(shouldAutoHideMeetingControls({ ...base, modalOpen: true })).toBe(false)
     expect(shouldAutoHideMeetingControls({ ...base, waitingCount: 2 })).toBe(false)
     expect(shouldAutoHideMeetingControls({ ...base, busy: true })).toBe(false)
     expect(shouldAutoHideMeetingControls({ ...base, controlsPinned: true })).toBe(false)
   })
 
   it('expands stage area in maximized mode and further when controls are hidden', () => {
-    const chrome = resolveMeetingChromeLayout({
+    const layout = resolveMeetingUiLayout({
       width: 1280,
       height: 800,
       isDesktop: true,
       safeTop: 0,
       safeBottom: 0,
     })
-    const normal = resolveMeetingUiChromePadding({
-      chrome,
+    const normal = resolveMeetingUiPadding({
+      layout,
       uiMode: 'normal',
       controlsVisible: true,
     })
-    const maximized = resolveMeetingUiChromePadding({
-      chrome,
+    const maximized = resolveMeetingUiPadding({
+      layout,
       uiMode: 'maximized',
       controlsVisible: true,
     })
-    const minimal = resolveMeetingUiChromePadding({
-      chrome,
+    const minimal = resolveMeetingUiPadding({
+      layout,
       uiMode: 'maximized',
       controlsVisible: false,
     })
@@ -82,8 +83,8 @@ describe('meeting UI chrome', () => {
     expect(minimal.controlsClearance).toBeGreaterThanOrEqual(48)
     expect(meetingCriticalControlsAlwaysReachable()).toBe(true)
 
-    const applied = applyMeetingUiChromeLayout(chrome, minimal)
+    const applied = applyMeetingUiLayout(layout, minimal)
     expect(applied.stagePaddingBottom).toBe(minimal.stagePaddingBottom)
-    expect(applied.panelMaxWidthFraction).toBe(chrome.panelMaxWidthFraction)
+    expect(applied.panelMaxWidthFraction).toBe(layout.panelMaxWidthFraction)
   })
 })

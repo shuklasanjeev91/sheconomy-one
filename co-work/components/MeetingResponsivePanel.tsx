@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Theme, useThemeName } from 'tamagui'
+import { Theme } from 'tamagui'
 
 import {
   Sheet,
@@ -33,12 +34,11 @@ const NATIVE_SHEET_Z = 200_000
 
 /**
  * Host for Chat / Participants / Invite / etc.
- * Mobile + tablet: Zoom-mobile bottom sheet over the stage.
+ * Mobile + tablet: Zoom-mobile bottom sheet over the stage (matching Image 1 half-sheet).
  * Laptop+: Zoom-web right side dock above the toolbar (stage reflows).
  *
- * Native sheets stay in-tree (no Tamagui Sheet, no RN Modal). Video SurfaceViews
- * are unmounted while the sheet is open so they cannot steal taps. Interactive
- * chrome in the sheet uses RN Pressable.
+ * Sheets always render under Tamagui `dark` so composers/icons stay visible
+ * even when the rest of the app is in light mode.
  */
 export function MeetingResponsivePanel({
   open,
@@ -52,7 +52,6 @@ export function MeetingResponsivePanel({
   children,
 }: MeetingResponsivePanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
-  const themeName = useThemeName()
   const insets = useSafeAreaInsets()
   const keyboardInset = useComposerKeyboardInset()
 
@@ -60,26 +59,33 @@ export function MeetingResponsivePanel({
 
   if (presentation === 'bottom-sheet' && Platform.OS !== 'web') {
     return (
-      <Theme name={themeName}>
+      <Theme name="dark">
         <View
           collapsable={false}
-          pointerEvents="auto"
-          style={[
-            nativeSheetStyles.fill,
-            {
-              backgroundColor: coworkUi.surface,
-              paddingTop: Math.max(insets.top, 8),
-              // iOS keyboard overlays the window; lift the whole sheet so the
-              // composer / search field stays visible. Android resizes instead.
-              paddingBottom: keyboardInset > 0 ? keyboardInset : Math.max(insets.bottom, 8),
-            },
-          ]}
+          pointerEvents="box-none"
+          style={nativeSheetStyles.backdrop}
         >
-          <View style={nativeSheetStyles.handleWrap} pointerEvents="none">
-            <View style={[nativeSheetStyles.handle, { backgroundColor: coworkUi.borderSoft }]} />
-          </View>
-          <View style={nativeSheetStyles.body} collapsable={false} pointerEvents="auto">
-            {children}
+          {/* Dimmed top backdrop: tapping dismisses the sheet while video stays visible on top (Image 1) */}
+          <Pressable
+            style={nativeSheetStyles.scrim}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close panel"
+          />
+          {/* Zoom mobile bottom half-sheet (Image 1) */}
+          <View
+            style={[
+              nativeSheetStyles.halfSheet,
+              {
+                backgroundColor: coworkUi.surface,
+                borderColor: coworkUi.glassBorder,
+                paddingBottom: keyboardInset > 0 ? keyboardInset : Math.max(insets.bottom, 8),
+              },
+            ]}
+          >
+            <View style={nativeSheetStyles.body} collapsable={false} pointerEvents="auto">
+              {children}
+            </View>
           </View>
         </View>
       </Theme>
@@ -88,42 +94,44 @@ export function MeetingResponsivePanel({
 
   if (presentation === 'bottom-sheet') {
     return (
-      <Sheet
-        open={open}
-        onOpenChange={(next) => {
-          if (!next) onClose()
-        }}
-        modal
-        dismissOnSnapToBottom={false}
-        dismissOnOverlayPress={false}
-        disableDrag
-        snapPoints={[96]}
-        snapPointsMode="percent"
-        zIndex={MEETING_SIDE_PANEL_Z_INDEX + 40}
-        animation="quick"
-        moveOnKeyboardChange={false}
-      >
-        <SheetOverlay animation="quick" />
-        <SheetFrame
-          padding={0}
-          margin={0}
-          backgroundColor={coworkUi.surface}
-          borderTopLeftRadius={18}
-          borderTopRightRadius={18}
-          borderBottomLeftRadius={0}
-          borderBottomRightRadius={0}
-          overflow="hidden"
-          height="96%"
-          maxHeight="96%"
-          width="100%"
-          maxWidth="100%"
+      <Theme name="dark">
+        <Sheet
+          open={open}
+          onOpenChange={(next) => {
+            if (!next) onClose()
+          }}
+          modal
+          dismissOnSnapToBottom={false}
+          dismissOnOverlayPress={false}
+          disableDrag
+          snapPoints={[62]}
+          snapPointsMode="percent"
+          zIndex={MEETING_SIDE_PANEL_Z_INDEX + 40}
+          animation="quick"
+          moveOnKeyboardChange={false}
         >
-          <SheetHandle backgroundColor={coworkUi.borderSoft} marginTop="$2" />
-          <YStack flex={1} minHeight={0} width="100%" overflow="hidden">
-            {children}
-          </YStack>
-        </SheetFrame>
-      </Sheet>
+          <SheetOverlay animation="quick" />
+          <SheetFrame
+            padding={0}
+            margin={0}
+            backgroundColor={coworkUi.surface}
+            borderTopLeftRadius={20}
+            borderTopRightRadius={20}
+            borderBottomLeftRadius={0}
+            borderBottomRightRadius={0}
+            overflow="hidden"
+            height="62%"
+            maxHeight="75%"
+            width="100%"
+            maxWidth="100%"
+          >
+            <SheetHandle backgroundColor={coworkUi.borderSoft} marginTop="$2" />
+            <YStack flex={1} minHeight={0} width="100%" overflow="hidden">
+              {children}
+            </YStack>
+          </SheetFrame>
+        </Sheet>
+      </Theme>
     )
   }
 
@@ -146,24 +154,35 @@ export function MeetingResponsivePanel({
 }
 
 const nativeSheetStyles = StyleSheet.create({
-  fill: {
+  backdrop: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     zIndex: NATIVE_SHEET_Z,
+    justifyContent: 'flex-end',
+  },
+  scrim: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  halfSheet: {
+    width: '100%',
+    height: '62%',
+    maxHeight: '75%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    overflow: 'hidden',
     elevation: 48,
-  },
-  handleWrap: {
-    alignItems: 'center',
-    paddingTop: 6,
-    paddingBottom: 4,
-  },
-  handle: {
-    width: 40,
-    height: 5,
-    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.6,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -4 },
   },
   body: {
     flex: 1,

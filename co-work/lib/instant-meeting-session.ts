@@ -68,6 +68,12 @@ export function openInstantMeetingSession(input: {
   autoJoin?: boolean
   /** Mark that the caller is already in the live room (minimize handoff). */
   enteredRoom?: boolean
+  /**
+   * Force the Zoom floating bubble to expand into the live overlay.
+   * Minimize handoff passes `enteredRoom` without `expand` so presentation
+   * can stay minimized; bubble Maximize passes `expand: true`.
+   */
+  expand?: boolean
   displayName?: string | null
   audioEnabled?: boolean
   videoEnabled?: boolean
@@ -77,6 +83,7 @@ export function openInstantMeetingSession(input: {
 
   const autoJoin = input.autoJoin ?? true
   const prev = session
+  const shouldExpand = input.expand === true || (!input.enteredRoom && input.expand !== false)
 
   // Same meeting already open (plain or dashed code) — update metadata without
   // remounting LiveKit / join UI. Prefer the persisted meeting_code when present.
@@ -114,9 +121,7 @@ export function openInstantMeetingSession(input: {
       }
       emit()
     }
-    // Fresh join / re-open expands; minimize handoff passes enteredRoom and
-    // then calls minimizeGlobalSession itself.
-    if (!input.enteredRoom) {
+    if (shouldExpand) {
       maximizeGlobalSession()
     }
     return

@@ -11,7 +11,7 @@ export function meetingPopoutQueryFlag(): string {
   return 'popout'
 }
 
-/** True when this window should render Zoom-style secondary-monitor stage chrome. */
+/** True when this window should render Zoom-style secondary-monitor stage layout. */
 export function isMeetingPopoutMode(search?: string): boolean {
   try {
     const raw =

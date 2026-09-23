@@ -7,6 +7,7 @@ import { scrollHostTransformReset } from '~/lib/layout/styles'
 import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 import { usePullToRefresh } from '~/hooks/usePullToRefresh'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useKeyboardVisible } from '~/hooks/useKeyboardVisible'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type PageScrollProps = {
@@ -27,6 +28,7 @@ type PageScrollProps = {
  */
 export function PageScroll({ children, onRefresh, refreshing }: PageScrollProps) {
   const { isDesktop, isDesktopWeb, mobileTabBarOffset } = useAppLayout()
+  const keyboardVisible = useKeyboardVisible()
   const { setScrollY } = useAppBarScroll()
   const ui = useAppUi()
   const { refreshControl, webPullHandlers, runRefresh } = usePullToRefresh({
@@ -73,8 +75,8 @@ export function PageScroll({ children, onRefresh, refreshing }: PageScrollProps)
     )
   }
 
-  // Reserve space only when the mobile tab dock is actually shown (not desktop).
-  const bottomInset = isDesktop ? 0 : mobileTabBarOffset
+  // Reserve space only when the mobile tab dock is actually shown (not desktop and not while keyboard is open).
+  const bottomInset = isDesktop || keyboardVisible ? 0 : mobileTabBarOffset
 
   return (
     <ScrollView

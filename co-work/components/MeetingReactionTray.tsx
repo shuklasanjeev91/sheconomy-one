@@ -1,145 +1,37 @@
-import { useEffect, useState } from 'react'
-import { Modal, Platform, Pressable } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
-import { Button, Text, XStack, YStack } from '~/components/ui'
-import { applyMeetingReactionTone, MEETING_REACTIONS } from '~/co-work/lib/meeting-reactions'
+import { AppBottomSheet, Text, XStack, YStack } from '~/components/ui'
+import { MEETING_REACTIONS } from '~/co-work/lib/meeting-reactions'
 import {
   MEETING_NONVERBAL_STATUSES,
   type MeetingNonverbalStatusId,
 } from '~/co-work/lib/meeting-nonverbal'
-import {
-  loadMeetingMediaPrefs,
-  MEETING_REACTION_TONES,
-  saveMeetingMediaPrefs,
-} from '~/co-work/lib/meeting-media-prefs'
-import {
-  MEETING_PORTAL_Z_INDEX,
-  MEETING_REACTION_TRAY_Z_INDEX,
-} from '~/co-work/lib/meeting-toolbar'
-import { meetingBarStyle, useCoWorkTheme } from '~/co-work/lib/theme'
-import { coworkBoxShadow } from '~/lib/platform/crossStyles'
-import { ViewportOverlay } from '~/components/layout'
+import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 type MeetingReactionTrayProps = {
   open: boolean
   onSelect: (emoji: string) => void
   onSelectNonverbal?: (status: MeetingNonverbalStatusId | null) => void
   activeNonverbal?: MeetingNonverbalStatusId | null
+  handRaised?: boolean
+  onToggleHand?: () => void
   onRequestClose?: () => void
 }
 
-function ReactionChipRow({
-  tone,
-  onSelect,
-  onToneChange,
-  onSelectNonverbal,
-  activeNonverbal,
-}: {
-  tone: string
-  onSelect: (emoji: string) => void
-  onToneChange: (tone: string) => void
-  onSelectNonverbal?: (status: MeetingNonverbalStatusId | null) => void
-  activeNonverbal?: MeetingNonverbalStatusId | null
-}) {
-  const { ui: coworkUi, shadows: coworkShadows } = useCoWorkTheme()
+/** Zoom-style “Send with effect” — same emoji, presented as effect chips. */
+const SEND_WITH_EFFECT = ['🎈', '🚀', '👍', '🎉', '😂', '❤️'] as const
 
-  return (
-    <YStack
-      gap="$1.5"
-      paddingHorizontal="$2.5"
-      paddingVertical="$2"
-      borderRadius={18}
-      borderWidth={1}
-      borderColor={coworkUi.glassBorder}
-      style={{
-        ...meetingBarStyle(coworkUi, true),
-        ...coworkBoxShadow(coworkShadows, 'dock'),
-      }}
-    >
-      <XStack alignItems="center" gap="$1">
-        {MEETING_REACTIONS.map((item) => {
-          const emoji = applyMeetingReactionTone(item.emoji, tone)
-          return (
-            <Button
-              key={item.emoji}
-              aria-label={item.label}
-              chromeless
-              circular
-              width={44}
-              height={44}
-              padding={0}
-              pressStyle={{ scale: 1.15 }}
-              hoverStyle={{ scale: 1.08, backgroundColor: 'rgba(255,255,255,0.08)' }}
-              onPress={() => onSelect(emoji)}
-            >
-              <Text fontSize={24}>{emoji}</Text>
-            </Button>
-          )
-        })}
-      </XStack>
-      {onSelectNonverbal ? (
-        <XStack alignItems="center" gap="$1" flexWrap="wrap" justifyContent="center">
-          {MEETING_NONVERBAL_STATUSES.map((row) => (
-            <Button
-              key={row.id}
-              aria-label={row.label}
-              chromeless
-              height={32}
-              paddingHorizontal="$2"
-              borderRadius={999}
-              backgroundColor={
-                activeNonverbal === row.id ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.06)'
-              }
-              onPress={() =>
-                onSelectNonverbal(activeNonverbal === row.id ? null : row.id)
-              }
-            >
-              <Text fontSize={13}>
-                {row.emoji} {row.label}
-              </Text>
-            </Button>
-          ))}
-        </XStack>
-      ) : null}
-      <XStack alignItems="center" justifyContent="center" gap="$1.5" paddingBottom="$0.5">
-        {MEETING_REACTION_TONES.map((row) => (
-          <Pressable
-            key={row.id || 'default'}
-            accessibilityLabel={row.label}
-            onPress={() => onToneChange(row.id)}
-            style={{
-              width: 18,
-              height: 18,
-              borderRadius: 99,
-              backgroundColor: row.swatch,
-              borderWidth: tone === row.id ? 2 : 1,
-              borderColor: tone === row.id ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
-            }}
-          />
-        ))}
-      </XStack>
-    </YStack>
-  )
-}
-
-/** Quick-reaction strip above the meeting control dock — escapes host overflow on all platforms. */
+/** Reactions + raise hand as a Zoom-mobile bottom sheet. */
 export function MeetingReactionTray({
   open,
   onSelect,
   onSelectNonverbal,
   activeNonverbal = null,
+  handRaised = false,
+  onToggleHand,
   onRequestClose,
 }: MeetingReactionTrayProps) {
-  const insets = useSafeAreaInsets()
-  const [tone, setTone] = useState('')
-
-  useEffect(() => {
-    if (!open) return
-    void loadMeetingMediaPrefs().then((prefs) => setTone(prefs.reactionTone ?? ''))
-  }, [open])
-
-  if (!open) return null
+  const { ui } = useCoWorkTheme()
 
   const selectAndClose = (emoji: string) => {
     onRequestClose?.()
@@ -151,68 +43,137 @@ export function MeetingReactionTray({
     onRequestClose?.()
   }
 
-  const changeTone = (next: string) => {
-    setTone(next)
-    void loadMeetingMediaPrefs().then((prefs) =>
-      saveMeetingMediaPrefs({ ...prefs, reactionTone: next }),
-    )
+  const toggleHandAndClose = () => {
+    onToggleHand?.()
+    onRequestClose?.()
   }
 
-  if (Platform.OS === 'web') {
-    return (
-      <ViewportOverlay>
-        <YStack
-          position={'fixed' as never}
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          pointerEvents="box-none"
-          zIndex={MEETING_PORTAL_Z_INDEX}
-          alignItems="center"
-          justifyContent="flex-end"
-          paddingBottom={Math.max(insets.bottom, 12) + 78}
-        >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close reactions"
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            onPress={onRequestClose}
-          />
-          <ReactionChipRow
-            tone={tone}
-            onSelect={selectAndClose}
-            onToneChange={changeTone}
-            onSelectNonverbal={onSelectNonverbal ? selectNonverbal : undefined}
-            activeNonverbal={activeNonverbal}
-          />
-        </YStack>
-      </ViewportOverlay>
-    )
-  }
+  const primaryReactions = MEETING_REACTIONS.slice(0, 6)
 
   return (
-    <Modal transparent visible animationType="fade" onRequestClose={onRequestClose}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Close reactions"
-        style={{ flex: 1, justifyContent: 'flex-end', alignItems: 'center' }}
-        onPress={onRequestClose}
-      >
-        <YStack
-          paddingBottom={Math.max(insets.bottom, 12) + 78}
-          zIndex={MEETING_REACTION_TRAY_Z_INDEX}
-          onStartShouldSetResponder={() => true}
-        >
-          <ReactionChipRow
-            tone={tone}
-            onSelect={selectAndClose}
-            onToneChange={changeTone}
-            onSelectNonverbal={onSelectNonverbal ? selectNonverbal : undefined}
-            activeNonverbal={activeNonverbal}
-          />
+    <AppBottomSheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onRequestClose?.()
+      }}
+      title="Reactions"
+      showHandle
+      scrollable
+      fitContent
+      surfaceColor={ui.meetingBarElevated}
+      handleColor={ui.borderSoft}
+    >
+      <YStack gap="$4" paddingBottom="$3">
+        {onToggleHand ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={handRaised ? 'Lower hand' : 'Raise hand'}
+            onPress={toggleHandAndClose}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              minHeight: 48,
+              borderRadius: 12,
+              backgroundColor: handRaised ? ui.brandMuted : ui.surfaceMuted,
+              borderWidth: 1,
+              borderColor: handRaised ? ui.brand : ui.borderSoft,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text fontSize={20}>✋</Text>
+            <Text fontSize={16} fontWeight="700" color={ui.text}>
+              {handRaised ? 'Lower hand' : 'Raise hand'}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {onSelectNonverbal ? (
+          <XStack alignItems="center" justifyContent="space-between" paddingHorizontal="$1">
+            {MEETING_NONVERBAL_STATUSES.filter((row) =>
+              ['yes', 'no', 'slow', 'faster', 'break'].includes(row.id),
+            ).map((row) => {
+              const active = activeNonverbal === row.id
+              return (
+                <Pressable
+                  key={row.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={row.label}
+                  onPress={() => selectNonverbal(active ? null : row.id)}
+                  style={({ pressed }) => ({
+                    width: 52,
+                    height: 52,
+                    borderRadius: 999,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: active ? ui.brandMuted : ui.surfaceMuted,
+                    borderWidth: 1,
+                    borderColor: active ? ui.brand : ui.borderSoft,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <Text fontSize={22}>{row.emoji}</Text>
+                </Pressable>
+              )
+            })}
+          </XStack>
+        ) : null}
+
+        <YStack gap="$2">
+          <Text fontSize={13} fontWeight="700" color={ui.textMuted}>
+            Reactions
+          </Text>
+          <XStack alignItems="center" justifyContent="space-between">
+            {primaryReactions.map((item) => (
+              <Pressable
+                key={item.emoji}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
+                onPress={() => selectAndClose(item.emoji)}
+                style={({ pressed }) => ({
+                  width: 44,
+                  height: 44,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text fontSize={26}>{item.emoji}</Text>
+              </Pressable>
+            ))}
+          </XStack>
         </YStack>
-      </Pressable>
-    </Modal>
+
+        <YStack gap="$2">
+          <Text fontSize={13} fontWeight="700" color={ui.textMuted}>
+            Send with effect
+          </Text>
+          <XStack alignItems="center" justifyContent="space-between">
+            {SEND_WITH_EFFECT.map((emoji) => (
+              <Pressable
+                key={`effect-${emoji}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Send ${emoji} with effect`}
+                onPress={() => selectAndClose(emoji)}
+                style={({ pressed }) => ({
+                  width: 48,
+                  height: 48,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: ui.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: ui.borderSoft,
+                  opacity: pressed ? 0.75 : 1,
+                })}
+              >
+                <Text fontSize={24}>{emoji}</Text>
+              </Pressable>
+            ))}
+          </XStack>
+        </YStack>
+      </YStack>
+    </AppBottomSheet>
   )
 }

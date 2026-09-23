@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Modal, Platform, Pressable } from 'react-native'
+import { Platform } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
-import { Button, Icons, Switch, Text, XStack, YStack } from '~/components/ui'
-import { useCoWorkTheme } from '~/co-work/lib/theme'
+import { AppBottomSheet, Icons, Switch, Text, XStack, YStack } from '~/components/ui'
 import {
   loadMeetingMediaPrefs,
   saveMeetingMediaPrefs,
   type MeetingMediaPrefs,
 } from '~/co-work/lib/meeting-media-prefs'
-import {
-  meetingShareContentItems,
-  type MeetingShareContentKind,
-} from '~/co-work/lib/meeting-share-content'
+import { type MeetingShareContentKind } from '~/co-work/lib/meeting-share-content'
+import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 export type MeetingShareStartOptions = {
   content: MeetingShareContentKind
@@ -26,13 +24,18 @@ type MeetingShareOptionsSheetProps = {
   onConfirm: (options: MeetingShareStartOptions) => void
   supportsScreenShare?: boolean
   supportsWhiteboard?: boolean
-  /** Prefill Screen / Photos / Documents / Whiteboard when opening. */
   initialContent?: MeetingShareContentKind | null
 }
 
+type ShareListItem = {
+  kind: MeetingShareContentKind
+  label: string
+  icon: typeof Icons.ScreenShare
+  tint?: string
+}
+
 /**
- * Zoom-style Share Content sheet — content tiles (Screen / Photos / Documents /
- * Whiteboard) above sound / optimize / annotate options. Sheconomy magenta accents.
+ * Zoom-style Share sheet — primary green Screen action + content list.
  */
 export function MeetingShareOptionsSheet({
   open,
@@ -43,49 +46,40 @@ export function MeetingShareOptionsSheet({
   initialContent = null,
 }: MeetingShareOptionsSheetProps) {
   const { ui } = useCoWorkTheme()
-  const [content, setContent] = useState<MeetingShareContentKind>('screen')
   const [shareComputerSound, setShareComputerSound] = useState(false)
   const [optimizeShareForVideo, setOptimizeShareForVideo] = useState(false)
   const [annotateAfterShare, setAnnotateAfterShare] = useState(false)
-  const [ready, setReady] = useState(false)
 
-  const contentItems = meetingShareContentItems({
-    supportsScreenShare,
-    supportsWhiteboard,
-  })
+  const listItems: ShareListItem[] = []
+  if (supportsWhiteboard) {
+    listItems.push({ kind: 'whiteboard', label: 'Whiteboards', icon: Icons.PenTool })
+  }
+  listItems.push(
+    { kind: 'photos', label: 'Photos', icon: Icons.Image },
+    { kind: 'photos', label: 'Image from file', icon: Icons.Image },
+    { kind: 'files', label: 'Document', icon: Icons.FileText },
+  )
 
   useEffect(() => {
-    if (!open) {
-      setReady(false)
-      return
-    }
+    if (!open) return
     let cancelled = false
     void loadMeetingMediaPrefs().then((prefs) => {
       if (cancelled) return
       setShareComputerSound(prefs.shareComputerSound === true)
       setOptimizeShareForVideo(prefs.optimizeShareForVideo === true)
       setAnnotateAfterShare(prefs.annotateAfterShare === true)
-      const items = meetingShareContentItems({
-        supportsScreenShare,
-        supportsWhiteboard,
-      })
-      const preferred =
-        initialContent && items.some((item) => item.kind === initialContent)
-          ? initialContent
-          : supportsScreenShare
-            ? 'screen'
-            : supportsWhiteboard
-              ? 'whiteboard'
-              : items[0]?.kind ?? 'photos'
-      setContent(preferred)
-      setReady(true)
     })
     return () => {
       cancelled = true
     }
-  }, [open, supportsScreenShare, supportsWhiteboard, initialContent])
+  }, [open])
 
-  async function persistAndConfirm() {
+  useEffect(() => {
+    if (!open || !initialContent || initialContent === 'screen') return
+    // Deep-link from Docs / Apps into a specific share kind.
+  }, [open, initialContent])
+
+  async function startShare(content: MeetingShareContentKind) {
     const next: MeetingShareStartOptions = {
       content,
       shareComputerSound,
@@ -94,208 +88,135 @@ export function MeetingShareOptionsSheet({
     }
     try {
       const prefs = await loadMeetingMediaPrefs()
-      const patch: MeetingMediaPrefs = {
+      await saveMeetingMediaPrefs({
         ...prefs,
         shareComputerSound: next.shareComputerSound,
         optimizeShareForVideo: next.optimizeShareForVideo,
         annotateAfterShare: next.annotateAfterShare,
-      }
-      await saveMeetingMediaPrefs(patch)
+      } satisfies MeetingMediaPrefs)
     } catch {
       // Still start share even if prefs write fails.
     }
     onConfirm(next)
   }
 
-  if (!open) return null
-
-  const screenOptionsVisible = content === 'screen'
-
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable
-        style={{
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.65)',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-        }}
-        onPress={onClose}
-      >
-        <Pressable
-          style={{ width: '100%', maxWidth: 480 }}
-          onPress={(e) => e.stopPropagation()}
-        >
+    <AppBottomSheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+      title="Share"
+      showHandle
+      scrollable
+      fitContent
+      surfaceColor={ui.meetingBarElevated}
+      handleColor={ui.borderSoft}
+    >
+      <YStack gap="$3" paddingBottom="$2">
+        {supportsScreenShare ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share screen"
+            onPress={() => void startShare('screen')}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              minHeight: 52,
+              borderRadius: 14,
+              backgroundColor: pressed ? 'rgba(34,197,94,0.22)' : 'rgba(34,197,94,0.14)',
+              borderWidth: 1,
+              borderColor: 'rgba(34,197,94,0.5)',
+            })}
+          >
+            <Icons.ScreenShare size={22} color="#22C55E" />
+            <Text fontSize={17} fontWeight="800" color="#22C55E">
+              Screen
+            </Text>
+          </Pressable>
+        ) : (
           <YStack
-            backgroundColor={ui.surfaceElevated}
-            borderTopLeftRadius={18}
-            borderTopRightRadius={18}
+            minHeight={52}
+            borderRadius={14}
+            alignItems="center"
+            justifyContent="center"
+            paddingHorizontal={16}
+            backgroundColor={ui.meetingControl}
             borderWidth={1}
             borderColor={ui.borderSoft}
-            padding="$4"
-            paddingBottom="$5"
-            gap="$4"
           >
-            <YStack alignItems="center" paddingTop={2}>
-              <YStack width={36} height={4} borderRadius={999} backgroundColor="rgba(255,255,255,0.28)" />
-            </YStack>
-
-            <XStack justifyContent="space-between" alignItems="center">
-              <YStack flex={1} gap={2}>
-                <Text fontSize={18} fontWeight="800" color={ui.text} letterSpacing={-0.3}>
-                  Share content
-                </Text>
-                <Text fontSize={12} color={ui.textMuted}>
-                  Screen, photos, documents, or whiteboard
-                </Text>
-              </YStack>
-              <Button
-                tone="ghost"
-                size="$2"
-                circular
-                icon={<Icons.X size={16} color={ui.textSecondary} />}
-                onPress={onClose}
-                accessibilityLabel="Close"
-              />
-            </XStack>
-
-            <XStack flexWrap="wrap" gap="$2.5">
-              {contentItems.map((item) => {
-                const active = content === item.kind
-                const Icon =
-                  item.kind === 'screen'
-                    ? Icons.ScreenShare
-                    : item.kind === 'photos'
-                      ? Icons.Image
-                      : item.kind === 'files'
-                        ? Icons.FileText
-                        : Icons.PenTool
-                return (
-                  <Pressable
-                    key={item.kind}
-                    onPress={() => setContent(item.kind)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    style={{
-                      width: '47%',
-                      flexGrow: 1,
-                      minWidth: 140,
-                      borderRadius: 14,
-                      borderWidth: 1.5,
-                      borderColor: active ? ui.brand : ui.borderSoft,
-                      backgroundColor: active ? ui.brandMuted : 'rgba(255,255,255,0.04)',
-                      paddingVertical: 14,
-                      paddingHorizontal: 12,
-                      gap: 8,
-                    }}
-                  >
-                    <YStack
-                      width={40}
-                      height={40}
-                      borderRadius={12}
-                      alignItems="center"
-                      justifyContent="center"
-                      backgroundColor={active ? ui.brand : 'rgba(255,255,255,0.08)'}
-                    >
-                      <Icon size={20} color="#fff" />
-                    </YStack>
-                    <Text fontSize={14} fontWeight="800" color={ui.text}>
-                      {item.label}
-                    </Text>
-                    <Text fontSize={11} color={ui.textMuted} lineHeight={15}>
-                      {item.hint}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </XStack>
-
-            {screenOptionsVisible ? (
-              <YStack gap="$3" opacity={ready ? 1 : 0.6}>
-                <Text fontSize={12} fontWeight="800" color={ui.brandLight} letterSpacing={0.3}>
-                  SCREEN OPTIONS
-                </Text>
-                <ShareOptionRow
-                  label="Share computer sound"
-                  hint={
-                    Platform.OS === 'web'
-                      ? 'Includes tab or system audio when the browser supports it'
-                      : 'Includes device audio when the OS capture picker allows it'
-                  }
-                  value={shareComputerSound}
-                  onChange={setShareComputerSound}
-                />
-                <ShareOptionRow
-                  label="Optimize for video clip"
-                  hint="Prefer smoother motion encoding for movies and demos"
-                  value={optimizeShareForVideo}
-                  onChange={setOptimizeShareForVideo}
-                />
-                <ShareOptionRow
-                  label="Annotate after sharing"
-                  hint="Open the annotation overlay once your share starts"
-                  value={annotateAfterShare}
-                  onChange={setAnnotateAfterShare}
-                />
-              </YStack>
-            ) : (
-              <YStack
-                padding="$3"
-                borderRadius={12}
-                backgroundColor="rgba(255,255,255,0.04)"
-                borderWidth={1}
-                borderColor={ui.borderSoft}
-                gap="$1"
-              >
-                <Text fontSize={13} fontWeight="700" color={ui.text}>
-                  {content === 'photos'
-                    ? 'Share a photo attachment'
-                    : content === 'files'
-                      ? 'Share a document attachment'
-                      : 'Open the whiteboard'}
-                </Text>
-                <Text fontSize={12} color={ui.textMuted} lineHeight={17}>
-                  {content === 'whiteboard'
-                    ? 'Everyone in the meeting can draw together.'
-                    : 'The attachment is posted to Everyone in meeting chat.'}
-                </Text>
-              </YStack>
-            )}
-
-            <XStack gap="$2.5" paddingTop="$1">
-              <Button tone="outline" flex={1} borderRadius={10} height={44} onPress={onClose}>
-                Cancel
-              </Button>
-              <Button
-                tone="primary"
-                flex={1}
-                borderRadius={10}
-                height={44}
-                backgroundColor={ui.brand}
-                onPress={() => void persistAndConfirm()}
-                icon={
-                  content === 'screen' ? (
-                    <Icons.ScreenShare size={16} color="#fff" />
-                  ) : content === 'photos' ? (
-                    <Icons.Image size={16} color="#fff" />
-                  ) : content === 'files' ? (
-                    <Icons.Paperclip size={16} color="#fff" />
-                  ) : (
-                    <Icons.PenTool size={16} color="#fff" />
-                  )
-                }
-              >
-                {content === 'screen'
-                  ? 'Share'
-                  : content === 'whiteboard'
-                    ? 'Open'
-                    : 'Attach'}
-              </Button>
-            </XStack>
+            <Text fontSize={14} fontWeight="600" color={ui.textMuted} textAlign="center">
+              Screen share is unavailable on this build
+            </Text>
           </YStack>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        )}
+
+        <YStack
+          borderRadius={14}
+          overflow="hidden"
+          borderWidth={1}
+          borderColor={ui.borderSoft}
+          backgroundColor={ui.meetingControl}
+        >
+          {listItems.map((item, index) => {
+            const Icon = item.icon
+            return (
+              <Pressable
+                key={`${item.label}-${index}`}
+                onPress={() => void startShare(item.kind)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 14,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  opacity: pressed ? 0.75 : 1,
+                  borderTopWidth: index === 0 ? 0 : 1,
+                  borderTopColor: ui.borderSoft,
+                })}
+              >
+                <Icon size={22} color={ui.textSecondary} strokeWidth={1.8} />
+                <Text flex={1} color={ui.text} fontSize={16} fontWeight="600">
+                  {item.label}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </YStack>
+
+        {supportsScreenShare ? (
+          <YStack gap="$2.5" paddingTop="$1">
+            <Text fontSize={12} fontWeight="800" color={ui.textMuted} letterSpacing={0.4}>
+              SCREEN OPTIONS
+            </Text>
+            <ShareOptionRow
+              label="Share device audio"
+              hint={
+                Platform.OS === 'web'
+                  ? 'Includes tab or system audio when supported'
+                  : 'Includes device audio when the OS capture picker allows it'
+              }
+              value={shareComputerSound}
+              onChange={setShareComputerSound}
+            />
+            <ShareOptionRow
+              label="Optimize for video clip"
+              hint="Prefer smoother motion for movies and demos"
+              value={optimizeShareForVideo}
+              onChange={setOptimizeShareForVideo}
+            />
+            <ShareOptionRow
+              label="Annotate after sharing"
+              hint="Open the annotation overlay once your share starts"
+              value={annotateAfterShare}
+              onChange={setAnnotateAfterShare}
+            />
+          </YStack>
+        ) : null}
+      </YStack>
+    </AppBottomSheet>
   )
 }
 
@@ -312,22 +233,12 @@ function ShareOptionRow({
 }) {
   const { ui } = useCoWorkTheme()
   return (
-    <XStack
-      alignItems="center"
-      justifyContent="space-between"
-      gap="$3"
-      paddingVertical="$2"
-      paddingHorizontal="$3"
-      borderRadius={12}
-      backgroundColor="rgba(255,255,255,0.04)"
-      borderWidth={1}
-      borderColor={ui.borderSoft}
-    >
-      <YStack flex={1} gap={2}>
+    <XStack alignItems="center" gap="$3" paddingVertical={2}>
+      <YStack flex={1} gap={2} minWidth={0}>
         <Text fontSize={14} fontWeight="700" color={ui.text}>
           {label}
         </Text>
-        <Text fontSize={11} color={ui.textMuted} lineHeight={15}>
+        <Text fontSize={12} color={ui.textSecondary} lineHeight={16}>
           {hint}
         </Text>
       </YStack>

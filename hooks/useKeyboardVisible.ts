@@ -26,25 +26,29 @@ export function useKeyboardBottomInset() {
   useEffect(() => {
     if (Platform.OS === 'web') return
 
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+    const handleShow = (event: any) => {
+      const h = Math.max(0, Math.round(event?.endCoordinates?.height ?? 0))
+      if (h > 0) setHeight(h)
+    }
+    const handleHide = () => setHeight(0)
 
-    const show = Keyboard.addListener(showEvent, (event) => {
-      setHeight(Math.max(0, Math.round(event.endCoordinates?.height ?? 0)))
-    })
-    const hide = Keyboard.addListener(hideEvent, () => setHeight(0))
+    const subWillShow = Keyboard.addListener('keyboardWillShow', handleShow)
+    const subDidShow = Keyboard.addListener('keyboardDidShow', handleShow)
+    const subWillHide = Keyboard.addListener('keyboardWillHide', handleHide)
+    const subDidHide = Keyboard.addListener('keyboardDidHide', handleHide)
 
     return () => {
-      show.remove()
-      hide.remove()
+      subWillShow.remove()
+      subDidShow.remove()
+      subWillHide.remove()
+      subDidHide.remove()
     }
   }, [])
 
   return height
 }
 
-/** iOS keyboard overlap; Android window resize already handled. */
+/** Native software keyboard inset across iOS and Android. */
 export function useComposerKeyboardInset() {
-  const height = useKeyboardBottomInset()
-  return Platform.OS === 'ios' ? height : 0
+  return useKeyboardBottomInset()
 }

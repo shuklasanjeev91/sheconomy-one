@@ -212,6 +212,7 @@
       "package": "com.sheconomy.ecommerce",
       "versionCode": 188,
       "softwareKeyboardLayoutMode": "resize",
+      "largeHeap": true,
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon-adaptive.png",
         "backgroundColor": "#D81B60"

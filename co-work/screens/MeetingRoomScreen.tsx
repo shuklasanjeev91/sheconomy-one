@@ -3,7 +3,9 @@
 import '~/lib/polyfills/install-dom-exception'
 
 import { Platform, useWindowDimensions } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { RoomEvent, Track } from 'livekit-client'
 
 import {
   ANDROID_PRESENT_UNAVAILABLE_MESSAGE,
@@ -15,6 +17,7 @@ import { MeetingShareOptionsSheet,
   type MeetingShareStartOptions,
 } from '~/co-work/components/MeetingShareOptionsSheet'
 import { MeetingAppsSheet } from '~/co-work/components/MeetingAppsSheet'
+import { MeetingSettingsSheet } from '~/co-work/components/MeetingSettingsSheet'
 import type { MeetingShareContentKind } from '~/co-work/lib/meeting-share-content'
 import { MeetingTransferHostSheet } from '~/co-work/components/MeetingTransferHostSheet'
 import { ScreenCenter, ViewportOverlay } from '~/components/layout'
@@ -23,8 +26,7 @@ import {
   CoWorkAlertBanner,
   MeetingInfoModal,
 } from '~/co-work/components/CoWorkUi'
-import { MeetingIpadChromeHeader } from '~/co-work/components/MeetingIpadChromeHeader'
-import { MeetingPhoneChromeHeader } from '~/co-work/components/MeetingPhoneChromeHeader'
+import { MeetingHeader } from '~/co-work/components/MeetingHeader'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { LiveKitMeetingRoom, type LiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom'
 import { MeetingChatPanel } from '~/co-work/components/MeetingChatPanel'
@@ -82,19 +84,20 @@ import {
 } from '~/co-work/lib/meeting-media-reconnect'
 import { isMeetingChatEnabled, isMeetingPrivateChatEnabled } from '~/co-work/lib/meeting-chat'
 import { canChangeCriticalMeetingSettings } from '~/co-work/lib/meeting-role-permissions'
-import { resolveMeetingChromeLayout } from '~/co-work/lib/meeting-orientation-layout'
+import { resolveMeetingUiLayout } from '~/co-work/lib/meeting-orientation-layout'
 import {
   meetingPanelPresentation,
   meetingViewportIsLandscape,
   resolveMeetingBreakpoint,
 } from '~/co-work/lib/meeting-responsive'
 import {
-  applyMeetingUiChromeLayout,
-  resolveMeetingUiChromePadding,
+  applyMeetingUiLayout,
+  resolveMeetingUiPadding,
   shouldAutoHideMeetingControls,
-} from '~/co-work/lib/meeting-ui-chrome'
-import { useMeetingUiChrome } from '~/co-work/hooks/useMeetingUiChrome'
+} from '~/co-work/lib/meeting-ui-overlay'
+import { useMeetingUiVisibility } from '~/co-work/hooks/useMeetingUiVisibility'
 import { useMeetingFullscreen } from '~/co-work/hooks/useMeetingFullscreen'
+import { useKeyboardBottomInset } from '~/hooks/useKeyboardVisible'
 import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
 import {
   describeMeetingWebScreenShare,
@@ -190,19 +193,8 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
   const caps = useMemo(() => getMediaCapabilities(), [])
   const useLiveKit = supportsLiveKitVideo() && !!props.meeting.room_id
   const { width: roomWidth, height: roomHeight } = useWindowDimensions()
-  const blockVideoSurfaces = useMemo(() => {
-    if (Platform.OS === 'web' || presence.panel === 'none') return false
-    const shortest = Math.min(roomWidth, roomHeight)
-    const breakpoint = resolveMeetingBreakpoint(roomWidth, {
-      isNative: true,
-      shortestSide: shortest,
-    })
-    return (
-      meetingPanelPresentation(breakpoint, {
-        isLandscape: meetingViewportIsLandscape(roomWidth, roomHeight),
-      }) === 'bottom-sheet'
-    )
-  }, [presence.panel, roomHeight, roomWidth])
+  // Video surfaces remain active behind/above bottom sheets (Image 1)
+  const blockVideoSurfaces = false
   const [mediaReconnectFailed, setMediaReconnectFailed] = useState(false)
   const [mediaReconnectKey, setMediaReconnectKey] = useState(0)
   const [breakoutRoomId, setBreakoutRoomId] = useState<string | null>(null)
@@ -616,9 +608,9 @@ function MeetingRoomOverlay({
   )
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions()
   const { isTablet, isDesktop, safeTop, safeBottom, safeLeft, safeRight } = useAppLayout()
-  const chromeBase = useMemo(
+  const layoutBase = useMemo(
     () =>
-      resolveMeetingChromeLayout({
+      resolveMeetingUiLayout({
         width: viewportWidth,
         height: viewportHeight,
         safeTop,
@@ -640,12 +632,12 @@ function MeetingRoomOverlay({
       viewportWidth,
     ],
   )
-  const chrome = useMemo(
+  const layout = useMemo(
     () =>
-      applyMeetingUiChromeLayout(
-        chromeBase,
-        resolveMeetingUiChromePadding({
-          chrome: chromeBase,
+      applyMeetingUiLayout(
+        layoutBase,
+        resolveMeetingUiPadding({
+          layout: layoutBase,
           uiMode: meetingMachine.uiMode,
           controlsVisible: meetingMachine.controlsVisible,
           safeTop,
@@ -653,7 +645,7 @@ function MeetingRoomOverlay({
         }),
       ),
     [
-      chromeBase,
+      layoutBase,
       meetingMachine.controlsVisible,
       meetingMachine.uiMode,
       safeBottom,
@@ -666,17 +658,106 @@ function MeetingRoomOverlay({
     setMeetingState(meeting)
   }, [meeting])
 
+  const [activeVideoTrack, setActiveVideoTrack] = useState<any>(null)
+
+  useEffect(() => {
+    const room = liveKit?.room
+    if (!room) {
+      setActiveVideoTrack(null)
+      return
+    }
+
+    const updateActiveTrack = () => {
+      // 1. Remote screen share
+      for (const p of room.remoteParticipants.values()) {
+        for (const pub of p.videoTrackPublications.values()) {
+          if (pub.source === Track.Source.ScreenShare && pub.track && !pub.isMuted) {
+            setActiveVideoTrack({
+              participant: p,
+              publication: pub,
+              source: pub.source,
+            })
+            return
+          }
+        }
+      }
+
+      // 2. Active speakers among remote participants
+      for (const speaker of room.activeSpeakers) {
+        if (speaker !== room.localParticipant) {
+          const pub = speaker.getTrackPublication(Track.Source.Camera)
+          if (pub && pub.track && !pub.isMuted) {
+            setActiveVideoTrack({
+              participant: speaker,
+              publication: pub,
+              source: pub.source,
+            })
+            return
+          }
+        }
+      }
+
+      // 3. Any remote participant with camera
+      for (const p of room.remoteParticipants.values()) {
+        const pub = p.getTrackPublication(Track.Source.Camera)
+        if (pub && pub.track && !pub.isMuted) {
+          setActiveVideoTrack({
+            participant: p,
+            publication: pub,
+            source: pub.source,
+          })
+          return
+        }
+      }
+
+      // 4. Local camera
+      const localPub = room.localParticipant.getTrackPublication(Track.Source.Camera)
+      if (localPub && localPub.track && !localPub.isMuted) {
+        setActiveVideoTrack({
+          participant: room.localParticipant,
+          publication: localPub,
+          source: localPub.source,
+        })
+        return
+      }
+
+      setActiveVideoTrack(null)
+    }
+
+    updateActiveTrack()
+
+    room.on(RoomEvent.TrackSubscribed, updateActiveTrack)
+    room.on(RoomEvent.TrackUnsubscribed, updateActiveTrack)
+    room.on(RoomEvent.TrackMuted, updateActiveTrack)
+    room.on(RoomEvent.TrackUnmuted, updateActiveTrack)
+    room.on(RoomEvent.LocalTrackPublished, updateActiveTrack)
+    room.on(RoomEvent.LocalTrackUnpublished, updateActiveTrack)
+    room.on(RoomEvent.ActiveSpeakersChanged, updateActiveTrack)
+
+    return () => {
+      room.off(RoomEvent.TrackSubscribed, updateActiveTrack)
+      room.off(RoomEvent.TrackUnsubscribed, updateActiveTrack)
+      room.off(RoomEvent.TrackMuted, updateActiveTrack)
+      room.off(RoomEvent.TrackUnmuted, updateActiveTrack)
+      room.off(RoomEvent.LocalTrackPublished, updateActiveTrack)
+      room.off(RoomEvent.LocalTrackUnpublished, updateActiveTrack)
+      room.off(RoomEvent.ActiveSpeakersChanged, updateActiveTrack)
+    }
+  }, [liveKit?.room, liveKit?.videoEnabled, liveKit?.screenSharing])
+
   const [shareOpen, setShareOpen] = useState(false)
   const [shareOptionsOpen, setShareOptionsOpen] = useState(false)
   const [shareOptionsInitialContent, setShareOptionsInitialContent] =
     useState<MeetingShareContentKind | null>(null)
   const [appsSheetOpen, setAppsSheetOpen] = useState(false)
+  const [settingsSheetOpen, setSettingsSheetOpen] = useState(false)
   const [askToUnmuteVisible, setAskToUnmuteVisible] = useState(false)
   const [inviteCardDismissed, setInviteCardDismissed] = useState(false)
   const [safeDrivingOpen, setSafeDrivingOpen] = useState(false)
   const [safeDrivingSpeaking, setSafeDrivingSpeaking] = useState(false)
   const [transferHostOpen, setTransferHostOpen] = useState(false)
   const [reactionTrayOpen, setReactionTrayOpen] = useState(false)
+  const [controlsOverlayOpen, setControlsOverlayOpen] = useState(false)
   const [infoModalOpen, setInfoModalOpen] = useState(false)
   const [whiteboardHidden, setWhiteboardHidden] = useState(false)
   const [audioTestOpen, setAudioTestOpen] = useState(false)
@@ -771,21 +852,35 @@ function MeetingRoomOverlay({
     },
     [dispatchUi],
   )
-  const { revealControls } = useMeetingUiChrome({
+  const roomModalOpen =
+    controlsOverlayOpen ||
+    shareOptionsOpen ||
+    appsSheetOpen ||
+    settingsSheetOpen ||
+    reactionTrayOpen ||
+    audioTestOpen ||
+    shortcutsOpen ||
+    transferHostOpen ||
+    infoModalOpen ||
+    safeDrivingOpen
+
+  const { revealControls, toggleControls } = useMeetingUiVisibility({
     uiMode: meetingMachine.uiMode,
     viewMode: meetingMachine.viewMode,
     panelOpen: presence.panel !== 'none',
+    modalOpen: roomModalOpen,
     waitingCount: presence.waitingParticipants.length,
     busy: exiting,
     controlsPinned: meetingMachine.controlsPinned,
     controlsVisible: meetingMachine.controlsVisible,
     onSetControlsVisible: setControlsVisible,
   })
-  const chromeVisible = meetingMachine.controlsVisible
+  const controlsVisible = meetingMachine.controlsVisible
   const immersiveAutoHide = shouldAutoHideMeetingControls({
     uiMode: meetingMachine.uiMode,
     viewMode: meetingMachine.viewMode,
     panelOpen: presence.panel !== 'none',
+    modalOpen: roomModalOpen,
     waitingCount: presence.waitingParticipants.length,
     busy: exiting,
     controlsPinned: meetingMachine.controlsPinned,
@@ -844,7 +939,7 @@ function MeetingRoomOverlay({
     if (presence.whiteboard.active) setWhiteboardHidden(false)
   }, [presence.whiteboard.active, presence.whiteboard.startedBy])
   const roomy = isTablet || isDesktop
-  const panelTrailingInset = chrome.panelTrailingInset
+  const panelTrailingInset = layout.panelTrailingInset
 
   const captions = useLiveCaptions({
     userId,
@@ -963,6 +1058,9 @@ function MeetingRoomOverlay({
         toast.show(message, { tone: 'danger' })
       }
     },
+    onBroadcastStatus: (isRecording) => {
+      presence.broadcastRecordingStatus(isRecording)
+    },
   })
 
   const recordingIndicator = useMeetingRecordingIndicator(
@@ -973,21 +1071,21 @@ function MeetingRoomOverlay({
   const showError = presence.error && presence.error !== dismissedError
   // Keyboard resize can flip portrait→landscape metrics and unmount the sheet
   // under a focused composer. Freeze presentation while any panel is open.
-  const panelPresentationLockedRef = useRef(chrome.panelPresentation)
+  const panelPresentationLockedRef = useRef(layout.panelPresentation)
   if (presence.panel === 'none') {
-    panelPresentationLockedRef.current = chrome.panelPresentation
+    panelPresentationLockedRef.current = layout.panelPresentation
   }
   const panelPresentation =
-    presence.panel === 'none' ? chrome.panelPresentation : panelPresentationLockedRef.current
+    presence.panel === 'none' ? layout.panelPresentation : panelPresentationLockedRef.current
   const panelFullWidth = panelPresentation === 'bottom-sheet'
   const sheetPanelOpen = panelPresentation === 'bottom-sheet' && presence.panel !== 'none'
   const sidePanelWidth = Math.min(
-    chrome.breakpoint === 'large-desktop' ? 440 : chrome.breakpoint === 'desktop' ? 400 : 380,
-    Math.round(viewportWidth * chrome.panelMaxWidthFraction),
+    layout.breakpoint === 'large-desktop' ? 440 : layout.breakpoint === 'desktop' ? 400 : 380,
+    Math.round(viewportWidth * layout.panelMaxWidthFraction),
   )
   const sidePanelOpen = panelPresentation === 'side' && presence.panel !== 'none'
   const stageTrailingInsetValue = sidePanelOpen
-    ? sidePanelWidth + Math.max(chrome.panelTrailingInset, 8)
+    ? sidePanelWidth + Math.max(layout.panelTrailingInset, 8)
     : 0
   const { setStageTrailingInset, pinnedUserIds, togglePinnedUserId } = useMeetingLiveSignals()
   useEffect(() => {
@@ -996,7 +1094,7 @@ function MeetingRoomOverlay({
   }, [setStageTrailingInset, stageTrailingInsetValue])
   const recording = isAuthoritativeHost || canModerate
     ? recordingSession.recording || recordingSession.isProcessing
-    : recordingIndicator.isRecording
+    : presence.liveRecordingSignal ?? recordingIndicator.isRecording
 
   useEffect(() => {
     if (!liveKit) {
@@ -1312,17 +1410,27 @@ function MeetingRoomOverlay({
     if (!fullscreen.supported) {
       toast.show('Full screen unavailable', {
         tone: 'info',
-        message: fullscreen.unsupportedMessage,
+        message: fullscreen.unsupportedMessage || 'Full screen is not available on this device.',
       })
       return
     }
-    void fullscreen.toggle().catch((cause) => {
-      toast.show('Full screen failed', {
-        tone: 'error',
-        message: cause instanceof Error ? cause.message : fullscreen.unsupportedMessage,
+    const entering = !fullscreen.active
+    void fullscreen
+      .toggle()
+      .then(() => {
+        // Expand / restore the video stage alongside system full screen.
+        dispatchUi({ type: 'SET_UI_MODE', uiMode: entering ? 'maximized' : 'normal' })
       })
-    })
-  }, [fullscreen, toast])
+      .catch((cause) => {
+        toast.show('Full screen failed', {
+          tone: 'error',
+          message:
+            cause instanceof Error
+              ? cause.message
+              : fullscreen.unsupportedMessage || 'Could not enter full screen.',
+        })
+      })
+  }, [dispatchUi, fullscreen, toast])
 
   const ensureMeetingGlobalSession = useCallback(
     (presentation: 'fullscreen' | 'minimized' | 'pip' = 'fullscreen') => {
@@ -1351,6 +1459,7 @@ function MeetingRoomOverlay({
           screenSharing: liveKit?.screenSharing ?? false,
           speakerOn: liveKit?.speakerOn ?? true,
         },
+        activeTrackRef: activeVideoTrack,
         // Handlers are refreshed by useRegisterGlobalSession on the next effect.
         // Stub here so the mini-player never appears without End / Mic.
         handlers: {
@@ -1368,13 +1477,18 @@ function MeetingRoomOverlay({
         },
       })
     },
-    [admittedCount, avatarUrl, liveKit, meeting, session],
+    [activeVideoTrack, admittedCount, avatarUrl, liveKit, meeting, session],
   )
 
   const minimizeMeeting = useCallback(
     (options?: { browseHref?: string | null }) => {
+      // Leave system full screen before collapsing to the mini-player.
+      if (fullscreen.active) {
+        void fullscreen.toggle().catch(() => undefined)
+      }
+      dispatchUi({ type: 'SET_UI_MODE', uiMode: 'normal' })
       // Drop any open crop sheet so Minimize never reveals Commerce under
-      // "Crop virtual background" chrome (stale session / see-through crop hole).
+      // "Crop virtual background" UI (stale session / see-through crop hole).
       clearImageCropQueue()
       // Keep LiveKit mounted via InstantMeetingHost. Mark enteredRoom so Maximize
       // resumes the live room instead of the Join confirm lobby.
@@ -1389,6 +1503,20 @@ function MeetingRoomOverlay({
       // `minimizeGlobalSession()` is a no-op when LiveKit hasn't registered yet
       // and InstantMeetingHost stays fullscreen over home.
       ensureMeetingGlobalSession('minimized')
+
+      // On platforms supporting native PiP (iPad / iOS), attempt to launch native Video Picture-in-Picture
+      // so the user actually sees the live video floating rather than an audio-only avatar!
+      const caps = detectSessionPipCapabilities()
+      if (caps.supported) {
+        void requestSessionPictureInPicture('.sheconomy-meeting-overlay video, video')
+          .then((res) => {
+            if (res.ok) {
+              ensureMeetingGlobalSession('pip')
+            }
+          })
+          .catch(() => undefined)
+      }
+
       toast.show('Meeting minimized', {
         tone: 'success',
         message: meetingBrowsingMinimizedNotice('meeting'),
@@ -1397,7 +1525,7 @@ function MeetingRoomOverlay({
       // Never navigate twice (browseAway used to race home vs the tapped tab).
       navigateApp((options?.browseHref as never) || coWorkRoutes.home)
     },
-    [displayName, ensureMeetingGlobalSession, meeting, toast],
+    [dispatchUi, displayName, ensureMeetingGlobalSession, fullscreen, meeting, toast],
   )
 
   const collapseMeetingForBrowse = useCallback(() => {
@@ -1687,6 +1815,7 @@ function MeetingRoomOverlay({
       screenSharing: liveKit?.screenSharing ?? false,
       speakerOn: liveKit?.speakerOn ?? true,
     },
+    activeTrackRef: activeVideoTrack,
     handlers: {
       toggleMic: () => {
         if (session.hasMedia()) session.toggleMic()
@@ -1879,10 +2008,11 @@ function MeetingRoomOverlay({
     [presence, toast],
   )
 
-  const panelTop = chrome.panelTop
-  // Meeting routes are chromeless (no app tab bar). Clear home indicator via chrome.
+  const keyboardHeight = useKeyboardBottomInset()
+  const panelTop = layout.panelTop
+  // Meeting routes are chromeless (no app tab bar). Clear home indicator via layout.
   const controlsBottom = Math.max(safeBottom, 0)
-  const panelBottom = chrome.panelBottom
+  const panelBottom = Math.max(layout.panelBottom, keyboardHeight)
   const overlayPosition = Platform.OS === 'web' ? ('fixed' as const) : ('absolute' as const)
 
   return (
@@ -1897,7 +2027,7 @@ function MeetingRoomOverlay({
       pointerEvents="box-none"
       zIndex={100}
     >
-      {!chromeVisible && immersiveAutoHide && !sheetPanelOpen ? (
+      {!sheetPanelOpen ? (
         <YStack
           position={overlayPosition}
           top={0}
@@ -1906,9 +2036,9 @@ function MeetingRoomOverlay({
           bottom={0}
           zIndex={15}
           pointerEvents="auto"
-          onPress={revealControls}
+          onPress={toggleControls}
           accessibilityRole="button"
-          accessibilityLabel="Show meeting controls"
+          accessibilityLabel={controlsVisible ? 'Hide meeting controls' : 'Show meeting controls'}
         />
       ) : null}
 
@@ -1918,145 +2048,127 @@ function MeetingRoomOverlay({
         left={0}
         right={0}
         zIndex={20}
-        pointerEvents={chromeVisible ? 'auto' : 'none'}
-        opacity={chromeVisible ? 1 : 0}
+        pointerEvents={controlsVisible ? 'auto' : 'none'}
+        opacity={controlsVisible ? 1 : 0}
         style={{
-          transform: [{ translateY: chromeVisible ? 0 : -24 }],
+          transform: [{ translateY: controlsVisible ? 0 : -24 }],
+          ...(Platform.OS === 'web' ? { transition: 'opacity 0.22s ease, transform 0.22s ease' } : {}),
         }}
       >
-        {!chrome.compactControls ? (
-          <MeetingIpadChromeHeader
-            safeTop={safeTop}
-            safeLeft={safeLeft}
-            safeRight={safeRight}
-            locked={!!presence.moderationSettings?.is_locked}
-            recording={recording}
-            viewMode={meetingMachine.viewMode}
-            speakerOn={liveKit?.speakerOn ?? true}
-            onBack={() => minimizeMeeting()}
-            onMeetingInfo={() => setInfoModalOpen(true)}
-            onAnnotate={() => {
-              if (liveKit?.screenSharing || meetingMachine.viewMode === 'screen-share') {
-                setAnnotateShareOpen((open) => {
-                  const next = !open
-                  presence.setAnnotationSessionOpen(next)
-                  return next
-                })
-                return
-              }
-              // Zoom: Annotate from header starts share with annotate enabled.
-              setShareOptionsInitialContent('screen')
-              void import('~/co-work/lib/meeting-media-prefs').then(
-                ({ loadMeetingMediaPrefs, saveMeetingMediaPrefs }) =>
-                  loadMeetingMediaPrefs().then((prefs) =>
-                    saveMeetingMediaPrefs({ ...prefs, annotateAfterShare: true }),
-                  ),
-              )
-              setShareOptionsOpen(true)
-              toast.show('Share your screen to annotate', {
-                tone: 'info',
-                message: 'Pick Screen, then start sharing to draw on the stage.',
-              })
-            }}
-            onToggleSpeaker={
-              liveKit
-                ? () => {
-                    void (async () => {
-                      const wasOn = liveKit.speakerOn
-                      await liveKit.toggleSpeaker()
-                      toast.show(wasOn ? 'Speaker off' : 'Speaker on', {
+        <MeetingHeader
+          compact={layout.compactControls}
+          safeTop={safeTop}
+          safeLeft={safeLeft}
+          safeRight={safeRight}
+          title={presence.liveTopic || title}
+          locked={!!presence.moderationSettings?.is_locked}
+          recording={recording}
+          viewMode={meetingMachine.viewMode}
+          speakerOn={liveKit?.speakerOn ?? true}
+          onBack={() => minimizeMeeting()}
+          onMinimize={() => minimizeMeeting()}
+          // Zoom-style: header chevron / minimize → floating bubble.
+          // Browser full screen stays in More (onToggleFullscreen), not here —
+          // Maximize2 in the header was confused with bubble Maximize.
+          onToggleFullscreen={toggleFullscreen}
+          fullscreenActive={fullscreen.active}
+          onMeetingInfo={() => setInfoModalOpen(true)}
+          onTile={enterMeetingPip}
+          onEffects={() => presence.togglePanel('backgrounds')}
+          onWhiteboard={() => {
+            if (!presence.whiteboard.active) {
+              presence.startWhiteboard()
+              setWhiteboardHidden(false)
+            } else {
+              setWhiteboardHidden((v) => !v)
+            }
+          }}
+          onAnnotate={() => {
+            setAnnotateShareOpen((open) => {
+              const next = !open
+              presence.setAnnotationSessionOpen(next)
+              return next
+            })
+          }}
+          onToggleSpeaker={
+            liveKit
+              ? () => {
+                  void (async () => {
+                    const wasOn = liveKit.speakerOn
+                    await liveKit.toggleSpeaker()
+                    toast.show(wasOn ? 'Speaker off' : 'Speaker on', {
+                      tone: 'info',
+                      message: wasOn
+                        ? 'Audio plays through the earpiece.'
+                        : 'Audio plays through the loudspeaker.',
+                    })
+                  })()
+                }
+              : undefined
+          }
+          onFlipCamera={
+            liveKit
+              ? () => {
+                  void (async () => {
+                    try {
+                      const facing = await liveKit.flipCamera()
+                      toast.show(facing === 'environment' ? 'Rear camera' : 'Front camera', {
                         tone: 'info',
-                        message: wasOn
-                          ? 'Audio plays through the earpiece.'
-                          : 'Audio plays through the loudspeaker.',
                       })
-                    })()
-                  }
-                : undefined
-            }
-            onFlipCamera={
-              liveKit
-                ? () => {
-                    void (async () => {
-                      try {
-                        const facing = await liveKit.flipCamera()
-                        toast.show(facing === 'environment' ? 'Rear camera' : 'Front camera', {
-                          tone: 'info',
-                        })
-                      } catch (cause) {
-                        toast.show('Could not flip camera', {
-                          tone: 'danger',
-                          message: cause instanceof Error ? cause.message : 'Try again in a moment.',
-                        })
-                      }
-                    })()
-                  }
-                : undefined
-            }
-            onSettings={() => {
-              // Header gear → Zoom meeting settings / host security.
-              if (canModerate) presence.togglePanel('host_tools')
-              else setInfoModalOpen(true)
-            }}
-            onSecurity={() => {
-              if (canModerate) presence.togglePanel('host_tools')
-              else setInfoModalOpen(true)
-            }}
-            onToggleView={() =>
-              dispatchUi({
-                type: 'SET_VIEW',
-                viewMode: meetingMachine.viewMode === 'speaker' ? 'gallery' : 'speaker',
-              })
-            }
-          />
-        ) : (
-          <MeetingPhoneChromeHeader
-            safeTop={safeTop}
-            safeLeft={safeLeft}
-            safeRight={safeRight}
-            title={presence.liveTopic || title}
-            recording={recording}
-            speakerOn={liveKit?.speakerOn ?? true}
-            onMinimize={() => minimizeMeeting()}
-            onMeetingInfo={() => setInfoModalOpen(true)}
-            onEffects={liveKit ? () => presence.togglePanel('backgrounds') : undefined}
-            onToggleSpeaker={
-              liveKit
-                ? () => {
-                    void (async () => {
-                      const wasOn = liveKit.speakerOn
-                      await liveKit.toggleSpeaker()
-                      toast.show(wasOn ? 'Speaker off' : 'Speaker on', {
-                        tone: 'info',
-                        message: wasOn
-                          ? 'Audio plays through the earpiece.'
-                          : 'Audio plays through the loudspeaker.',
+                    } catch (cause) {
+                      toast.show('Could not flip camera', {
+                        tone: 'danger',
+                        message: cause instanceof Error ? cause.message : 'Try again in a moment.',
                       })
-                    })()
-                  }
-                : undefined
-            }
-            onFlipCamera={
-              liveKit
-                ? () => {
-                    void (async () => {
-                      try {
-                        const facing = await liveKit.flipCamera()
-                        toast.show(facing === 'environment' ? 'Rear camera' : 'Front camera', {
-                          tone: 'info',
-                        })
-                      } catch (cause) {
-                        toast.show('Could not flip camera', {
-                          tone: 'danger',
-                          message: cause instanceof Error ? cause.message : 'Try again in a moment.',
-                        })
-                      }
-                    })()
-                  }
-                : undefined
-            }
-          />
-        )}
+                    }
+                  })()
+                }
+              : undefined
+          }
+          onSettings={() => {
+            // Header gear → Zoom meeting settings / host security.
+            if (canModerate) presence.togglePanel('host_tools')
+            else presence.togglePanel('audio')
+          }}
+          onSecurity={() => {
+            if (canModerate) presence.togglePanel('host_tools')
+            else setInfoModalOpen(true)
+          }}
+          onToggleView={() =>
+            dispatchUi({
+              type: 'SET_VIEW',
+              viewMode: meetingMachine.viewMode === 'speaker' ? 'gallery' : 'speaker',
+            })
+          }
+          onEnd={isAuthoritativeHost ? handleEnd : handleLeave}
+          isHost={isAuthoritativeHost}
+        />
+
+        {/* Zoom Mobile Top-Left Green Shield (Image 1 & Image 3) */}
+        {layout.compactControls && (controlsVisible || sheetPanelOpen) ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Meeting security and encryption info"
+            hitSlop={8}
+            onPress={() => setInfoModalOpen(true)}
+            style={({ pressed }) => ({
+              position: 'absolute',
+              top: Math.max(safeTop, 8) + 52,
+              left: Math.max(safeLeft, 14),
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              backgroundColor: pressed ? 'rgba(18, 36, 26, 0.95)' : 'rgba(18, 36, 26, 0.85)',
+              borderWidth: 1,
+              borderColor: 'rgba(34, 197, 94, 0.4)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 35,
+            })}
+          >
+            <Icons.ShieldCheck size={18} color="#22C55E" />
+          </Pressable>
+        ) : null}
 
         <MeetingRecordingConsentBanner
           recording={recording}
@@ -2069,7 +2181,7 @@ function MeetingRoomOverlay({
             inputLevel: liveKit?.audioQuality?.inputLevel ?? 0,
             enabled: !exiting && !presence.isWaiting,
           })}
-          topOffset={Math.max(safeTop, 8) + (chromeVisible ? 56 : 12)}
+          topOffset={Math.max(safeTop, 8) + (controlsVisible ? 56 : 12)}
           onUnmute={() => toggleMeetingAudio()}
         />
         <MeetingAskToUnmuteBanner
@@ -2077,7 +2189,7 @@ function MeetingRoomOverlay({
             askToUnmuteVisible &&
             !(session.getMediaSnapshot()?.audioEnabled ?? liveKit?.audioEnabled ?? true)
           }
-          topOffset={Math.max(safeTop, 8) + (chromeVisible ? 56 : 12) + 64}
+          topOffset={Math.max(safeTop, 8) + (controlsVisible ? 56 : 12) + 64}
           onUnmute={() => {
             setAskToUnmuteVisible(false)
             toggleMeetingAudio()
@@ -2811,10 +2923,10 @@ function MeetingRoomOverlay({
         presentationSafe={
           meetingMachine.viewMode === 'screen-share' || !!liveKit?.screenSharing
         }
-        wideLayout={chrome.captionWideLayout}
-        topOffset={chrome.captionTopOffset}
-        bottomOffset={chrome.captionBottomOffset}
-        sideInset={chrome.captionSideInset}
+        wideLayout={layout.captionWideLayout}
+        topOffset={layout.captionTopOffset}
+        bottomOffset={layout.captionBottomOffset}
+        sideInset={layout.captionSideInset}
         trailingInset={stageTrailingInsetValue}
         onTargetLangChange={(language) => {
           captions.setTargetLang(language)
@@ -2841,18 +2953,20 @@ function MeetingRoomOverlay({
         paddingLeft={Math.max(safeLeft, 0)}
         paddingRight={Math.max(safeRight, 0)}
         zIndex={MEETING_TOOLBAR_Z_INDEX}
-        pointerEvents={sheetPanelOpen ? 'none' : 'auto'}
-        opacity={sheetPanelOpen ? 0 : 1}
-        style={
-          chromeVisible && !sheetPanelOpen && chrome.compactControls
+        pointerEvents={(controlsVisible || roomModalOpen) && !sheetPanelOpen ? 'auto' : 'none'}
+        opacity={(controlsVisible || roomModalOpen) && !sheetPanelOpen ? 1 : 0}
+        style={{
+          transform: [{ translateY: (controlsVisible || roomModalOpen) && !sheetPanelOpen ? 0 : 40 }],
+          ...(Platform.OS === 'web' ? { transition: 'opacity 0.22s ease, transform 0.22s ease' } : {}),
+          ...((controlsVisible || roomModalOpen) && !sheetPanelOpen && layout.compactControls
             ? footerFadeStyle(
                 'linear-gradient(180deg, transparent 0%, rgba(12, 8, 10, 0.75) 55%)',
                 'rgba(12, 8, 10, 0.92)',
               )
-            : undefined
-        }
+            : {}),
+        }}
       >
-        {chromeVisible && !sheetPanelOpen ? (
+        {(controlsVisible || roomModalOpen) && !sheetPanelOpen ? (
           <YStack gap="$2" width="100%">
             <MeetingInviteOthersCard
               visible={
@@ -2895,7 +3009,7 @@ function MeetingRoomOverlay({
             panel={presence.panel}
             backgroundActive={(liveKit?.videoEffects.selection.mode ?? 'off') !== 'off'}
             unreadChatCount={presence.unreadChatCount}
-            forceCompact={chrome.compactControls}
+            forceCompact={layout.compactControls}
             raisedHandCount={raisedHandCount}
             waitingCount={presence.waitingParticipants.length}
             participantCount={admittedCount}
@@ -3105,30 +3219,13 @@ function MeetingRoomOverlay({
                   }
                 : undefined
             }
-            onToggleAnnotateShare={
-              liveKit?.screenSharing || meetingMachine.viewMode === 'screen-share'
-                ? () => {
-                    setAnnotateShareOpen((open) => {
-                      const next = !open
-                      presence.setAnnotationSessionOpen(next)
-                      return next
-                    })
-                  }
-                : () => {
-                    setShareOptionsInitialContent('screen')
-                    void import('~/co-work/lib/meeting-media-prefs').then(
-                      ({ loadMeetingMediaPrefs, saveMeetingMediaPrefs }) =>
-                        loadMeetingMediaPrefs().then((prefs) =>
-                          saveMeetingMediaPrefs({ ...prefs, annotateAfterShare: true }),
-                        ),
-                    )
-                    setShareOptionsOpen(true)
-                    toast.show('Share your screen to annotate', {
-                      tone: 'info',
-                      message: 'Pick Screen, then start sharing to draw on the stage.',
-                    })
-                  }
-            }
+            onToggleAnnotateShare={() => {
+              setAnnotateShareOpen((open) => {
+                const next = !open
+                presence.setAnnotationSessionOpen(next)
+                return next
+              })
+            }}
             annotateShareActive={annotateShareOpen || presence.annotationOpen}
             onRequestRemoteControl={() => {
               // Prefer the active screen sharer identity when available.
@@ -3160,6 +3257,7 @@ function MeetingRoomOverlay({
               setShareOptionsOpen(true)
             }}
             onOpenApps={() => setAppsSheetOpen(true)}
+            onOverlayOpenChange={setControlsOverlayOpen}
             onMuteAll={isAuthoritativeHost ? handleMuteAll : undefined}
             onAskAllToMute={canModerate ? () => void presence.askAllToMute() : undefined}
             onAskAllToUnmute={
@@ -3180,7 +3278,7 @@ function MeetingRoomOverlay({
             muteOnJoin={!!meetingState.security_settings?.muteOnJoin}
             onToggleVideoOffOnJoin={isAuthoritativeHost ? handleToggleVideoOffOnJoin : undefined}
             videoOffOnJoin={!!meetingState.security_settings?.videoOffOnJoin}
-            onToggleFullscreen={Platform.OS === 'web' ? toggleFullscreen : undefined}
+            onToggleFullscreen={toggleFullscreen}
             fullscreenActive={fullscreen.active}
             onMinimize={minimizeMeeting}
             onPictureInPicture={enterMeetingPip}
@@ -3191,7 +3289,7 @@ function MeetingRoomOverlay({
                 message: 'Tap Unmute when you want to speak again.',
               })
             }}
-            onOpenSettings={() => setInfoModalOpen(true)}
+            onOpenSettings={() => setSettingsSheetOpen(true)}
             onOpenSafeDriving={() => {
               if (liveKit?.videoEnabled) {
                 void presence.syncMediaState({ is_video_off: true })
@@ -3307,6 +3405,13 @@ function MeetingRoomOverlay({
         onClose={() => setAppsSheetOpen(false)}
         actions={[
           {
+            key: 'virtual_backgrounds',
+            label: 'Virtual Backgrounds',
+            hint: 'Blur or replace your camera background',
+            icon: Icons.Image,
+            onPress: () => presence.togglePanel('backgrounds'),
+          },
+          {
             key: 'polls',
             label: 'Polls',
             hint: 'Create and run live polls',
@@ -3352,6 +3457,67 @@ function MeetingRoomOverlay({
                 },
               ]
             : []),
+        ]}
+      />
+      <MeetingSettingsSheet
+        open={settingsSheetOpen}
+        onClose={() => setSettingsSheetOpen(false)}
+        actions={[
+          ...(canModerate
+            ? [
+                {
+                  key: 'meeting_settings',
+                  label: 'Meeting settings',
+                  icon: Icons.Video,
+                  onPress: () => presence.togglePanel('host_tools'),
+                },
+              ]
+            : []),
+          {
+            key: 'virtual_background',
+            label: 'Virtual background',
+            icon: Icons.Image,
+            onPress: () => {
+              if (!liveKit) return
+              presence.togglePanel('backgrounds')
+            },
+          },
+          {
+            key: 'video_filters',
+            label: 'Video filters',
+            icon: Icons.Sparkles,
+            onPress: () => {
+              toast.show('Video filters', {
+                tone: 'info',
+                message: 'Coming soon — use Virtual background for blur and images.',
+              })
+            },
+          },
+          {
+            key: 'audio',
+            label: 'Audio',
+            icon: Icons.Headphones,
+            onPress: () => presence.togglePanel('audio'),
+          },
+          {
+            key: 'captions',
+            label: 'Captions and translations',
+            icon: Icons.Captions,
+            onPress: () => toggleCaptions(),
+          },
+          {
+            key: 'safe_driving',
+            label: 'Safe driving mode',
+            icon: Icons.Car,
+            onPress: () => {
+              if (liveKit?.videoEnabled) {
+                void presence.syncMediaState({ is_video_off: true })
+                liveKit.toggleVideo()
+              }
+              if (liveKit?.audioEnabled) toggleMeetingAudio()
+              setSafeDrivingOpen(true)
+            },
+          },
         ]}
       />
       <MeetingInfoModal
@@ -3421,6 +3587,157 @@ function MeetingRoomOverlay({
         onClose={() => setAudioTestOpen(false)}
       />
       <MeetingShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      {/* Immersive chrome-hidden: Zoom-style quick actions (flip / background / chat / view / driving). */}
+      {layout.compactControls && !controlsVisible && !roomModalOpen && !sheetPanelOpen ? (
+        <XStack
+          position="absolute"
+          bottom={Math.max(safeBottom, 12) + 6}
+          alignSelf="center"
+          alignItems="center"
+          gap={10}
+          zIndex={25}
+          paddingHorizontal={12}
+          paddingVertical={8}
+          borderRadius={999}
+          backgroundColor="rgba(12, 8, 10, 0.78)"
+          borderWidth={1}
+          borderColor="rgba(255,255,255,0.16)"
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Switch camera"
+            hitSlop={12}
+            onPress={() => {
+              if (!liveKit) return
+              void (async () => {
+                try {
+                  const facing = await liveKit.flipCamera()
+                  toast.show(facing === 'environment' ? 'Rear camera' : 'Front camera', {
+                    tone: 'info',
+                  })
+                } catch (cause) {
+                  toast.show('Could not flip camera', {
+                    tone: 'danger',
+                    message: cause instanceof Error ? cause.message : 'Try again.',
+                  })
+                }
+              })()
+            }}
+            style={{
+              minWidth: 36,
+              height: 28,
+              borderRadius: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 8,
+              backgroundColor: 'rgba(255,255,255,0.12)',
+            }}
+          >
+            <Icons.RefreshCw size={14} color="#fff" />
+          </Pressable>
+          {liveKit ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Virtual background"
+              hitSlop={12}
+              onPress={() => {
+                dispatchUi({ type: 'SET_CONTROLS', visible: true })
+                presence.togglePanel('backgrounds')
+              }}
+              style={{
+                minWidth: 36,
+                height: 28,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 8,
+                backgroundColor:
+                  (liveKit.videoEffects.selection.mode ?? 'off') !== 'off'
+                    ? 'rgba(14, 114, 237, 0.55)'
+                    : 'rgba(255,255,255,0.12)',
+              }}
+            >
+              <Icons.Image size={14} color="#fff" />
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Meeting chat"
+            hitSlop={12}
+            onPress={() => {
+              dispatchUi({ type: 'SET_CONTROLS', visible: true })
+              presence.togglePanel('chat')
+            }}
+            style={{
+              minWidth: 36,
+              height: 28,
+              borderRadius: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 8,
+              backgroundColor: 'rgba(255,255,255,0.12)',
+            }}
+          >
+            <Icons.MessageSquare size={14} color="#fff" />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              meetingMachine.viewMode === 'speaker'
+                ? 'Switch to gallery view'
+                : 'Switch to speaker view'
+            }
+            hitSlop={12}
+            onPress={() => {
+              dispatchUi({
+                type: 'SET_VIEW',
+                viewMode: meetingMachine.viewMode === 'speaker' ? 'gallery' : 'speaker',
+              })
+            }}
+            style={{
+              minWidth: 36,
+              height: 28,
+              borderRadius: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 8,
+              backgroundColor: 'rgba(255,255,255,0.12)',
+            }}
+          >
+            {meetingMachine.viewMode === 'speaker' ? (
+              <Icons.Grid2x2 size={14} color="#fff" />
+            ) : (
+              <Icons.User size={14} color="#fff" />
+            )}
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Safe driving mode"
+            hitSlop={12}
+            onPress={() => {
+              if (liveKit?.videoEnabled) {
+                void presence.syncMediaState({ is_video_off: true })
+                liveKit.toggleVideo()
+              }
+              if (liveKit?.audioEnabled) toggleMeetingAudio()
+              setSafeDrivingOpen(true)
+            }}
+            style={{
+              minWidth: 36,
+              height: 28,
+              borderRadius: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 8,
+              backgroundColor: 'rgba(255,255,255,0.12)',
+            }}
+          >
+            <Icons.Car size={14} color="#fff" />
+          </Pressable>
+        </XStack>
+      ) : null}
+
       <MeetingSafeDrivingMode
         open={safeDrivingOpen}
         muted={!(liveKit?.audioEnabled ?? true) && !safeDrivingSpeaking}

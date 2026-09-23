@@ -149,6 +149,7 @@ export function useMeetingPresence({
     message: string
   } | null>(null)
   const [floatingReactions, setFloatingReactions] = useState<FloatingMeetingReaction[]>([])
+  const [liveRecordingSignal, setLiveRecordingSignal] = useState<boolean | null>(null)
   const [nonverbalByUserId, setNonverbalByUserId] = useState<
     Record<string, MeetingNonverbalStatusId>
   >({})
@@ -577,12 +578,20 @@ export function useMeetingPresence({
       }
       if (payload.type === 'remote-control-response' && payload.to === userId) {
         setLatestChatNotice({
-          id: `remote-control-res-${payload.timestamp}`,
+          id: `rc-resp-${payload.timestamp}`,
           title: 'Remote control',
           message: payload.accepted
-            ? 'Your remote control request was accepted.'
-            : 'Your remote control request was denied.',
+            ? 'Your remote control request was accepted'
+            : 'Your remote control request was denied',
         })
+        return
+      }
+      if (payload.type === 'host-transferred') {
+        void refreshParticipants()
+        return
+      }
+      if (payload.type === 'recording-status') {
+        setLiveRecordingSignal(payload.isRecording)
         return
       }
       if (payload.type !== 'presence' || payload.from === userId) return
@@ -1080,10 +1089,32 @@ export function useMeetingPresence({
     await refreshParticipants()
   }, [meeting.id, refreshParticipants])
 
-  const transferHost = useCallback(async (targetUserId: string) => {
-    await transferMeetingHost(meeting.id, targetUserId)
-    await refreshParticipants()
-  }, [meeting.id, refreshParticipants])
+  const transferHost = useCallback(
+    async (targetUserId: string) => {
+      await transferMeetingHost(meeting.id, targetUserId)
+      sendSignal({
+        type: 'host-transferred',
+        from: userId,
+        newHostId: targetUserId,
+        timestamp: Date.now(),
+      })
+      await refreshParticipants()
+    },
+    [meeting.id, refreshParticipants, sendSignal, userId],
+  )
+
+  const broadcastRecordingStatus = useCallback(
+    (isRecording: boolean) => {
+      setLiveRecordingSignal(isRecording)
+      sendSignal({
+        type: 'recording-status',
+        from: userId,
+        isRecording,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
 
   const broadcastCaption = useCallback(
     (text: string, speaker: string, sourceLang?: string, isFinal = true) => {
@@ -1498,5 +1529,7 @@ export function useMeetingPresence({
     publishAnnotationStroke,
     clearAnnotations,
     setAnnotationSessionOpen,
+    liveRecordingSignal,
+    broadcastRecordingStatus,
   }
 }

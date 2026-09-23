@@ -43,7 +43,7 @@ export function MeetingVideoGrid({
 }: MeetingVideoGridProps) {
   const remotes = Object.values(remotePeers)
   const { width, height } = useWindowDimensions()
-  // Approximate stage after meeting chrome (header + control dock).
+  // Approximate stage after meeting UI (header + control dock).
   const stageWidth = Math.max(width - 24, 1)
   const stageHeight = Math.max(height - 200, 1)
 

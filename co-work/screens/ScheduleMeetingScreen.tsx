@@ -536,7 +536,7 @@ export function ScheduleMeetingScreen() {
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
       <YStack gap="$5" width="100%" {...LAYOUT_STRETCH}>
-        {/* Zoom-style Cancel / title / Save chrome */}
+        {/* Zoom-style Cancel / title / Save bar */}
         <XStack alignItems="center" justifyContent="space-between" gap="$3" paddingBottom="$1">
           <Button
             tone="ghost"

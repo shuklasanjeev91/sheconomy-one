@@ -45,10 +45,10 @@ export function captionOverlayLayout(input: {
       Math.round(input.viewportWidth * (input.wideLayout ? 0.42 : 0.92)),
     ),
   )
-  const reservedChrome = input.bottomOffsetHint ?? (input.presentationSafe ? 260 : 220)
+  const reservedBottom = input.bottomOffsetHint ?? (input.presentationSafe ? 260 : 220)
   const maxHeight = Math.min(
     HEIGHTS[input.size],
-    Math.max(72, input.viewportHeight - reservedChrome),
+    Math.max(72, input.viewportHeight - reservedBottom),
   )
 
   return {

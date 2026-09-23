@@ -55,7 +55,7 @@ export default function CoWorkMeetingLiveRoute() {
       navigateApp(coWorkRoutes.home)
       return
     }
-    navigateApp(coWorkRoutes.meetings)
+    navigateApp(coWorkRoutes.home)
   }, [code])
 
   if (!code) {

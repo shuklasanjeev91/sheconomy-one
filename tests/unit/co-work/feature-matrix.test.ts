@@ -20,7 +20,7 @@ import type { TrackReferenceOrPlaceholder } from '@livekit/components-core'
  * Pure helpers only — no LiveKit/DOM. Guards Zoom-like 1–N room behavior.
  */
 describe('co-work feature matrix (web + native)', () => {
-  it('exposes host primary controls including security, share, leave, end', () => {
+  it('exposes host primary controls including share, more, end on Zoom dock', () => {
     const keys = meetingToolbarPrimaryKeys({
       viewerRole: 'host',
       supportsVideo: true,
@@ -31,21 +31,18 @@ describe('co-work feature matrix (web + native)', () => {
     for (const key of [
       'mic',
       'camera',
-      'security',
       'participants',
       'chat',
       'reactions',
       'share_screen',
-      'record',
+      'captions',
+      'whiteboard',
+      'docs',
+      'apps',
       'more',
-      'leave',
       'end_meeting',
     ] as const) {
       expect(keys).toContain(key)
-    }
-    // Secondary Zoom actions live under More — not the primary dock.
-    for (const key of ['raise_hand', 'whiteboard', 'captions', 'invite', 'browse'] as const) {
-      expect(keys).not.toContain(key)
     }
   })
 

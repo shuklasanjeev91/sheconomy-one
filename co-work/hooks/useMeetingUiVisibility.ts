@@ -4,23 +4,23 @@ import { Platform } from 'react-native'
 import {
   MEETING_CONTROLS_IDLE_MS,
   shouldAutoHideMeetingControls,
-  type MeetingChromeVisibilityInput,
-} from '~/co-work/lib/meeting-ui-chrome'
+  type MeetingUiVisibilityInput,
+} from '~/co-work/lib/meeting-ui-overlay'
 
-type UseMeetingUiChromeOptions = MeetingChromeVisibilityInput & {
+type UseMeetingUiVisibilityOptions = MeetingUiVisibilityInput & {
   controlsVisible: boolean
   onSetControlsVisible: (visible: boolean) => void
 }
 
 /**
- * Auto-hides immersive meeting chrome after idle, and reveals it on move/tap.
+ * Auto-hides immersive meeting controls after idle, and reveals them on move/tap.
  * Critical actions stay available via a separate peek in the room screen.
  */
-export function useMeetingUiChrome({
+export function useMeetingUiVisibility({
   controlsVisible,
   onSetControlsVisible,
   ...visibility
-}: UseMeetingUiChromeOptions) {
+}: UseMeetingUiVisibilityOptions) {
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const visibilityRef = useRef(visibility)
   visibilityRef.current = visibility
@@ -62,13 +62,14 @@ export function useMeetingUiChrome({
     scheduleHide,
     visibility.busy,
     visibility.controlsPinned,
+    visibility.modalOpen,
     visibility.panelOpen,
     visibility.uiMode,
     visibility.viewMode,
     visibility.waitingCount,
   ])
 
-  // Web: mouse movement anywhere in the meeting reveals chrome.
+  // Web: mouse movement anywhere in the meeting reveals controls.
   // Use refs so the listener identity stays stable (avoids re-bind storms).
   const revealRef = useRef(revealControls)
   revealRef.current = revealControls
@@ -88,14 +89,30 @@ export function useMeetingUiChrome({
   }, [
     visibility.busy,
     visibility.controlsPinned,
+    visibility.modalOpen,
     visibility.panelOpen,
     visibility.uiMode,
     visibility.viewMode,
     visibility.waitingCount,
   ])
 
+  const toggleControls = useCallback(() => {
+    if (!shouldAutoHideMeetingControls(visibilityRef.current)) {
+      if (!controlsVisible) onSetControlsVisible(true)
+      return
+    }
+    if (controlsVisible) {
+      clearIdle()
+      onSetControlsVisible(false)
+    } else {
+      onSetControlsVisible(true)
+      scheduleHide()
+    }
+  }, [clearIdle, controlsVisible, onSetControlsVisible, scheduleHide])
+
   return {
     revealControls,
+    toggleControls,
     scheduleHide,
   }
 }

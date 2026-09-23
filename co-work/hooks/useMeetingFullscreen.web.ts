@@ -39,7 +39,8 @@ async function exitDocumentFullscreen(): Promise<void> {
 }
 
 /**
- * Web Fullscreen API for the meeting stage. Native no-ops via the `.native` stub.
+ * Web Fullscreen API for the meeting stage (`.web` platform).
+ * Native immersive mode lives in `useMeetingFullscreen.native.ts`.
  */
 export function useMeetingFullscreen(target?: HTMLElement | null) {
   const capabilities = detectMeetingWebCapabilities()

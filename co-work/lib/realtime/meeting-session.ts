@@ -15,7 +15,7 @@ export type MeetingMediaAdapter = {
   stopScreenShare: () => void | Promise<void>
   changeAudioDevice: (deviceId: string) => Promise<void>
   changeVideoDevice: (deviceId: string) => Promise<void>
-  /** Optional readouts for UI chrome (not required to swap transports). */
+  /** Optional readouts for UI overlay (not required to swap transports). */
   getMediaSnapshot?: () => MeetingMediaSnapshot
 }
 

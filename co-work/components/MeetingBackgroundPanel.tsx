@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Alert, Image, Pressable } from 'react-native'
+import { Alert, Image } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { Button, Icons, ScrollView, Slider, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
@@ -383,7 +384,7 @@ function EffectTile({
           borderColor={borderColor}
           alignItems="center"
           justifyContent="center"
-          backgroundColor={coworkUi.surface}
+          backgroundColor="#1a1218"
         >
           {imageSource || imageUri ? (
             <Image

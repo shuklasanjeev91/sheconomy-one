@@ -35,12 +35,18 @@ type MeetingBackgroundPreviewProps = {
   /** When false, stop the local camera so Join can open without fighting the lobby preview. */
   active?: boolean
   videoOverlay?: ReactNode
+  pickerOpen?: boolean
+  onTogglePicker?: () => void
+  /** Zoom join chrome (native uses side VB + flip; web ignores). */
+  joinChrome?: boolean
 }
 
 export function MeetingBackgroundPreview({
   userId,
   active = true,
   videoOverlay,
+  pickerOpen,
+  onTogglePicker,
 }: MeetingBackgroundPreviewProps = {}) {
   const toast = useAppToast()
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -290,6 +296,8 @@ export function MeetingBackgroundPreview({
       customItems={customs}
       selectedImageUri={previewImageUri}
       videoOverlay={videoOverlay}
+      pickerOpen={pickerOpen}
+      onTogglePicker={onTogglePicker}
       preview={
         <video
           ref={videoRef}

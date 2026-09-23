@@ -17,12 +17,12 @@ import {
 } from '~/co-work/lib/meeting-gallery-layout'
 import {
   meetingStageContentBox,
-  resolveMeetingChromeLayout,
+  resolveMeetingUiLayout,
 } from '~/co-work/lib/meeting-orientation-layout'
 import {
-  applyMeetingUiChromeLayout,
-  resolveMeetingUiChromePadding,
-} from '~/co-work/lib/meeting-ui-chrome'
+  applyMeetingUiLayout,
+  resolveMeetingUiPadding,
+} from '~/co-work/lib/meeting-ui-overlay'
 import { applyMeetingSelectiveCameraSubscribe } from '~/co-work/lib/meeting-selective-subscribe'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useMeetingMachine } from '~/co-work/components/MeetingProvider'
@@ -44,8 +44,8 @@ export function MeetingVideoStage() {
       loadMeetingMediaPrefs().then((prefs) => setHdVideoPref(prefs.hdVideo !== false)),
     )
   }, [])
-  const chrome = useMemo(() => {
-    const base = resolveMeetingChromeLayout({
+  const uiLayout = useMemo(() => {
+    const base = resolveMeetingUiLayout({
       width,
       height,
       safeTop,
@@ -56,10 +56,10 @@ export function MeetingVideoStage() {
       isDesktop,
       isNative: false,
     })
-    return applyMeetingUiChromeLayout(
+    return applyMeetingUiLayout(
       base,
-      resolveMeetingUiChromePadding({
-        chrome: base,
+      resolveMeetingUiPadding({
+        layout: base,
         uiMode: state.uiMode,
         controlsVisible: state.controlsVisible,
         safeTop,
@@ -81,7 +81,7 @@ export function MeetingVideoStage() {
   const { stageTracks, filmstripTracks, totalTiles, hasScreenShare, isLocalScreenSharing } =
     useMeetingGalleryTracks()
   const [page, setPage] = useState(0)
-  const [filmstripWidth, setFilmstripWidth] = useState(chrome.filmstripWidth)
+  const [filmstripWidth, setFilmstripWidth] = useState(uiLayout.filmstripWidth)
   const [filmstripOffset, setFilmstripOffset] = useState({ x: 0, y: 0 })
   const [screenShareBannerVisible, setScreenShareBannerVisible] = useState(false)
   const previousScreenShare = useRef(false)
@@ -95,30 +95,30 @@ export function MeetingVideoStage() {
     originY: number
   } | null>(null)
   const pageSize = resolveMeetingGalleryPageSize({
-    basePageSize: chrome.pageSize,
+    basePageSize: uiLayout.pageSize,
     denseGallery: state.denseGallery,
-    breakpoint: chrome.breakpoint,
+    breakpoint: uiLayout.breakpoint,
   })
   const filmstripExpanded = filmstripTracks.length > 0 && !state.participantStripMinimized
   const screenLayoutEarly = state.viewMode === 'screen-share' && hasScreenShare
   const speakerLayoutEarly = state.viewMode === 'speaker'
   const filmstripBesideEarly =
     speakerLayoutEarly || screenLayoutEarly
-      ? chrome.filmstripBeside || width >= 700 || state.sideBySideShare
-      : chrome.filmstripBeside || state.sideBySideShare
+      ? uiLayout.filmstripBeside || width >= 700 || state.sideBySideShare
+      : uiLayout.filmstripBeside || state.sideBySideShare
   const { width: stageWidth, height: stageHeight } = meetingStageContentBox({
     viewportWidth: width,
     viewportHeight: height,
-    chrome: {
-      ...chrome,
+    layout: {
+      ...uiLayout,
       filmstripBeside: filmstripBesideEarly,
       filmstripWidth: filmstripBesideEarly
-        ? Math.max(chrome.filmstripWidth, speakerLayoutEarly ? 120 : chrome.filmstripWidth)
-        : chrome.filmstripWidth,
+        ? Math.max(uiLayout.filmstripWidth, speakerLayoutEarly ? 120 : uiLayout.filmstripWidth)
+        : uiLayout.filmstripWidth,
       filmstripHeight:
         speakerLayoutEarly && !filmstripBesideEarly
-          ? Math.max(chrome.filmstripHeight, 96)
-          : chrome.filmstripHeight,
+          ? Math.max(uiLayout.filmstripHeight, 96)
+          : uiLayout.filmstripHeight,
     },
     filmstripExpanded,
     stageTrailingInset,
@@ -190,13 +190,13 @@ export function MeetingVideoStage() {
   }, [hasScreenShare, screenShareBannerVisible])
 
   useEffect(() => {
-    setFilmstripWidth(chrome.filmstripWidth)
-  }, [chrome.filmstripWidth])
+    setFilmstripWidth(uiLayout.filmstripWidth)
+  }, [uiLayout.filmstripWidth])
 
   useEffect(() => {
     if (
-      !chrome.filmstripBeside ||
-      chrome.policy === 'landscape-phone' ||
+      !uiLayout.filmstripBeside ||
+      uiLayout.policy === 'landscape-phone' ||
       state.participantStripMinimized ||
       !filmstripRef.current ||
       typeof ResizeObserver === 'undefined'
@@ -208,7 +208,7 @@ export function MeetingVideoStage() {
     })
     observer.observe(filmstripRef.current)
     return () => observer.disconnect()
-  }, [chrome.filmstripBeside, chrome.policy, state.participantStripMinimized])
+  }, [uiLayout.filmstripBeside, uiLayout.policy, state.participantStripMinimized])
 
   useEffect(() => {
     if (!isDesktop) {
@@ -240,14 +240,14 @@ export function MeetingVideoStage() {
     }
   }, [filmstripWidth, isDesktop, stageHeight, stageWidth])
 
-  const layout = useMemo(
+  const galleryLayout = useMemo(
     () =>
       meetingGalleryLayout(paged.items.length, {
         width: stageWidth,
         height: stageHeight,
-        preferWide: chrome.galleryPreferWide,
+        preferWide: uiLayout.galleryPreferWide,
       }),
-    [chrome.galleryPreferWide, paged.items.length, stageWidth, stageHeight],
+    [uiLayout.galleryPreferWide, paged.items.length, stageWidth, stageHeight],
   )
   const screenLayout = screenLayoutEarly
   const speakerLayout = speakerLayoutEarly
@@ -270,16 +270,16 @@ export function MeetingVideoStage() {
       : '',
     speakerLayout ? 'sheconomy-video-stage--speaker' : '',
     filmstripBeside ? 'sheconomy-video-stage--filmstrip-beside' : 'sheconomy-video-stage--filmstrip-bottom',
-    chrome.policy === 'landscape-phone' ? 'sheconomy-video-stage--landscape-phone' : '',
-    chrome.policy === 'portrait-phone' ? 'sheconomy-video-stage--portrait-phone' : '',
+    uiLayout.policy === 'landscape-phone' ? 'sheconomy-video-stage--landscape-phone' : '',
+    uiLayout.policy === 'portrait-phone' ? 'sheconomy-video-stage--portrait-phone' : '',
   ]
     .filter(Boolean)
     .join(' ')
 
-  const galleryCols = screenLayout || speakerLayout ? 1 : layout.columns
-  const galleryRows = screenLayout || speakerLayout ? 1 : layout.rows
+  const galleryCols = screenLayout || speakerLayout ? 1 : galleryLayout.columns
+  const galleryRows = screenLayout || speakerLayout ? 1 : galleryLayout.rows
   const speakerFilmstripWidth = Math.max(
-    filmstripBeside ? filmstripWidth : chrome.filmstripWidth,
+    filmstripBeside ? filmstripWidth : uiLayout.filmstripWidth,
     speakerLayout ? 120 : 0,
   )
 
@@ -291,16 +291,16 @@ export function MeetingVideoStage() {
         {
           '--filmstrip-width': state.participantStripMinimized
             ? '44px'
-            : `${filmstripBeside ? speakerFilmstripWidth : chrome.filmstripWidth}px`,
-          '--stage-pad-top': `${chrome.stagePaddingTop}px`,
-          '--stage-pad-bottom': `${chrome.stagePaddingBottom}px`,
-          '--stage-pad-left': `${chrome.stagePaddingLeft}px`,
-          '--stage-pad-right': `${chrome.stagePaddingRight}px`,
-          '--filmstrip-height': `${speakerLayout && !filmstripBeside ? Math.max(chrome.filmstripHeight, 96) : chrome.filmstripHeight}px`,
-          paddingTop: chrome.stagePaddingTop,
-          paddingBottom: chrome.stagePaddingBottom,
-          paddingLeft: chrome.stagePaddingLeft,
-          paddingRight: chrome.stagePaddingRight + stageTrailingInset,
+            : `${filmstripBeside ? speakerFilmstripWidth : uiLayout.filmstripWidth}px`,
+          '--stage-pad-top': `${uiLayout.stagePaddingTop}px`,
+          '--stage-pad-bottom': `${uiLayout.stagePaddingBottom}px`,
+          '--stage-pad-left': `${uiLayout.stagePaddingLeft}px`,
+          '--stage-pad-right': `${uiLayout.stagePaddingRight}px`,
+          '--filmstrip-height': `${speakerLayout && !filmstripBeside ? Math.max(uiLayout.filmstripHeight, 96) : uiLayout.filmstripHeight}px`,
+          paddingTop: uiLayout.stagePaddingTop,
+          paddingBottom: uiLayout.stagePaddingBottom,
+          paddingLeft: uiLayout.stagePaddingLeft,
+          paddingRight: uiLayout.stagePaddingRight + stageTrailingInset,
           boxSizing: 'border-box',
         } as CSSProperties
       }

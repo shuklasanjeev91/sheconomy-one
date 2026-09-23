@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MEETING_SIDE_PANEL_Z_INDEX,
   MEETING_TOOLBAR_Z_INDEX,
-  meetingToolbarChrome,
+  meetingToolbarMode,
   meetingToolbarMoreKeys,
   meetingToolbarMoreSections,
   meetingToolbarPrimaryKeys,
@@ -12,11 +12,11 @@ import {
 } from '../../../co-work/lib/meeting-toolbar'
 
 describe('meeting toolbar layout', () => {
-  it('maps compact → Zoom mobile chrome and roomy → Zoom web', () => {
-    expect(meetingToolbarChrome({ compact: true })).toBe('mobile')
-    expect(meetingToolbarChrome({ compact: false })).toBe('web')
-    expect(meetingToolbarChrome({ chrome: 'mobile' })).toBe('mobile')
-    expect(meetingToolbarChrome({ chrome: 'web', compact: true })).toBe('web')
+  it('maps compact → Zoom mobile UI and roomy → Zoom web', () => {
+    expect(meetingToolbarMode({ compact: true })).toBe('mobile')
+    expect(meetingToolbarMode({ compact: false })).toBe('web')
+    expect(meetingToolbarMode({ mode: 'mobile' })).toBe('mobile')
+    expect(meetingToolbarMode({ mode: 'web', compact: true })).toBe('web')
   })
 
   it('keeps a lean Zoom iPad/large primary dock', () => {
@@ -33,6 +33,7 @@ describe('meeting toolbar layout', () => {
       'participants',
       'chat',
       'reactions',
+      'raise_hand',
       'share_screen',
       'captions',
       'whiteboard',
@@ -59,6 +60,7 @@ describe('meeting toolbar layout', () => {
       'participants',
       'chat',
       'reactions',
+      'raise_hand',
       'share_screen',
       'captions',
       'whiteboard',
@@ -108,7 +110,7 @@ describe('meeting toolbar layout', () => {
         viewerRole: 'participant',
         supportsVideo: true,
         supportsScreenShare: true,
-        chrome: 'mobile',
+        mode: 'mobile',
       }),
     ).toContain('chat')
     expect(
@@ -116,7 +118,7 @@ describe('meeting toolbar layout', () => {
         viewerRole: 'participant',
         supportsVideo: true,
         supportsScreenShare: true,
-        chrome: 'mobile',
+        mode: 'mobile',
       }),
     ).not.toContain('share_screen')
   })
@@ -177,17 +179,17 @@ describe('meeting toolbar layout', () => {
 
   it('shortens Zoom mobile dock captions', () => {
     expect(
-      meetingToolbarPrimaryLabel('camera', { chrome: 'mobile', videoEnabled: true }),
+      meetingToolbarPrimaryLabel('camera', { mode: 'mobile', videoEnabled: true }),
     ).toBe('Stop video')
     expect(
-      meetingToolbarPrimaryLabel('camera', { chrome: 'web', videoEnabled: true }),
+      meetingToolbarPrimaryLabel('camera', { mode: 'web', videoEnabled: true }),
     ).toBe('Stop Video')
-    expect(meetingToolbarPrimaryLabel('participants', { chrome: 'mobile' })).toBe('People')
-    expect(meetingToolbarPrimaryLabel('share_screen', { chrome: 'mobile' })).toBe('Share')
-    expect(meetingToolbarPrimaryLabel('reactions', { chrome: 'web' })).toBe('Reactions')
-    expect(meetingToolbarPrimaryLabel('share_screen', { chrome: 'web' })).toBe('Start share')
-    expect(meetingToolbarPrimaryLabel('docs', { chrome: 'web' })).toBe('Docs')
-    expect(meetingToolbarPrimaryLabel('apps', { chrome: 'web' })).toBe('Apps')
+    expect(meetingToolbarPrimaryLabel('participants', { mode: 'mobile' })).toBe('People')
+    expect(meetingToolbarPrimaryLabel('share_screen', { mode: 'mobile' })).toBe('Share')
+    expect(meetingToolbarPrimaryLabel('reactions', { mode: 'web' })).toBe('Reactions')
+    expect(meetingToolbarPrimaryLabel('share_screen', { mode: 'web' })).toBe('Start share')
+    expect(meetingToolbarPrimaryLabel('docs', { mode: 'web' })).toBe('Docs')
+    expect(meetingToolbarPrimaryLabel('apps', { mode: 'web' })).toBe('Apps')
   })
 
   it('orders Zoom mobile More: Meeting (chat) → AV → View → Apps → Host', () => {

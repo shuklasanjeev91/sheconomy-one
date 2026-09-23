@@ -6,6 +6,7 @@ import {
   peekGlobalSession,
   registerGlobalSession,
   setGlobalSessionHandlers,
+  updateGlobalSessionActiveTrack,
   updateGlobalSessionMedia,
   updateGlobalSessionMeta,
   type GlobalSessionHandlers,
@@ -38,6 +39,7 @@ type UseRegisterGlobalSessionArgs = {
     speakerOn?: boolean
   }
   handlers: GlobalSessionHandlers
+  activeTrackRef?: any
 }
 
 function codesMatch(a: string, b: string) {
@@ -69,6 +71,7 @@ export function useRegisterGlobalSession({
   participantCount,
   media,
   handlers,
+  activeTrackRef,
 }: UseRegisterGlobalSessionArgs) {
   const handlersRef = useRef(handlers)
   handlersRef.current = handlers
@@ -97,6 +100,7 @@ export function useRegisterGlobalSession({
       },
       pipSupported: pip.supported,
       pipUnsupportedMessage: pip.supported ? null : sessionPipUnsupportedMessage(pip),
+      activeTrackRef,
       handlers: {
         toggleMic: () => handlersRef.current.toggleMic?.(),
         toggleCamera: () => handlersRef.current.toggleCamera?.(),
@@ -122,6 +126,11 @@ export function useRegisterGlobalSession({
     subtitle,
     title,
   ])
+
+  useEffect(() => {
+    if (!active) return
+    updateGlobalSessionActiveTrack(activeTrackRef)
+  }, [active, activeTrackRef])
 
   useEffect(() => {
     if (!active) return

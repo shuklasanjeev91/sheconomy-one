@@ -125,7 +125,7 @@ export function GeoSearchSheet({
       {Platform.OS === 'web' ? (
         sheetBody
       ) : (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           {sheetBody}
         </KeyboardAvoidingView>
       )}

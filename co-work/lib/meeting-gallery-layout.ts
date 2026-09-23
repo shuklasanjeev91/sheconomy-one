@@ -4,9 +4,9 @@ export type GalleryLayout = {
 }
 
 export type GalleryLayoutOptions = {
-  /** Usable stage width in px (after chrome / padding). */
+  /** Usable stage width in px (after UI insets / padding). */
   width: number
-  /** Usable stage height in px (after chrome / padding). */
+  /** Usable stage height in px (after UI insets / padding). */
   height: number
   /** Prefer wide/landscape packing when the orientation policy says so. */
   preferWide?: boolean

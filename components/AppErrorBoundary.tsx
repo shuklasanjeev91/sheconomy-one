@@ -1,5 +1,6 @@
 import { Component, Fragment, type ErrorInfo, type ReactNode } from 'react'
-import { Platform, Pressable, StyleSheet, Text as RNText, View } from 'react-native'
+import { Platform, StyleSheet, Text as RNText, View } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { logger } from '~/lib/api'
 import { appRoutes } from '~/lib/routes'
@@ -11,6 +12,8 @@ type Props = {
   scope?: string
   /** Show the underlying error message even in Release (useful for meeting debug). */
   alwaysShowError?: boolean
+  /** Called when the user taps Try again / Go home (e.g. tear down InstantMeetingHost). */
+  onDismiss?: () => void
 }
 
 type State = {
@@ -200,10 +203,12 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   private handleRetry = () => {
+    this.props.onDismiss?.()
     this.setState({ error: null, supportRef: null, remountKey: Date.now() })
   }
 
   private handleGoHome = () => {
+    this.props.onDismiss?.()
     this.setState({ error: null, supportRef: null, remountKey: Date.now() })
     try {
       replaceApp(appRoutes.home)

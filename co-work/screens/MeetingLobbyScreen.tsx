@@ -1,9 +1,10 @@
 import { AppLink } from '~/components/navigation/AppLink'
 import { useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react'
-import { Pressable } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useRouter } from 'one'
 
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
+import { ensureGuestUserSession } from '~/co-work/lib/guest-session'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection, ScreenCenter } from '~/components/layout'
 import { BRAND_MEMBER_LABEL } from '~/config/brand'
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
@@ -116,7 +117,7 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
 function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
   const router = useRouter()
-  const { isDesktop, isTablet } = useAppLayout()
+  const { isDesktop, isTablet, safeTop, safeBottom } = useAppLayout()
   const wide = isDesktop || isTablet
   const toast = useAppToast()
   const { profile, user, isAuthenticated, isLoading } = useProfile()
@@ -271,6 +272,19 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
     const preferredVideo = opts?.videoEnabled ?? !turnOffVideo
     unlockWebAudioPlayback()
     void (async () => {
+      if (!user) {
+        try {
+          await ensureGuestUserSession(joinDisplayName)
+        } catch (guestErr) {
+          joiningRef.current = false
+          setPreviewActive(true)
+          toast.show('Could not join as guest', {
+            tone: 'error',
+            message: guestErr instanceof Error ? guestErr.message : 'Please try again',
+          })
+          return
+        }
+      }
       const perms = await ensureMeetingMobilePermissions({
         requestNotifications: false,
         requestMicrophone: preferredAudio,
@@ -335,17 +349,19 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
 
   if (loadingMeeting || (isLoading && !user)) {
     return (
-      <ScreenCenter backgroundColor="#0c080a">
+      <ScreenCenter
+        backgroundColor="#0c080a"
+        style={{
+          paddingTop: Math.max(safeTop, 16),
+          paddingBottom: Math.max(safeBottom, 16),
+        }}
+      >
         <Spinner size="large" color={coworkUi.brand} />
         <Text color={coworkUi.textSecondary} marginTop="$3">
           Preparing video preview…
         </Text>
       </ScreenCenter>
     )
-  }
-
-  if (!isAuthenticated || !user) {
-    return <AuthSignInFlow returnTo={String(coWorkRoutes.meeting(normalizedCode || code))} />
   }
 
   const joinReady = meeting && verified && isMeetingJoinable(meeting)
@@ -362,8 +378,9 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
       style={{ minHeight: '100%', backgroundColor: '#0c080a' }}
     >
       <PageSection
-        paddingVertical={wide ? '$4' : '$3'}
-        paddingBottom="$8"
+        paddingTop={wide ? 20 : Math.max(safeTop, 14)}
+        paddingBottom={wide ? 32 : Math.max(safeBottom, 20) + 24}
+        paddingHorizontal={wide ? '$4' : '$3'}
         {...LAYOUT_STRETCH}
       >
         {/* Centered Zoom Video Preview Window */}
@@ -381,23 +398,38 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
             boxShadow: '0 24px 64px rgba(0, 0, 0, 0.7)',
           }}
         >
-          {/* Zoom Window Header Bar */}
-          <XStack alignItems="center" justifyContent="space-between" paddingBottom="$1">
-            <XStack alignItems="center" gap="$2">
-              <Icons.Video size={17} color={coworkUi.brand} />
-              <Text fontSize={15} fontWeight="700" color="#ffffff" letterSpacing={0.2}>
-                Video Preview
+          {/* Zoom Window Header Bar (Image 3: Cancel on top-left) */}
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            paddingTop={wide ? 0 : 4}
+            paddingBottom="$1"
+          >
+            <Pressable
+              onPress={() => router.push(coWorkRoutes.home as never)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text fontSize={15} fontWeight="700" color="#0E72ED">
+                Cancel
+              </Text>
+            </Pressable>
+            <XStack alignItems="center" gap="$1.5">
+              <Icons.ShieldCheck size={16} color="#22C55E" />
+              <Text fontSize={14} fontWeight="700" color="#fff">
+                Sheconomy
               </Text>
             </XStack>
-            <XStack
-              cursor="pointer"
-              padding="$1.5"
-              borderRadius={999}
-              pressStyle={{ opacity: 0.7 }}
+            <Pressable
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Close preview"
               onPress={() => router.push(coWorkRoutes.home as never)}
+              style={{ padding: 4 }}
             >
               <Icons.X size={18} color={coworkUi.textMuted} />
-            </XStack>
+            </Pressable>
           </XStack>
 
           {/* Meeting Details Sub-Header */}
@@ -516,22 +548,138 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
             </YStack>
           ) : null}
 
-          {/* Video preview + join panel — split on desktop, stacked on tablet/mobile */}
-          {joinReady ? (
-            <YStack width="100%" gap="$3">
-              <XStack
-                width="100%"
-                gap={isDesktop ? '$5' : '$3'}
-                flexWrap={isDesktop ? 'nowrap' : 'wrap'}
-                alignItems={isDesktop ? 'flex-start' : 'stretch'}
+          {/* Video preview + join panel — Zoom-style preview card */}
+          {joinReady ? (() => {
+            const previewOverlayControls = (
+              <YStack
+                position="absolute"
+                top={0}
+                left={0}
+                right={0}
+                bottom={0}
+                zIndex={25}
+                pointerEvents="box-none"
+                justifyContent="space-between"
+                padding="$2.5"
               >
-                <YStack
-                  flexGrow={1}
-                  flexShrink={1}
-                  flexBasis={isDesktop ? '0%' : '100%'}
-                  width={isDesktop ? undefined : '100%'}
-                  minWidth={0}
+                {/* Top row: Name badge on left, floating tools on right (Speaker, Flip, Effects) */}
+                <XStack alignItems="center" justifyContent="space-between" width="100%" pointerEvents="box-none">
+                  <ViewerNameBadge
+                    name={viewerName}
+                    muted={doNotConnectAudio}
+                    dangerColor={coworkUi.danger}
+                  />
+                  <XStack alignItems="center" gap="$1.5" pointerEvents="auto">
+                    <Pressable
+                      onPress={() => setShowAudioTest(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Audio settings"
+                      hitSlop={8}
+                      style={({ pressed }) => ({
+                        width: 36,
+                        height: 36,
+                        borderRadius: 999,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: pressed ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.15)',
+                      })}
+                    >
+                      <Icons.Volume2 size={16} color="#fff" />
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => {
+                        setPreviewActive(false)
+                        setTimeout(() => setPreviewActive(true), 150)
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Flip camera"
+                      hitSlop={8}
+                      style={({ pressed }) => ({
+                        width: 36,
+                        height: 36,
+                        borderRadius: 999,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: pressed ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.15)',
+                      })}
+                    >
+                      <Icons.RefreshCw size={15} color="#fff" />
+                    </Pressable>
+                  </XStack>
+                </XStack>
+
+                {/* Bottom center: Mic and Camera toggles floating on video (Image 3) */}
+                <XStack
+                  alignItems="center"
+                  justifyContent="center"
+                  gap="$4"
+                  width="100%"
+                  pointerEvents="auto"
+                  paddingBottom="$1"
                 >
+                  <Pressable
+                    onPress={() => setDoNotConnectAudio((v) => !v)}
+                    accessibilityRole="button"
+                    accessibilityLabel={doNotConnectAudio ? 'Unmute microphone' : 'Mute microphone'}
+                    style={({ pressed }) => ({
+                      width: 48,
+                      height: 48,
+                      borderRadius: 999,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: doNotConnectAudio
+                        ? coworkUi.danger
+                        : pressed
+                          ? 'rgba(0,0,0,0.85)'
+                          : 'rgba(0,0,0,0.65)',
+                      borderWidth: 1.5,
+                      borderColor: doNotConnectAudio ? coworkUi.danger : 'rgba(255,255,255,0.25)',
+                    })}
+                  >
+                    {doNotConnectAudio ? (
+                      <Icons.MicOff size={20} color="#fff" />
+                    ) : (
+                      <Icons.Mic size={20} color="#fff" />
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setTurnOffVideo((v) => !v)}
+                    accessibilityRole="button"
+                    accessibilityLabel={turnOffVideo ? 'Turn camera on' : 'Turn camera off'}
+                    style={({ pressed }) => ({
+                      width: 48,
+                      height: 48,
+                      borderRadius: 999,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: turnOffVideo
+                        ? coworkUi.danger
+                        : pressed
+                          ? 'rgba(0,0,0,0.85)'
+                          : 'rgba(0,0,0,0.65)',
+                      borderWidth: 1.5,
+                      borderColor: turnOffVideo ? coworkUi.danger : 'rgba(255,255,255,0.25)',
+                    })}
+                  >
+                    {turnOffVideo ? (
+                      <Icons.VideoOff size={20} color="#fff" />
+                    ) : (
+                      <Icons.Video size={20} color="#fff" />
+                    )}
+                  </Pressable>
+                </XStack>
+              </YStack>
+            )
+
+            return (
+              <YStack width="100%" gap="$3">
+                <YStack width="100%" maxWidth={wide ? 560 : undefined} alignSelf="center">
                   {!turnOffVideo ? (
                     <Suspense
                       fallback={
@@ -555,13 +703,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                       <MeetingBackgroundPreview
                         userId={user?.id}
                         active={previewActive}
-                        videoOverlay={
-                          <ViewerNameBadge
-                            name={viewerName}
-                            muted={doNotConnectAudio}
-                            dangerColor={coworkUi.danger}
-                          />
-                        }
+                        videoOverlay={previewOverlayControls}
                       />
                     </Suspense>
                   ) : (
@@ -592,156 +734,46 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                           Video is turned off
                         </Text>
                       </YStack>
-                      <YStack position="absolute" left={12} bottom={12} zIndex={20} maxWidth="75%">
-                        <ViewerNameBadge
-                          name={viewerName}
-                          muted={doNotConnectAudio}
-                          dangerColor={coworkUi.danger}
-                        />
-                      </YStack>
+                      {previewOverlayControls}
                     </YStack>
                   )}
                 </YStack>
 
-                <YStack
-                  flexGrow={1}
-                  flexShrink={1}
-                  flexBasis={isDesktop ? '0%' : '100%'}
-                  width={isDesktop ? undefined : '100%'}
-                  minWidth={isDesktop ? 320 : undefined}
-                  gap="$3"
-                >
-              <YStack gap="$3" paddingTop="$1" width="100%">
-                <XStack
-                  alignItems="flex-start"
-                  gap="$2.5"
-                  width="100%"
-                  cursor="pointer"
-                  onPress={() => {
-                    setAlwaysShowPreview((v) => {
-                      const next = !v
-                      void import('~/co-work/lib/meeting-join-preview-pref').then(({ saveAlwaysShowJoinPreview }) =>
-                        saveAlwaysShowJoinPreview(next),
-                      )
-                      return next
-                    })
-                  }}
-                >
-                  <Checkbox
-                    checked={alwaysShowPreview}
-                    onCheckedChange={(c) => {
-                      const next = Boolean(c)
-                      setAlwaysShowPreview(next)
-                      void import('~/co-work/lib/meeting-join-preview-pref').then(({ saveAlwaysShowJoinPreview }) =>
-                        saveAlwaysShowJoinPreview(next),
-                      )
-                    }}
-                    flexShrink={0}
-                  />
-                  <Text fontSize={13} color={coworkUi.textSecondary} flex={1} flexShrink={1} lineHeight={18}>
-                    Always show this preview when joining
-                  </Text>
-                </XStack>
+                <YStack width="100%" maxWidth={wide ? 560 : undefined} alignSelf="center" gap="$3">
+                  {!user ? (
+                    <YStack gap="$1.5" width="100%">
+                      <Text fontSize={12} fontWeight="700" color={coworkUi.textSecondary}>
+                        Your Name (Display Name)
+                      </Text>
+                      <Input
+                        value={joinDisplayName}
+                        onChangeText={setJoinDisplayName}
+                        placeholder="Enter your name"
+                        backgroundColor="rgba(0, 0, 0, 0.5)"
+                        borderColor={coworkUi.borderSoft}
+                        color="#ffffff"
+                        placeholderTextColor={coworkUi.textMuted}
+                        borderRadius={10}
+                        fontSize={15}
+                        height={46}
+                      />
+                    </YStack>
+                  ) : null}
 
-                {isDesktop ? (
-                  <XStack
-                    alignItems="center"
-                    gap="$1.5"
-                    cursor="pointer"
-                    pressStyle={{ opacity: 0.7 }}
-                    onPress={() => setShowAudioTest(true)}
-                    alignSelf="flex-start"
-                  >
-                    <Icons.Volume2 size={15} color={coworkUi.brandLight} />
-                    <Text fontSize={13} fontWeight="700" color={coworkUi.brandLight}>
-                      Test Speaker and Microphone
-                    </Text>
-                  </XStack>
-                ) : null}
-
-                <XStack alignItems="center" justifyContent="center" gap="$5" paddingVertical="$2">
-                  <Pressable
-                    onPress={() => setDoNotConnectAudio((v) => !v)}
-                    accessibilityLabel={doNotConnectAudio ? 'Unmute microphone' : 'Mute microphone'}
-                    style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 999,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: doNotConnectAudio
-                        ? coworkUi.danger
-                        : 'rgba(255,255,255,0.14)',
-                    }}
-                  >
-                    {doNotConnectAudio ? (
-                      <Icons.MicOff size={22} color="#fff" />
-                    ) : (
-                      <Icons.Mic size={22} color="#fff" />
-                    )}
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setTurnOffVideo((v) => !v)}
-                    accessibilityLabel={turnOffVideo ? 'Turn camera on' : 'Turn camera off'}
-                    style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 999,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: turnOffVideo
-                        ? coworkUi.danger
-                        : 'rgba(255,255,255,0.14)',
-                    }}
-                  >
-                    {turnOffVideo ? (
-                      <Icons.VideoOff size={22} color="#fff" />
-                    ) : (
-                      <Icons.Video size={22} color="#fff" />
-                    )}
-                  </Pressable>
-                </XStack>
-              </YStack>
-
-              {/* Waiting notice if scheduled and not started */}
-              {waitingForStart && !isHost ? (
-                <YStack
-                  gap="$2"
-                  padding="$3.5"
-                  borderRadius={12}
-                  borderWidth={1}
-                  borderColor="rgba(255, 255, 255, 0.1)"
-                  backgroundColor="rgba(255, 255, 255, 0.04)"
-                >
-                  <XStack alignItems="center" gap="$2">
-                    <Icons.Clock size={16} color={coworkUi.brand} />
-                    <Text fontWeight="700" fontSize={14} color="#fff">
-                      This meeting has not started yet
-                    </Text>
-                  </XStack>
-                  <Text color={coworkUi.textSecondary} fontSize={13} lineHeight={19}>
-                    It is scheduled for {formatMeetingWhenLabel(meeting!)}. You will enter as soon as the host starts.
-                  </Text>
-                </YStack>
-              ) : null}
-
-              {/* Zoom Start / Join CTA — single primary on tablet & phone; dual on large desktop web */}
-              <YStack width="100%" gap="$3" paddingTop="$2" flexShrink={0}>
-                {!isDesktop ? (
+                  {/* Zoom Start / Join CTA button */}
                   <Button
                     width="100%"
                     height={JOIN_BUTTON_HEIGHT}
                     minHeight={JOIN_BUTTON_HEIGHT}
                     maxHeight={JOIN_BUTTON_HEIGHT}
-                    flexGrow={0}
-                    flexShrink={0}
                     tone="primary"
                     size="$5"
                     borderRadius={12}
                     disabled={isLocked && !isHost}
                     opacity={isLocked && !isHost ? 0.55 : 1}
                     color="#fff"
-                    backgroundColor={coworkUi.brand}
+                    backgroundColor="#0E72ED"
+                    fontWeight="700"
                     onPress={() =>
                       enterLiveRoom({
                         videoEnabled: !turnOffVideo,
@@ -749,138 +781,161 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                       })
                     }
                     style={{
-                      ...controlGradientStyle(coworkGradients.activeControl, coworkUi.brand),
                       height: JOIN_BUTTON_HEIGHT,
                       minHeight: JOIN_BUTTON_HEIGHT,
+                      backgroundColor: '#0E72ED',
                     }}
                   >
                     {isLocked && !isHost
                       ? 'Meeting Locked'
                       : waitingForStart && isHost
                         ? 'Start'
-                        : 'Join'}
+                        : isHost
+                          ? 'Start'
+                          : !user
+                            ? 'Join as Guest'
+                            : 'Join'}
                   </Button>
-                ) : (
-                  <>
-                <Button
+
+                  {!user ? (
+                    <XStack justifyContent="center" alignItems="center" gap="$1" paddingVertical="$1">
+                      <Text fontSize={12} color={coworkUi.textMuted}>
+                        Already have an account?
+                      </Text>
+                      <Pressable
+                        onPress={() =>
+                          router.push(
+                            `/auth/sign-in?returnTo=${encodeURIComponent(
+                              coWorkRoutes.meeting(normalizedCode || code),
+                            )}` as never,
+                          )
+                        }
+                      >
+                        <Text fontSize={12} fontWeight="700" color="#0E72ED">
+                          Sign in
+                        </Text>
+                      </Pressable>
+                    </XStack>
+                  ) : null}
+
+                  {/* Always show this preview checkbox (Image 3) */}
+                  <XStack
+                    alignItems="center"
+                    justifyContent="center"
+                    gap="$2.5"
+                    width="100%"
+                    cursor="pointer"
+                    onPress={() => {
+                      setAlwaysShowPreview((v) => {
+                        const next = !v
+                        void import('~/co-work/lib/meeting-join-preview-pref').then(({ saveAlwaysShowJoinPreview }) =>
+                          saveAlwaysShowJoinPreview(next),
+                        )
+                        return next
+                      })
+                    }}
+                  >
+                    <Checkbox
+                      checked={alwaysShowPreview}
+                      onCheckedChange={(c) => {
+                        const next = Boolean(c)
+                        setAlwaysShowPreview(next)
+                        void import('~/co-work/lib/meeting-join-preview-pref').then(({ saveAlwaysShowJoinPreview }) =>
+                          saveAlwaysShowJoinPreview(next),
+                        )
+                      }}
+                      flexShrink={0}
+                    />
+                    <Text fontSize={13} color={coworkUi.textSecondary} flexShrink={1}>
+                      Always show this preview when joining
+                    </Text>
+                  </XStack>
+                </YStack>
+
+                {/* Waiting notice if scheduled and not started */}
+                {waitingForStart && !isHost ? (
+                  <YStack
+                    gap="$2"
+                    padding="$3.5"
+                    borderRadius={12}
+                    borderWidth={1}
+                    borderColor="rgba(255, 255, 255, 0.1)"
+                    backgroundColor="rgba(255, 255, 255, 0.04)"
+                  >
+                    <XStack alignItems="center" gap="$2">
+                      <Icons.Clock size={16} color={coworkUi.brand} />
+                      <Text fontWeight="700" fontSize={14} color="#fff">
+                        This meeting has not started yet
+                      </Text>
+                    </XStack>
+                    <Text color={coworkUi.textSecondary} fontSize={13} lineHeight={19}>
+                      It is scheduled for {formatMeetingWhenLabel(meeting!)}. You will enter as soon as the host starts.
+                    </Text>
+                  </YStack>
+                ) : null}
+
+                {/* Utility buttons row */}
+                <XStack
+                  alignItems="center"
+                  justifyContent="center"
+                  gap="$2.5"
+                  paddingTop="$3"
+                  flexWrap="wrap"
                   width="100%"
-                  height={JOIN_BUTTON_HEIGHT}
-                  minHeight={JOIN_BUTTON_HEIGHT}
-                  maxHeight={JOIN_BUTTON_HEIGHT}
-                  flexGrow={0}
-                  flexShrink={0}
-                  tone="primary"
-                  size="$5"
-                  borderRadius={10}
-                  disabled={isLocked && !isHost}
-                  opacity={isLocked && !isHost ? 0.55 : 1}
-                  color="#fff"
-                  icon={<Icons.Video size={19} color="#fff" />}
-                  onPress={() => enterLiveRoom({ videoEnabled: true })}
-                  style={{
-                    ...controlGradientStyle(coworkGradients.activeControl, coworkUi.brand),
-                    height: JOIN_BUTTON_HEIGHT,
-                    minHeight: JOIN_BUTTON_HEIGHT,
-                  }}
+                  borderTopWidth={1}
+                  borderColor="rgba(255, 255, 255, 0.08)"
                 >
-                  {isLocked && !isHost
-                    ? 'Meeting Locked'
-                    : waitingForStart && isHost
-                      ? 'Start with Video'
-                      : 'Join with Video'}
-                </Button>
-
-                <Button
-                  width="100%"
-                  height={JOIN_BUTTON_HEIGHT}
-                  minHeight={JOIN_BUTTON_HEIGHT}
-                  maxHeight={JOIN_BUTTON_HEIGHT}
-                  flexGrow={0}
-                  flexShrink={0}
-                  tone="outline"
-                  size="$5"
-                  borderRadius={10}
-                  disabled={isLocked && !isHost}
-                  opacity={isLocked && !isHost ? 0.55 : 1}
-                  borderColor="rgba(255, 255, 255, 0.22)"
-                  backgroundColor="rgba(255, 255, 255, 0.1)"
-                  color="#ffffff"
-                  icon={<Icons.VideoOff size={19} color="#ffffff" />}
-                  onPress={() => enterLiveRoom({ videoEnabled: false })}
-                >
-                  {isLocked && !isHost
-                    ? 'Meeting Locked'
-                    : waitingForStart && isHost
-                      ? 'Start without Video'
-                      : 'Join without Video'}
-                </Button>
-                  </>
-                )}
-              </YStack>
-
-              {/* Utility buttons row */}
-              <XStack
-                alignItems="center"
-                justifyContent="center"
-                gap="$2.5"
-                paddingTop="$3"
-                flexWrap="wrap"
-                width="100%"
-                borderTopWidth={1}
-                borderColor="rgba(255, 255, 255, 0.08)"
-              >
-                <Button
-                  tone="outline"
-                  size="$3"
-                  borderRadius={8}
-                  borderColor="rgba(255, 255, 255, 0.14)"
-                  backgroundColor="rgba(255, 255, 255, 0.04)"
-                  onPress={handleCopyLink}
-                  icon={<Icons.Copy size={14} color="#fff" />}
-                >
-                  <Text fontSize={12} fontWeight="600" color="#fff">
-                    Copy Link
-                  </Text>
-                </Button>
-
-                <Button
-                  tone="outline"
-                  size="$3"
-                  borderRadius={8}
-                  borderColor="rgba(255, 255, 255, 0.14)"
-                  backgroundColor="rgba(255, 255, 255, 0.04)"
-                  onPress={() => setShareOpen(true)}
-                  icon={<Icons.Share2 size={14} color="#fff" />}
-                >
-                  <Text fontSize={12} fontWeight="600" color="#fff">
-                    Share
-                  </Text>
-                </Button>
-
-                {isHost ? (
                   <Button
                     tone="outline"
                     size="$3"
                     borderRadius={8}
                     borderColor="rgba(255, 255, 255, 0.14)"
                     backgroundColor="rgba(255, 255, 255, 0.04)"
-                    icon={<Icons.UserPlus size={14} color="#fff" />}
-                    onPress={() => setShowInvite((open) => !open)}
+                    onPress={handleCopyLink}
+                    icon={<Icons.Copy size={14} color="#fff" />}
                   >
                     <Text fontSize={12} fontWeight="600" color="#fff">
-                      {showInvite ? 'Hide Invite' : 'Invite'}
+                      Copy Link
                     </Text>
                   </Button>
-                ) : null}
 
-                <MeetingCalendarIconButton onPress={() => void addToCalendar()} />
-              </XStack>
-                </YStack>
-              </XStack>
+                  <Button
+                    tone="outline"
+                    size="$3"
+                    borderRadius={8}
+                    borderColor="rgba(255, 255, 255, 0.14)"
+                    backgroundColor="rgba(255, 255, 255, 0.04)"
+                    onPress={() => setShareOpen(true)}
+                    icon={<Icons.Share2 size={14} color="#fff" />}
+                  >
+                    <Text fontSize={12} fontWeight="600" color="#fff">
+                      Share
+                    </Text>
+                  </Button>
 
-              <MeetingShareSheet open={shareOpen} onOpenChange={setShareOpen} meeting={meeting!} />
-            </YStack>
-          ) : null}
+                  {isHost ? (
+                    <Button
+                      tone="outline"
+                      size="$3"
+                      borderRadius={8}
+                      borderColor="rgba(255, 255, 255, 0.14)"
+                      backgroundColor="rgba(255, 255, 255, 0.04)"
+                      icon={<Icons.UserPlus size={14} color="#fff" />}
+                      onPress={() => setShowInvite((open) => !open)}
+                    >
+                      <Text fontSize={12} fontWeight="600" color="#fff">
+                        {showInvite ? 'Hide Invite' : 'Invite'}
+                      </Text>
+                    </Button>
+                  ) : null}
+
+                  <MeetingCalendarIconButton onPress={() => void addToCalendar()} />
+                </XStack>
+
+                <MeetingShareSheet open={shareOpen} onOpenChange={setShareOpen} meeting={meeting!} />
+              </YStack>
+            )
+          })() : null}
 
           {/* Host Invite Drawer */}
           {isHost && showInvite && user && meeting ? (

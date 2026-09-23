@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Platform, Pressable } from 'react-native'
+import { Platform } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'

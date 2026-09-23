@@ -95,7 +95,11 @@ export function CoWorkScreen() {
     )
   }, [user?.id])
 
-  async function startInstantMeeting(options?: { videoOn?: boolean; usePmi?: boolean }) {
+  async function startInstantMeeting(options?: {
+    videoOn?: boolean
+    usePmi?: boolean
+    whiteboard?: boolean
+  }) {
     if (creating) return
     if (!user) {
       toast.show('Sign in required', {
@@ -105,8 +109,9 @@ export function CoWorkScreen() {
       router.push('/auth/sign-in' as never)
       return
     }
-    const videoOn = options?.videoOn ?? startWithVideo
-    const withPmi = options?.usePmi ?? usePmi
+    const isWhiteboard = options?.whiteboard ?? false
+    const videoOn = isWhiteboard ? false : (options?.videoOn ?? startWithVideo)
+    const withPmi = isWhiteboard ? false : (options?.usePmi ?? usePmi)
     setStartWithVideo(videoOn)
     setUsePmi(withPmi)
     setCreating(true)
@@ -127,18 +132,23 @@ export function CoWorkScreen() {
       const media = meetingJoinMediaFromPermissions(perms, { videoEnabled: videoOn })
 
       const hostLabel = profile?.full_name?.trim() || profile?.username?.trim() || BRAND_NAME
+      const meetingTitle = isWhiteboard
+        ? `${hostLabel}'s Whiteboard Session`
+        : withPmi
+          ? `${hostLabel}'s Personal Meeting Room`
+          : `${hostLabel}'s Meeting`
       const meeting = withPmi
         ? await (
             await import('~/co-work/lib/meeting-pmi')
           ).startOrReusePersonalMeeting(user.id, {
-            title: `${hostLabel}'s Personal Meeting Room`,
+            title: meetingTitle,
             startNow: true,
             securitySettings: {
               videoOffOnJoin: !videoOn,
             },
           })
         : await createMeeting(user.id, {
-            title: `${hostLabel}'s Meeting`,
+            title: meetingTitle,
             startNow: true,
             securitySettings: {
               videoOffOnJoin: !videoOn,
@@ -299,7 +309,9 @@ export function CoWorkScreen() {
                 {/* 1. New Meeting (SHEconomy Primary Magenta) */}
                 <MeetingActionTile
                   label="New Meeting"
-                  icon={Icons.Video}
+                  // Lucide `Video` only renders a stray curve on Android Hermes SVG;
+                  // Camera matches the meeting intent and draws cleanly.
+                  icon={Icons.Camera}
                   color={SHECONOMY_MEETING_COLORS.primary}
                   hoverColor={SHECONOMY_MEETING_COLORS.primaryHover}
                   busy={creating}
@@ -667,6 +679,9 @@ export function CoWorkScreen() {
         pmiCode={userPmi}
         onStart={(options) => {
           void startInstantMeeting(options)
+        }}
+        onStartWhiteboard={() => {
+          void startInstantMeeting({ videoOn: false, usePmi: false, whiteboard: true })
         }}
       />
     </PageContent>

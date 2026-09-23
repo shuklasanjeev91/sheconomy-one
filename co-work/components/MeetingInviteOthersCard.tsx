@@ -1,4 +1,4 @@
-import { Pressable } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -25,25 +25,26 @@ export function MeetingInviteOthersCard({
 
   if (pill) {
     return (
-      <YStack alignSelf="center" zIndex={40} pointerEvents="box-none" marginBottom="$1">
+      <YStack alignSelf="center" zIndex={40} pointerEvents="box-none" marginBottom="$1.5">
         <Pressable
           onPress={onInvite}
           accessibilityRole="button"
-          style={{
+          style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
-            paddingHorizontal: 14,
-            paddingVertical: 10,
+            paddingHorizontal: 16,
+            paddingVertical: 9,
             borderRadius: 999,
-            backgroundColor: 'rgba(255,255,255,0.96)',
+            backgroundColor: pressed ? 'rgba(245,245,245,0.98)' : '#FFFFFF',
             borderWidth: 1,
-            borderColor: 'rgba(0,0,0,0.08)',
-            boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
-          }}
+            borderColor: 'rgba(0,0,0,0.06)',
+            boxShadow: '0 6px 24px rgba(0,0,0,0.22)',
+            transform: [{ scale: pressed ? 0.98 : 1 }],
+          })}
         >
-          <Icons.Users size={15} color={ui.brand} />
-          <Text color="#111" fontSize={13} fontWeight="700">
+          <Icons.Users size={16} color="#0E72ED" />
+          <Text color="#1F2937" fontSize={13} fontWeight="600">
             Invite your contacts to join this meeting
           </Text>
         </Pressable>

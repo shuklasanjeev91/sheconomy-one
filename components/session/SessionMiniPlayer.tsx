@@ -28,11 +28,20 @@ import {
   openInstantMeetingSession,
   peekInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
+import { SessionMiniPlayerVideo } from '~/components/session/SessionMiniPlayerVideo'
 
 /** WhatsApp-style floating call bubble (portrait). */
 const BUBBLE_W = 118
 const BUBBLE_H = 178
 const EDGE = 12
+
+function hasLiveVideoTrack(trackRef: any): boolean {
+  if (!trackRef) return false
+  const pub = trackRef.publication
+  if (!pub) return false
+  if (pub.isMuted) return false
+  return !!pub.track
+}
 
 type SessionMiniPlayerProps = {
   session: GlobalSessionState
@@ -130,18 +139,22 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
   )
 
   const onMaximize = useCallback(() => {
-    const instant = peekInstantMeetingSession()
-
-    // Meetings must expand InstantMeetingHost in place. Never navigate to
-    // maximizeHref — that remounts MeetingLiveScreen on Join confirm / Join now.
+    // Zoom-style: expand the floating bubble back into the live room overlay.
+    // Meetings must expand InstantMeetingHost in place — never navigate to
+    // maximizeHref (that remounted MeetingLiveScreen on Join confirm).
     if (session.kind === 'meeting') {
+      const instant = peekInstantMeetingSession()
       openInstantMeetingSession({
         code: session.code,
         meeting: instant?.meeting ?? null,
         autoJoin: true,
         enteredRoom: true,
+        expand: true,
         displayName: instant?.displayName ?? null,
+        audioEnabled: session.media.audioEnabled,
+        videoEnabled: session.media.videoEnabled,
       })
+      // Belt-and-suspenders — expand even if openInstantMeetingSession no-op'd.
       maximizeGlobalSession()
       return
     }
@@ -150,7 +163,7 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
     if (session.maximizeHref) {
       navigateApp(session.maximizeHref as never)
     }
-  }, [session.code, session.kind, session.maximizeHref])
+  }, [session.code, session.kind, session.maximizeHref, session.media.audioEnabled, session.media.videoEnabled])
 
   const onPip = useCallback(() => {
     const caps = detectSessionPipCapabilities()
@@ -211,7 +224,6 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
       backgroundColor="#1a1016"
       borderWidth={1.5}
       borderColor="rgba(255,255,255,0.22)"
-      {...pan.panHandlers}
       style={
         Platform.OS === 'web'
           ? {
@@ -223,34 +235,46 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
       }
       accessibilityLabel={`${liveLabel} minimized. Tap to return.`}
     >
-      {/* Tap target — WhatsApp expands the call from the bubble face. */}
+      {/* Drag + tap-to-maximize live on the face only — control buttons stay clickable. */}
       <YStack
         flex={1}
         width="100%"
         alignItems="center"
         justifyContent="center"
-        backgroundColor="#2a1520"
+        backgroundColor="#0c080a"
         onPress={onMaximize}
         cursor="pointer"
         accessibilityRole="button"
         accessibilityLabel={`Return to ${liveLabel.toLowerCase()}`}
+        overflow="hidden"
+        position="relative"
+        {...pan.panHandlers}
       >
-        <YStack
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          backgroundColor="rgba(216,27,96,0.28)"
-          pointerEvents="none"
-        />
-        <Avatar
-          src={session.avatarUrl}
-          name={session.title}
-          size={56}
-          borderWidth={2}
-          borderColor="rgba(255,255,255,0.35)"
-        />
+        {hasLiveVideoTrack(session.activeTrackRef) ? (
+          <SessionMiniPlayerVideo
+            trackRef={session.activeTrackRef}
+            mirrored={session.activeTrackRef?.participant?.isLocal}
+          />
+        ) : (
+          <>
+            <YStack
+              position="absolute"
+              top={0}
+              left={0}
+              right={0}
+              bottom={0}
+              backgroundColor="rgba(216,27,96,0.28)"
+              pointerEvents="none"
+            />
+            <Avatar
+              src={session.avatarUrl}
+              name={session.title}
+              size={56}
+              borderWidth={2}
+              borderColor="rgba(255,255,255,0.35)"
+            />
+          </>
+        )}
 
         <XStack
           position="absolute"
@@ -261,7 +285,7 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
           paddingHorizontal={7}
           paddingVertical={3}
           borderRadius={999}
-          backgroundColor="rgba(0,0,0,0.45)"
+          backgroundColor="rgba(0,0,0,0.6)"
         >
           <YStack width={7} height={7} borderRadius={999} backgroundColor="#22c55e" />
           <Text color="#fff" fontSize={10} fontWeight="800">
@@ -292,11 +316,13 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
           position="absolute"
           left={0}
           right={0}
-          bottom={44}
+          bottom={0}
           paddingHorizontal={8}
+          paddingVertical={5}
           alignItems="center"
+          backgroundColor="rgba(0,0,0,0.55)"
         >
-          <Text color="#fff" fontSize={12} fontWeight="800" numberOfLines={1} textAlign="center">
+          <Text color="#fff" fontSize={11} fontWeight="700" numberOfLines={1} textAlign="center">
             {session.title}
           </Text>
         </YStack>

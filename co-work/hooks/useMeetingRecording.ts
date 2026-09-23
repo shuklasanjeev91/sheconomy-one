@@ -26,6 +26,7 @@ type UseMeetingRecordingOptions = {
   onStopped?: (status?: MeetingRecordingStatus | string) => void
   onReady?: (recording: MeetingRecordingSummary) => void
   onError?: (message: string, configRequired?: boolean) => void
+  onBroadcastStatus?: (isRecording: boolean) => void
 }
 
 export function useMeetingRecording({
@@ -39,6 +40,7 @@ export function useMeetingRecording({
   onStopped,
   onReady,
   onError,
+  onBroadcastStatus,
 }: UseMeetingRecordingOptions) {
   const [recording, setRecording] = useState(false)
   const [status, setStatus] = useState<MeetingRecordingStatus | string | null>(null)
@@ -61,6 +63,8 @@ export function useMeetingRecording({
   onReadyRef.current = onReady
   const onErrorRef = useRef(onError)
   onErrorRef.current = onError
+  const onBroadcastStatusRef = useRef(onBroadcastStatus)
+  onBroadcastStatusRef.current = onBroadcastStatus
 
   const clearPoll = useCallback(() => {
     if (pollTimerRef.current) {
@@ -129,6 +133,7 @@ export function useMeetingRecording({
 
     setRecording(false)
     setStatus(result.status ?? 'processing')
+    onBroadcastStatusRef.current?.(false)
     if (captionLines.length > 0) {
       void downloadCaptionTranscript(captionLines, meetingCode)
     }
@@ -177,6 +182,7 @@ export function useMeetingRecording({
       cloudRecordingIdRef.current = cloud.recordingId
       setRecording(true)
       setStatus(cloud.status ?? 'recording')
+      onBroadcastStatusRef.current?.(true)
       setActiveRecording({
         id: cloud.recordingId,
         meetingId,

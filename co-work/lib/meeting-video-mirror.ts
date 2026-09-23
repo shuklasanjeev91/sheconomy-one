@@ -13,6 +13,8 @@ export type MeetingVideoMirrorInput = {
   isScreenShare?: boolean
   /** LiveKit source when available — Camera mirrors, ScreenShare never. */
   source?: string | null
+  /** Front vs rear camera facing — rear camera must never mirror. */
+  cameraFacing?: 'user' | 'environment' | string | null
 }
 
 export function shouldMirrorMeetingVideo(input: MeetingVideoMirrorInput): boolean {
@@ -21,6 +23,7 @@ export function shouldMirrorMeetingVideo(input: MeetingVideoMirrorInput): boolea
   if (!input.isLocal) return false
   if (input.isScreenShare) return false
   if (input.source && /screen/i.test(input.source)) return false
+  if (input.cameraFacing === 'environment') return false
   return true
 }
 

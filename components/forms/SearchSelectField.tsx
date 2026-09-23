@@ -223,7 +223,7 @@ function SearchSelectSheet({
       {Platform.OS === 'web' ? (
         body
       ) : (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           {body}
         </KeyboardAvoidingView>
       )}

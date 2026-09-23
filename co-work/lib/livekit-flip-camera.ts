@@ -28,9 +28,13 @@ function facingFromTrack(track: LocalVideoTrack | undefined, fallback: CameraFac
 /**
  * Flip local camera front ↔ rear.
  *
- * Native (iOS/Android WebRTC): prefer `_switchCamera()` which reuses the
- * capture session without tearing down the LiveKit publication.
- * Web / fallback: `restartTrack({ facingMode })` then `setCameraEnabled`.
+ * Native Android/iOS: `applyConstraints({ facingMode })` with the known next
+ * facing. Android requires the CameraCaptureController patch that honors
+ * facingMode from the new constraints (stock RN WebRTC ignored it and kept
+ * the constructor facing — toast said "Rear" while video stayed front).
+ *
+ * Never unpublish + republish on native — that freezes the local tile and
+ * drops virtual-background processors mid-call.
  */
 export async function flipLocalParticipantCamera(
   localParticipant: LocalParticipant,
@@ -50,17 +54,31 @@ export async function flipLocalParticipantCamera(
   const nextFacing = oppositeFacing(resolvedFacing)
   const mediaTrack = track?.mediaStreamTrack as SwitchableTrack | undefined
 
-  // React Native WebRTC — switch facing without republishing.
-  if (Platform.OS !== 'web' && mediaTrack && typeof mediaTrack._switchCamera === 'function') {
-    mediaTrack._switchCamera()
-    return nextFacing
+  if (Platform.OS !== 'web' && mediaTrack && typeof mediaTrack.applyConstraints === 'function') {
+    try {
+      // Pass ideal + exact so normalizeConstraints keeps environment/user.
+      await mediaTrack.applyConstraints({
+        facingMode: { exact: nextFacing } as unknown as ConstrainDOMString,
+      })
+      const actual = facingFromTrack(track, nextFacing)
+      if (actual === nextFacing) return nextFacing
+      // Some devices ignore `exact` — retry with plain string.
+      await mediaTrack.applyConstraints({ facingMode: nextFacing })
+      return facingFromTrack(track, nextFacing)
+    } catch {
+      // Fall through.
+    }
   }
 
-  // Web / generic: applyConstraints when available (keeps track id stable).
+  if (Platform.OS !== 'web' && mediaTrack && typeof mediaTrack._switchCamera === 'function') {
+    mediaTrack._switchCamera()
+    return facingFromTrack(track, nextFacing)
+  }
+
   if (mediaTrack && typeof mediaTrack.applyConstraints === 'function') {
     try {
       await mediaTrack.applyConstraints({ facingMode: nextFacing })
-      return nextFacing
+      return facingFromTrack(track, nextFacing)
     } catch {
       // Fall through to LiveKit restart.
     }

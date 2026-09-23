@@ -6,7 +6,7 @@ type InstantMeetingBodyProps = {
   onExit: () => void
 }
 
-/** Live room body for InstantMeetingHost (keeps host file focused on overlay chrome). */
+/** Live room body for InstantMeetingHost (keeps host file focused on overlay UI). */
 export function InstantMeetingBody({ session, onExit }: InstantMeetingBodyProps) {
   return (
     <MeetingLiveScreen

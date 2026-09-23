@@ -29,6 +29,7 @@ import {
 import { radius } from '~/config/tokens'
 import { useFullscreenOverlayInsets } from '~/hooks/useFullscreenOverlayInsets'
 import { useFullscreenOverlaySize } from '~/hooks/useFullscreenOverlaySize'
+import { useKeyboardBottomInset } from '~/hooks/useKeyboardVisible'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 // Approximate non-scrolling chrome heights so the scroll body can extend as
@@ -205,6 +206,7 @@ type SheetSurfaceProps = {
   footer?: ReactNode
   children: ReactNode
   overlayInsets: { top: number; bottom: number }
+  keyboardHeight?: number
   maxHeight: number
   /** `Sheet.ScrollView` for a real sheet, a plain one for a stacked layer. */
   scrollComponent: ComponentType<any>
@@ -212,6 +214,17 @@ type SheetSurfaceProps = {
   scrollMaxHeight?: number
   /** Layers can't be dragged, so they get a static grabber bar. */
   staticHandle?: boolean
+  /**
+   * Hug content height instead of stretching to the viewport.
+   * Used for short sheets (share picker, confirm, end meeting).
+   */
+  fitContent?: boolean
+  /** Zoom More-style: grab handle only (no title / close row). */
+  hideHeader?: boolean
+  /** Override sheet fill (e.g. Sheconomy meeting plum). */
+  surfaceColor?: string
+  /** Override grabber / handle color. */
+  handleColor?: string
 }
 
 /** Handle + header + (scrollable) body + sticky footer — shared by both modes. */
@@ -224,12 +237,20 @@ function SheetSurface({
   footer,
   children,
   overlayInsets,
+  keyboardHeight = 0,
   maxHeight,
   scrollComponent: ScrollComponent,
   scrollMaxHeight,
   staticHandle,
+  fitContent = false,
+  hideHeader = false,
+  surfaceColor,
+  handleColor,
 }: SheetSurfaceProps) {
   const ui = useAppUi()
+  const isKeyboardOpen = keyboardHeight > 0
+  const sheetBg = surfaceColor ?? ui.surface
+  const grabber = handleColor ?? ui.border
 
   const body = (
     <YStack paddingHorizontal="$4" paddingTop="$3" paddingBottom="$3" gap="$3" width="100%">
@@ -240,37 +261,41 @@ function SheetSurface({
   return (
     <YStack
       width="100%"
-      flex={1}
-      height="100%"
-      maxHeight={maxHeight}
-      paddingTop={overlayInsets.top}
-      paddingBottom={0}
-      marginBottom={0}
+      {...(fitContent
+        ? { maxHeight }
+        : { height: '100%' as const, maxHeight, flex: 1 })}
+      backgroundColor={sheetBg}
+      borderTopLeftRadius={fitContent ? 16 : 0}
+      borderTopRightRadius={fitContent ? 16 : 0}
+      borderBottomLeftRadius={0}
+      borderBottomRightRadius={0}
+      overflow="hidden"
     >
       {showHandle ? (
         <YStack paddingTop="$2.5" paddingBottom="$1" alignItems="center" width="100%">
           {staticHandle ? (
-            <YStack width={40} height={5} borderRadius={radius.pill} backgroundColor={ui.border} />
+            <YStack width={40} height={5} borderRadius={radius.pill} backgroundColor={grabber} />
           ) : (
-            <SheetHandle />
+            <SheetHandle backgroundColor={grabber} />
           )}
         </YStack>
       ) : null}
 
-      <BottomSheetHeader title={title} onClose={onClose} />
+      {!hideHeader ? <BottomSheetHeader title={title} onClose={onClose} /> : null}
 
       {scrollable ? (
         <ScrollComponent
           width="100%"
-          flex={1}
+          {...(fitContent ? {} : { flex: 1 })}
           showsVerticalScrollIndicator
           keyboardShouldPersistTaps="handled"
           onScroll={onScroll}
           scrollEventThrottle={16}
           // Without a footer the body itself has to clear the nav bar.
           contentContainerStyle={{
-            paddingBottom: footer ? 0 : overlayInsets.bottom,
-            flexGrow: 1,
+            paddingBottom: footer ? 0 : (isKeyboardOpen ? 16 : overlayInsets.bottom),
+            // Full-screen sheets stretch the body; fit sheets hug content.
+            ...(fitContent ? {} : { flexGrow: 1 }),
           }}
           {...(scrollMaxHeight != null
             ? { maxHeight: scrollMaxHeight as unknown as number }
@@ -279,7 +304,11 @@ function SheetSurface({
           {body}
         </ScrollComponent>
       ) : (
-        <YStack flex={1} width="100%" paddingBottom={footer ? 0 : overlayInsets.bottom}>
+        <YStack
+          {...(fitContent ? {} : { flex: 1 })}
+          width="100%"
+          paddingBottom={footer ? 0 : (isKeyboardOpen ? 16 : overlayInsets.bottom)}
+        >
           {body}
         </YStack>
       )}
@@ -289,12 +318,12 @@ function SheetSurface({
           width="100%"
           paddingHorizontal="$4"
           paddingTop="$3"
-          // 13 matches the `$3` space token, so no-inset platforms are unchanged.
-          paddingBottom={13 + overlayInsets.bottom}
+          // When keyboard is open, drop the nav bar inset so footer sits right above keyboard.
+          paddingBottom={isKeyboardOpen ? 10 : 13 + overlayInsets.bottom}
           marginBottom={0}
           borderTopWidth={1}
           borderTopColor={ui.borderSubtle}
-          backgroundColor={ui.surface}
+          backgroundColor={sheetBg}
         >
           {footer}
         </YStack>
@@ -316,17 +345,30 @@ type AppBottomSheetProps = {
   scrollable?: boolean
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   /**
-   * @deprecated Sheets always cover the full viewport. Kept for call-site compatibility.
+   * Size the sheet to its content instead of filling the viewport.
+   * Use for short pickers / confirms (share, end meeting, apps).
    */
-  maxHeightRatio?: number
+  fitContent?: boolean
+  /** Grab handle only — skip title / close row (Zoom More style). */
+  hideHeader?: boolean
+  /** Override sheet fill (Sheconomy meeting plum, etc.). */
+  surfaceColor?: string
+  /** Override grabber color. */
+  handleColor?: string
+  /**
+   * @deprecated Sheets always cover the full viewport width. Kept for call-site compatibility.
+   */
+  maxWidth?: number
 }
 
 /**
- * Cross-platform bottom sheet — measures the device screen and covers it
- * exactly (web, iOS, Android) with no bottom padding or margin gap, and always
- * shows a close control in the header.
+ * Bottom sheet across web, iOS, and Android.
  *
- * Nesting is supported: open one from inside another and native stacks it as a
+ * Default is full-viewport. Pass `fitContent` for short sheets that should hug
+ * their content height (share picker, confirm, end meeting).
+ *
+ * When an `AppBottomSheet` is opened *inside* another one, native automatically
+ * detects the parent sheet context via `SheetLayerContext` and renders as a
  * layer over the parent frame instead of a second (invisible) modal.
  */
 export function AppBottomSheet({
@@ -338,10 +380,17 @@ export function AppBottomSheet({
   showHandle = true,
   scrollable = true,
   onScroll,
+  fitContent = false,
+  hideHeader = false,
+  surfaceColor,
+  handleColor,
 }: AppBottomSheetProps) {
   const ui = useAppUi()
   const overlayInsets = useFullscreenOverlayInsets()
   const screen = useFullscreenOverlaySize()
+  const keyboardHeight = useKeyboardBottomInset()
+  const nativeKeyboardOffset = !isWeb ? keyboardHeight : 0
+  const sheetBg = surfaceColor ?? ui.surface
 
   const parentLayers = useContext(SheetLayerContext)
   const asLayer = !isWeb && parentLayers != null
@@ -351,7 +400,7 @@ export function AppBottomSheet({
   // Space taken by the handle/header/footer that sits outside the scroll body.
   const chromeHeight =
     (showHandle ? HANDLE_CHROME : 0) +
-    HEADER_CHROME +
+    (hideHeader ? 0 : HEADER_CHROME) +
     (footer ? FOOTER_CHROME : 0) +
     overlayInsets.top +
     overlayInsets.bottom
@@ -359,6 +408,8 @@ export function AppBottomSheet({
   function close() {
     onOpenChange(false)
   }
+
+  const surfaceMaxHeight = screen.height - nativeKeyboardOffset
 
   const surface = open ? (
     <SheetSurface
@@ -369,11 +420,20 @@ export function AppBottomSheet({
       onScroll={onScroll}
       footer={footer}
       overlayInsets={overlayInsets}
-      maxHeight={screen.height}
+      keyboardHeight={keyboardHeight}
+      maxHeight={surfaceMaxHeight}
       staticHandle={asLayer}
+      fitContent={fitContent}
+      hideHeader={hideHeader}
+      surfaceColor={surfaceColor}
+      handleColor={handleColor}
       scrollComponent={asLayer ? ScrollView : Sheet.ScrollView}
       scrollMaxHeight={
-        isWeb ? (`calc(100vh - ${chromeHeight}px)` as unknown as number) : undefined
+        isWeb
+          ? (`calc(100vh - ${chromeHeight}px)` as unknown as number)
+          : fitContent
+            ? surfaceMaxHeight - chromeHeight
+            : undefined
       }
     >
       {children}
@@ -393,8 +453,8 @@ export function AppBottomSheet({
       onOpenChange={onOpenChange}
       modal
       dismissOnSnapToBottom
-      snapPoints={[100]}
-      snapPointsMode="percent"
+      snapPoints={fitContent ? ['fit', 0] : [100]}
+      snapPointsMode={fitContent ? 'fit' : 'percent'}
       zIndex={100_000}
       animation={SHEET_ANIMATION}
       // Keep focused inputs above the software keyboard on iOS and Android.
@@ -406,24 +466,32 @@ export function AppBottomSheet({
       <SheetFrame
         padding={0}
         margin={0}
-        backgroundColor={ui.surface}
-        borderTopLeftRadius={0}
-        borderTopRightRadius={0}
+        backgroundColor={sheetBg}
+        borderTopLeftRadius={fitContent ? 16 : 0}
+        borderTopRightRadius={fitContent ? 16 : 0}
         borderBottomLeftRadius={0}
         borderBottomRightRadius={0}
         overflow="hidden"
-        height={screen.height}
-        maxHeight={screen.height}
-        minHeight={screen.height}
-        width={screen.width}
-        maxWidth={screen.width}
-        minWidth={screen.width}
-        flex={1}
-        position="absolute"
-        top={0}
-        left={0}
-        right={0}
-        bottom={0}
+        {...(fitContent
+          ? {
+              width: '100%' as const,
+              maxWidth: screen.width,
+              maxHeight: surfaceMaxHeight,
+            }
+          : {
+              height: surfaceMaxHeight,
+              maxHeight: surfaceMaxHeight,
+              minHeight: surfaceMaxHeight,
+              width: screen.width,
+              maxWidth: screen.width,
+              minWidth: screen.width,
+              flex: 1,
+              position: 'absolute' as const,
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: nativeKeyboardOffset,
+            })}
       >
         {layerStore ? (
           <SheetLayerContext.Provider value={layerStore}>

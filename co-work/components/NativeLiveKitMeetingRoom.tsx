@@ -5,10 +5,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Platform,
-  Pressable,
   ScrollView as NativeScrollView,
-  useWindowDimensions,
+  useWindowDimensions
 } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { ConnectionState, DisconnectReason, RoomEvent, Track, VideoQuality } from 'livekit-client'
 import type { RemoteTrackPublication } from 'livekit-client'
 import {
@@ -82,12 +82,12 @@ import {
 } from '~/co-work/lib/meeting-gallery-layout'
 import {
   meetingStageContentBox,
-  resolveMeetingChromeLayout,
+  resolveMeetingUiLayout,
 } from '~/co-work/lib/meeting-orientation-layout'
 import {
-  applyMeetingUiChromeLayout,
-  resolveMeetingUiChromePadding,
-} from '~/co-work/lib/meeting-ui-chrome'
+  applyMeetingUiLayout,
+  resolveMeetingUiPadding,
+} from '~/co-work/lib/meeting-ui-overlay'
 import { applyMeetingSelectiveCameraSubscribe } from '~/co-work/lib/meeting-selective-subscribe'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
@@ -560,8 +560,8 @@ function NativeMeetingVideoStage() {
       loadMeetingMediaPrefs().then((prefs) => setHdVideoPref(prefs.hdVideo !== false)),
     )
   }, [])
-  const chrome = useMemo(() => {
-    const base = resolveMeetingChromeLayout({
+  const layout = useMemo(() => {
+    const base = resolveMeetingUiLayout({
       width,
       height,
       safeTop,
@@ -572,10 +572,10 @@ function NativeMeetingVideoStage() {
       isDesktop,
       isNative: true,
     })
-    return applyMeetingUiChromeLayout(
+    return applyMeetingUiLayout(
       base,
-      resolveMeetingUiChromePadding({
-        chrome: base,
+      resolveMeetingUiPadding({
+        layout: base,
         uiMode: state.uiMode,
         controlsVisible: state.controlsVisible,
         safeTop,
@@ -643,9 +643,9 @@ function NativeMeetingVideoStage() {
   const galleryPagerRef = useRef<NativeScrollView | null>(null)
   const followSpeakerUntilRef = useRef(0)
   const pageSize = resolveMeetingGalleryPageSize({
-    basePageSize: chrome.pageSize,
+    basePageSize: layout.pageSize,
     denseGallery: state.denseGallery,
-    breakpoint: chrome.breakpoint,
+    breakpoint: layout.breakpoint,
   })
   const paged = useMemo(
     () => paginateMeetingGallery(layoutState.stageTracks, page, pageSize),
@@ -715,29 +715,29 @@ function NativeMeetingVideoStage() {
   // Speaker view always keeps a filmstrip of the other participants (side on
   // wide layouts, bottom strip on portrait phones).
   const filmstripBeside = speakerMode
-    ? chrome.filmstripBeside || width >= 700 || state.sideBySideShare
-    : chrome.filmstripBeside || state.sideBySideShare
+    ? layout.filmstripBeside || width >= 700 || state.sideBySideShare
+    : layout.filmstripBeside || state.sideBySideShare
   const filmstripExpanded = showFilmstrip && !state.participantStripMinimized
   const screenLayout = state.viewMode === 'screen-share' && hasScreenShare
   const galleryMode = state.viewMode === 'gallery' || (!screenLayout && !speakerMode)
   const { width: mainWidth, height: mainHeight } = meetingStageContentBox({
     viewportWidth: width,
     viewportHeight: height,
-    chrome: speakerMode
+    layout: speakerMode
       ? {
-          ...chrome,
+          ...layout,
           filmstripBeside,
-          filmstripWidth: filmstripBeside ? Math.max(chrome.filmstripWidth, 112) : chrome.filmstripWidth,
-          filmstripHeight: filmstripBeside ? chrome.filmstripHeight : Math.max(chrome.filmstripHeight, 92),
+          filmstripWidth: filmstripBeside ? Math.max(layout.filmstripWidth, 112) : layout.filmstripWidth,
+          filmstripHeight: filmstripBeside ? layout.filmstripHeight : Math.max(layout.filmstripHeight, 92),
         }
-      : chrome,
+      : layout,
     filmstripExpanded,
     stageTrailingInset,
   })
   const gallery = meetingGalleryLayout(stageTracks.length, {
     width: mainWidth,
     height: mainHeight,
-    preferWide: chrome.galleryPreferWide,
+    preferWide: layout.galleryPreferWide,
   })
 
   useEffect(() => {
@@ -758,7 +758,7 @@ function NativeMeetingVideoStage() {
     const pageLayout = meetingGalleryLayout(pageTracks.length, {
       width: mainWidth,
       height: mainHeight,
-      preferWide: chrome.galleryPreferWide,
+      preferWide: layout.galleryPreferWide,
     })
     return (
       <XStack
@@ -792,7 +792,7 @@ function NativeMeetingVideoStage() {
               name={name}
               isScreen={isScreen}
               width={tileWidth}
-              height={Math.max(tileHeight, chrome.policy === 'landscape-phone' ? 72 : 100)}
+              height={Math.max(tileHeight, layout.policy === 'landscape-phone' ? 72 : 100)}
               radius={14}
               mirrorLocalVideo={state.mirrorLocalVideo}
               hdVideo={hdVideoPref}
@@ -814,10 +814,10 @@ function NativeMeetingVideoStage() {
       width="100%"
       height="100%"
       backgroundColor="#0c080a"
-      paddingTop={chrome.stagePaddingTop}
-      paddingBottom={chrome.stagePaddingBottom}
-      paddingLeft={chrome.stagePaddingLeft}
-      paddingRight={chrome.stagePaddingRight + stageTrailingInset}
+      paddingTop={layout.stagePaddingTop}
+      paddingBottom={layout.stagePaddingBottom}
+      paddingLeft={layout.stagePaddingLeft}
+      paddingRight={layout.stagePaddingRight + stageTrailingInset}
     >
       {stageTracks.length === 0 ? (
         <YStack
@@ -900,7 +900,7 @@ function NativeMeetingVideoStage() {
                     name={name}
                     isScreen={isScreen}
                     width={tileWidth}
-                    height={Math.max(tileHeight, chrome.policy === 'landscape-phone' ? 72 : 100)}
+                    height={Math.max(tileHeight, layout.policy === 'landscape-phone' ? 72 : 100)}
                     radius={screenLayout && index === 0 ? coworkUi.radius.tile : 14}
                     mirrorLocalVideo={state.mirrorLocalVideo}
                     hdVideo={hdVideoPref}
@@ -922,8 +922,8 @@ function NativeMeetingVideoStage() {
                 right: 0,
                 bottom: filmstripBeside ? undefined : 0,
                 top: filmstripBeside ? 0 : undefined,
-                width: filmstripBeside ? chrome.filmstripWidth : '100%',
-                height: filmstripBeside ? mainHeight : chrome.filmstripHeight,
+                width: filmstripBeside ? layout.filmstripWidth : '100%',
+                height: filmstripBeside ? mainHeight : layout.filmstripHeight,
               }}
               horizontal={!filmstripBeside}
               showsHorizontalScrollIndicator={false}
@@ -936,8 +936,8 @@ function NativeMeetingVideoStage() {
                     trackRef={trackRef}
                     name={participantDisplayName(trackRef.participant)}
                     isScreen={false}
-                    width={chrome.pipWidth}
-                    height={chrome.pipHeight}
+                    width={layout.pipWidth}
+                    height={layout.pipHeight}
                     radius={10}
                     compact
                     mirrorLocalVideo={state.mirrorLocalVideo}
@@ -947,8 +947,8 @@ function NativeMeetingVideoStage() {
                 ))}
                 {filmstripCapped.overflow > 0 ? (
                   <YStack
-                    width={chrome.pipWidth}
-                    height={chrome.pipHeight}
+                    width={layout.pipWidth}
+                    height={layout.pipHeight}
                     borderRadius={10}
                     alignItems="center"
                     justifyContent="center"
@@ -967,7 +967,7 @@ function NativeMeetingVideoStage() {
               position="absolute"
               right={filmstripBeside ? 4 : 8}
               bottom={
-                filmstripBeside ? 4 : filmstripExpanded ? chrome.filmstripHeight + 4 : 8
+                filmstripBeside ? 4 : filmstripExpanded ? layout.filmstripHeight + 4 : 8
               }
               width={44}
               height={44}
@@ -999,7 +999,7 @@ function NativeMeetingVideoStage() {
           {paged.pageCount > 1 ? (
             <XStack
               position="absolute"
-              bottom={filmstripExpanded && !filmstripBeside ? chrome.filmstripHeight + 10 : 12}
+              bottom={filmstripExpanded && !filmstripBeside ? layout.filmstripHeight + 10 : 12}
               alignSelf="center"
               gap="$2"
               alignItems="center"
@@ -1089,8 +1089,8 @@ function NativeMeetingVideoStage() {
         return label ? (
           <YStack
             position="absolute"
-            top={chrome.stagePaddingTop + 8}
-            left={chrome.stagePaddingLeft + 8}
+            top={layout.stagePaddingTop + 8}
+            left={layout.stagePaddingLeft + 8}
             maxWidth={320}
             zIndex={30}
             paddingHorizontal="$3"
@@ -1276,12 +1276,19 @@ function NativeVideoTile({
   }, [isScreen, mediaTrack, trackSid])
 
   // Only treat the surface as ready once MediaStream exists — never use track.sid alone.
-  const mediaReadyToken = streamAttachId
+  const mediaReadyToken =
+    streamAttachId ??
+    resolveNativeVideoStreamAttachId(mediaTrack, { allowTrackIdFallback: !isScreen }) ??
+    mediaTrack?.sid ??
+    null
+  const trackFacing =
+    (mediaTrack as any)?.mediaStreamTrack?.getSettings?.()?.facingMode
   const mirrored = shouldMirrorMeetingVideo({
     mirrorLocalVideo,
     isLocal: trackRef.participant.isLocal,
     isScreenShare: isScreen,
     source: trackRef.source,
+    cameraFacing: trackFacing,
   })
 
   // Screen share: if the track is subscribed but the surface briefly reports 0×0,

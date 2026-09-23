@@ -382,7 +382,7 @@ export function MessageComposer({
         nav-bar / home-indicator inset — except while the keyboard covers it. */}
     <YStack
       backgroundColor={theme.composerBg}
-      paddingBottom={keyboardVisible ? 2 : Math.max(insets.bottom, 2)}
+      paddingBottom={keyboardVisible ? 4 : Math.max(insets.bottom, 8)}
     >
       {quickReplies.length > 0 ? (
         <YStack paddingHorizontal={8} paddingTop={8} gap={6}>

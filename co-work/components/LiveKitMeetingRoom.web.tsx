@@ -47,7 +47,7 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     box-sizing: border-box;
   }
   .sheconomy-video-stage--landscape-phone {
-    /* Padding comes from inline chrome vars — keep CSS padding as fallback only. */
+    /* Padding comes from inline layout vars — keep CSS padding as fallback only. */
     padding: var(--stage-pad-top, 62px) var(--stage-pad-right, 10px)
       var(--stage-pad-bottom, 82px) var(--stage-pad-left, 10px);
   }
@@ -769,7 +769,7 @@ export function LiveKitMeetingRoom({
         style={meetingViewportStyle()}
       >
         {overlay?.(null)}
-        {/* Portal above meeting chrome — fixed overlay otherwise covers this card. */}
+        {/* Portal above meeting UI — fixed overlay otherwise covers this card. */}
         <ViewportOverlay>
           <YStack
             position={'fixed' as never}

@@ -49,6 +49,8 @@ export type GlobalSessionState = {
   pipSupported: boolean
   /** User-facing reason when PiP is unavailable. */
   pipUnsupportedMessage: string | null
+  /** LiveKit TrackReference for rendering real-time video in the mini-player. */
+  activeTrackRef?: any
 }
 
 type GlobalSessionStore = {
@@ -99,6 +101,7 @@ export type RegisterGlobalSessionInput = {
   pipSupported?: boolean
   pipUnsupportedMessage?: string | null
   handlers?: GlobalSessionHandlers
+  activeTrackRef?: any
 }
 
 export function registerGlobalSession(input: RegisterGlobalSessionInput): void {
@@ -134,8 +137,25 @@ export function registerGlobalSession(input: RegisterGlobalSessionInput): void {
       pipSupported: input.pipSupported ?? previous?.pipSupported ?? false,
       pipUnsupportedMessage:
         input.pipUnsupportedMessage ?? previous?.pipUnsupportedMessage ?? null,
+      activeTrackRef:
+        input.activeTrackRef !== undefined
+          ? input.activeTrackRef
+          : (previous?.activeTrackRef ?? null),
     },
     handlers: { ...store.handlers, ...input.handlers },
+  }
+  emit()
+}
+
+export function updateGlobalSessionActiveTrack(activeTrackRef: any): void {
+  if (!store.session) return
+  if (store.session.activeTrackRef === activeTrackRef) return
+  store = {
+    ...store,
+    session: {
+      ...store.session,
+      activeTrackRef,
+    },
   }
   emit()
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Platform, Pressable, View } from 'react-native'
+import { Platform, View } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { AppTextField } from '~/components/forms/AppTextField'
 import { Avatar, Button, Icons, Input, ScrollView, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -155,15 +156,18 @@ export function MeetingChatPanel({
     setDraft('')
   }
 
+  const [newChatTooltipDismissed, setNewChatTooltipDismissed] = useState(false)
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+
   const composerPlaceholder = !chatEnabled
     ? 'Chat is disabled'
     : audience === 'hosts'
-      ? 'Message hosts and co-hosts…'
+      ? 'Message hosts and co-hosts'
       : audience === 'private'
         ? recipientId
-          ? 'Write a private message…'
-          : 'Choose a participant…'
-        : 'Message everyone…'
+          ? `Message ${toLabel}`
+          : 'Choose a participant'
+        : 'Message Everyone'
   const sendDisabled = !chatEnabled || (audience === 'private' && !recipientId)
 
   async function handleSaveChat() {
@@ -198,78 +202,310 @@ export function MeetingChatPanel({
 
   return (
     <CoWorkPanelShell fullWidth={fullWidth}>
-      <MeetingPanelHeader
-        title="Everyone"
-        subtitle={
-          chatEnabled
-            ? `${messages.length} message${messages.length === 1 ? '' : 's'} · This meeting only`
-            : 'Chat is turned off for this meeting'
-        }
-        icon={<Icons.MessageSquare size={18} color={coworkUi.brandLight} />}
-        onClose={onClose}
-        trailing={
-          messages.length > 0 ? (
-            Platform.OS === 'web' ? (
-              <Button
-                tone="ghost"
-                size="$2"
-                borderRadius={999}
-                width={36}
-                height={36}
-                padding={0}
-                onPress={() => void handleSaveChat()}
-                icon={<Icons.Download size={16} color={coworkUi.textSecondary} />}
-                accessibilityLabel="Save chat"
-              />
-            ) : (
-              <MeetingSheetButton
-                accessibilityLabel="Save chat"
-                onPress={() => void handleSaveChat()}
+      {/* Zoom Mobile Header & Channel Selector (Image 1) */}
+      {fullWidth ? (
+        <YStack width="100%" backgroundColor={coworkUi.meetingBarElevated}>
+          {/* Top handle bar */}
+          <YStack
+            width={36}
+            height={4}
+            borderRadius={2}
+            backgroundColor="rgba(255, 255, 255, 0.28)"
+            alignSelf="center"
+            marginTop={8}
+            marginBottom={4}
+          />
+
+          {/* Header Row: Circular (X) · [Everyone ^] · Circular (...) */}
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            paddingHorizontal="$3.5"
+            paddingVertical="$2"
+            borderBottomWidth={1}
+            borderBottomColor="rgba(255, 255, 255, 0.08)"
+          >
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close chat"
+              hitSlop={8}
+              style={({ pressed }) => ({
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.12)',
+              })}
+            >
+              <Icons.X size={18} color="#fff" />
+            </Pressable>
+
+            <Pressable
+              onPress={() => setToMenuOpen((open) => !open)}
+              accessibilityRole="button"
+              accessibilityLabel={`Chat with ${toLabel}, tap to change`}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 14,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: pressed ? 'rgba(255, 255, 255, 0.16)' : 'transparent',
+              })}
+            >
+              <Text fontSize={17} fontWeight="800" color="#fff" letterSpacing={-0.3}>
+                {toLabel}
+              </Text>
+              {toMenuOpen ? (
+                <Icons.ChevronUp size={16} color="rgba(255, 255, 255, 0.85)" />
+              ) : (
+                <Icons.ChevronDown size={16} color="rgba(255, 255, 255, 0.85)" />
+              )}
+            </Pressable>
+
+            <Pressable
+              onPress={() => setMoreMenuOpen((open) => !open)}
+              accessibilityRole="button"
+              accessibilityLabel="Chat options"
+              hitSlop={8}
+              style={({ pressed }) => ({
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? coworkUi.brandDark : coworkUi.brand,
+              })}
+            >
+              <Icons.MoreHorizontal size={18} color="#fff" />
+            </Pressable>
+          </XStack>
+
+          {/* More options menu dropdown if open */}
+          {moreMenuOpen ? (
+            <YStack
+              marginHorizontal="$3.5"
+              marginTop="$2"
+              padding="$2"
+              borderRadius={12}
+              borderWidth={1}
+              borderColor={coworkUi.borderSoft}
+              backgroundColor={coworkUi.meetingBarElevated}
+              gap={2}
+            >
+              <Pressable
+                onPress={() => {
+                  setMoreMenuOpen(false)
+                  void handleSaveChat()
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 8,
+                  backgroundColor: pressed ? coworkUi.brandMuted : 'transparent',
+                })}
+              >
+                <Icons.Download size={16} color={coworkUi.brandLight} />
+                <Text color={coworkUi.text} fontSize={13} fontWeight="600">
+                  Save chat
+                </Text>
+              </Pressable>
+            </YStack>
+          ) : null}
+
+          {/* Channel / Direct Message Switcher Row with Popover Tooltip (Image 1) */}
+          <XStack
+            alignItems="center"
+            gap="$2.5"
+            paddingHorizontal="$3.5"
+            paddingTop="$2.5"
+            paddingBottom="$2.5"
+            position="relative"
+            zIndex={25}
+          >
+            {/* Everyone Channel Tab */}
+            <Pressable
+              onPress={() => {
+                setAudience('everyone')
+                setRecipientId(null)
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Everyone channel"
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: audience === 'everyone' ? coworkUi.brandMuted : 'rgba(255, 255, 255, 0.08)',
+                borderWidth: audience === 'everyone' ? 2 : 1,
+                borderColor: audience === 'everyone' ? coworkUi.brand : coworkUi.borderSoft,
+              }}
+            >
+              <Icons.Users size={20} color={audience === 'everyone' ? coworkUi.brandLight : '#fff'} />
+            </Pressable>
+
+            {/* Active Direct Message / Host Tab */}
+            {audience !== 'everyone' ? (
+              <Pressable
+                onPress={() => setToMenuOpen((open) => !open)}
+                accessibilityRole="button"
+                accessibilityLabel={`Active chat with ${toLabel}`}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 999,
-                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  height: 44,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: coworkUi.brandMuted,
+                  borderWidth: 2,
+                  borderColor: coworkUi.brand,
                 }}
               >
-                <Icons.Download size={16} color={coworkUi.textSecondary} />
-              </MeetingSheetButton>
-            )
-          ) : null
-        }
-      />
+                <Icons.User size={16} color={coworkUi.brandLight} />
+                <Text fontSize={13} fontWeight="700" color="#fff" numberOfLines={1} maxWidth={110}>
+                  {toLabel}
+                </Text>
+              </Pressable>
+            ) : null}
 
-      {chatEnabled && messages.length === 0 ? (
-        <YStack
-          marginHorizontal="$3"
-          marginTop="$3"
-          padding="$3"
-          borderRadius={12}
-          backgroundColor="rgba(216, 27, 96, 0.12)"
-          borderWidth={1}
-          borderColor="rgba(216, 27, 96, 0.28)"
-          gap="$1.5"
-        >
-          <XStack alignItems="center" gap="$2">
-            <YStack
-              paddingHorizontal="$1.5"
-              paddingVertical={2}
-              borderRadius={6}
-              backgroundColor={coworkUi.brand}
+            {/* Plus button to start new chat */}
+            <Pressable
+              onPress={() => {
+                setToMenuOpen((open) => !open)
+                setNewChatTooltipDismissed(true)
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Start new chat"
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 0.18)',
+              }}
             >
-              <Text color="#fff" fontSize={10} fontWeight="800">
-                NEW
-              </Text>
-            </YStack>
-            <Text color="#fff" fontSize={13} fontWeight="800">
-              New chat
-            </Text>
+              <Icons.Plus size={20} color="#fff" />
+            </Pressable>
+
+            {/* Anchored Tooltip Bubble: [NEW] New chat (Image 1) */}
+            {!newChatTooltipDismissed && !toMenuOpen ? (
+              <YStack
+                position="absolute"
+                top={50}
+                left={14}
+                right={14}
+                zIndex={30}
+                style={{
+                  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.65)',
+                }}
+              >
+                {/* Upward pointer triangle pointing to [+] */}
+                <YStack
+                  style={{
+                    width: 0,
+                    height: 0,
+                    borderLeftWidth: 8,
+                    borderRightWidth: 8,
+                    borderBottomWidth: 8,
+                    borderLeftColor: 'transparent',
+                    borderRightColor: 'transparent',
+                    borderBottomColor: '#22252A',
+                    marginLeft: 66,
+                  }}
+                />
+                <Pressable
+                  onPress={() => {
+                    setToMenuOpen(true)
+                    setNewChatTooltipDismissed(true)
+                  }}
+                >
+                  <YStack
+                    backgroundColor="#22252A"
+                    borderRadius={14}
+                    paddingHorizontal="$3.5"
+                    paddingVertical="$3"
+                    borderWidth={1}
+                    borderColor="rgba(255, 255, 255, 0.18)"
+                    gap="$1.5"
+                  >
+                    <XStack alignItems="center" gap="$2">
+                      <YStack
+                        paddingHorizontal={6}
+                        paddingVertical={2}
+                        borderRadius={5}
+                        backgroundColor="#2563EB"
+                      >
+                        <Text color="#fff" fontSize={11} fontWeight="800" letterSpacing={0.4}>
+                          NEW
+                        </Text>
+                      </YStack>
+                      <Text color="#fff" fontSize={16} fontWeight="800">
+                        New chat
+                      </Text>
+                    </XStack>
+                    <Text color="#D1D5DB" fontSize={13} lineHeight={18}>
+                      Direct message someone or start group chats with two or more participants.
+                    </Text>
+                  </YStack>
+                </Pressable>
+              </YStack>
+            ) : null}
           </XStack>
-          <Text color={coworkUi.textSecondary} fontSize={12} lineHeight={17}>
-            Direct message someone or chat with hosts — switch the recipient above the composer.
-          </Text>
         </YStack>
-      ) : null}
+      ) : (
+        <MeetingPanelHeader
+          title="Everyone"
+          subtitle={
+            chatEnabled
+              ? `${messages.length} message${messages.length === 1 ? '' : 's'} · This meeting only`
+              : 'Chat is turned off for this meeting'
+          }
+          icon={<Icons.MessageSquare size={18} color={coworkUi.brandLight} />}
+          onClose={onClose}
+          trailing={
+            messages.length > 0 ? (
+              Platform.OS === 'web' ? (
+                <Button
+                  tone="ghost"
+                  size="$2"
+                  borderRadius={999}
+                  width={36}
+                  height={36}
+                  padding={0}
+                  onPress={() => void handleSaveChat()}
+                  icon={<Icons.Download size={16} color={coworkUi.textSecondary} />}
+                  accessibilityLabel="Save chat"
+                />
+              ) : (
+                <MeetingSheetButton
+                  accessibilityLabel="Save chat"
+                  onPress={() => void handleSaveChat()}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 999,
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <Icons.Download size={16} color={coworkUi.textSecondary} />
+                </MeetingSheetButton>
+              )
+            ) : null
+          }
+        />
+      )}
 
       <ScrollView
         flex={1}
@@ -423,14 +659,21 @@ export function MeetingChatPanel({
 
       <YStack
         flexShrink={0}
-        padding="$3"
+        paddingHorizontal="$3"
+        paddingTop="$2.5"
         gap="$2"
         borderTopWidth={1}
         borderTopColor={coworkUi.borderSoft}
         backgroundColor={coworkUi.surfaceElevated}
         pointerEvents="auto"
         zIndex={6}
-        paddingBottom={fullWidth ? undefined : Math.max(12, keyboardInset)}
+        paddingBottom={
+          fullWidth
+            ? Platform.OS === 'android'
+              ? 10
+              : 8
+            : Math.max(12, keyboardInset)
+        }
       >
         {chatEnabled && audiences.length > 1 ? (
           <YStack gap="$2">
@@ -659,6 +902,7 @@ export function MeetingChatPanel({
             ) : null}
           </YStack>
         ) : null}
+        {/* Zoom composer: attachment · input · emoji · send — always contrast-safe. */}
         <View
           collapsable={false}
           pointerEvents="auto"
@@ -666,6 +910,7 @@ export function MeetingChatPanel({
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
+            minHeight: 48,
             zIndex: 8,
             elevation: 12,
           }}
@@ -679,7 +924,7 @@ export function MeetingChatPanel({
                 onAttach()
                 return
               }
-              toast.show('Attachments coming soon', {
+              toast.show('Attachments', {
                 tone: 'info',
                 message: 'Share files from the meeting Share menu for now.',
               })
@@ -687,14 +932,16 @@ export function MeetingChatPanel({
             style={{
               width: 40,
               height: 40,
-              borderRadius: 12,
+              borderRadius: 999,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: coworkUi.meetingControl,
+              borderWidth: 1,
+              borderColor: coworkUi.glassBorder,
               opacity: chatEnabled ? 1 : 0.45,
             }}
           >
-            <Icons.Plus size={18} color={coworkUi.textSecondary} />
+            <Icons.Plus size={20} color={coworkUi.text} />
           </Pressable>
           {Platform.OS === 'web' ? (
             <Input
@@ -703,15 +950,17 @@ export function MeetingChatPanel({
               onChangeText={setDraft}
               editable={chatEnabled}
               placeholder={composerPlaceholder}
-              backgroundColor="rgba(255,255,255,0.05)"
-              borderColor={coworkUi.borderSoft}
+              backgroundColor={coworkUi.meetingControl}
+              borderColor={coworkUi.glassBorder}
               color={coworkUi.text}
               placeholderTextColor={coworkUi.textMuted}
-              borderRadius={14}
+              borderRadius={22}
+              height={42}
               onSubmitEditing={send}
             />
           ) : (
             <AppTextField
+              embedded
               value={draft}
               onChangeText={setDraft}
               editable={chatEnabled}
@@ -727,10 +976,13 @@ export function MeetingChatPanel({
               containerStyle={{
                 flex: 1,
                 minWidth: 0,
-                height: 48,
-                minHeight: 48,
+                height: 42,
+                minHeight: 42,
+                borderRadius: 22,
+                borderWidth: 1,
+                borderColor: coworkUi.glassBorder,
                 backgroundColor: coworkUi.meetingControl,
-                borderColor: coworkUi.border,
+                paddingHorizontal: 14,
               }}
             />
           )}
@@ -745,47 +997,41 @@ export function MeetingChatPanel({
             style={{
               width: 40,
               height: 40,
-              borderRadius: 12,
+              borderRadius: 999,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: coworkUi.meetingControl,
+              borderWidth: 1,
+              borderColor: coworkUi.glassBorder,
               opacity: chatEnabled ? 1 : 0.45,
             }}
           >
-            <Icons.Smile size={18} color={coworkUi.textSecondary} />
+            <Icons.Smile size={20} color={coworkUi.text} />
           </Pressable>
-          {Platform.OS === 'web' ? (
-            <Button
-              tone="primary"
-              size="$3"
-              borderRadius={14}
-              disabled={sendDisabled}
-              onPress={send}
-            >
-              Send
-            </Button>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Send chat message"
-              disabled={sendDisabled}
-              onPress={send}
-              style={{
-                minHeight: 48,
-                minWidth: 72,
-                paddingHorizontal: 16,
-                borderRadius: 14,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: sendDisabled ? coworkUi.meetingControl : coworkUi.brand,
-                opacity: sendDisabled ? 0.55 : 1,
-              }}
-            >
-              <Text fontWeight="700" color="#fff">
-                Send
-              </Text>
-            </Pressable>
-          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send chat message"
+            disabled={sendDisabled || !draft.trim()}
+            onPress={send}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 999,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor:
+                sendDisabled || !draft.trim() ? coworkUi.meetingControl : coworkUi.brand,
+              borderWidth: 1,
+              borderColor:
+                sendDisabled || !draft.trim() ? coworkUi.glassBorder : coworkUi.brand,
+              opacity: sendDisabled || !draft.trim() ? 0.55 : 1,
+            }}
+          >
+            <Icons.Send
+              size={18}
+              color={sendDisabled || !draft.trim() ? coworkUi.textMuted : '#fff'}
+            />
+          </Pressable>
         </View>
       </YStack>
     </CoWorkPanelShell>

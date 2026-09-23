@@ -6,6 +6,7 @@ import { ScreenFill } from '~/components/layout'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
+import { useAppLayout } from '~/hooks/useAppLayout'
 
 type MeetingEndedScreenProps = {
   title?: string
@@ -42,6 +43,7 @@ export function MeetingEndedScreen({
   onDone,
 }: MeetingEndedScreenProps) {
   const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
+  const { safeTop, safeBottom } = useAppLayout()
   const router = useRouter()
   const duration = formatDuration(startedAt)
   const [rating, setRating] = useState(0)
@@ -63,7 +65,9 @@ export function MeetingEndedScreen({
       backgroundColor="#0c080a"
       alignItems="center"
       justifyContent="center"
-      padding="$5"
+      paddingHorizontal="$5"
+      paddingTop={Math.max(safeTop, 20)}
+      paddingBottom={Math.max(safeBottom, 20)}
     >
       <YStack
         gap="$5"

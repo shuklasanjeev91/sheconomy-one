@@ -51,6 +51,9 @@ Deno.serve(async (req) => {
     return json({ authorizationUrl: authorization.toString(), configured: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not start OAuth'
-    return json({ error: message, configured: !message.includes('not configured') }, 503)
+    const configured = !/not configured/i.test(message)
+    // Missing secrets is a known/config state — return 200 so supabase-js
+    // surfaces `data.error` instead of the opaque "non-2xx" FunctionsHttpError.
+    return json({ error: message, configured }, configured ? 503 : 200)
   }
 })

@@ -56,6 +56,7 @@ export function ConfirmDialog({
         onOpenChange={setOpen}
         title={title}
         scrollable={false}
+        fitContent
         footer={
           <XStack gap="$2" width="100%">
             <Button tone="secondary" flex={1} onPress={() => setOpen(false)}>

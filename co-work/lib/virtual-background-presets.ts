@@ -13,6 +13,10 @@ export async function resolveNativePresetFileUri(_id: string | undefined): Promi
   return null
 }
 
+export function getPresetThumbnailSource(_id: string | undefined): ImageSourcePropType | null {
+  return null
+}
+
 /**
  * Web/SSR-safe presets — files live in `/public/meeting-backgrounds`.
  * Native uses `virtual-background-presets.native.ts` (Metro `require`).

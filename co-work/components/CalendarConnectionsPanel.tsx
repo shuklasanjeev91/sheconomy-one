@@ -84,11 +84,13 @@ export function CalendarConnectionsPanel({
       const message = error instanceof Error ? error.message : 'Try again later.'
       toast.show(`Could not connect ${calendarProviderLabel(provider)}`, {
         tone: 'danger',
-        message: message.includes('not configured')
-          ? 'Calendar sync is not configured for this build yet.'
-          : message.includes('Could not open')
+        message: /not configured/i.test(message)
+          ? 'Calendar sync is not set up on the server yet (OAuth client secrets missing).'
+          : /Could not open/i.test(message)
             ? 'Could not open the authorization page. Check your browser or try again.'
-            : message,
+            : /non-2xx/i.test(message)
+              ? 'Calendar service is unavailable. Try again in a moment.'
+              : message,
       })
     } finally {
       setBusyProvider(null)

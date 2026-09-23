@@ -1,4 +1,5 @@
-import { Image, Pressable } from 'react-native'
+import { Image, Platform } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useState, type ReactNode } from 'react'
 
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
@@ -8,7 +9,10 @@ import {
   OFF_BACKGROUND,
   type VirtualBackgroundSelection,
 } from '~/co-work/lib/virtual-backgrounds'
-import { getVirtualBackgroundPresets } from '~/co-work/lib/virtual-background-presets'
+import {
+  getPresetThumbnailSource,
+  getVirtualBackgroundPresets,
+} from '~/co-work/lib/virtual-background-presets'
 
 export type MeetingBackgroundQuickCustomItem = {
   id: string
@@ -35,6 +39,8 @@ type MeetingBackgroundQuickPickerProps = {
   videoOverlay?: ReactNode
   showHeader?: boolean
   showTrayToggle?: boolean
+  pickerOpen?: boolean
+  onTogglePicker?: () => void
 }
 
 export function MeetingBackgroundQuickPicker({
@@ -51,12 +57,38 @@ export function MeetingBackgroundQuickPicker({
   videoOverlay,
   showHeader = false,
   showTrayToggle = true,
+  pickerOpen,
+  onTogglePicker,
 }: MeetingBackgroundQuickPickerProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const presets = getVirtualBackgroundPresets()
-  const [showPicker, setShowPicker] = useState(false)
+  const [internalShowPicker, setInternalShowPicker] = useState(false)
+  const isPickerOpen = pickerOpen !== undefined ? pickerOpen : internalShowPicker
+
+  const togglePicker = () => {
+    if (onTogglePicker) onTogglePicker()
+    else setInternalShowPicker((prev) => !prev)
+  }
+
+  const openPicker = () => {
+    if (pickerOpen !== undefined) {
+      if (!pickerOpen && onTogglePicker) onTogglePicker()
+    } else {
+      setInternalShowPicker(true)
+    }
+  }
+
   const active = (value: VirtualBackgroundSelection) =>
     selection.mode === value.mode && (value.mode !== 'image' || selection.id === value.id)
+
+  // Android: never drive Camera2 through VideoEffectProcessor on the join
+  // preview — show a soft composite (background image + oval camera) instead.
+  const softBackgroundSource =
+    Platform.OS === 'android' && selection.mode === 'image'
+      ? getPresetThumbnailSource(selection.id) ??
+        (selectedImageUri ? { uri: selectedImageUri } : null)
+      : null
+  const softPreviewActive = !!softBackgroundSource
 
   return (
     <YStack gap="$2.5" width="100%" style={{ position: 'relative' }}>
@@ -81,7 +113,39 @@ export function MeetingBackgroundQuickPicker({
         position="relative"
         flexShrink={0}
       >
-        {preview}
+        {softPreviewActive ? (
+          <YStack position="absolute" top={0} right={0} bottom={0} left={0}>
+            <Image
+              source={softBackgroundSource}
+              resizeMode="cover"
+              style={{ width: '100%', height: '100%' }}
+            />
+            <YStack
+              position="absolute"
+              top={0}
+              right={0}
+              bottom={0}
+              left={0}
+              alignItems="center"
+              justifyContent="center"
+            >
+              <YStack
+                width="42%"
+                aspectRatio={3 / 4}
+                maxHeight="78%"
+                borderRadius={999}
+                overflow="hidden"
+                borderWidth={2}
+                borderColor="rgba(255,255,255,0.35)"
+                backgroundColor="#0a0a0c"
+              >
+                {preview}
+              </YStack>
+            </YStack>
+          </YStack>
+        ) : (
+          preview
+        )}
         {busy ? (
           <YStack
             position="absolute"
@@ -97,40 +161,56 @@ export function MeetingBackgroundQuickPicker({
           </YStack>
         ) : null}
 
-        {selectedImageUri && selection.mode === 'image' && !showPicker ? (
-          <XStack
-            position="absolute"
-            left={videoOverlay ? undefined : 12}
-            right={videoOverlay ? 12 : undefined}
-            bottom={12}
-            alignItems="center"
-            gap="$2"
-            paddingHorizontal="$2"
-            paddingVertical={4}
-            borderRadius={999}
-            backgroundColor="rgba(0,0,0,0.72)"
-            borderWidth={1}
-            borderColor="rgba(255,255,255,0.2)"
-            zIndex={10}
+        {selectedImageUri && selection.mode === 'image' && !isPickerOpen ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Virtual background settings"
+            onPress={openPicker}
+            style={({ pressed }) => ({
+              position: 'absolute',
+              left: videoOverlay ? undefined : 12,
+              right: videoOverlay ? 12 : undefined,
+              bottom: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 999,
+              backgroundColor: pressed ? 'rgba(0,0,0,0.92)' : 'rgba(0,0,0,0.76)',
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.25)',
+              zIndex: 35,
+              cursor: 'pointer',
+            })}
           >
             <Image
               source={{ uri: selectedImageUri }}
               resizeMode="cover"
               style={{ width: 28, height: 18, borderRadius: 4 }}
             />
-            <Text fontSize={10} color="#fff" fontWeight="700">
+            <Text fontSize={11} color="#fff" fontWeight="700">
               Virtual background
             </Text>
-          </XStack>
+            <Icons.ChevronUp size={13} color="#fff" />
+          </Pressable>
         ) : null}
 
         {videoOverlay ? (
-          <YStack position="absolute" left={12} bottom={12} zIndex={20} maxWidth="75%">
+          <YStack
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            zIndex={20}
+            pointerEvents="box-none"
+          >
             {videoOverlay}
           </YStack>
         ) : null}
 
-        {showTrayToggle ? (
+        {showTrayToggle && !videoOverlay ? (
           <XStack
             position="absolute"
             top={10}
@@ -141,15 +221,15 @@ export function MeetingBackgroundQuickPicker({
             paddingHorizontal="$2.5"
             paddingVertical="$1.5"
             borderWidth={1}
-            borderColor={showPicker ? coworkUi.brand : 'rgba(255,255,255,0.18)'}
+            borderColor={isPickerOpen ? coworkUi.brand : 'rgba(255,255,255,0.18)'}
             alignItems="center"
             gap="$1.5"
             cursor="pointer"
             pressStyle={{ opacity: 0.85 }}
-            onPress={() => setShowPicker((prev) => !prev)}
+            onPress={togglePicker}
             maxWidth="55%"
           >
-            <Icons.Wand2 size={13} color={showPicker ? coworkUi.brand : '#fff'} />
+            <Icons.Wand2 size={13} color={isPickerOpen ? coworkUi.brand : '#fff'} />
             <Text fontSize={11} fontWeight="700" color="#fff" numberOfLines={1} flexShrink={1}>
               {selection.mode !== 'off' ? 'Background active' : 'Background'}
             </Text>
@@ -158,7 +238,7 @@ export function MeetingBackgroundQuickPicker({
       </YStack>
 
       {/* Virtual Background Quick Tiles — collapsible or always visible */}
-      {showPicker || !showTrayToggle ? (
+      {isPickerOpen || !showTrayToggle ? (
         <YStack
           gap="$2"
           padding="$2.5"
@@ -221,6 +301,14 @@ export function MeetingBackgroundQuickPicker({
           Live preview is limited on this device. Your selection is saved and will apply when you
           join.
         </Text>
+      ) : Platform.OS === 'android' && selection.mode === 'image' ? (
+        <Text fontSize={12} color={coworkUi.textSecondary}>
+          Soft preview — your camera stays live (no freeze). Selection is saved for this meeting.
+        </Text>
+      ) : Platform.OS === 'android' && selection.mode === 'blur' ? (
+        <Text fontSize={12} color={coworkUi.textSecondary}>
+          Blur is saved. Your camera stays live so preview never freezes on this device.
+        </Text>
       ) : null}
       {error ? (
         <Text fontSize={12} color={coworkUi.danger}>
@@ -251,6 +339,9 @@ function QuickTile({
   busy?: boolean
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const [imageFailed, setImageFailed] = useState(false)
+  const hasImage = !!(imageUri || imageSource) && !imageFailed
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -258,6 +349,10 @@ function QuickTile({
       accessibilityLabel={label}
       onPress={onPress}
       disabled={!!busy}
+      style={({ pressed }) => ({
+        cursor: busy ? 'default' : 'pointer',
+        opacity: busy ? 0.6 : pressed ? 0.8 : 1,
+      })}
     >
       <YStack gap={4} width={66} alignItems="center" opacity={dimmed ? 0.55 : 1}>
         <YStack
@@ -267,16 +362,26 @@ function QuickTile({
           overflow="hidden"
           borderWidth={active ? 2 : 1}
           borderColor={active ? coworkUi.brand : coworkUi.borderSoft}
-          backgroundColor={coworkUi.surface}
+          backgroundColor={hasImage ? '#1a1218' : coworkUi.surfaceMuted}
           alignItems="center"
           justifyContent="center"
         >
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
-          ) : imageSource ? (
-            <Image source={imageSource} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
+          {imageUri && !imageFailed ? (
+            <Image
+              source={{ uri: imageUri }}
+              resizeMode="cover"
+              onError={() => setImageFailed(true)}
+              style={{ width: '100%', height: '100%' }}
+            />
+          ) : imageSource && !imageFailed ? (
+            <Image
+              source={imageSource}
+              resizeMode="cover"
+              onError={() => setImageFailed(true)}
+              style={{ width: '100%', height: '100%' }}
+            />
           ) : (
-            icon
+            icon ?? <Icons.Image size={18} color={coworkUi.textMuted} />
           )}
           {busy ? (
             <YStack

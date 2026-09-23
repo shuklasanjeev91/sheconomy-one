@@ -145,7 +145,7 @@ export function shouldConfirmNativeBackgroundPause(
 }
 
 /** Classify AppState transitions for interruption UX.
- * active→inactive is Control Center / app switcher / incoming call chrome — not
+ * active→inactive is Control Center / app switcher / incoming call UI — not
  * a confirmed phone call. Treat as brief app_inactive so we don't flash a
  * "Phone call in progress" banner for every system sheet.
  */

@@ -7,7 +7,7 @@ type MeetingRoleBadgeProps = {
   size?: 'sm' | 'md'
 }
 
-/** Visible HOST / CO-HOST pill for people list and room chrome. */
+/** Visible HOST / CO-HOST pill for people list and room layout. */
 export function MeetingRoleBadge({ role, size = 'sm' }: MeetingRoleBadgeProps) {
   const label = meetingRoleBadgeLabel(role)
   if (!label) return null

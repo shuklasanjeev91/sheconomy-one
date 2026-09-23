@@ -7,7 +7,7 @@ import {
   resolveMeetingBreakpoint,
   resolveMeetingResponsiveLayout,
 } from '../../../co-work/lib/meeting-responsive'
-import { resolveMeetingChromeLayout, resolveMeetingOrientationPolicy } from '../../../co-work/lib/meeting-orientation-layout'
+import { resolveMeetingUiLayout, resolveMeetingOrientationPolicy } from '../../../co-work/lib/meeting-orientation-layout'
 
 describe('meeting responsive breakpoints', () => {
   it('maps web widths to Mobile → Tablet → Laptop → Desktop → Large Desktop', () => {
@@ -42,7 +42,7 @@ describe('meeting responsive breakpoints', () => {
     ).toBe('bottom-sheet')
   })
 
-  it('uses Zoom desktop/iPad chrome from tablet up (side panels + roomy dock)', () => {
+  it('uses Zoom desktop/tablet UI from tablet up (side panels + roomy dock)', () => {
     const tabletPortrait = resolveMeetingResponsiveLayout({ width: 800, height: 1024 })
     expect(tabletPortrait.breakpoint).toBe('tablet')
     expect(tabletPortrait.panelPresentation).toBe('side')
@@ -76,14 +76,14 @@ describe('meeting responsive breakpoints', () => {
     expect(nativeTablet.panelPresentation).toBe('side')
     expect(nativeTablet.compactControls).toBe(false)
 
-    const tabletChrome = resolveMeetingChromeLayout({ width: 800, height: 1024 })
-    expect(tabletChrome.panelPresentation).toBe('side')
-    expect(tabletChrome.compactControls).toBe(false)
-    expect(tabletChrome.panelFullWidth).toBe(false)
+    const tabletLayout = resolveMeetingUiLayout({ width: 800, height: 1024 })
+    expect(tabletLayout.panelPresentation).toBe('side')
+    expect(tabletLayout.compactControls).toBe(false)
+    expect(tabletLayout.panelFullWidth).toBe(false)
   })
 
 
-  it('describes mobile vs desktop meeting chrome recipes', () => {
+  it('describes mobile vs desktop meeting UI recipes', () => {
     const mobile = resolveMeetingResponsiveLayout({ width: 390, height: 844 })
     expect(mobile.toolbarPlacement).toBe('bottom')
     expect(mobile.filmstripPlacement).toBe('bottom')
@@ -99,7 +99,7 @@ describe('meeting responsive breakpoints', () => {
     expect(desktop.galleryPreferWide).toBe(true)
   })
 
-  it('wires chrome layout policies to the responsive ladder', () => {
+  it('wires layout policies to the responsive ladder', () => {
     expect(resolveMeetingOrientationPolicy({ width: 390, height: 844 })).toBe('portrait-phone')
     expect(resolveMeetingOrientationPolicy({ width: 844, height: 390 })).toBe('landscape-phone')
     expect(resolveMeetingOrientationPolicy({ width: 800, height: 1024 })).toBe('tablet')
@@ -107,17 +107,17 @@ describe('meeting responsive breakpoints', () => {
     expect(resolveMeetingOrientationPolicy({ width: 1200, height: 800 })).toBe('desktop')
     expect(resolveMeetingOrientationPolicy({ width: 1600, height: 900 })).toBe('large-desktop')
 
-    const phone = resolveMeetingChromeLayout({ width: 390, height: 844 })
+    const phone = resolveMeetingUiLayout({ width: 390, height: 844 })
     expect(phone.panelPresentation).toBe('bottom-sheet')
     expect(phone.compactControls).toBe(true)
     expect(phone.filmstripBeside).toBe(false)
 
-    const tablet = resolveMeetingChromeLayout({ width: 800, height: 1024 })
+    const tablet = resolveMeetingUiLayout({ width: 800, height: 1024 })
     expect(tablet.panelPresentation).toBe('side')
     expect(tablet.compactControls).toBe(false)
     expect(tablet.filmstripBeside).toBe(false)
 
-    const desk = resolveMeetingChromeLayout({ width: 1440, height: 900 })
+    const desk = resolveMeetingUiLayout({ width: 1440, height: 900 })
     expect(desk.panelPresentation).toBe('side')
     expect(desk.filmstripBeside).toBe(true)
     expect(desk.compactControls).toBe(false)

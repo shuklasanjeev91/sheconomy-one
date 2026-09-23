@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Modal, Platform, Pressable } from 'react-native'
+import { Platform } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
-import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { AppBottomSheet, Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import {
   SHECONOMY_MEETING_COLORS,
   coworkGlassStyle,
@@ -218,8 +219,6 @@ export function MeetingInfoModal({
   const [copiedId, setCopiedId] = useState(false)
   const [copiedPasscode, setCopiedPasscode] = useState(false)
 
-  if (!open) return null
-
   const handleCopyLink = async () => {
     if (!shareUrl) return
     await copyShareLink(shareUrl)
@@ -242,170 +241,132 @@ export function MeetingInfoModal({
   }
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        style={{
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.65)',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: 16,
-        }}
-        onPress={onClose}
-      >
-        <Pressable
-          style={{ width: '100%', maxWidth: 440 }}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <YStack
-            backgroundColor={ui.surface}
-            borderWidth={1}
-            borderColor={ui.borderSoft}
-            borderRadius={16}
-            padding="$5"
-            gap="$4"
-            style={{
-              boxShadow: '0 16px 36px rgba(0, 0, 0, 0.4)',
-            }}
+    <AppBottomSheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+      title={topic || 'Meeting info'}
+      showHandle
+      scrollable
+      footer={
+        shareUrl ? (
+          <Button
+            tone="primary"
+            borderRadius={10}
+            backgroundColor={ui.brand}
+            width="100%"
+            icon={
+              copiedLink ? (
+                <Icons.Check size={16} color="#FFFFFF" />
+              ) : (
+                <Icons.Copy size={16} color="#FFFFFF" />
+              )
+            }
+            onPress={() => void handleCopyLink()}
           >
-            {/* Header with Green Shield */}
-            <XStack justifyContent="space-between" alignItems="center">
-              <XStack alignItems="center" gap="$2.5">
-                <YStack
-                  width={32}
-                  height={32}
-                  borderRadius={16}
-                  backgroundColor="rgba(16, 185, 129, 0.15)"
-                  alignItems="center"
-                  justifyContent="center"
-                >
-                  <Icons.ShieldCheck size={18} color={SHECONOMY_MEETING_COLORS.green} />
-                </YStack>
-                <YStack>
-                  <Text fontSize={16} fontWeight="700" color={ui.text}>
-                    {topic || 'SHEconomy Meeting Info'}
-                  </Text>
-                  <Text fontSize={12} color={SHECONOMY_MEETING_COLORS.green} fontWeight="600">
-                    End-to-End Encrypted
-                  </Text>
-                </YStack>
-              </XStack>
+            {copiedLink ? 'Link copied!' : 'Copy invite link'}
+          </Button>
+        ) : undefined
+      }
+    >
+      <YStack gap="$4">
+        <XStack alignItems="center" gap="$2.5">
+          <YStack
+            width={32}
+            height={32}
+            borderRadius={16}
+            backgroundColor="rgba(16, 185, 129, 0.15)"
+            alignItems="center"
+            justifyContent="center"
+          >
+            <Icons.ShieldCheck size={18} color={SHECONOMY_MEETING_COLORS.green} />
+          </YStack>
+          <Text fontSize={13} color={SHECONOMY_MEETING_COLORS.green} fontWeight="700">
+            End-to-end encrypted
+          </Text>
+        </XStack>
+
+        <YStack
+          backgroundColor={ui.surfaceMuted}
+          borderRadius={12}
+          borderWidth={1}
+          borderColor={ui.borderSoft}
+          padding="$3"
+          gap="$3"
+        >
+          <XStack justifyContent="space-between" alignItems="center">
+            <Text fontSize={13} color={ui.textSecondary}>
+              Meeting ID
+            </Text>
+            <XStack alignItems="center" gap="$2">
+              <Text fontSize={14} fontWeight="700" color={ui.text} letterSpacing={1}>
+                {meetingCode}
+              </Text>
               <Button
                 tone="ghost"
                 size="$2"
-                circular
-                icon={<Icons.X size={16} color={ui.textSecondary} />}
-                onPress={onClose}
-                accessibilityLabel="Close"
-              />
-            </XStack>
-
-            {/* Info Table */}
-            <YStack
-              backgroundColor={ui.surfaceElevated}
-              borderRadius={12}
-              borderWidth={1}
-              borderColor={ui.borderSoft}
-              padding="$3"
-              gap="$3"
-            >
-              {/* Meeting ID */}
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text fontSize={13} color={ui.textSecondary}>
-                  Meeting ID
-                </Text>
-                <XStack alignItems="center" gap="$2">
-                  <Text fontSize={14} fontWeight="700" color={ui.text} letterSpacing={1}>
-                    {meetingCode}
-                  </Text>
-                  <Button
-                    tone="ghost"
-                    size="$2"
-                    icon={
-                      copiedId ? (
-                        <Icons.Check size={14} color={SHECONOMY_MEETING_COLORS.green} />
-                      ) : (
-                        <Icons.Copy size={14} color={ui.textSecondary} />
-                      )
-                    }
-                    onPress={() => void handleCopyId()}
-                    accessibilityLabel="Copy meeting ID"
-                  />
-                </XStack>
-              </XStack>
-
-              {/* Host */}
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text fontSize={13} color={ui.textSecondary}>
-                  Host
-                </Text>
-                <Text fontSize={13} fontWeight="600" color={ui.text}>
-                  {hostName}
-                </Text>
-              </XStack>
-
-              {/* Passcode */}
-              {passcode ? (
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={13} color={ui.textSecondary}>
-                    Passcode
-                  </Text>
-                  <XStack alignItems="center" gap="$2">
-                    <Text fontSize={13} fontWeight="700" color={ui.text}>
-                      {passcode}
-                    </Text>
-                    <Button
-                      tone="ghost"
-                      size="$2"
-                      icon={
-                        copiedPasscode ? (
-                          <Icons.Check size={14} color={SHECONOMY_MEETING_COLORS.green} />
-                        ) : (
-                          <Icons.Copy size={14} color={ui.textSecondary} />
-                        )
-                      }
-                      onPress={() => void handleCopyPasscode()}
-                      accessibilityLabel="Copy passcode"
-                    />
-                  </XStack>
-                </XStack>
-              ) : null}
-
-              {/* Numeric Passcode */}
-              {numericPasscode ? (
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={13} color={ui.textSecondary}>
-                    Numeric Passcode
-                  </Text>
-                  <Text fontSize={13} fontWeight="600" color={ui.text}>
-                    {numericPasscode}
-                  </Text>
-                </XStack>
-              ) : null}
-            </YStack>
-
-            {/* Copy Invite Link Button */}
-            {shareUrl ? (
-              <Button
-                tone="primary"
-                borderRadius={10}
-                backgroundColor={ui.brand}
                 icon={
-                  copiedLink ? (
-                    <Icons.Check size={16} color="#FFFFFF" />
+                  copiedId ? (
+                    <Icons.Check size={14} color={SHECONOMY_MEETING_COLORS.green} />
                   ) : (
-                    <Icons.Copy size={16} color="#FFFFFF" />
+                    <Icons.Copy size={14} color={ui.textSecondary} />
                   )
                 }
-                onPress={() => void handleCopyLink()}
-              >
-                {copiedLink ? 'Link Copied!' : 'Copy Invite Link'}
-              </Button>
-            ) : null}
-          </YStack>
-        </Pressable>
-      </Pressable>
-    </Modal>
+                onPress={() => void handleCopyId()}
+                accessibilityLabel="Copy meeting ID"
+              />
+            </XStack>
+          </XStack>
+
+          <XStack justifyContent="space-between" alignItems="center">
+            <Text fontSize={13} color={ui.textSecondary}>
+              Host
+            </Text>
+            <Text fontSize={13} fontWeight="600" color={ui.text}>
+              {hostName}
+            </Text>
+          </XStack>
+
+          {passcode ? (
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text fontSize={13} color={ui.textSecondary}>
+                Passcode
+              </Text>
+              <XStack alignItems="center" gap="$2">
+                <Text fontSize={13} fontWeight="700" color={ui.text}>
+                  {passcode}
+                </Text>
+                <Button
+                  tone="ghost"
+                  size="$2"
+                  icon={
+                    copiedPasscode ? (
+                      <Icons.Check size={14} color={SHECONOMY_MEETING_COLORS.green} />
+                    ) : (
+                      <Icons.Copy size={14} color={ui.textSecondary} />
+                    )
+                  }
+                  onPress={() => void handleCopyPasscode()}
+                  accessibilityLabel="Copy passcode"
+                />
+              </XStack>
+            </XStack>
+          ) : null}
+
+          {numericPasscode ? (
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text fontSize={13} color={ui.textSecondary}>
+                Numeric Passcode
+              </Text>
+              <Text fontSize={13} fontWeight="600" color={ui.text}>
+                {numericPasscode}
+              </Text>
+            </XStack>
+          ) : null}
+        </YStack>
+      </YStack>
+    </AppBottomSheet>
   )
 }
 

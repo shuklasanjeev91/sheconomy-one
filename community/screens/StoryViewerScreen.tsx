@@ -319,7 +319,7 @@ export function StoryViewerScreen() {
 
   return (
     <YStack flex={1} backgroundColor="#000" position="relative">
-      <XStack position="absolute" top={16} left={16} right={16} gap={4} zIndex={4}>
+      <XStack position="absolute" top={Math.max(insets.top, 16)} left={16} right={16} gap={4} zIndex={4}>
         {slides.map((s, i) => (
           <YStack
             key={s.id}
@@ -340,7 +340,7 @@ export function StoryViewerScreen() {
 
       <XStack
         position="absolute"
-        top={28}
+        top={Math.max(insets.top, 16) + 14}
         left={16}
         right={16}
         zIndex={5}

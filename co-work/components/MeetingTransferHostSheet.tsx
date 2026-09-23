@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { Alert, Platform } from 'react-native'
 
 import {
   AppBottomSheet,
@@ -11,6 +10,7 @@ import {
   YStack,
 } from '~/components/ui'
 import { MeetingRoleBadge } from '~/co-work/components/MeetingRoleBadge'
+import { confirmMeetingAction } from '~/co-work/lib/meeting-confirm'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import { meetingRoleFromFlags } from '~/co-work/lib/meeting-role-permissions'
 import { transferHostCandidates } from '~/co-work/lib/meeting-transfer-host'
@@ -64,24 +64,13 @@ export function MeetingTransferHostSheet({
 
   const confirmTransfer = (participant: MeetingParticipant) => {
     const name = participantName(participant)
-    const title = 'Transfer host?'
-    const message = `Make ${name} the host of this meeting? You’ll become a co-host.`
-
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`)) {
-        void runTransfer(participant)
-      }
-      return
-    }
-
-    Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Transfer host',
-        style: 'default',
-        onPress: () => void runTransfer(participant),
-      },
-    ])
+    confirmMeetingAction({
+      title: 'Transfer host?',
+      message: `Make ${name} the host of this meeting? You’ll become a co-host.`,
+      confirmLabel: 'Transfer host',
+      cancelLabel: 'Cancel',
+      onConfirm: () => void runTransfer(participant),
+    })
   }
 
   return (

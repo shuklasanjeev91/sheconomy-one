@@ -10,6 +10,7 @@ import { DesktopScrollTracker } from '~/components/navigation/DesktopScrollTrack
 import { CommerceDesktopFooter } from '~/commerce/navigation/CommerceDesktopFooter'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuthScreen } from '~/hooks/useAuthScreen'
+import { useKeyboardBottomInset } from '~/hooks/useKeyboardVisible'
 import {
   isAdminPath,
   isChatConversationPath,
@@ -137,15 +138,23 @@ export function AppShell({ children }: AppShellProps) {
   // Manage Shop uses its own top bar + Etsy-style bottom tabs — hide marketplace header.
   const hideMobileHeader = !isDesktop && isVendorPath(pathname)
 
+  const keyboardHeight = useKeyboardBottomInset()
+  const isKeyboardOpen = keyboardHeight > 0
+
   const useChromelessLayout = chromeless || authScreen.chromeless
   // Meeting overlay owns its own safe-area padding (header/dock). Wrapping the
   // shell in top+bottom SafeArea left white/black letterbox rails on phones.
   const meetingEdgeToEdge = chromeless && !authScreen.chromeless
+  const showMobileBottomTabs = !isDesktop && !chatConversationMobile && !isSellerLanding
   const safeEdges = meetingEdgeToEdge
     ? ([] as const)
-    : useChromelessLayout
-      ? (['top', 'bottom'] as const)
-      : (['top'] as const)
+    : isKeyboardOpen
+      ? (['top'] as const)
+      : useChromelessLayout
+        ? (['top', 'bottom'] as const)
+        : !showMobileBottomTabs && !chatConversationMobile
+          ? (['top', 'bottom'] as const)
+          : (['top'] as const)
 
   return (
     <NativeSafeArea edges={[...safeEdges]}>
@@ -176,6 +185,7 @@ export function AppShell({ children }: AppShellProps) {
               maxWidth="100%"
               backgroundColor={ui.background}
               overflow="hidden"
+              paddingBottom={Platform.OS !== 'web' ? keyboardHeight : 0}
               style={
                 authScreen.chromeless && !chromeless
                   ? authViewportStyle()
@@ -195,6 +205,7 @@ export function AppShell({ children }: AppShellProps) {
                 position="relative"
                 backgroundColor={ui.background}
                 overflow={clipShellOverflow ? 'hidden' : 'visible'}
+                paddingBottom={Platform.OS !== 'web' ? keyboardHeight : 0}
                 style={{
                   ...(lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)),
                   ...documentDesktopFlex,

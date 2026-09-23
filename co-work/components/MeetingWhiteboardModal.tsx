@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Modal,
   Platform,
-  Pressable,
   TextInput,
   View,
   useWindowDimensions,
-  type GestureResponderEvent,
+  type GestureResponderEvent
 } from 'react-native'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import Svg, { Ellipse, Path, Rect as SvgRect, Text as SvgText } from 'react-native-svg'
 
-import { ViewportOverlay } from '~/components/layout/ViewportOverlay'
-import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
-import { MEETING_PORTAL_Z_INDEX } from '~/co-work/lib/meeting-toolbar'
+import { AppBottomSheet, Button, Icons, Text, XStack, YStack } from '~/components/ui'
 import {
   appendWhiteboardPoint,
   createWhiteboardStrokeId,
@@ -464,37 +461,20 @@ export function MeetingWhiteboardModal({
     </YStack>
   )
 
-  if (Platform.OS === 'web') {
-    return (
-      <ViewportOverlay>
-        <YStack
-          position={'fixed' as never}
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          zIndex={MEETING_PORTAL_Z_INDEX}
-          pointerEvents="auto"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: MEETING_PORTAL_Z_INDEX,
-            width: '100vw',
-            height: '100dvh',
-          }}
-        >
-          {board}
-        </YStack>
-      </ViewportOverlay>
-    )
-  }
-
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <YStack flex={1} width={windowWidth} height={windowHeight} backgroundColor="#0c080a">
+    <AppBottomSheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+      title="Whiteboard"
+      showHandle
+      scrollable={false}
+    >
+      <YStack flex={1} minHeight={Math.max(windowHeight - 160, 320)} backgroundColor="#0c080a">
         {board}
       </YStack>
-    </Modal>
+    </AppBottomSheet>
   )
 }
 

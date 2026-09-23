@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
-import { Modal, Platform, Pressable, View } from 'react-native'
+import { Platform, Pressable, View } from 'react-native'
 
 import {
   FaceCaptureOverlay,
   VerificationSteps,
 } from '~/components/gender-verification/GenderVerificationPanel'
 import { GenderVerificationErrorBoundary } from '~/components/gender-verification/GenderVerificationErrorBoundary'
-import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { AppBottomSheet, Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { BRAND_NAME } from '~/config/brand'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -53,23 +53,19 @@ export function GenderVerificationModal({
     />
   )
 
-  // Native: RN Modal escapes SafeArea / overflow:hidden shell clipping.
-  if (Platform.OS !== 'web') {
-    return (
-      <Modal
-        visible={open}
-        transparent
-        animationType="slide"
-        onRequestClose={onClose}
-        statusBarTranslucent
-      >
-        {open ? shell : null}
-      </Modal>
-    )
-  }
-
-  if (!open) return null
-  return shell
+  return (
+    <AppBottomSheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+      title="Human verification"
+      showHandle={dismissible}
+      scrollable={false}
+    >
+      {open ? shell : null}
+    </AppBottomSheet>
+  )
 }
 
 function GenderVerificationModalShell({
@@ -81,53 +77,13 @@ function GenderVerificationModalShell({
   const { isDesktop, safeTop, safeBottom } = useAppLayout()
 
   return (
-    <YStack
-      position={Platform.OS === 'web' ? ('fixed' as never) : 'absolute'}
-      top={0}
-      left={0}
-      right={0}
-      bottom={0}
-      zIndex={200_020}
-      backgroundColor="rgba(0,0,0,0.55)"
-      alignItems="center"
-      justifyContent={isDesktop ? 'center' : 'flex-end'}
-      padding={isDesktop ? '$4' : 0}
-      pointerEvents="box-none"
-    >
-      <YStack
-        width="100%"
-        maxWidth={isDesktop ? 520 : undefined}
-        flex={isDesktop ? undefined : 1}
-        maxHeight={isDesktop ? ('90vh' as const) : ('100%' as const)}
-        minHeight={isDesktop ? undefined : 0}
-        backgroundColor={ui.surface}
-        borderRadius={isDesktop ? radius.card : 0}
-        borderWidth={isDesktop ? 1 : 0}
-        borderColor={ui.borderSubtle}
-        overflow="hidden"
-        paddingTop={isDesktop ? 0 : safeTop}
-        pointerEvents="auto"
-        style={
-          Platform.OS === 'web'
-            ? ({
-                ...(isDesktop ? getShadowStyle('lg') : {}),
-                display: 'flex',
-                flexDirection: 'column',
-                ...(isDesktop ? {} : { flex: 1, minHeight: 0 }),
-              } as const)
-            : isDesktop
-              ? getShadowStyle('lg')
-              : { flex: 1, minHeight: 0 }
-        }
-      >
-        <ModalHeader ui={ui} dismissible={dismissible} onClose={onClose} />
-        <VerificationFlow
-          onClose={onClose}
-          onVerified={onVerified}
-          footerPad={isDesktop ? 20 : Math.max(safeBottom, 12)}
-          fillHeight={!isDesktop}
-        />
-      </YStack>
+    <YStack width="100%" gap="$2" minHeight={420}>
+      <VerificationFlow
+        onClose={onClose}
+        onVerified={onVerified}
+        footerPad={Math.max(safeBottom, 12)}
+        fillHeight={false}
+      />
     </YStack>
   )
 }

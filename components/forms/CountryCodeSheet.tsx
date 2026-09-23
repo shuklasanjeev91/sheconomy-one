@@ -117,7 +117,7 @@ export function CountryCodeSheet({
         {Platform.OS === 'web' ? (
           list
         ) : (
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             {list}
           </KeyboardAvoidingView>
         )}

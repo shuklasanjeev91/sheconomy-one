@@ -46,4 +46,15 @@ describe('meeting video surface remounts', () => {
     const second = nextMeetingVideoSurfaceSize(first, { w: 372, h: 228 })
     expect(second).toBe(first)
   })
+
+  it('forms a valid remount key with mediaReadyToken streamId', () => {
+    const key = meetingVideoTrackRemountKey({
+      trackSid: 'TR_123',
+      streamId: 'stream-ready-token',
+      surface: { w: 640, h: 480 },
+      isScreen: false,
+      mirrored: true,
+    })
+    expect(key).toBe('TR_123-stream-ready-token-cam-m')
+  })
 })

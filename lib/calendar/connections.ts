@@ -1,6 +1,7 @@
 import { supabase } from '~/lib/supabase/client'
 import { meetingFeatureFlags } from '~/co-work/lib/meeting-feature-flags'
 import { openExternalUrl } from '~/lib/platform/openUrl'
+import { readSupabaseFunctionError } from '~/lib/supabase/function-error'
 
 export type CalendarProvider = 'google' | 'microsoft'
 
@@ -47,10 +48,26 @@ export async function startCalendarOAuth(
   const { data, error } = await supabase.functions.invoke('calendar-oauth-start', {
     body: { provider, redirectTo },
   })
-  if (error) throw new Error(error.message || `Could not connect ${provider}`)
-  const payload = data as { authorizationUrl?: string; error?: string; configured?: boolean }
-  if (payload.error || !payload.authorizationUrl) {
-    throw new Error(payload.error || `${provider} calendar is not configured`)
+  const payload = (data ?? {}) as {
+    authorizationUrl?: string
+    error?: string
+    configured?: boolean
+  }
+  if (error || payload.error || !payload.authorizationUrl) {
+    const label = calendarProviderLabel(provider)
+    const detail = await readSupabaseFunctionError(
+      error,
+      payload,
+      `Could not connect ${label}`,
+    )
+    if (/not configured/i.test(detail) || payload.configured === false) {
+      throw new Error(
+        `${label} sync is not configured yet. Ask an admin to set ${
+          provider === 'google' ? 'GOOGLE_CALENDAR' : 'MICROSOFT_CALENDAR'
+        }_CLIENT_ID / _CLIENT_SECRET on Supabase.`,
+      )
+    }
+    throw new Error(detail)
   }
   return { authorizationUrl: payload.authorizationUrl }
 }
@@ -68,9 +85,16 @@ export async function revokeCalendarConnection(provider: CalendarProvider): Prom
   const { data, error } = await supabase.functions.invoke('calendar-oauth-revoke', {
     body: { provider },
   })
-  if (error) throw new Error(error.message || `Could not disconnect ${provider}`)
-  const payload = data as { error?: string }
-  if (payload?.error) throw new Error(payload.error)
+  const payload = (data ?? {}) as { error?: string }
+  if (error || payload?.error) {
+    throw new Error(
+      await readSupabaseFunctionError(
+        error,
+        payload,
+        `Could not disconnect ${calendarProviderLabel(provider)}`,
+      ),
+    )
+  }
 }
 
 export async function upsertMeetingCalendarEvent(

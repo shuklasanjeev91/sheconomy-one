@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native'
+import { Platform, Pressable } from 'react-native'
 
+import { AppBottomSheet, Text, XStack, YStack } from '~/components/ui'
 import { REACTION_TYPES, type ReactionType } from '~/community/lib/constants'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { WebOnlyStyle } from '~/components/platform/WebOnlyStyle'
-import { Text, XStack, YStack } from '~/components/ui'
 
 type ReactionPickerProps = {
   visible: boolean
@@ -12,7 +12,7 @@ type ReactionPickerProps = {
   onClose: () => void
 }
 
-/** Floating reaction bar with pop-in animation. */
+/** Reaction picker — bottom sheet on native, floating bar on web (hover UX). */
 export function ReactionPicker({ visible, onSelect, onClose }: ReactionPickerProps) {
   const communityUi = useCommunityUi()
   if (!visible) return null
@@ -27,6 +27,8 @@ export function ReactionPicker({ visible, onSelect, onClose }: ReactionPickerPro
       borderWidth={1}
       borderColor={communityUi.borderLight}
       alignItems="center"
+      justifyContent="center"
+      flexWrap="wrap"
       style={Platform.OS === 'web' ? { boxShadow: communityUi.reactionBarShadow } : undefined}
       // @ts-expect-error web pointer events
       onMouseLeave={Platform.OS === 'web' ? onClose : undefined}
@@ -46,17 +48,19 @@ export function ReactionPicker({ visible, onSelect, onClose }: ReactionPickerPro
     </XStack>
   )
 
-  // Native: Modal so the bar isn't clipped by CommunityCard / overflow parents.
   if (Platform.OS !== 'web') {
     return (
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-        <View style={styles.modalRoot} pointerEvents="box-none">
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Dismiss reactions" />
-          <View style={styles.modalBar} pointerEvents="box-none">
-            {bar}
-          </View>
-        </View>
-      </Modal>
+      <AppBottomSheet
+        open={visible}
+        onOpenChange={(next) => {
+          if (!next) onClose()
+        }}
+        title="React"
+        showHandle
+        scrollable={false}
+      >
+        {bar}
+      </AppBottomSheet>
     )
   }
 
@@ -178,16 +182,3 @@ export function ReactionBurst({ emoji, onDone }: { emoji: string; onDone: () => 
     </YStack>
   )
 }
-
-const styles = StyleSheet.create({
-  modalRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingBottom: 96,
-  },
-  modalBar: {
-    alignItems: 'center',
-    zIndex: 2,
-  },
-})
