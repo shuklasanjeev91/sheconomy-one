@@ -612,6 +612,27 @@ export async function updateMeetingSchedule(
   return mapMeeting(data as Record<string, unknown>)
 }
 
+/** Host/co-host: rename topic without changing schedule (works for instant + live). */
+export async function updateMeetingTitle(meetingId: string, title: string): Promise<Meeting> {
+  const trimmed = title.trim()
+  if (!trimmed) throw new Error('Title is required.')
+
+  const { data, error } = await supabase.rpc('update_meeting_schedule_secure', {
+    meeting_id_input: meetingId,
+    title_input: trimmed,
+  })
+
+  if (error) {
+    if (/HOST_REQUIRED/i.test(error.message)) {
+      throw new Error('Only the host or a co-host can edit this meeting.')
+    }
+    throw new Error(error.message)
+  }
+
+  invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
+  return mapMeeting(data as Record<string, unknown>)
+}
+
 export async function startMeeting(meetingId: string): Promise<void> {
   // Always read live status — InstantMeetingHost / lobby can pass a stale
   // cached `active` row after the meeting was ended, which skipped restart and

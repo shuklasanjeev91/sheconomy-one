@@ -38,6 +38,7 @@ type MeetingHostToolsPanelProps = {
   onLowerAllHands?: () => void
   onClearAllFeedback?: () => void
   onRenameTopic?: (title: string) => void
+  onTransferHostPress?: () => void
   webinarMode?: boolean
   onToggleWebinarMode?: (enabled: boolean) => void
   interpretationChannelId?: string
@@ -126,6 +127,7 @@ export function MeetingHostToolsPanel({
   onLowerAllHands,
   onClearAllFeedback,
   onRenameTopic,
+  onTransferHostPress,
   webinarMode = false,
   onToggleWebinarMode,
   interpretationChannelId = 'floor',
@@ -439,6 +441,24 @@ export function MeetingHostToolsPanel({
               icon={<Icons.Info size={16} color="white" />}
             >
               Open meeting info
+            </Button>
+            {onTransferHostPress && canEditPermissions ? (
+              <Button
+                tone="outline"
+                borderRadius={999}
+                onPress={onTransferHostPress}
+                icon={<Icons.UserCheck size={16} color={coworkUi.text} />}
+              >
+                Transfer host
+              </Button>
+            ) : null}
+            <Button
+              tone="outline"
+              borderRadius={999}
+              onPress={onOpenParticipants}
+              icon={<Icons.Users size={16} color={coworkUi.text} />}
+            >
+              Make co-host (Participants)
             </Button>
             {onRenameTopic && canEditPermissions ? (
               <YStack

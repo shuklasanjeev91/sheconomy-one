@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import { Button, Icons, ScrollView, Switch, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Field, Icons, Input, ScrollView, Switch, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkPanelShell, CoWorkSectionLabel, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
@@ -27,6 +27,12 @@ type MeetingInfoPanelProps = {
   onHostLeaveBehaviorChange?: (behavior: 'end' | 'transfer_to_co_host') => void
   /** Zoom-style: open joined-participant picker and transfer host now. */
   onTransferHostPress?: () => void
+  /** Open Participants so host can Make co-host from a person’s menu. */
+  onOpenParticipants?: () => void
+  /** Rename the live meeting topic for everyone. */
+  onRenameTopic?: (title: string) => void
+  /** Edit scheduled date/time/title outside the live room. */
+  onEditSchedule?: () => void
   isLocked?: boolean
   onToggleLock?: () => void
 }
@@ -44,18 +50,28 @@ export function MeetingInfoPanel({
   hostLeaveBehavior,
   onHostLeaveBehaviorChange,
   onTransferHostPress,
+  onOpenParticipants,
+  onRenameTopic,
+  onEditSchedule,
   isLocked = false,
   onToggleLock,
 }: MeetingInfoPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const toast = useAppToast()
   const [shareOpen, setShareOpen] = useState(false)
+  const [topicDraft, setTopicDraft] = useState(meeting.title || '')
+
+  useEffect(() => {
+    setTopicDraft(meeting.title || '')
+  }, [meeting.title])
 
   const shareUrl = getMeetingShareUrl(meeting.meeting_code)
   const hostName = meeting.host?.full_name || meeting.host?.username || BRAND_MEMBER_LABEL
   const security = meeting.security_settings
   const invitees = meeting.invitees ?? []
   const formattedCode = formatMeetingCode(meeting.meeting_code)
+  const canEditSchedule =
+    !!onEditSchedule && meeting.status !== 'cancelled' && meeting.status !== 'ended'
 
   async function handleCopy(value: string, label: string) {
     const copied = await copyShareLink(value)
@@ -79,6 +95,13 @@ export function MeetingInfoPanel({
     )
   }
 
+  function saveTopic() {
+    const next = topicDraft.trim()
+    if (!next || !onRenameTopic || next === meeting.title) return
+    onRenameTopic(next)
+    toast.show('Topic updated', { tone: 'success', message: 'Everyone sees the new meeting title.' })
+  }
+
   return (
     <CoWorkPanelShell fullWidth={fullWidth}>
       <MeetingPanelHeader
@@ -92,15 +115,41 @@ export function MeetingInfoPanel({
         <YStack gap="$4">
           <YStack gap="$2">
             <CoWorkSectionLabel>Topic</CoWorkSectionLabel>
-            <Text fontSize={16} fontWeight="800" color={coworkUi.text} letterSpacing={-0.3}>
-              {meeting.title}
-            </Text>
+            {isHost && onRenameTopic ? (
+              <YStack gap="$2">
+                <Field label="Meeting title">
+                  <Input
+                    value={topicDraft}
+                    onChangeText={setTopicDraft}
+                    placeholder={meeting.title || 'Meeting topic'}
+                    backgroundColor="rgba(255,255,255,0.05)"
+                    borderColor={coworkUi.borderSoft}
+                    color={coworkUi.text}
+                    borderRadius={14}
+                  />
+                </Field>
+                <Button
+                  size="$3"
+                  tone="outline"
+                  borderRadius={999}
+                  disabled={!topicDraft.trim() || topicDraft.trim() === meeting.title}
+                  onPress={saveTopic}
+                >
+                  Update title
+                </Button>
+              </YStack>
+            ) : (
+              <Text fontSize={16} fontWeight="800" color={coworkUi.text} letterSpacing={-0.3}>
+                {meeting.title}
+              </Text>
+            )}
             {meeting.description ? (
               <Text fontSize={13} color={coworkUi.textSecondary} lineHeight={19}>
                 {meeting.description}
               </Text>
             ) : null}
           </YStack>
+
 
           <InfoRow label="Host" value={hostName} />
           <InfoRow
@@ -186,7 +235,7 @@ export function MeetingInfoPanel({
             </YStack>
           ) : null}
 
-          {isHost && onTransferHostPress ? (
+          {isHost && (onTransferHostPress || onOpenParticipants || canEditSchedule) ? (
             <YStack gap="$2">
               <CoWorkSectionLabel>Host controls</CoWorkSectionLabel>
               <YStack
@@ -197,22 +246,73 @@ export function MeetingInfoPanel({
                 borderWidth={1}
                 borderColor={coworkUi.borderSoft}
               >
-                <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
-                  Transfer host
-                </Text>
-                <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
-                  Pick someone who has joined this meeting. They become the host; you stay as a
-                  co-host.
-                </Text>
-                <Button
-                  size="$3"
-                  borderRadius={999}
-                  tone="primary"
-                  icon={<Icons.UserCheck size={16} color="white" />}
-                  onPress={onTransferHostPress}
-                >
-                  Choose a participant
-                </Button>
+                {onTransferHostPress ? (
+                  <YStack gap="$2">
+                    <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
+                      Transfer host
+                    </Text>
+                    <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
+                      Pick someone who has joined. They become the host; you stay as a co-host.
+                    </Text>
+                    <Button
+                      size="$3"
+                      borderRadius={999}
+                      tone="primary"
+                      icon={<Icons.UserCheck size={16} color="white" />}
+                      onPress={onTransferHostPress}
+                    >
+                      Choose a participant
+                    </Button>
+                  </YStack>
+                ) : null}
+
+                {onOpenParticipants ? (
+                  <YStack gap="$2" marginTop={onTransferHostPress ? 8 : 0}>
+                    <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
+                      Make a co-host
+                    </Text>
+                    <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
+                      Open Participants, tap ··· next to a person, then Choose Make co-host.
+                    </Text>
+                    <Button
+                      size="$3"
+                      borderRadius={999}
+                      tone="outline"
+                      icon={<Icons.Users size={16} color={coworkUi.brandLight} />}
+                      borderColor={coworkUi.borderAccent}
+                      color={coworkUi.brandLight}
+                      onPress={onOpenParticipants}
+                    >
+                      Open participants
+                    </Button>
+                  </YStack>
+                ) : null}
+
+                {canEditSchedule ? (
+                  <YStack gap="$2" marginTop={onTransferHostPress || onOpenParticipants ? 8 : 0}>
+                    <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
+                      Date and details
+                    </Text>
+                    <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
+                      {meeting.status === 'instant' || meeting.status === 'active'
+                        ? 'Update the title, schedule a future time, or edit invitees.'
+                        : 'Change the scheduled start, end, or invitees on the schedule screen.'}
+                    </Text>
+                    <Button
+                      size="$3"
+                      borderRadius={999}
+                      tone="outline"
+                      icon={<Icons.Calendar size={16} color={coworkUi.brandLight} />}
+                      borderColor={coworkUi.borderAccent}
+                      color={coworkUi.brandLight}
+                      onPress={onEditSchedule}
+                    >
+                      {meeting.status === 'instant' || meeting.status === 'active'
+                        ? 'Edit meeting details'
+                        : 'Edit schedule'}
+                    </Button>
+                  </YStack>
+                ) : null}
               </YStack>
             </YStack>
           ) : null}

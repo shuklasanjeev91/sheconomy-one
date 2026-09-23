@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Switch as RNSwitch } from 'react-native'
 
-import { AppBottomSheet, Button, Text, XStack, YStack } from '~/components/ui'
+import { AppBottomSheet, Button, Input, Text, XStack, YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { formatMeetingCode } from '~/co-work/lib/meetings'
 
@@ -9,7 +9,13 @@ type MeetingStartSheetProps = {
   open: boolean
   onClose: () => void
   pmiCode?: string | null
-  onStart: (options: { videoOn: boolean; usePmi: boolean; whiteboard?: boolean }) => void
+  defaultTitle?: string
+  onStart: (options: {
+    videoOn: boolean
+    usePmi: boolean
+    whiteboard?: boolean
+    title?: string
+  }) => void
   onStartWhiteboard?: () => void
 }
 
@@ -18,18 +24,21 @@ export function MeetingStartSheet({
   open,
   onClose,
   pmiCode,
+  defaultTitle,
   onStart,
   onStartWhiteboard,
 }: MeetingStartSheetProps) {
   const { ui } = useCoWorkTheme()
   const [videoOn, setVideoOn] = useState(true)
   const [usePmi, setUsePmi] = useState(false)
+  const [title, setTitle] = useState(defaultTitle ?? '')
 
   useEffect(() => {
     if (!open) return
     setVideoOn(true)
     setUsePmi(false)
-  }, [open])
+    setTitle(defaultTitle ?? '')
+  }, [open, defaultTitle])
 
   return (
     <AppBottomSheet
@@ -48,7 +57,11 @@ export function MeetingStartSheet({
             borderRadius={12}
             backgroundColor={ui.brand}
             onPress={() => {
-              onStart({ videoOn, usePmi: usePmi && !!pmiCode })
+              onStart({
+                videoOn,
+                usePmi: usePmi && !!pmiCode,
+                title: title.trim() || undefined,
+              })
               onClose()
             }}
           >
@@ -70,7 +83,26 @@ export function MeetingStartSheet({
         </YStack>
       }
     >
-      <YStack gap="$1">
+      <YStack gap="$3">
+        <YStack gap="$1.5">
+          <Text color={ui.text} fontSize={15} fontWeight="600">
+            Meeting title
+          </Text>
+          <Input
+            value={title}
+            onChangeText={setTitle}
+            placeholder="e.g. Weekly standup"
+            backgroundColor="rgba(255,255,255,0.05)"
+            borderColor={ui.borderSoft}
+            color={ui.text}
+            borderRadius={12}
+            height={44}
+          />
+          <Text fontSize={12} color={ui.textMuted}>
+            You can rename this again anytime from Meeting info while you are host.
+          </Text>
+        </YStack>
+
         <XStack
           alignItems="center"
           justifyContent="space-between"
@@ -100,13 +132,17 @@ export function MeetingStartSheet({
               Use personal meeting ID (PMI)
             </Text>
             {pmiCode ? (
-              <Text color={ui.textMuted} fontSize={13} fontWeight="600">
+              <Text fontSize={12} color={ui.textMuted}>
                 {formatMeetingCode(pmiCode)}
               </Text>
-            ) : null}
+            ) : (
+              <Text fontSize={12} color={ui.textMuted}>
+                Available after you start once with PMI
+              </Text>
+            )}
           </YStack>
           <RNSwitch
-            value={usePmi}
+            value={usePmi && !!pmiCode}
             onValueChange={setUsePmi}
             disabled={!pmiCode}
             trackColor={{ false: ui.borderSoft, true: ui.brand }}

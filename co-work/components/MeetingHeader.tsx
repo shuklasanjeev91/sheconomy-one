@@ -206,7 +206,7 @@ export function MeetingHeader({
       <XStack alignItems="center" gap="$2">
         {onBack || onMinimize ? (
           <HeaderIconButton label="Minimize meeting" onPress={onMinimize || onBack}>
-            <Icons.ChevronLeft size={22} color="#fff" />
+            <Icons.Minimize2 size={20} color="#fff" />
           </HeaderIconButton>
         ) : null}
 

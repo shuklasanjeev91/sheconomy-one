@@ -67,7 +67,8 @@ export function MeetingCardOverflowMenu({
     viewerRole: meeting.viewer_role,
   })
   const canEdit =
-    canManage && meeting.status !== 'cancelled' && meeting.status !== 'active'
+    canManage && meeting.status !== 'cancelled' && meeting.status !== 'ended'
+  // Allow Edit for scheduled + active so hosts can change title/date after start.
   const canDelete = canManage && meeting.status !== 'cancelled'
   const canStart = meeting.status !== 'cancelled'
 

@@ -122,7 +122,7 @@ import {
 import { meetingBrowsingMinimizedNotice } from '~/co-work/lib/meeting-lifecycle'
 import { clearImageCropQueue } from '~/lib/media/crop-session'
 import { useSessionPipOnHide } from '~/lib/session/useSessionPipOnHide'
-import { formatMeetingCode, getMeetingShareUrl, updateMeetingLiveSettings } from '~/co-work/lib/meetings'
+import { formatMeetingCode, getMeetingShareUrl, updateMeetingLiveSettings, updateMeetingTitle } from '~/co-work/lib/meetings'
 import { isMeetingPopoutMode } from '~/co-work/lib/meeting-dual-monitor'
 import { copyShareLink } from '~/lib/share'
 import {
@@ -2072,7 +2072,7 @@ function MeetingRoomOverlay({
           // Maximize2 in the header was confused with bubble Maximize.
           onToggleFullscreen={toggleFullscreen}
           fullscreenActive={fullscreen.active}
-          onMeetingInfo={() => setInfoModalOpen(true)}
+          onMeetingInfo={() => presence.setPanel('info')}
           onTile={enterMeetingPip}
           onEffects={() => presence.togglePanel('backgrounds')}
           onWhiteboard={() => {
@@ -2132,7 +2132,7 @@ function MeetingRoomOverlay({
           }}
           onSecurity={() => {
             if (canModerate) presence.togglePanel('host_tools')
-            else setInfoModalOpen(true)
+            else presence.setPanel('info')
           }}
           onToggleView={() =>
             dispatchUi({
@@ -2150,7 +2150,7 @@ function MeetingRoomOverlay({
             accessibilityRole="button"
             accessibilityLabel="Meeting security and encryption info"
             hitSlop={8}
-            onPress={() => setInfoModalOpen(true)}
+            onPress={() => presence.setPanel('info')}
             style={({ pressed }) => ({
               position: 'absolute',
               top: Math.max(safeTop, 8) + 52,
@@ -2582,6 +2582,9 @@ function MeetingRoomOverlay({
           onToggleLock={isAuthoritativeHost ? handleToggleLock : undefined}
           onOpenParticipants={() => presence.setPanel('people')}
           onOpenInfo={() => presence.setPanel('info')}
+          onTransferHostPress={
+            isAuthoritativeHost ? () => setTransferHostOpen(true) : undefined
+          }
           onToggleCaptions={toggleCaptions}
           onOpenPolls={() => presence.setPanel('polls')}
           onOpenQa={() => presence.setPanel('qna')}
@@ -2665,6 +2668,12 @@ function MeetingRoomOverlay({
               ? (nextTitle) => {
                   presence.setMeetingTopicLive(nextTitle)
                   setMeetingState((current) => ({ ...current, title: nextTitle }))
+                  void updateMeetingTitle(meeting.id, nextTitle).catch((cause) =>
+                    toast.show('Could not save title', {
+                      tone: 'danger',
+                      message: cause instanceof Error ? cause.message : 'Please try again.',
+                    }),
+                  )
                 }
               : undefined
           }
@@ -2858,6 +2867,36 @@ function MeetingRoomOverlay({
           }
           onTransferHostPress={
             isAuthoritativeHost ? () => setTransferHostOpen(true) : undefined
+          }
+          onOpenParticipants={
+            isAuthoritativeHost
+              ? () => {
+                  presence.setPanel('people')
+                }
+              : undefined
+          }
+          onRenameTopic={
+            isAuthoritativeHost
+              ? (nextTitle) => {
+                  presence.setMeetingTopicLive(nextTitle)
+                  setMeetingState((current) => ({ ...current, title: nextTitle }))
+                  void updateMeetingTitle(meeting.id, nextTitle).catch((cause) =>
+                    toast.show('Could not save title', {
+                      tone: 'danger',
+                      message: cause instanceof Error ? cause.message : 'Please try again.',
+                    }),
+                  )
+                }
+              : undefined
+          }
+          onEditSchedule={
+            isAuthoritativeHost &&
+            meetingState.status !== 'ended' &&
+            meetingState.status !== 'cancelled'
+              ? () => {
+                  navigateApp(coWorkRoutes.scheduleEdit(meetingState.id))
+                }
+              : undefined
           }
           isLocked={!!presence.moderationSettings?.is_locked}
           onToggleLock={isAuthoritativeHost ? handleToggleLock : undefined}

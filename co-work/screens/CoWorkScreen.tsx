@@ -99,6 +99,7 @@ export function CoWorkScreen() {
     videoOn?: boolean
     usePmi?: boolean
     whiteboard?: boolean
+    title?: string
   }) {
     if (creating) return
     if (!user) {
@@ -132,11 +133,14 @@ export function CoWorkScreen() {
       const media = meetingJoinMediaFromPermissions(perms, { videoEnabled: videoOn })
 
       const hostLabel = profile?.full_name?.trim() || profile?.username?.trim() || BRAND_NAME
-      const meetingTitle = isWhiteboard
-        ? `${hostLabel}'s Whiteboard Session`
-        : withPmi
-          ? `${hostLabel}'s Personal Meeting Room`
-          : `${hostLabel}'s Meeting`
+      const customTitle = options?.title?.trim()
+      const meetingTitle = customTitle
+        ? customTitle
+        : isWhiteboard
+          ? `${hostLabel}'s Whiteboard Session`
+          : withPmi
+            ? `${hostLabel}'s Personal Meeting Room`
+            : `${hostLabel}'s Meeting`
       const meeting = withPmi
         ? await (
             await import('~/co-work/lib/meeting-pmi')
@@ -677,6 +681,11 @@ export function CoWorkScreen() {
         open={showStartSheet}
         onClose={() => setShowStartSheet(false)}
         pmiCode={userPmi}
+        defaultTitle={
+          profile?.full_name?.trim() || profile?.username?.trim()
+            ? `${profile?.full_name?.trim() || profile?.username?.trim()}'s Meeting`
+            : undefined
+        }
         onStart={(options) => {
           void startInstantMeeting(options)
         }}
