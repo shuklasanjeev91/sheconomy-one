@@ -467,6 +467,14 @@ verify_jwt = true
 [functions.shepay-sync-child]
 verify_jwt = true
 
+# Admin-only: create a PayU child merchant from an approved in-app KYC application.
+[functions.shepay-create-child]
+verify_jwt = true
+
+# Shop owner: realtime PAN / GSTIN registry check.
+[functions.shepay-verify-kyc]
+verify_jwt = true
+
 # Authenticated: release held SHEPay settlements after child merchant connect.
 [functions.shepay-release-pending]
 verify_jwt = true

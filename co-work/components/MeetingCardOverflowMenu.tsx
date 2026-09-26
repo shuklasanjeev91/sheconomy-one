@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Alert, Platform } from 'react-native'
 
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
+import { RnPressable } from '~/co-work/components/RnPressable'
 import {
   cancelMeeting,
   formatMeetingCode,
@@ -16,10 +17,9 @@ import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting } from '~/co-work/lib/types'
 import {
+  AppBottomSheet,
   Button,
   Icons,
-  Popover,
-  PopoverContent,
   Text,
   XStack,
   YStack,
@@ -48,7 +48,8 @@ type MenuItem = {
 
 /**
  * Zoom-style ⋮ menu on meeting cards: Start, Copy / Share invitation, Edit, Delete.
- * Uses Popover with flip so the menu stays in the viewport.
+ * Opens an action sheet. A popover trigger toggles twice on the same press
+ * (built-in toggle plus the button handler), so the menu never appears.
  */
 export function MeetingCardOverflowMenu({
   meeting,
@@ -176,64 +177,66 @@ export function MeetingCardOverflowMenu({
       : null,
   ].filter(Boolean) as MenuItem[]
 
+  function selectItem(item: MenuItem) {
+    setOpen(false)
+    // iPad drops navigation and the delete alert while this sheet is still
+    // dismissing, so run the action after it has closed.
+    setTimeout(() => item.onPress(), 350)
+  }
+
   return (
     <>
-      <Popover open={open} onOpenChange={setOpen} placement="top-end" allowFlip>
-        <Popover.Trigger asChild>
-          <Button
-            tone="ghost"
-            size="$2"
-            circular
-            icon={<Icons.MoreHorizontal size={18} color={coworkUi.textMuted} />}
-            accessibilityLabel={`More actions for ${meeting.title}`}
-            accessibilityHint={`Meeting ${formatMeetingCode(meeting.meeting_code)}`}
-            onPress={(event) => {
-              event?.stopPropagation?.()
-              setOpen((current) => !current)
-            }}
-          />
-        </Popover.Trigger>
-        <PopoverContent
-          elevate
-          zIndex={500000}
-          minWidth={220}
-          padding="$1.5"
-          borderRadius={14}
-          backgroundColor={coworkUi.surface}
-          borderWidth={1}
-          borderColor={coworkUi.borderSoft}
-          overflow="hidden"
-        >
-          <YStack gap={1}>
-            {items.map((item) => {
-              const Icon = item.icon
-              const color = item.danger ? coworkUi.danger : coworkUi.text
-              return (
+      <Button
+        tone="ghost"
+        size="$2"
+        circular
+        zIndex={2}
+        icon={<Icons.MoreHorizontal size={18} color={coworkUi.textMuted} />}
+        accessibilityLabel={`More actions for ${meeting.title}`}
+        accessibilityHint={`Meeting ${formatMeetingCode(meeting.meeting_code)}`}
+        onPress={(event) => {
+          event?.stopPropagation?.()
+          setOpen(true)
+        }}
+      />
+
+      <AppBottomSheet
+        open={open}
+        onOpenChange={setOpen}
+        title={meeting.title}
+        fitContent
+        scrollable={false}
+      >
+        <YStack gap="$1" width="100%">
+          {items.map((item) => {
+            const Icon = item.icon
+            const color = item.danger ? coworkUi.danger : coworkUi.text
+            return (
+              <RnPressable
+                key={item.key}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
+                onPress={() => selectItem(item)}
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              >
                 <XStack
-                  key={item.key}
                   alignItems="center"
                   gap="$3"
-                  minHeight={44}
+                  minHeight={48}
                   paddingHorizontal="$3"
                   borderRadius={10}
-                  cursor="pointer"
-                  hoverStyle={{ backgroundColor: coworkUi.surfaceMuted }}
-                  pressStyle={{ opacity: 0.85 }}
-                  onPress={() => {
-                    setOpen(false)
-                    item.onPress()
-                  }}
+                  pointerEvents="none"
                 >
                   <Icon size={18} color={color} />
                   <Text fontSize={15} fontWeight="600" color={color} flex={1}>
                     {item.label}
                   </Text>
                 </XStack>
-              )
-            })}
-          </YStack>
-        </PopoverContent>
-      </Popover>
+              </RnPressable>
+            )
+          })}
+        </YStack>
+      </AppBottomSheet>
 
       <MeetingShareSheet open={shareOpen} onOpenChange={setShareOpen} meeting={meeting} />
     </>

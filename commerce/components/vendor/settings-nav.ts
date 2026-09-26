@@ -53,7 +53,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: 'payments',
     label: 'Payment Methods',
-    description: 'Connect PayU child merchant to receive SHEPay split payouts.',
+    description: 'Submit payout and KYC details so SHEconomy can pay you.',
     icon: Icons.CreditCard,
     ready: true,
   },

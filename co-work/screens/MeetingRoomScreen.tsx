@@ -1265,7 +1265,7 @@ function MeetingRoomOverlay({
       toast.show(`Live captions on · ${captions.targetLangName}`, {
         tone: 'success',
         message: canPublish
-          ? 'Others’ speech is translated to your language. Keep speaking to caption yourself for the room.'
+          ? `Speech is captioned live and shown in ${captions.targetLangName}.`
           : 'You can view others’ captions. Speech recognition is unavailable for publishing on this browser.',
       })
       return
@@ -2096,11 +2096,11 @@ function MeetingRoomOverlay({
                   void (async () => {
                     const wasOn = liveKit.speakerOn
                     await liveKit.toggleSpeaker()
-                    toast.show(wasOn ? 'Speaker off' : 'Speaker on', {
+                    toast.show(wasOn ? 'Loudspeaker off' : 'Loudspeaker on', {
                       tone: 'info',
                       message: wasOn
-                        ? 'Audio plays through the earpiece.'
-                        : 'Audio plays through the loudspeaker.',
+                        ? 'Audio uses a connected Bluetooth speaker, headset, or the phone.'
+                        : 'Audio plays through the built-in speaker.',
                     })
                   })()
                 }

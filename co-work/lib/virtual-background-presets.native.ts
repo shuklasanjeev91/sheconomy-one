@@ -1,4 +1,4 @@
-import { Platform, type ImageSourcePropType } from 'react-native'
+import { Image, Platform, type ImageSourcePropType } from 'react-native'
 
 import type { VirtualBackgroundSelection } from '~/co-work/lib/virtual-backgrounds'
 
@@ -36,14 +36,17 @@ function androidAssetUri(fileName: string): string {
 }
 
 /**
- * Release Hermes builds often fail to paint Metro `require()` module ids in
- * `<Image>`. The APK still packs the PNGs under android_asset — use that URI
- * for thumbnails / soft preview. The camera processor needs a real cache file
- * via `resolveNativePresetFileUri` instead.
+ * Prefer Metro asset module ids. On Android release, also fall back to
+ * `Image.resolveAssetSource` when Hermes needs an explicit URI for `<Image>`.
  */
-function thumbnailSource(asset: number, fileName: string): ImageSourcePropType {
+function thumbnailSource(asset: number, _fileName: string): ImageSourcePropType {
   if (Platform.OS === 'android') {
-    return { uri: androidAssetUri(fileName) }
+    try {
+      const resolved = Image.resolveAssetSource(asset)
+      if (resolved?.uri) return { uri: resolved.uri }
+    } catch {
+      // Fall through to the packed module id.
+    }
   }
   return asset
 }

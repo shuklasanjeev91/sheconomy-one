@@ -42,6 +42,7 @@ import {
   setShopActiveAdmin,
   verifyShop,
 } from '~/lib/shop/shop.store'
+import { AdminShopPayuKycPanel } from '~/app/admin/components/AdminShopPayuKycPanel'
 import type { Shop, ShopFormData, ShopUpdate } from '~/lib/shop/shop.type'
 import { COMMON_SHOP_CATEGORIES } from '~/lib/shop/shop.type'
 import {
@@ -771,6 +772,7 @@ export function ShopDetailsPanel({
   const socialLinks = recordEntries(shop.social_links)
   const metadata = recordEntries(shop.shop_metadata)
   const taxConfig = recordEntries(shop.tax_configuration)
+  const [kycBlocksPublish, setKycBlocksPublish] = useState(false)
 
   return (
     <YStack gap="$4">
@@ -805,7 +807,12 @@ export function ShopDetailsPanel({
         borderColor="$borderColor"
       >
         <Button size="$3" tone="outline" icon={Icons.Pencil} onPress={onEdit} disabled={busy}>Edit</Button>
-        <Button size="$3" tone={shop.verified ? 'outline' : 'primary'} onPress={onToggleVerified} disabled={busy}>
+        <Button
+          size="$3"
+          tone={shop.verified ? 'outline' : 'primary'}
+          onPress={onToggleVerified}
+          disabled={busy || (!shop.verified && kycBlocksPublish)}
+        >
           {shop.verified ? 'Unverify' : 'Verify'}
         </Button>
         <Button size="$3" tone="outline" onPress={onToggleActive} disabled={busy}>
@@ -815,6 +822,8 @@ export function ShopDetailsPanel({
           Soft delete
         </Button>
       </XStack>
+
+      <AdminShopPayuKycPanel shopId={shop.id} onBlocksPublish={setKycBlocksPublish} />
 
       <DetailSection title="Owner">
         <XStack gap="$3" alignItems="center" marginBottom="$2">

@@ -13494,6 +13494,119 @@ export type Database = {
           },
         ]
       }
+      shop_payu_kyc: {
+        Row: {
+          admin_note: string | null
+          bank_account_number: string
+          bank_document_path: string | null
+          bank_holder_name: string
+          business_entity_id: number
+          business_name: string
+          created_at: string
+          email: string
+          gst_document_path: string | null
+          gst_legal_name: string | null
+          gst_number: string | null
+          gst_status: string | null
+          gst_trade_name: string | null
+          ifsc: string
+          legal_name: string
+          mobile: string
+          monthly_expected_volume: number
+          pan_document_path: string | null
+          pan_name: string
+          pan_number: string
+          payu_document_status: string | null
+          payu_error: string | null
+          payu_kyc_status: string | null
+          payu_merchant_key: string | null
+          payu_mid: string | null
+          payu_onboarding_status: string | null
+          payu_product_account_uuid: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          shop_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_note?: string | null
+          bank_account_number?: string
+          bank_document_path?: string | null
+          bank_holder_name?: string
+          business_entity_id?: number
+          business_name?: string
+          created_at?: string
+          email?: string
+          gst_document_path?: string | null
+          gst_legal_name?: string | null
+          gst_number?: string | null
+          gst_status?: string | null
+          gst_trade_name?: string | null
+          ifsc?: string
+          legal_name?: string
+          mobile?: string
+          monthly_expected_volume?: number
+          pan_document_path?: string | null
+          pan_name?: string
+          pan_number?: string
+          payu_document_status?: string | null
+          payu_error?: string | null
+          payu_kyc_status?: string | null
+          payu_merchant_key?: string | null
+          payu_mid?: string | null
+          payu_onboarding_status?: string | null
+          payu_product_account_uuid?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shop_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_note?: string | null
+          bank_account_number?: string
+          bank_document_path?: string | null
+          bank_holder_name?: string
+          business_entity_id?: number
+          business_name?: string
+          created_at?: string
+          email?: string
+          gst_document_path?: string | null
+          gst_legal_name?: string | null
+          gst_number?: string | null
+          gst_status?: string | null
+          gst_trade_name?: string | null
+          ifsc?: string
+          legal_name?: string
+          mobile?: string
+          monthly_expected_volume?: number
+          pan_document_path?: string | null
+          pan_name?: string
+          pan_number?: string
+          payu_document_status?: string | null
+          payu_error?: string | null
+          payu_kyc_status?: string | null
+          payu_merchant_key?: string | null
+          payu_mid?: string | null
+          payu_onboarding_status?: string | null
+          payu_product_account_uuid?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shop_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_payu_kyc_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: true
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shop_legal_documents: {
         Row: {
           body_markdown: string

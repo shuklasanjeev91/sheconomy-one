@@ -13,6 +13,7 @@ import {
   loadMeetingMediaPrefs,
   saveMeetingMediaPrefs,
 } from '~/co-work/lib/meeting-media-prefs'
+import { showCallAudioOutputPicker } from '~/co-work/lib/livekit-call-audio'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 type MeetingAudioPanelProps = {
@@ -195,7 +196,17 @@ export function MeetingAudioPanel({
               </Button>
               {Platform.OS !== 'web' ? (
                 <Button tone="outline" size="$2" borderRadius={999} onPress={onToggleSpeaker}>
-                  {speakerOn ? 'Use phone / headset' : 'Use speaker'}
+                  {speakerOn ? 'Use Bluetooth or phone' : 'Use loudspeaker'}
+                </Button>
+              ) : null}
+              {Platform.OS === 'ios' ? (
+                <Button
+                  tone="outline"
+                  size="$2"
+                  borderRadius={999}
+                  onPress={() => void showCallAudioOutputPicker()}
+                >
+                  Bluetooth & speakers
                 </Button>
               ) : null}
             </XStack>

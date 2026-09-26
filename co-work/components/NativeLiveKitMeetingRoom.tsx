@@ -791,6 +791,7 @@ function NativeMeetingVideoStage() {
               trackRef={trackRef}
               name={name}
               isScreen={isScreen}
+              localScreenShareActive={isLocalScreenSharing}
               width={tileWidth}
               height={Math.max(tileHeight, layout.policy === 'landscape-phone' ? 72 : 100)}
               radius={14}
@@ -899,6 +900,7 @@ function NativeMeetingVideoStage() {
                     trackRef={trackRef}
                     name={name}
                     isScreen={isScreen}
+                    localScreenShareActive={isLocalScreenSharing}
                     width={tileWidth}
                     height={Math.max(tileHeight, layout.policy === 'landscape-phone' ? 72 : 100)}
                     radius={screenLayout && index === 0 ? coworkUi.radius.tile : 14}
@@ -936,6 +938,7 @@ function NativeMeetingVideoStage() {
                     trackRef={trackRef}
                     name={participantDisplayName(trackRef.participant)}
                     isScreen={false}
+                    localScreenShareActive={isLocalScreenSharing}
                     width={layout.pipWidth}
                     height={layout.pipHeight}
                     radius={10}
@@ -1126,6 +1129,7 @@ function NativeVideoTile({
   mirrorLocalVideo,
   hdVideo = true,
   activeSpeaker,
+  localScreenShareActive = false,
 }: {
   trackRef: import('@livekit/components-core').TrackReferenceOrPlaceholder
   name: string
@@ -1137,6 +1141,8 @@ function NativeVideoTile({
   mirrorLocalVideo: boolean
   hdVideo?: boolean
   activeSpeaker: boolean
+  /** Local share is on. SurfaceViews punch a black hole into MediaProjection. */
+  localScreenShareActive?: boolean
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
   const {
@@ -1308,7 +1314,14 @@ function NativeVideoTile({
     (forceScreenSurface && isScreen
       ? { w: Math.max(Math.floor(width), 2), h: Math.max(Math.floor(height), 2) }
       : null)
+  const localScreenShare = isScreen && trackRef.participant.isLocal
+  // Android SurfaceView cannot be captured by MediaProjection — it records as
+  // a black tile and the in-meeting camera goes black with it. While this
+  // device is sharing, keep every local tile on a normal view.
+  const hideLocalSurface = localScreenShareActive && trackRef.participant.isLocal
   const shouldRenderVideo =
+    !localScreenShare &&
+    !hideLocalSurface &&
     !blockVideoSurfaces &&
     surfacesAllowed &&
     !!mediaTrack &&
@@ -1406,14 +1419,13 @@ function NativeVideoTile({
             height: effectiveSurface.h,
             backgroundColor: '#0c080a',
           }}
-          // cover + elevated zOrder: Android MediaProjection and iOS receivers both
-          // blank with contain / zOrder 0 on cross-platform screen share.
-          objectFit={isScreen ? 'contain' : 'cover'}
+          // contain letterboxes MediaProjection into a black tile on Android.
+          objectFit="cover"
           mirror={mirrored}
-          // Camera tiles must stay at zOrder 0. Compact zOrder 1 puts Android
-          // SurfaceViews above the More/security Modal so participant taps no-op.
-          // Screen share still needs a higher layer so the share is visible.
-          zOrder={isScreen ? 2 : 0}
+          // Camera tiles stay at zOrder 0 so they don't punch a black hole
+          // through the meeting chrome. Remote screen share needs a layer
+          // above the window or the frames never composite.
+          zOrder={isScreen ? 1 : 0}
           iosPIP={
             Platform.OS === 'ios' && !isScreen
               ? {
@@ -1426,9 +1438,9 @@ function NativeVideoTile({
         />
       ) : (
         <YStack flex={1} width="100%" height="100%" alignItems="center" justifyContent="center" gap={compact ? 4 : 8}>
-          {isScreen ? (
-            <Text fontSize={compact ? 11 : 13} color="rgba(255,255,255,0.6)" fontWeight="600" textAlign="center" paddingHorizontal="$3">
-              Receiving screen…
+          {isScreen || hideLocalSurface ? (
+            <Text fontSize={compact ? 11 : 13} color="rgba(255,255,255,0.75)" fontWeight="600" textAlign="center" paddingHorizontal="$3">
+              {localScreenShare || hideLocalSurface ? 'Sharing your screen' : 'Receiving screen…'}
             </Text>
           ) : (
             <>

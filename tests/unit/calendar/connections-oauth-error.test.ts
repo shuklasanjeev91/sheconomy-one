@@ -37,6 +37,19 @@ describe('startCalendarOAuth error surfacing', () => {
     )
   })
 
+  it('opens a Google or Outlook add-event page when OAuth is not configured', async () => {
+    const { calendarConnectFallbackUrl } = await import('~/lib/calendar/connections')
+    const event = {
+      title: 'Planning',
+      startsAt: '2026-09-25T10:00:00.000Z',
+      endsAt: '2026-09-25T11:00:00.000Z',
+    }
+    expect(calendarConnectFallbackUrl('google', event)).toContain('calendar.google.com/calendar/render')
+    expect(calendarConnectFallbackUrl('google', event)).toContain('Planning')
+    expect(calendarConnectFallbackUrl('microsoft', event)).toContain('outlook.office.com')
+    expect(calendarConnectFallbackUrl('google')).toBe('https://calendar.google.com/calendar/u/0/r')
+  })
+
   it('returns authorizationUrl on success', async () => {
     const { startCalendarOAuth } = await import('~/lib/calendar/connections')
     invoke.mockResolvedValue({

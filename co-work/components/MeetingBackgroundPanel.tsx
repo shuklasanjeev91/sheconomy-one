@@ -285,53 +285,47 @@ export function MeetingBackgroundPanel({
           ) : null}
         </YStack>
 
-        {showAll ? (
-          <>
-            <Button tone="ghost" size="$3" alignSelf="flex-start" onPress={() => setShowAll(false)}>
-              Back to quick picks
-            </Button>
-            <YStack gap="$3">
-              <XStack gap="$3" flexWrap="wrap">
+        <YStack gap="$3">
+          <XStack justifyContent="space-between" alignItems="center">
+            <Text fontWeight="800" color={coworkUi.text}>My backgrounds</Text>
+            {loadingLibrary ? <Spinner size="small" color={coworkUi.brand} /> : null}
+          </XStack>
+          <XStack gap="$3" flexWrap="wrap">
+            <EffectTile
+              label="Upload"
+              active={false}
+              borderColor={coworkUi.borderSoft}
+              onPress={() => void upload()}
+              busy={busyId === 'upload'}
+              icon={<Icons.Upload size={23} color={coworkUi.text} />}
+            />
+            {custom.map((item) => {
+              const value = { ...customBackgroundSelection(item), imageUrl: item.imageUrl }
+              return (
                 <EffectTile
-                  label="Upload"
-                  active={false}
-                  borderColor={coworkUi.borderSoft}
-                  onPress={() => void upload()}
-                  busy={busyId === 'upload'}
-                  icon={<Icons.Upload size={23} color={coworkUi.text} />}
+                  key={item.id}
+                  label={item.name}
+                  imageUri={item.imageUrl}
+                  active={selected(effects.selection, value)}
+                  borderColor={tileBorder(selected(effects.selection, value))}
+                  busy={busyId === item.id}
+                  onPress={() => void applySelection(value)}
+                  onDelete={() => remove(item)}
                 />
-              </XStack>
-            </YStack>
+              )
+            })}
+          </XStack>
+          {!loadingLibrary && custom.length === 0 ? (
+            <Text fontSize={13} color={coworkUi.textMuted}>
+              Upload a 16:9 image to use it behind you in this meeting.
+            </Text>
+          ) : null}
+        </YStack>
 
-            <YStack gap="$3">
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text fontWeight="800" color={coworkUi.text}>My backgrounds</Text>
-                {loadingLibrary ? <Spinner size="small" color={coworkUi.brand} /> : null}
-              </XStack>
-              {!loadingLibrary && custom.length === 0 ? (
-                <Text fontSize={13} color={coworkUi.textMuted}>
-                  Upload a 16:9 image to use it on all your devices.
-                </Text>
-              ) : null}
-              <XStack gap="$3" flexWrap="wrap">
-                {custom.map((item) => {
-                  const value = { ...customBackgroundSelection(item), imageUrl: item.imageUrl }
-                  return (
-                    <EffectTile
-                      key={item.id}
-                      label={item.name}
-                      imageUri={item.imageUrl}
-                      active={selected(effects.selection, value)}
-                      borderColor={tileBorder(selected(effects.selection, value))}
-                      busy={busyId === item.id}
-                      onPress={() => void applySelection(value)}
-                      onDelete={() => remove(item)}
-                    />
-                  )
-                })}
-              </XStack>
-            </YStack>
-          </>
+        {showAll ? (
+          <Button tone="ghost" size="$3" alignSelf="flex-start" onPress={() => setShowAll(false)}>
+            Back to quick picks
+          </Button>
         ) : null}
 
         {effects.error ? (

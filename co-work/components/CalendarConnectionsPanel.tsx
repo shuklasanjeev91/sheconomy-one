@@ -6,21 +6,27 @@ import { CoWorkSectionLabel } from '~/co-work/components/CoWorkUi'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { meetingFeatureFlags } from '~/co-work/lib/meeting-feature-flags'
 import {
+  calendarConnectFallbackUrl,
   calendarProviderLabel,
   connectCalendarProvider,
   fetchCalendarConnections,
   revokeCalendarConnection,
   type CalendarConnection,
+  type CalendarDraftEvent,
   type CalendarProvider,
 } from '~/lib/calendar/connections'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 
 const PROVIDERS: CalendarProvider[] = ['google', 'microsoft']
 
 /** Connect / disconnect Google + Outlook for automatic meeting event sync. */
 export function CalendarConnectionsPanel({
   redirectTo = '/co-work/meetings',
+  event,
 }: {
   redirectTo?: string
+  /** When set, Connect opens this meeting in Google or Outlook if account sync is unavailable. */
+  event?: CalendarDraftEvent | null
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
   const toast = useAppToast()
@@ -82,10 +88,22 @@ export function CalendarConnectionsPanel({
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Try again later.'
+      if (/not configured/i.test(message)) {
+        const opened = await openExternalUrl(calendarConnectFallbackUrl(provider, event))
+        if (opened) {
+          toast.show(`${calendarProviderLabel(provider)} opened`, {
+            tone: 'success',
+            message: event?.title?.trim()
+              ? 'Add this meeting in the calendar that just opened.'
+              : 'Sign in there to use that calendar for Sheconomy meetings.',
+          })
+          return
+        }
+      }
       toast.show(`Could not connect ${calendarProviderLabel(provider)}`, {
         tone: 'danger',
         message: /not configured/i.test(message)
-          ? 'Calendar sync is not set up on the server yet (OAuth client secrets missing).'
+          ? 'Could not open the calendar. Try again.'
           : /Could not open/i.test(message)
             ? 'Could not open the authorization page. Check your browser or try again.'
             : /non-2xx/i.test(message)

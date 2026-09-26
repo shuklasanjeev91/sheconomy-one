@@ -33,7 +33,8 @@ export type LiveCaptionPreferences = {
   targetLang: string
   /**
    * Speech-to-text language for this device.
-   * `auto` follows `targetLang` (Zoom-style: captions language drives recognition).
+   * `auto` follows the device region language (Zoom: spoken language is independent
+   * of the Show/caption language used for translation).
    */
   spokenLang: 'auto' | string
   collapsed: boolean
@@ -129,7 +130,7 @@ export function useLiveCaptions({
   const targetLang = preferences.targetLang
   const targetLangName = captionLanguageName(targetLang)
   // STT uses spoken language (device region by default). Display/translation uses
-  // targetLang so A can speak English while B reads Hindi captions.
+  // targetLang so A can speak English while B reads Hindi captions — Zoom-style.
   const spokenLangCode =
     preferences.spokenLang === 'auto' ? regionLanguage : preferences.spokenLang
   const speakLocale = speechRecognitionLocale(
@@ -145,6 +146,8 @@ export function useLiveCaptions({
   const [localLines, setLocalLines] = useState<LiveCaptionLine[]>([])
   const [translatedRemote, setTranslatedRemote] = useState<LiveCaptionLine[]>([])
   const [error, setError] = useState<string | null>(null)
+  const errorRef = useRef<string | null>(null)
+  const errorBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const nativeSessionRef = useRef<NativeSpeechSession | null>(null)
   const shouldRestartRef = useRef(false)
@@ -173,6 +176,30 @@ export function useLiveCaptions({
 
   const supported = isLiveCaptionsSupported()
   const canPublish = canPublishLiveCaptions()
+
+  const setCaptionError = useCallback((next: string | null) => {
+    const normalized = next?.trim() ?? null
+    if (errorRef.current === normalized) return
+    errorRef.current = normalized
+    setError(normalized)
+    if (errorBannerTimerRef.current) {
+      clearTimeout(errorBannerTimerRef.current)
+      errorBannerTimerRef.current = null
+    }
+    if (
+      normalized &&
+      /speech recognition|view others/i.test(normalized) &&
+      !/microphone/i.test(normalized)
+    ) {
+      errorBannerTimerRef.current = setTimeout(() => {
+        errorBannerTimerRef.current = null
+        if (errorRef.current === normalized) {
+          errorRef.current = null
+          setError(null)
+        }
+      }, 7000)
+    }
+  }, [])
 
   const publishCaption = useCallback((text: string, isFinal: boolean) => {
     const trimmed = text.trim()
@@ -228,7 +255,7 @@ export function useLiveCaptions({
   const startWebRecognition = useCallback(() => {
     const recognition = createSpeechRecognition()
     if (!recognition) {
-      setError('Live captions are not supported in this browser')
+      setCaptionError('Could not start speech recognition. You can still view others’ captions.')
       return false
     }
 
@@ -247,7 +274,7 @@ export function useLiveCaptions({
         else interim = text
       }
       if (interim) {
-        setError(null)
+        setCaptionError(null)
         setInterimText(interim)
         publishCaption(interim, false)
       }
@@ -255,13 +282,13 @@ export function useLiveCaptions({
 
     recognition.onerror = (event) => {
       if (event.error === 'not-allowed') {
-        setError('Microphone access is required for live captions')
+        setCaptionError('Microphone access is required for live captions')
         shouldRestartRef.current = false
         setPublishing(false)
         return
       }
       if (event.error !== 'aborted' && event.error !== 'no-speech') {
-        setError('Live captions paused — retrying…')
+        setCaptionError('Live captions paused — retrying…')
       }
     }
 
@@ -282,52 +309,62 @@ export function useLiveCaptions({
     recognitionRef.current = recognition
     recognition.start()
     return true
-  }, [commitFinalCaption, publishCaption])
+  }, [commitFinalCaption, publishCaption, setCaptionError])
 
   const startNativeRecognition = useCallback(async () => {
-    const session = await createNativeSpeechSession({
-      onPartial: (text) => {
-        setError(null)
-        setInterimText(text)
-        publishCaption(text, false)
+    const session = await createNativeSpeechSession(
+      {
+        onPartial: (text) => {
+          setCaptionError(null)
+          setInterimText(text)
+          publishCaption(text, false)
+        },
+        onFinal: (text) => {
+          setCaptionError(null)
+          commitFinalCaption(text)
+        },
+        onError: (message) => {
+          // Show microphone denials and STT-unavailable banners.
+          // The banner auto-clears as soon as any caption flows (see effect below),
+          // so background retries are safe — user still sees remote captions while we retry.
+          const lower = message.toLowerCase()
+          if (lower.includes('microphone')) {
+            setCaptionError(message)
+            shouldRestartRef.current = false
+            setPublishing(false)
+            return
+          }
+          if (
+            lower.includes('speech recognition') ||
+            lower.includes('unavailable') ||
+            lower.includes('could not start') ||
+            lower.includes('view others')
+          ) {
+            setCaptionError(message)
+            return
+          }
+        },
       },
-      onFinal: (text) => {
-        setError(null)
-        commitFinalCaption(text)
-      },
-      onError: (message) => {
-        // Soft banners only for mic denial. Transient STT issues must not cover the stage —
-        // remote captions still work while viewing.
-        const lower = message.toLowerCase()
-        if (lower.includes('microphone')) {
-          setError(message)
-          shouldRestartRef.current = false
-          setPublishing(false)
-          return
-        }
-        // Ignore soft/unavailable STT noise (common during LiveKit audio sessions).
-      },
-    })
+      { shareLiveKitMic: true },
+    )
     if (!session) {
-      // Keep CC active for viewing room captions; show a soft hint once.
-      setError('Could not start speech recognition on this device. You can still view others’ captions.')
+      setCaptionError('Could not start speech recognition. You can still view others’ captions.')
       return false
     }
     nativeSessionRef.current = session
     shouldRestartRef.current = true
     try {
       await session.start(speakLocaleRef.current)
-      setError(null)
       return true
     } catch {
-      setError('Could not start speech recognition. You can still view others’ captions.')
-      return false
+      setCaptionError('Could not start speech recognition. You can still view others’ captions.')
+      return true
     }
-  }, [commitFinalCaption, publishCaption])
+  }, [commitFinalCaption, publishCaption, setCaptionError])
 
   const startRecognition = useCallback(() => {
     if (!canPublish) {
-      setError(null)
+      setCaptionError('Could not start speech recognition. You can still view others’ captions.')
       setPublishing(false)
       return
     }
@@ -337,7 +374,7 @@ export function useLiveCaptions({
     if (startingLockRef.current) return
     startingLockRef.current = true
 
-    setError(null)
+    setCaptionError(null)
     void (async () => {
       try {
         if (isNativeRuntime()) {
@@ -347,18 +384,19 @@ export function useLiveCaptions({
         }
 
         if (!hasSpeechRecognition() || !startWebRecognition()) {
+          setCaptionError('Could not start speech recognition. You can still view others’ captions.')
           setPublishing(false)
           return
         }
         setPublishing(true)
       } catch {
-        setError('Could not start live captions')
+        setCaptionError('Could not start speech recognition. You can still view others’ captions.')
         setPublishing(false)
       } finally {
         startingLockRef.current = false
       }
     })()
-  }, [canPublish, startNativeRecognition, startWebRecognition])
+  }, [canPublish, startNativeRecognition, startWebRecognition, setCaptionError])
 
   const stopRecognition = useCallback(() => {
     shouldRestartRef.current = false
@@ -367,6 +405,12 @@ export function useLiveCaptions({
     const native = nativeSessionRef.current
     nativeSessionRef.current = null
     if (native) void native.destroy()
+    if (errorBannerTimerRef.current) {
+      clearTimeout(errorBannerTimerRef.current)
+      errorBannerTimerRef.current = null
+    }
+    errorRef.current = null
+    setError(null)
     setInterimText('')
     setLiveCaptionText('')
     setLiveCaptionSpeaker('')
@@ -634,6 +678,11 @@ export function useLiveCaptions({
     if (!error) return
     if (/microphone/i.test(error)) return
     if (currentCaption || visibleLines.length > 0 || interimText.trim()) {
+      errorRef.current = null
+      if (errorBannerTimerRef.current) {
+        clearTimeout(errorBannerTimerRef.current)
+        errorBannerTimerRef.current = null
+      }
       setError(null)
     }
   }, [currentCaption, error, interimText, visibleLines.length])

@@ -3,7 +3,7 @@
     "name": "SHEconomy",
     "slug": "sheconomy",
     "owner": "sheconomy",
-    "version": "6.0.18",
+    "version": "6.0.25",
     "scheme": "sheconomy",
     "newArchEnabled": true,
     "platforms": [
@@ -148,7 +148,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "168",
+      "buildNumber": "170",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -210,7 +210,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 189,
+      "versionCode": 201,
       "softwareKeyboardLayoutMode": "resize",
       "largeHeap": true,
       "adaptiveIcon": {

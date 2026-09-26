@@ -529,6 +529,38 @@ export async function uploadShopGstDocument(
  * Use this in admin review screens or vendor settings.
  * Expires in 1 hour by default.
  */
+const KYC_DOC_BUCKET = 'shop-kyc-documents'
+
+/** Private payout KYC file. Path: {userId}/shops/{shopId}/kyc/{kind}-{timestamp}.{ext} */
+export async function uploadShopKycDocument(
+  userId: string,
+  shopId: string,
+  kind: 'pan' | 'bank' | 'gst',
+  file: { blob: Blob; mimeType: string; fileName?: string },
+): Promise<{ data: UploadResult | null; error: string | null }> {
+  const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
+  const path = `${userId}/shops/${shopId}/kyc/${kind}-${Date.now()}-${randomSuffix()}.${ext}`
+  if (file.blob.size <= 0) return { data: null, error: 'Document file is empty.' }
+  if (file.blob.size > 10 * 1024 * 1024) return { data: null, error: 'Document must be 10 MB or smaller.' }
+
+  const { error } = await uploadBlobWithProgress(KYC_DOC_BUCKET, path, file.blob, file.mimeType, {
+    upsert: true,
+  })
+  if (error) return { data: null, error }
+  return { data: { path, publicUrl: '' }, error: null }
+}
+
+export async function getKycDocumentSignedUrl(
+  path: string,
+  expiresInSeconds = 3600,
+): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from(KYC_DOC_BUCKET)
+    .createSignedUrl(path, expiresInSeconds)
+  if (error || !data?.signedUrl) return null
+  return data.signedUrl
+}
+
 export async function getGstDocumentSignedUrl(
   path: string,
   expiresInSeconds = 3600,

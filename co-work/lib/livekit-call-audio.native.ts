@@ -1,13 +1,19 @@
-import { Platform } from 'react-native'
+import { NativeModules, Platform } from 'react-native'
 
 import {
   AndroidAudioTypePresets,
+  AudioDeviceModule,
   AudioSession,
   setupIOSAudioManagement,
   type AppleAudioConfiguration,
 } from '@livekit/react-native'
 
 import type { LiveKitMediaMode } from '~/co-work/lib/livekit-media-controls'
+import {
+  androidAudioTypeOptionsForCall,
+  preferredCallAudioOutputId,
+  type LiveKitSpeechShareLevel,
+} from '~/co-work/lib/livekit-call-audio-options'
 
 export type CallAudioRoute = 'bluetooth' | 'headset' | 'speaker' | 'earpiece' | 'default'
 
@@ -18,9 +24,17 @@ export type CallAudioRoute = 'bluetooth' | 'headset' | 'speaker' | 'earpiece' | 
 let audioSessionGeneration = 0
 /** Last successful media mode — used when restoring after local recording. */
 let lastCallMediaMode: LiveKitMediaMode = 'meeting'
+/** Captions STT needs to share the mic with WebRTC; reconnects must keep this. */
+let speechShareLevel: LiveKitSpeechShareLevel = 'off'
+/** True only after the user taps the loudspeaker control. Otherwise Bluetooth wins. */
+let userForcedBuiltInSpeaker = false
 
 export function getActiveCallMediaMode(): LiveKitMediaMode {
   return lastCallMediaMode
+}
+
+export function getLiveKitCallAudioSpeechShare(): LiveKitSpeechShareLevel {
+  return speechShareLevel
 }
 
 /**
@@ -41,13 +55,7 @@ export async function configureLiveKitCallAudio(mediaMode: LiveKitMediaMode = 'm
         : ['bluetooth', 'headset', 'earpiece', 'speaker'],
       audioTypeOptions: {
         ...AndroidAudioTypePresets.communication,
-        // Required on many Android devices for Bluetooth mic + bidirectional audio.
-        forceHandleAudioRouting: true,
-        manageAudioFocus: true,
-        audioMode: 'inCommunication',
-        audioAttributesUsageType: 'voiceCommunication',
-        audioAttributesContentType: 'speech',
-        audioStreamType: 'voiceCall',
+        ...androidAudioTypeOptionsForCall(speechShareLevel),
       },
     },
     ios: {
@@ -66,6 +74,19 @@ export async function configureLiveKitCallAudio(mediaMode: LiveKitMediaMode = 'm
   if (generation !== audioSessionGeneration) return
 
   await AudioSession.startAudioSession()
+  // VoiceProcessingIO does echo cancellation and noise suppression.
+  // Software AEC on top of it sounds watery and does not cancel the speaker.
+  void NativeModules.LiveCaptionSpeech?.prepare?.().catch(() => {})
+  if (Platform.OS === 'ios') {
+    try {
+      await AudioDeviceModule.setVoiceProcessingEnabled(true)
+      AudioDeviceModule.setVoiceProcessingBypassed(false)
+      // AGC lifts quiet room noise into the mix. Leave echo and noise filters on.
+      AudioDeviceModule.setVoiceProcessingAGCEnabled(false)
+    } catch {
+      // Engine may not be up yet; videoChat mode still requests voice processing.
+    }
+  }
   if (generation !== audioSessionGeneration) {
     void AudioSession.stopAudioSession()
     return
@@ -76,7 +97,27 @@ export async function configureLiveKitCallAudio(mediaMode: LiveKitMediaMode = 'm
 
 export function stopLiveKitCallAudio(): void {
   audioSessionGeneration += 1
+  speechShareLevel = 'off'
+  userForcedBuiltInSpeaker = false
   void AudioSession.stopAudioSession()
+}
+
+/**
+ * Release exclusive Android audio focus (and optionally MODE_IN_COMMUNICATION)
+ * so SpeechRecognizer can start during a live meeting. Call with `off` when
+ * captions stop so AEC/Bluetooth routing return to the call preset.
+ */
+export async function setLiveKitCallAudioSpeechShare(
+  level: LiveKitSpeechShareLevel,
+): Promise<void> {
+  if (speechShareLevel === level) return
+  speechShareLevel = level
+  try {
+    await configureLiveKitCallAudio(lastCallMediaMode)
+    await applyPreferredCallAudioOutput(lastCallMediaMode)
+  } catch {
+    // Room may already be closing.
+  }
 }
 
 /** Keep iOS AVAudioSession in playAndRecord + Bluetooth while the room is live. */
@@ -101,10 +142,6 @@ function appleConfigForCall(input: {
     'allowBluetooth',
     'allowBluetoothA2DP',
     'allowAirPlay',
-    // Let SFSpeechRecognizer / Voice share the mic with LiveKit WebRTC so
-    // live captions can start during an active meeting (otherwise iPad shows
-    // "Speech recognition unavailable").
-    'mixWithOthers',
   ]
   // Only default to speaker when no accessory path is preferred by the OS
   // and the call is video/meeting. Accessory selection happens in applyPreferredCallAudioOutput.
@@ -113,81 +150,52 @@ function appleConfigForCall(input: {
   return {
     audioCategory: 'playAndRecord',
     audioCategoryOptions: options,
-    // voiceChat enables hardware AEC/NS; videoChat keeps speaker-friendly routing.
+    // videoChat/voiceChat enable VoiceProcessingIO: hardware echo cancellation
+    // and noise suppression. Captions read the WebRTC mic buffers, so they do
+    // not need this mode turned off.
     audioMode: input.preferSpeaker ? 'videoChat' : 'voiceChat',
   }
 }
 
+function routeFromOutputId(outputId: string | null, mediaMode: LiveKitMediaMode): CallAudioRoute {
+  if (outputId === 'force_speaker' || outputId === 'speaker') return 'speaker'
+  if (outputId === 'bluetooth' || outputId === 'headset' || outputId === 'earpiece') return outputId
+  if (outputId === 'default') return 'default'
+  return mediaMode === 'audio' ? 'earpiece' : 'speaker'
+}
+
 /**
- * Prefer Bluetooth / headset first. Speaker is only selected for video/meetings
- * when no accessory is available — never force_speaker over an active headset.
+ * Prefer a connected Bluetooth speaker or headset. The built-in loudspeaker
+ * is used only when the user turns it on, or when nothing else is connected.
  */
 export async function applyPreferredCallAudioOutput(
   mediaMode: LiveKitMediaMode,
   forceSpeaker?: boolean,
 ): Promise<CallAudioRoute> {
   const outputs = await AudioSession.getAudioOutputs()
-  const preferSpeaker = forceSpeaker ?? mediaMode !== 'audio'
-
-  if (Platform.OS === 'android') {
-    const order: CallAudioRoute[] = preferSpeaker
-      ? ['bluetooth', 'headset', 'speaker', 'earpiece']
-      : ['bluetooth', 'headset', 'earpiece', 'speaker']
-    for (const route of order) {
-      if (outputs.includes(route)) {
-        await AudioSession.selectAudioOutput(route)
-        return route
-      }
-    }
-    return 'earpiece'
+  const outputId = preferredCallAudioOutputId({
+    platform: Platform.OS === 'ios' ? 'ios' : 'android',
+    outputs,
+    mediaMode,
+    forceBuiltInSpeaker: forceSpeaker ?? userForcedBuiltInSpeaker,
+  })
+  if (outputId) {
+    await AudioSession.selectAudioOutput(outputId)
   }
-
-  // iOS: "default" follows Bluetooth/headset/earpiece; only use force_speaker
-  // when we explicitly want loudspeaker and no accessory is preferred.
-  if (!forceSpeaker && (outputs.includes('bluetooth') || outputs.includes('headset'))) {
-    if (outputs.includes('default')) {
-      await AudioSession.selectAudioOutput('default')
-      return 'default'
-    }
-  }
-
-  if (preferSpeaker && outputs.includes('force_speaker')) {
-    await AudioSession.selectAudioOutput('force_speaker')
-    return 'speaker'
-  }
-  if (outputs.includes('default')) {
-    await AudioSession.selectAudioOutput('default')
-    return 'default'
-  }
-  return preferSpeaker ? 'speaker' : 'earpiece'
+  return routeFromOutputId(outputId, mediaMode)
 }
 
 export async function toggleCallSpeaker(speakerOn: boolean): Promise<CallAudioRoute> {
-  const outputs = await AudioSession.getAudioOutputs()
-  if (Platform.OS === 'android') {
-    if (speakerOn && outputs.includes('speaker')) {
-      await AudioSession.selectAudioOutput('speaker')
-      return 'speaker'
-    }
-    // Leaving speaker: prefer Bluetooth → headset → earpiece.
-    for (const route of ['bluetooth', 'headset', 'earpiece'] as const) {
-      if (outputs.includes(route)) {
-        await AudioSession.selectAudioOutput(route)
-        return route
-      }
-    }
-    return 'earpiece'
-  }
+  userForcedBuiltInSpeaker = speakerOn
+  return applyPreferredCallAudioOutput(lastCallMediaMode, speakerOn)
+}
 
-  if (speakerOn && outputs.includes('force_speaker')) {
-    await AudioSession.selectAudioOutput('force_speaker')
-    return 'speaker'
-  }
-  if (outputs.includes('default')) {
-    await AudioSession.selectAudioOutput('default')
-    return 'default'
-  }
-  return speakerOn ? 'speaker' : 'earpiece'
+/** iOS system picker for Bluetooth speakers, headsets, and AirPlay. */
+export async function showCallAudioOutputPicker(): Promise<void> {
+  if (Platform.OS !== 'ios') return
+  userForcedBuiltInSpeaker = false
+  await AudioSession.selectAudioOutput('default')
+  await AudioSession.showAudioRoutePicker()
 }
 
 /** Shared capture constraints — echo cancel + noise suppress for WhatsApp-like clarity. */

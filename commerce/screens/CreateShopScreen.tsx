@@ -447,7 +447,10 @@ export function CreateShopScreen() {
       }
 
       await persistStorage.removeItem(DRAFT_STORAGE_KEY)
-      toast.show('Shop created', { tone: 'success', message: 'Your storefront is live.' })
+      toast.show('Shop created', {
+        tone: 'success',
+        message: 'Add payout details so the shop can appear after review.',
+      })
       setCountdown(REDIRECT_COUNTDOWN_SECONDS)
       setPhase('success')
     } catch (message) {
@@ -644,6 +647,7 @@ export function CreateShopScreen() {
           ui={ui}
           countdown={countdown}
           onSkip={() => router.push(vendorRoutes.home)}
+          onPayout={() => router.push(vendorRoutes.settingsSection('payments'))}
           onContinue={() => router.push(vendorRoutes.createListing)}
         />
       ) : null}
@@ -1786,11 +1790,13 @@ function SuccessOverlay({
   ui,
   countdown,
   onSkip,
+  onPayout,
   onContinue,
 }: {
   ui: Ui
   countdown: number
   onSkip: () => void
+  onPayout: () => void
   onContinue: () => void
 }) {
   const nativeFullscreen = Platform.OS === 'ios' || Platform.OS === 'android'
@@ -1840,10 +1846,11 @@ function SuccessOverlay({
 
         <YStack gap="$2" alignItems="center">
           <Text fontSize={20} fontWeight="800" color={ui.text} textAlign="center">
-            Your shop is live!
+            Your shop is created
           </Text>
           <Text fontSize={14} color={ui.textSecondary} textAlign="center" lineHeight={20}>
-            Let's add your first product. Redirecting to create a listing in {countdown}s…
+            Submit payout details so it can sell after review. You can add a product now.
+            Redirecting in {countdown}s…
           </Text>
         </YStack>
 
@@ -1856,6 +1863,9 @@ function SuccessOverlay({
             icon={<Icons.Plus size={16} color="white" />}
           >
             Create my first listing
+          </Button>
+          <Button tone="outline" size="$3" borderRadius={999} onPress={onPayout}>
+            Add payout details
           </Button>
           <Button tone="ghost" size="$3" borderRadius={999} onPress={onSkip}>
             Skip — go to dashboard

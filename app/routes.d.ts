@@ -51,6 +51,7 @@ declare module 'one' {
         | `/admin/components/AdminGroupsManager`
         | `/admin/components/AdminSaleEventsManager`
         | `/admin/components/AdminSettingsManager`
+        | `/admin/components/AdminShopPayuKycPanel`
         | `/admin/components/AdminShopsManager`
         | `/admin/components/AdminSponsoredAdsManager`
         | `/admin/components/CmsCoverImage`

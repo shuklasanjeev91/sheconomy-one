@@ -2,15 +2,21 @@ import Voice, {
   type SpeechErrorEvent,
   type SpeechResultsEvent,
 } from '@react-native-voice/voice'
-import { PermissionsAndroid, Platform } from 'react-native'
+import { NativeEventEmitter, NativeModules, PermissionsAndroid, Platform } from 'react-native'
 
 import {
   isLikelyCaptionFragment,
   mergeCaptionHypothesis,
 } from '~/co-work/lib/caption-utterance'
+import { setLiveKitCallAudioSpeechShare } from '~/co-work/lib/livekit-call-audio'
+import { speechRecognitionLocaleFallbacks } from '~/co-work/lib/livekit-call-audio-options'
 import { isNativeRuntime } from '~/lib/platform/capabilities'
 
-import type { NativeSpeechHandlers, NativeSpeechSession } from '~/co-work/lib/native-speech-recognition'
+import type {
+  NativeSpeechHandlers,
+  NativeSpeechSession,
+  NativeSpeechSessionOptions,
+} from '~/co-work/lib/native-speech-recognition'
 
 export function isNativeSpeechRecognitionAvailable() {
   return isNativeRuntime()
@@ -34,24 +40,23 @@ async function ensureMicrophonePermission(): Promise<boolean> {
   }
 }
 
-/** Prefer requested locale; fall back when the OS speech pack is missing (common for hi-IN). */
-function localeFallbacks(requested: string): string[] {
-  const primary = (requested || 'en-US').trim() || 'en-US'
-  const base = primary.split(/[-_]/)[0]?.toLowerCase() || 'en'
-  const candidates = [primary]
-  if (base === 'hi') candidates.push('hi-IN', 'en-IN', 'en-US')
-  else if (base !== 'en') candidates.push(`${base}-IN`, `${base}-US`, 'en-IN', 'en-US')
-  else candidates.push('en-IN', 'en-US')
-  return [...new Set(candidates)]
+/** Keep the recognizer open longer so multi-word sentences survive LiveKit mic contention. */
+type LiveCaptionSpeechModule = {
+  start: (locale: string) => Promise<string>
+  stop: () => Promise<void>
 }
 
-/** Keep the recognizer open longer so multi-word sentences survive LiveKit mic contention. */
+const liveCaptionSpeech = NativeModules.LiveCaptionSpeech as LiveCaptionSpeechModule | undefined
+
+function usesCallAudioCaptions(shareLiveKitMic: boolean) {
+  return shareLiveKitMic && Platform.OS === 'ios' && typeof liveCaptionSpeech?.start === 'function'
+}
+
 const ANDROID_VOICE_OPTIONS = {
   EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
   EXTRA_MAX_RESULTS: 5,
   EXTRA_PARTIAL_RESULTS: true,
   REQUEST_PERMISSIONS_AUTO: true,
-  // ~2.5s of silence before Android ends the utterance (default is much shorter).
   EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2500,
   EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
   EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 1200,
@@ -74,10 +79,25 @@ async function startVoiceWithFallback(locales: string[]): Promise<string> {
   throw lastError ?? new Error('Speech recognition failed to start')
 }
 
+async function cancelVoiceQuietly() {
+  try {
+    await Voice.cancel()
+  } catch {
+    try {
+      await Voice.stop()
+    } catch {
+      // ignore — may not be running yet
+    }
+  }
+}
+
 export async function createNativeSpeechSession(
   handlers: NativeSpeechHandlers,
+  options?: NativeSpeechSessionOptions,
 ): Promise<NativeSpeechSession | null> {
   if (!isNativeRuntime()) return null
+
+  const shareLiveKitMic = options?.shareLiveKitMic === true
 
   // Do not hard-fail on Voice.isAvailable() — on iOS it often returns false until
   // speech permission is granted / while LiveKit holds the audio session. Try start.
@@ -96,9 +116,15 @@ export async function createNativeSpeechSession(
   let shouldRestart = false
   let locale = 'en-US'
   let starting = false
+  let listening = false
+  let compatShare = false
   /** Growing hypothesis for the current spoken utterance. */
   let utterance = ''
   let finalizeTimer: ReturnType<typeof setTimeout> | null = null
+  let watchdog: ReturnType<typeof setInterval> | null = null
+  let retryAttempt = 0
+  const callAudio = usesCallAudioCaptions(shareLiveKitMic)
+  let callAudioSubs: Array<{ remove: () => void }> = []
 
   const clearFinalizeTimer = () => {
     if (!finalizeTimer) return
@@ -134,9 +160,85 @@ export async function createNativeSpeechSession(
     }, delayMs)
   }
 
+  const applySpeechShare = async (forceCompat: boolean) => {
+    if (!shareLiveKitMic) return
+    compatShare = compatShare || forceCompat
+    await setLiveKitCallAudioSpeechShare(compatShare ? 'compat' : 'share')
+  }
+
+  const stopCallAudio = async () => {
+    if (!callAudio || !liveCaptionSpeech) return
+    try {
+      await liveCaptionSpeech.stop()
+    } catch {
+      // ignore — may not be running yet
+    }
+  }
+
+  const beginListening = async () => {
+    if (callAudio && liveCaptionSpeech) {
+      // Do not switch the call into speech-share mode. That drops videoChat
+      // echo cancellation. iOS captions tap the LiveKit mic instead.
+      if (callAudioSubs.length === 0) {
+        const emitter = new NativeEventEmitter(NativeModules.LiveCaptionSpeech)
+        callAudioSubs = [
+          emitter.addListener('LiveCaptionPartial', (event: { text?: string }) => {
+            onSpeechPartialResults({ value: event?.text ? [event.text] : [] })
+          }),
+          emitter.addListener('LiveCaptionFinal', (event: { text?: string }) => {
+            onSpeechResults({ value: event?.text ? [event.text] : [] })
+          }),
+          emitter.addListener('LiveCaptionError', (event: { message?: string }) => {
+            onSpeechError({ error: { code: 'call-audio', message: event?.message ?? 'Speech recognition error' } })
+          }),
+        ]
+      }
+      try {
+        const used = await liveCaptionSpeech.start(locale || 'en-US')
+        if (used) locale = used
+        listening = true
+        retryAttempt = 0
+        return true
+      } catch {
+        listening = false
+        return false
+      }
+    }
+
+    await cancelVoiceQuietly()
+    await applySpeechShare(compatShare)
+    await new Promise((resolve) => setTimeout(resolve, Platform.OS === 'ios' ? 280 : 360))
+    try {
+      const used = await startVoiceWithFallback(speechRecognitionLocaleFallbacks(locale))
+      locale = used
+      listening = true
+      retryAttempt = 0
+      return true
+    } catch {
+      listening = false
+      if (shareLiveKitMic && Platform.OS === 'android' && !compatShare) {
+        compatShare = true
+        await applySpeechShare(true)
+        await new Promise((resolve) => setTimeout(resolve, 420))
+        try {
+          const used = await startVoiceWithFallback(speechRecognitionLocaleFallbacks(locale))
+          locale = used
+          listening = true
+          retryAttempt = 0
+          return true
+        } catch {
+          listening = false
+        }
+      }
+      return false
+    }
+  }
+
   const onSpeechPartialResults = (event: SpeechResultsEvent) => {
     const text = event.value?.[0]?.trim()
     if (!text) return
+    listening = true
+    retryAttempt = 0
     clearFinalizeTimer()
     emitPartial(text)
   }
@@ -144,52 +246,34 @@ export async function createNativeSpeechSession(
   const onSpeechResults = (event: SpeechResultsEvent) => {
     const text = event.value?.[0]?.trim()
     if (!text && !utterance) return
+    listening = true
+    retryAttempt = 0
     clearFinalizeTimer()
     if (text) emitPartial(text)
     // Android often fires results after every short pause with 1–2 words.
-    // Keep accumulating; only finalize after a quiet gap or speech-end.
-    if (Platform.OS === 'android' && isLikelyCaptionFragment(utterance)) {
-      scheduleFinalize(1400)
+    // iOS call-audio recognition also finalizes the first word ("hello")
+    // while the rest of the sentence is still being spoken — keep accumulating.
+    if (callAudio || (Platform.OS === 'android' && isLikelyCaptionFragment(utterance))) {
+      scheduleFinalize(callAudio ? 1600 : 1400)
       return
     }
     scheduleFinalize(Platform.OS === 'android' ? 900 : 350)
   }
 
-  const onSpeechError = (event: SpeechErrorEvent) => {
-    const code = String(event.error?.code ?? '')
-    const message = String(event.error?.message ?? 'Speech recognition error')
-    // 6 = recognizer busy, 7 = no match — both recoverable via restart.
-    if (code.includes('7') || /no.?speech|no.?match/i.test(message)) return
-    if (code.includes('6') || /busy|recognizer/i.test(message)) return
-    if (/permission|not.?authorized|denied/i.test(message)) {
-      shouldRestart = false
-      clearFinalizeTimer()
-      handlers.onError?.('Microphone access is required for live captions')
-      return
-    }
-    // Soft — keep viewing remote captions; restart will retry.
-  }
-
-  const restartSoon = () => {
-    if (!shouldRestart || starting) return
+  const restartSoon = (delayMs?: number) => {
+    if (!shouldRestart || starting || listening) return
     starting = true
-    const delay = Platform.OS === 'android' ? 280 : 220
+    const delay =
+      delayMs ??
+      Math.min(2800, (Platform.OS === 'android' ? 320 : 220) + retryAttempt * 400)
     setTimeout(() => {
       if (!shouldRestart) {
         starting = false
         return
       }
-      void startVoiceWithFallback(localeFallbacks(locale))
-        .then((used) => {
-          locale = used
-        })
-        .catch(() => {
-          setTimeout(() => {
-            if (!shouldRestart) return
-            void startVoiceWithFallback(localeFallbacks(locale)).catch(() => {
-              shouldRestart = false
-            })
-          }, 900)
+      void beginListening()
+        .then((ok) => {
+          if (!ok) retryAttempt += 1
         })
         .finally(() => {
           starting = false
@@ -197,7 +281,42 @@ export async function createNativeSpeechSession(
     }, delay)
   }
 
+  const onSpeechError = (event: SpeechErrorEvent) => {
+    const code = String(event.error?.code ?? '')
+    const message = String(event.error?.message ?? 'Speech recognition error')
+    // Call-audio captions reopen the recognizer natively. Don't tear the session down.
+    if (code === 'call-audio') {
+      listening = true
+      return
+    }
+    listening = false
+    // Android reports 6 for speech timeout and 7 for no match; both need a restart.
+    if (code === '6' || code === '7' || /no.?speech|no.?match/i.test(message)) {
+      restartSoon()
+      return
+    }
+    if (/permission|not.?authorized|denied/i.test(message) && !/insufficient/i.test(message)) {
+      shouldRestart = false
+      clearFinalizeTimer()
+      handlers.onError?.('Microphone access is required for live captions')
+      return
+    }
+    // 5 client / 8 busy / 9 insufficient (mic held by WebRTC) — free focus and retry.
+    if (
+      shareLiveKitMic &&
+      Platform.OS === 'android' &&
+      (code.includes('5') ||
+        code.includes('8') ||
+        code.includes('9') ||
+        /busy|client|insufficient|audio/i.test(message))
+    ) {
+      compatShare = true
+    }
+    restartSoon()
+  }
+
   const onSpeechEnd = () => {
+    listening = false
     // Flush whatever we heard before the recognizer restarts.
     if (utterance.trim()) {
       commitUtterance(true)
@@ -206,64 +325,77 @@ export async function createNativeSpeechSession(
     restartSoon()
   }
 
+  Voice.onSpeechStart = () => {
+    listening = true
+    retryAttempt = 0
+  }
   Voice.onSpeechPartialResults = onSpeechPartialResults
   Voice.onSpeechResults = onSpeechResults
   Voice.onSpeechError = onSpeechError
   Voice.onSpeechEnd = onSpeechEnd
+
+  const clearWatchdog = () => {
+    if (!watchdog) return
+    clearInterval(watchdog)
+    watchdog = null
+  }
 
   return {
     async start(nextLocale: string) {
       locale = nextLocale || 'en-US'
       shouldRestart = true
       utterance = ''
+      retryAttempt = 0
       clearFinalizeTimer()
-      try {
-        await Voice.cancel()
-      } catch {
-        try {
-          await Voice.stop()
-        } catch {
-          // ignore — may not be running yet
-        }
+      if (shareLiveKitMic) {
+        await applySpeechShare(false)
       }
-      // Yield so LiveKit's AVAudioSession can share the mic with Voice.
-      await new Promise((resolve) => setTimeout(resolve, Platform.OS === 'ios' ? 280 : 320))
-      const used = await startVoiceWithFallback(localeFallbacks(locale))
-      locale = used
+      const started = await beginListening()
+      clearWatchdog()
+      watchdog = setInterval(() => {
+        if (!shouldRestart || starting || listening) return
+        restartSoon(160)
+      }, 3500)
+      if (started) return
+      restartSoon(480)
     },
     async stop() {
       shouldRestart = false
+      listening = false
+      clearWatchdog()
       clearFinalizeTimer()
       if (utterance.trim()) commitUtterance(true)
-      try {
-        await Voice.cancel()
-      } catch {
-        try {
-          await Voice.stop()
-        } catch {
-          // ignore
-        }
+      if (callAudio) {
+        await stopCallAudio()
+      } else {
+        await cancelVoiceQuietly()
+      }
+      if (shareLiveKitMic) {
+        await setLiveKitCallAudioSpeechShare('off')
       }
     },
     async destroy() {
       shouldRestart = false
+      listening = false
+      clearWatchdog()
       clearFinalizeTimer()
       utterance = ''
-      try {
-        await Voice.cancel()
-      } catch {
+      for (const sub of callAudioSubs) sub.remove()
+      callAudioSubs = []
+      if (callAudio) {
+        await stopCallAudio()
+      } else {
+        await cancelVoiceQuietly()
         try {
-          await Voice.stop()
+          await Voice.destroy()
         } catch {
           // ignore
         }
+        Voice.removeAllListeners()
       }
-      try {
-        await Voice.destroy()
-      } catch {
-        // ignore
+      if (shareLiveKitMic) {
+        await setLiveKitCallAudioSpeechShare('off')
       }
-      Voice.removeAllListeners()
     },
   }
 }

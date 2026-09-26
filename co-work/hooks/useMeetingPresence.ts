@@ -51,6 +51,7 @@ import {
   isMeetingNonverbalStatusId,
   type MeetingNonverbalStatusId,
 } from '~/co-work/lib/meeting-nonverbal'
+import { canViewerSeeMeetingChatMessage } from '~/co-work/lib/meeting-chat'
 import { canManageMeeting } from '~/co-work/lib/meeting-role-permissions'
 import type { MeetingChatAudience } from '~/co-work/lib/meeting-role-permissions'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
@@ -196,6 +197,8 @@ export function useMeetingPresence({
     : selfParticipant?.role === 'co_host' || selfParticipant?.role === 'host'
       ? selfParticipant.role
       : 'participant'
+  const selfRoleRef = useRef(selfRole)
+  selfRoleRef.current = selfRole
   const canModerate = canManageMeeting(selfRole)
   const isWaiting = selfParticipant?.status === 'waiting'
   const isRejected = selfParticipant?.status === 'rejected'
@@ -258,12 +261,29 @@ export function useMeetingPresence({
 
   const refreshChat = useCallback(async () => {
     const rows = await fetchMeetingChat(meeting.id)
-    setChatMessages(rows)
+    setChatMessages(
+      rows.filter((row) =>
+        canViewerSeeMeetingChatMessage({
+          message: row,
+          viewerId: userId,
+          viewerRole: selfRoleRef.current,
+        }),
+      ),
+    )
   }, [meeting.id])
 
   const ingestRemoteChatMessage = useCallback(
     (message: MeetingChatMessage) => {
       if (!message?.id) return
+      if (
+        !canViewerSeeMeetingChatMessage({
+          message,
+          viewerId: userId,
+          viewerRole: selfRoleRef.current,
+        })
+      ) {
+        return
+      }
       // Own echoes arrive via local send; remote system messages use host/actor ids.
       if (message.sender_id === userId && message.audience !== 'system' && message.message_type !== 'system') {
         return

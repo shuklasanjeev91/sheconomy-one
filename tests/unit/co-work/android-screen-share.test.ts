@@ -54,4 +54,15 @@ describe('Android screen-share publish contract', () => {
       ),
     ).toMatch(/without video frames/i)
   })
+
+  it('preserves iOS ReplayKit blank-frame errors in soft toggle copy', () => {
+    expect(
+      softMediaToggleFailure(
+        'screen_share',
+        new Error(
+          'Screen share started without video frames. Choose SHEconomy → Start Broadcast, keep the red status bar visible, and try again.',
+        ),
+      ),
+    ).toMatch(/Start Broadcast/i)
+  })
 })

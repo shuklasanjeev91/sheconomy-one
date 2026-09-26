@@ -32,9 +32,10 @@ if (!fs.existsSync(target)) {
 }
 
 const MARKER = 'VideoProcessor.applyFrameAdaptationParameters'
+const FIXED = 'adapted.getBuffer() == frame.getBuffer()'
 
 let contents = fs.readFileSync(target, 'utf8')
-if (contents.includes(MARKER)) {
+if (contents.includes(MARKER) && contents.includes(FIXED)) {
   process.exit(0)
 }
 
@@ -50,9 +51,16 @@ const replacement = `    /**
         if (adapted == null) {
             return;
         }
-        onFrameCaptured(adapted);
-        // 1-arg handler fully balances retains/releases for \`adapted\`.
-        // Do NOT release again here (unlike VideoProcessor's default).
+        try {
+            deliver(adapted);
+        } finally {
+            if (adapted != frame) {
+                if (adapted.getBuffer() == frame.getBuffer()) {
+                    adapted.getBuffer().retain();
+                }
+                adapted.release();
+            }
+        }
     }
 
     /**
@@ -63,10 +71,13 @@ const replacement = `    /**
      */
     @Override
     public void onFrameCaptured(VideoFrame frame) {
+        deliver(frame);
+    }
+
+    private void deliver(VideoFrame frame) {
         if (mSink == null || frame == null) {
             return;
         }
-        frame.retain();
         VideoFrame outputFrame = frame;
         try {
             for (VideoFrameProcessor processor : this.videoFrameProcessors) {
@@ -76,8 +87,6 @@ const replacement = `    /**
                     mSink.onFrame(frame);
                     return;
                 }
-                // Processor returned a replacement — drop the previous output if it
-                // was also a replacement (not the retained capturer frame).
                 if (outputFrame != frame) {
                     outputFrame.release();
                 }
@@ -89,7 +98,6 @@ const replacement = `    /**
             if (outputFrame != null && outputFrame != frame) {
                 outputFrame.release();
             }
-            frame.release();
         }
     }
 }

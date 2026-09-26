@@ -48,7 +48,7 @@ import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 import { PaymentProviderIcon } from '~/commerce/components/vendor/payment/PaymentProviderIcon'
-import { ShepayEasyConnect } from '~/commerce/components/vendor/payment/ShepayEasyConnect'
+import { VendorPayuKycForm } from '~/commerce/components/vendor/payment/VendorPayuKycForm'
 
 type PaymentConnectFormProps = {
   ui: AppUiTokens
@@ -99,13 +99,7 @@ export function PaymentConnectForm({
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 32, paddingTop: 4 }}
         >
-          <ShepayEasyConnect
-            ui={ui}
-            shopId={shopId}
-            connected={connected}
-            onClose={onClose}
-            onConnected={onConnected}
-          />
+          <VendorPayuKycForm ui={ui} shopId={shopId} onSubmitted={onConnected} />
         </ScrollView>
       </YStack>
     )

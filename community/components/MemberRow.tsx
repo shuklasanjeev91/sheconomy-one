@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useWindowDimensions } from 'react-native'
 
 import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
 import { ProfileLink } from '~/community/components/ProfileLink'
@@ -22,13 +23,18 @@ export function MemberRow({
   onDismiss,
 }: MemberRowProps) {
   const communityUi = useCommunityUi()
+  const { width: windowWidth } = useWindowDimensions()
   const subtitle = member.headline || member.industry || member.location
   const [rowWidth, setRowWidth] = useState(0)
-  const stackActions =
-    compact && showConnect && rowWidth > 0 && rowWidth < STACK_ACTIONS_BELOW_WIDTH
+  const measuredWidth = rowWidth > 0 ? rowWidth : windowWidth
+  // Phone rows cannot fit avatar + name + Ignore + Accept on one line.
+  // Keeping the buttons inline crushes the name to a single letter.
+  const stackActions = showConnect && measuredWidth > 0 && measuredWidth < STACK_ACTIONS_BELOW_WIDTH
 
   return (
     <YStack
+      flexGrow={0}
+      alignSelf="stretch"
       paddingVertical={compact ? '$2' : '$3'}
       paddingHorizontal={compact ? 0 : '$1'}
       borderRadius={8}

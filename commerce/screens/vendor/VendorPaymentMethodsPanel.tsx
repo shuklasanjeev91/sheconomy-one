@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { PaymentErrorBoundary } from '~/commerce/components/PaymentErrorBoundary'
-import { ShepayEasyConnect } from '~/commerce/components/vendor/payment/ShepayEasyConnect'
+import { VendorPayuKycForm } from '~/commerce/components/vendor/payment/VendorPayuKycForm'
 import { fetchShepayHeldTotal } from '~/commerce/lib/shepay-held'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
@@ -224,12 +224,11 @@ export function VendorPaymentMethodsPanel({
             backgroundColor={ui.surface}
             style={getShadowStyle('sm')}
           >
-            <ShepayEasyConnect
+            <VendorPayuKycForm
               ui={ui}
               shopId={shopId}
-              connected={status !== 'needed'}
               embedded
-              onConnected={() => {
+              onSubmitted={() => {
                 setShowUpdateForm(false)
                 void refreshPaymentState()
               }}
@@ -246,7 +245,7 @@ export function VendorPaymentMethodsPanel({
               fontWeight="700"
               onPress={() => setShowUpdateForm(true)}
             >
-              Update PayU details
+              Update payout details
             </Button>
 
             <YStack

@@ -664,7 +664,15 @@ export function ScheduleMeetingScreen() {
             <MeetingInvitePicker hostId={user.id} value={invitees} onChange={setInvitees} />
           </ScheduleSection>
 
-          <CalendarConnectionsPanel redirectTo={isEditing ? `/co-work/schedule?edit=${editMeetingId}` : '/co-work/schedule'} />
+          <CalendarConnectionsPanel
+            redirectTo={isEditing ? `/co-work/schedule?edit=${editMeetingId}` : '/co-work/schedule'}
+            event={{
+              title: title.trim() || 'SHEconomy meeting',
+              startsAt: scheduledAt,
+              endsAt: scheduledEndAt,
+              description: description.trim() || undefined,
+            }}
+          />
 
           <ScheduleSection title="Calendar">
             <ScheduleToggleRow

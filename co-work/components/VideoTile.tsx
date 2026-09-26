@@ -85,7 +85,8 @@ export function VideoTile({
   }, [stream])
 
   const showWebVideo = Platform.OS === 'web' && stream && !videoOff
-  const showNativeVideo = Platform.OS !== 'web' && streamUrl && !videoOff && RtcView
+  const showNativeVideo =
+    Platform.OS !== 'web' && streamUrl && !videoOff && RtcView && !(isSelf && isScreen)
 
   return (
     <YStack
@@ -111,14 +112,14 @@ export function VideoTile({
           style={{
             width: '100%',
             height: '100%',
-            objectFit: isScreen ? 'contain' : 'cover',
+          objectFit: 'cover',
             transform: meetingVideoMirrorTransform(mirrored),
           }}
         />
       ) : showNativeVideo ? (
         <RtcView
           streamURL={streamUrl}
-          objectFit={isScreen ? 'contain' : 'cover'}
+          objectFit="cover"
           mirror={mirrored}
           style={{ width: '100%', height: '100%' }}
         />
@@ -128,6 +129,10 @@ export function VideoTile({
           {videoOff ? (
             <Text fontSize={11} color={coworkUi.textMuted}>
               Camera off
+            </Text>
+          ) : isSelf && isScreen ? (
+            <Text fontSize={12} color={coworkUi.textMuted} textAlign="center" paddingHorizontal="$3">
+              Sharing your screen
             </Text>
           ) : null}
         </YStack>

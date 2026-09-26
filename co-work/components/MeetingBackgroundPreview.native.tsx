@@ -149,24 +149,6 @@ export function MeetingBackgroundPreview({
       const track = trackRef.current?.mediaStreamTrack as (NativeEffectTrack & { id?: string }) | undefined
       if (!effectsSupportedRef.current) return false
 
-      // Android join preview: NEVER attach VideoEffectProcessor to the local
-      // preview track. Installing it mid-capture freezes Camera2 on many devices
-      // ("Client must return video buffers"). Selection is saved and applied in
-      // the LiveKit meeting room instead — camera preview stays live (Zoom-safe).
-      if (Platform.OS === 'android') {
-        try {
-          MeetingVideoEffectsNative?.configure?.({
-            mode: next.mode,
-            imagePath: next.imageUrl,
-            blurRadius: next.blurRadius,
-          })
-        } catch {
-          // ignore
-        }
-        if (track) detachProcessor(track)
-        return true
-      }
-
       if (!track || typeof track._setVideoEffects !== 'function') return false
       if (next.mode === 'image' && !nativeProcessorCanDecodeImageUri(next.imageUrl)) return false
 
@@ -186,6 +168,7 @@ export function MeetingBackgroundPreview({
         blurRadius: next.blurRadius,
       })
 
+      // Hot-swap config while the processor is already attached (Camera2-safe).
       if (processorOnRef.current) return true
 
       track._setVideoEffects([VIRTUAL_BACKGROUND_EFFECT_NAME])
@@ -202,7 +185,6 @@ export function MeetingBackgroundPreview({
       try {
         next = await resolveVirtualBackgroundSelection(normalized)
       } catch {
-        // Android soft preview only needs the preset id / local uri — keep going.
         next = normalized
       }
       setSelection(next)
@@ -218,7 +200,7 @@ export function MeetingBackgroundPreview({
       setError(null)
       try {
         const ok = await applyNativeEffect(next)
-        if (!ok && next.mode !== 'off' && Platform.OS !== 'android') {
+        if (!ok && next.mode !== 'off') {
           setError(
             'Could not preview this background on camera yet. It is saved and will apply when you join.',
           )
@@ -231,16 +213,11 @@ export function MeetingBackgroundPreview({
         } catch {
           // Keep ordinary camera preview.
         }
-        if (Platform.OS === 'android') {
-          // Soft preview still works from the preset id — don't clear the selection.
-          setError(null)
-        } else {
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : 'Could not preview this background. It is still saved for when you join.',
-          )
-        }
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : 'Could not preview this background. It is still saved for when you join.',
+        )
       } finally {
         setBusy(false)
       }

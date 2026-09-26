@@ -64,8 +64,8 @@ if (fgsPluginIndex < 0) {
 }
 
 const versionCode = appJson.expo?.android?.versionCode
-if (typeof versionCode !== 'number' || versionCode < 182) {
-  warnings.push(`android.versionCode is ${versionCode}; bump to 182+ before Play Present resubmit`)
+if (typeof versionCode !== 'number' || versionCode < 198) {
+  warnings.push(`android.versionCode is ${versionCode}; bump to 198+ before Play Present resubmit`)
 }
 
 const perms = appJson.expo?.android?.permissions ?? []
@@ -104,14 +104,20 @@ mustInclude(callKeepPluginPath, 'withCallKeepIos', 'CallKeep is iOS-only')
 mustNotInclude(callKeepPluginPath, 'VoiceConnectionService', 'CallKeep must not register Android ConnectionService')
 mustInclude(fgsPluginPath, 'FOREGROUND_SERVICE_MEDIA_PROJECTION', 'FGS plugin keeps MediaProjection permission')
 mustInclude(fgsPluginPath, 'FOREGROUND_SERVICE_PHONE_CALL', 'FGS plugin strips phoneCall FGS')
-mustInclude(fgsPluginPath, "tools:node", 'FGS compliance plugin uses tools:node=remove')
+mustInclude(fgsPluginPath, 'tools:node', 'FGS compliance plugin uses tools:node=remove')
 {
   const fgsSrc = read(fgsPluginPath)
-  if (fgsSrc.includes('MediaProjectionService')) {
+  if (
+    /SERVICES_TO_REMOVE\s*=\s*\[[^\]]*MediaProjectionService[^\]]*\]/s.test(fgsSrc) ||
+    /ensureRemoveService\([^)]*MediaProjectionService/.test(fgsSrc)
+  ) {
     errors.push('FGS plugin must not strip MediaProjectionService — Android Present needs it')
   }
   if (!fgsSrc.includes("'android:value': 'true'") && !fgsSrc.includes('"android:value": "true"')) {
     errors.push('ENABLE_SCREEN_SHARE_SERVICE meta-data must be true')
+  }
+  if (!fgsSrc.includes('SystemForegroundService')) {
+    errors.push('FGS plugin must strip androidx.work SystemForegroundService')
   }
 }
 
@@ -158,6 +164,17 @@ for (const manifestPath of mergedManifestCandidates) {
   for (const line of voiceLines) {
     if (!line.includes('tools:node="remove"')) {
       errors.push('VoiceConnectionService must be tools:node=remove only (no live ConnectionService)')
+    }
+  }
+
+  if (manifest.includes('MediaProjectionService') && manifest.includes('tools:node="remove"')) {
+    const mediaServiceLines = manifest
+      .split('\n')
+      .filter((line) => line.includes('MediaProjectionService'))
+    for (const line of mediaServiceLines) {
+      if (line.includes('tools:node="remove"')) {
+        errors.push('MediaProjectionService must not be tools:node=remove')
+      }
     }
   }
 }

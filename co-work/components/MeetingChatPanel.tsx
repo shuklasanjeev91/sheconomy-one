@@ -21,6 +21,7 @@ import {
   canDeleteMeetingChatMessage,
   isMeetingSystemChatMessage,
   meetingChatComposerAudiences,
+  meetingChatMessageInSelectedChannel,
 } from '~/co-work/lib/meeting-chat'
 import {
   buildMeetingChatArchive,
@@ -61,7 +62,6 @@ export function MeetingChatPanel({
   chatEnabled = true,
   privateChatEnabled = false,
   participantChatWith = 'everyone',
-  canManageChat = false,
   participantDisplayNames = {},
   meetingId,
   onAttach,
@@ -119,7 +119,7 @@ export function MeetingChatPanel({
 
   const toLabel = useMemo(() => {
     if (audience === 'everyone') return 'Everyone'
-    if (audience === 'hosts') return 'Hosts'
+    if (audience === 'hosts') return 'Host'
     if (!recipientId) return 'Private…'
     const row = privateTargets.find((p) => p.user_id === recipientId)
     return safeMeetingDisplayName(
@@ -142,9 +142,22 @@ export function MeetingChatPanel({
     }
   }, [audience, privateTargets, recipientId])
 
+  const visibleMessages = useMemo(
+    () =>
+      (messages ?? []).filter((message) =>
+        meetingChatMessageInSelectedChannel({
+          message,
+          audience,
+          recipientId,
+          currentUserId,
+        }),
+      ),
+    [audience, currentUserId, messages, recipientId],
+  )
+
   useEffect(() => {
     listRef.current?.scrollToEnd?.({ animated: true })
-  }, [messages.length])
+  }, [visibleMessages.length])
 
   function send() {
     if (!chatEnabled || !draft.trim()) return
@@ -535,7 +548,7 @@ export function MeetingChatPanel({
               </Text>
             </YStack>
           ) : null}
-          {chatEnabled && messages.length === 0 ? (
+          {chatEnabled && visibleMessages.length === 0 ? (
             <YStack
               padding="$5"
               alignItems="center"
@@ -547,13 +560,17 @@ export function MeetingChatPanel({
             >
               <Icons.MessageSquare size={28} color={coworkUi.textMuted} />
               <Text color={coworkUi.textMuted} textAlign="center" fontSize={13} lineHeight={19}>
-                No messages yet. Message everyone
-                {privateChatEnabled ? ', a participant privately,' : ''}
-                {canManageChat ? ' or hosts only.' : '.'}
+                {audience === 'private' && !recipientId
+                  ? 'Choose a participant to start a private chat.'
+                  : audience === 'private'
+                    ? `No private messages with ${toLabel} yet.`
+                    : audience === 'hosts'
+                      ? 'No host messages yet. Only the host and co-hosts see this chat.'
+                      : 'No messages yet. Messages here are visible to everyone in the meeting.'}
               </Text>
             </YStack>
           ) : null}
-          {messages.map((msg) => {
+          {visibleMessages.map((msg) => {
             if (isMeetingSystemChatMessage(msg)) {
               return (
                 <XStack key={msg.id} justifyContent="center" paddingVertical={2}>
@@ -639,7 +656,7 @@ export function MeetingChatPanel({
                   </XStack>
                   {hostsOnly ? (
                     <Text fontSize={10} fontWeight="700" color={coworkUi.warning}>
-                      Hosts only
+                      Host
                     </Text>
                   ) : null}
                   {isPrivate ? (
@@ -778,7 +795,7 @@ export function MeetingChatPanel({
                         setToMenuOpen(false)
                       }}
                     >
-                      Hosts only
+                      Host
                     </Button>
                   ) : (
                     <MeetingSheetButton
@@ -800,7 +817,7 @@ export function MeetingChatPanel({
                         fontWeight="700"
                         color={audience === 'hosts' ? '#fff' : coworkUi.text}
                       >
-                        Hosts only
+                        Host
                       </Text>
                     </MeetingSheetButton>
                   )

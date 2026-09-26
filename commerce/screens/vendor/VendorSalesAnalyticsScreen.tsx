@@ -8,6 +8,7 @@ import { SalesAnalyticsHubTabs } from '~/commerce/components/vendor/sales-analyt
 import { SalesAnalyticsRecordsList } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsRecordsList'
 import { SalesAnalyticsRegionalPanel } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsRegionalPanel'
 import { SalesAnalyticsSummaryCards } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsSummaryCards'
+import { SalesAnalyticsTopProductsPanel } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsTopProductsPanel'
 import { SalesAnalyticsForecastPanel } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsForecastPanel'
 import {
   fetchShopDemandForecasts,

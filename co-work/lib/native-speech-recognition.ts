@@ -14,6 +14,11 @@ export type NativeSpeechSession = {
   destroy: () => Promise<void>
 }
 
+export type NativeSpeechSessionOptions = {
+  /** Release exclusive LiveKit audio focus so STT can run during a meeting. */
+  shareLiveKitMic?: boolean
+}
+
 /** Web: SpeechRecognition when available; native Voice lives in `.native.ts`. */
 export function isNativeSpeechRecognitionAvailable() {
   if (isNativeRuntime()) return false
@@ -22,6 +27,7 @@ export function isNativeSpeechRecognitionAvailable() {
 
 export async function createNativeSpeechSession(
   handlers: NativeSpeechHandlers,
+  _options?: NativeSpeechSessionOptions,
 ): Promise<NativeSpeechSession | null> {
   if (isNativeRuntime()) return null
   return createWebSpeechSession(handlers)

@@ -2,7 +2,7 @@
 
 export const PAYMENT_UI_COPY = {
   pageTitle: 'Get paid',
-  pageSubtitle: 'Connect PayU once — then money from orders comes to you automatically.',
+  pageSubtitle: 'Submit payout details once. After review, money from orders comes to you automatically.',
   availableProviders: 'Available Providers',
   connectedProviders: 'Connected Providers',
   setupStatus: 'Setup Status',
@@ -10,18 +10,18 @@ export const PAYMENT_UI_COPY = {
   secureStatusValue: 'PCI-DSS Compliant',
   statusReadyTitle: 'SHEPay is active',
   statusReadyBody:
-    'Buyers can pay online. After each paid order, your share is released to your child merchant right away. Bank credit typically follows T+1.',
-  statusNeededTitle: 'Connect SHEPay to receive payouts',
+    'Buyers can pay online. After each paid order, your share is released to your bank account. Bank credit typically follows T+1.',
+  statusNeededTitle: 'Submit payout details',
   statusNeededBody:
-    'Buyers can still purchase your products. Until you connect, your share is held securely and transfers automatically once SHEPay is connected.',
-  statusIncompleteTitle: 'Finish SHEPay setup',
+    'Add your PAN, bank account, and documents. After review, your shop can sell and payouts are set up for you.',
+  statusIncompleteTitle: 'Payout setup is in progress',
   statusIncompleteBody:
-    'Your account is connected, but Child MID is missing. Add it so held and new settlements can be released to your bank.',
+    'Your details are with SHEconomy. You can sell once payout verification is complete.',
   howItWorksTitle: 'How it works',
   howItWorksSteps: [
-    'Buyers can pay you even before SHEPay is connected',
-    'Connect with your existing PayU key & MID, or set up new with PayU',
-    'Held amounts transfer automatically; new orders release right after payment',
+    'Submit your name, PAN, bank account, and documents here',
+    'SHEconomy reviews them and sets up payouts',
+    'Once verified, your shop can sell and each paid order settles to your bank',
   ] as const,
   withoutConnectionTitle: 'Before you connect',
   withoutConnectionBody:

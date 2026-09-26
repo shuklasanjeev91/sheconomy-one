@@ -78,6 +78,49 @@ export function formatMeetingSystemChatText(
   }
 }
 
+/** Who may receive this message. Private stays with the two people; host chat stays with hosts. */
+export function canViewerSeeMeetingChatMessage(input: {
+  message: Pick<
+    MeetingChatMessage,
+    'audience' | 'message_type' | 'sender_id' | 'recipient_id' | 'system_event_type'
+  >
+  viewerId: string
+  viewerRole: MeetingRole
+}): boolean {
+  if (isMeetingSystemChatMessage(input.message)) return true
+  const audience = input.message.audience ?? 'everyone'
+  if (audience === 'everyone') return true
+  if (audience === 'hosts') {
+    return canManageMeetingChat(input.viewerRole) || input.message.sender_id === input.viewerId
+  }
+  if (audience === 'private') {
+    return (
+      input.message.sender_id === input.viewerId || input.message.recipient_id === input.viewerId
+    )
+  }
+  return false
+}
+
+/** Zoom-style thread: the open To: target is the only conversation on screen. */
+export function meetingChatMessageInSelectedChannel(input: {
+  message: Pick<
+    MeetingChatMessage,
+    'audience' | 'message_type' | 'sender_id' | 'recipient_id' | 'system_event_type'
+  >
+  audience: MeetingChatAudience
+  recipientId?: string | null
+  currentUserId?: string | null
+}): boolean {
+  if (isMeetingSystemChatMessage(input.message)) return input.audience === 'everyone'
+  const messageAudience = input.message.audience ?? 'everyone'
+  if (input.audience === 'everyone') return messageAudience === 'everyone'
+  if (input.audience === 'hosts') return messageAudience === 'hosts'
+  if (input.audience !== 'private' || !input.recipientId || !input.currentUserId) return false
+  if (messageAudience !== 'private') return false
+  const parties = [input.message.sender_id, input.message.recipient_id]
+  return parties.includes(input.currentUserId) && parties.includes(input.recipientId)
+}
+
 export function meetingChatMessagePreview(
   message: MeetingChatMessage,
   participantDisplayNames: Record<string, string> = {},

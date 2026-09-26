@@ -62,7 +62,12 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
       top={Platform.OS === 'web' ? 0 : undefined}
       // Web-only: Tamagui `$gtMd` on native iPad can hide this header entirely.
       {...(Platform.OS === 'web' ? { $gtMd: { display: 'none' as const } } : { display: 'flex' })}
-      style={chromeSurfaceStyle(ui)}
+      // chromeSurfaceStyle sets elevation 1, which lets scrolled buttons paint
+      // over the search bar on Android. Keep the header above page cards.
+      style={{
+        ...chromeSurfaceStyle(ui),
+        ...(Platform.OS === 'android' ? { elevation: 24, zIndex: 50 } : null),
+      }}
       animation={headerAnim}
     >
       {showChromeRow ? (

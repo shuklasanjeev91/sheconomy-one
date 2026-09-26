@@ -1,5 +1,6 @@
 import { supabase } from '~/lib/supabase/client'
 import { meetingFeatureFlags } from '~/co-work/lib/meeting-feature-flags'
+import { buildCalendarLinks } from '~/lib/calendar/ics'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { readSupabaseFunctionError } from '~/lib/supabase/function-error'
 
@@ -150,4 +151,38 @@ export async function syncMeetingToConnectedCalendars(
 
 export function calendarProviderLabel(provider: CalendarProvider): string {
   return provider === 'google' ? 'Google Calendar' : 'Outlook Calendar'
+}
+
+/** Draft used when account OAuth is not configured and we open the calendar directly. */
+export type CalendarDraftEvent = {
+  title: string
+  startsAt: string
+  endsAt?: string
+  description?: string
+  location?: string
+}
+
+/**
+ * Add-event page for Google or Outlook. Used when calendar OAuth secrets are
+ * not on the server, so Connect still opens the calendar instead of erroring.
+ */
+export function calendarConnectFallbackUrl(
+  provider: CalendarProvider,
+  event?: CalendarDraftEvent | null,
+): string {
+  const title = event?.title?.trim()
+  const startsAt = event?.startsAt?.trim()
+  if (title && startsAt && !Number.isNaN(Date.parse(startsAt))) {
+    const links = buildCalendarLinks({
+      title,
+      startsAt,
+      endsAt: event?.endsAt,
+      description: event?.description,
+      location: event?.location,
+    })
+    return provider === 'google' ? links.google : links.outlook
+  }
+  return provider === 'google'
+    ? 'https://calendar.google.com/calendar/u/0/r'
+    : 'https://outlook.office.com/calendar/0/view/month'
 }

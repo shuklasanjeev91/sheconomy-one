@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  canViewerSeeMeetingChatMessage,
   formatMeetingSystemChatText,
   isMeetingChatEnabled,
   isMeetingPrivateChatEnabled,
   isMeetingSystemChatMessage,
   meetingChatComposerAudiences,
+  meetingChatMessageInSelectedChannel,
   meetingChatToolbarLabel,
 } from '../../../co-work/lib/meeting-chat'
 import type { Meeting } from '../../../co-work/lib/types'
@@ -76,6 +78,130 @@ describe('meeting chat', () => {
       'everyone',
       'hosts',
     ])
+  })
+
+  it('shows everyone, private, and host chats only in their own thread', () => {
+    const everyone = {
+      audience: 'everyone' as const,
+      message_type: 'text',
+      sender_id: 'a',
+      recipient_id: null,
+      system_event_type: null,
+    }
+    const privateToSam = {
+      audience: 'private' as const,
+      message_type: 'text',
+      sender_id: 'me',
+      recipient_id: 'sam',
+      system_event_type: null,
+    }
+    const hosts = {
+      audience: 'hosts' as const,
+      message_type: 'text',
+      sender_id: 'host',
+      recipient_id: null,
+      system_event_type: null,
+    }
+
+    expect(
+      meetingChatMessageInSelectedChannel({
+        message: everyone,
+        audience: 'everyone',
+        currentUserId: 'me',
+      }),
+    ).toBe(true)
+    expect(
+      meetingChatMessageInSelectedChannel({
+        message: privateToSam,
+        audience: 'everyone',
+        currentUserId: 'me',
+      }),
+    ).toBe(false)
+    expect(
+      meetingChatMessageInSelectedChannel({
+        message: privateToSam,
+        audience: 'private',
+        recipientId: 'sam',
+        currentUserId: 'me',
+      }),
+    ).toBe(true)
+    expect(
+      meetingChatMessageInSelectedChannel({
+        message: privateToSam,
+        audience: 'private',
+        recipientId: 'other',
+        currentUserId: 'me',
+      }),
+    ).toBe(false)
+    expect(
+      meetingChatMessageInSelectedChannel({
+        message: hosts,
+        audience: 'hosts',
+        currentUserId: 'host',
+      }),
+    ).toBe(true)
+    expect(
+      meetingChatMessageInSelectedChannel({
+        message: everyone,
+        audience: 'hosts',
+        currentUserId: 'host',
+      }),
+    ).toBe(false)
+  })
+
+  it('hides private and host messages from people who are not in that chat', () => {
+    expect(
+      canViewerSeeMeetingChatMessage({
+        message: {
+          audience: 'private',
+          message_type: 'text',
+          sender_id: 'a',
+          recipient_id: 'b',
+          system_event_type: null,
+        },
+        viewerId: 'c',
+        viewerRole: 'participant',
+      }),
+    ).toBe(false)
+    expect(
+      canViewerSeeMeetingChatMessage({
+        message: {
+          audience: 'private',
+          message_type: 'text',
+          sender_id: 'a',
+          recipient_id: 'b',
+          system_event_type: null,
+        },
+        viewerId: 'b',
+        viewerRole: 'participant',
+      }),
+    ).toBe(true)
+    expect(
+      canViewerSeeMeetingChatMessage({
+        message: {
+          audience: 'hosts',
+          message_type: 'text',
+          sender_id: 'host',
+          recipient_id: null,
+          system_event_type: null,
+        },
+        viewerId: 'guest',
+        viewerRole: 'participant',
+      }),
+    ).toBe(false)
+    expect(
+      canViewerSeeMeetingChatMessage({
+        message: {
+          audience: 'hosts',
+          message_type: 'text',
+          sender_id: 'host',
+          recipient_id: null,
+          system_event_type: null,
+        },
+        viewerId: 'co',
+        viewerRole: 'co_host',
+      }),
+    ).toBe(true)
   })
 
   it('respects meeting chat kill switches', () => {

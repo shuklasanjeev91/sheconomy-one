@@ -12,13 +12,20 @@
 
 Buyers are **not** blocked if a shop has not connected PayU yet.
 
-## Vendor setup (easy)
+## Vendor setup
 
-1. Vendor taps **Connect SHEPay** → **Open PayU setup** (same email/phone + shop code if asked).
-2. Vendor taps **Fetch my details & activate**.
-3. `shepay-sync-child` uses PayU Hub (`fetch_child_merchants`) to pull **pg_key** + **mid**, saves them, sets platform webhook, and releases held settlements.
+Vendors never open PayU. They submit payout details in shop settings (name, mobile, email, PAN, GST if they have it, bank account, IFSC, and KYC documents). An admin reviews the application and approves it. `shepay-create-child` then:
 
-Manual paste of key/MID remains available as a fallback.
+1. Gets a Hub token with scope `refer_child_merchant`.
+2. Creates the child merchant (`POST /api/v3/product_accounts`).
+3. Updates bank details (`PUT /api/v3/product_accounts/{uuid}`).
+4. Reads the child key and MID (`fetch_child_merchants`), saves them, marks the shop verified, and releases held settlements.
+
+Until that status is **PayU verified**, a new shop stays off the storefront. Shops that were already verified stay listed.
+
+While the vendor types a GSTIN, the app checks the GST checksum, fills the PAN from that GSTIN, and calls `shepay-verify-kyc`. With `GST_VERIFY_TOKEN` and `GST_VERIFY_CLIENT_ID` set, that call reads the tax registry and shows the legal name, trade name, and Active status. A cancelled GSTIN or a PAN that does not match the GSTIN cannot be submitted.
+
+`shepay-sync-child` remains the lookup used after create. It is not a vendor step.
 
 ### Hub secrets (required for auto-fetch)
 
@@ -30,7 +37,7 @@ Manual paste of key/MID remains available as a fallback.
 | `PAYU_HUB_BASE_URL` | Optional, default `https://accounts.payu.in` |
 | `PAYU_ONBOARDING_BASE_URL` | Optional, default `https://onboarding.payu.in` |
 
-Scopes on the Hub client: `fetch_child_merchants` (required), `refer_child_merchant` (optional for future create flow).
+Scopes on the Hub client: `fetch_child_merchants` and `refer_child_merchant` (required to create child merchants from admin approval).
 
 ## Vendor setup (legacy notes)
 
@@ -51,5 +58,5 @@ Scopes on the Hub client: `fetch_child_merchants` (required), `refer_child_merch
 
 ```bash
 npx supabase db push --project-ref zsaqrrzwygzwrlzgymxk
-npx supabase functions deploy shepay-payu-create shepay-payu-bin shepay-payu-verify shepay-payu-webhook shepay-release-pending shepay-sync-child --project-ref zsaqrrzwygzwrlzgymxk
+npx supabase functions deploy shepay-payu-create shepay-payu-bin shepay-payu-verify shepay-payu-webhook shepay-release-pending shepay-sync-child shepay-create-child --project-ref zsaqrrzwygzwrlzgymxk
 ```

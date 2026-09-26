@@ -15,6 +15,7 @@ import {
 
 import {
   forceScreenShareTrackSettings,
+  nativeCapturerReportsVideoSize,
   patchLiveKitWaitForDimensions,
   peekUnpatchedVideoSize,
 } from '~/co-work/lib/livekit-patch-dimensions'
@@ -174,33 +175,42 @@ export async function setLocalScreenShareEnabled(
         // ignore
       }
     }
-    // Wait for *real* MediaProjection/ReplayKit pixels. Faked 720p getSettings()
-    // used to trip this loop immediately, so Android published a black track
-    // and web/iOS stayed on an empty stage.
+    // Wait for a live capture MediaStream. On Android, also require real
+    // MediaProjection width/height — faked 720p getSettings() used to pass
+    // immediately and publish a black track. iOS ReplayKit never reports size
+    // in getSettings (ScreenCaptureController omits width/height), so requiring
+    // peekUnpatched dims always failed and tore down a working iPad/iPhone share.
+    const expectsCaptureSize = nativeCapturerReportsVideoSize(mediaTrack)
     const started = Date.now()
     while (Date.now() - started < 12_000) {
       if (!isLocalScreenShareTrackReady(publication)) break
       const stream = publication.track.mediaStream
       const live = publication.track.mediaStreamTrack
+      if (!stream?.id) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        forceScreenShareTrackSettings(publication.track.mediaStreamTrack)
+        continue
+      }
+      if (!expectsCaptureSize) break
       const actual = peekUnpatchedVideoSize(live)
-      if (stream?.id && actual.width > 1 && actual.height > 1) break
+      if (actual.width > 1 && actual.height > 1) break
       await new Promise((resolve) => setTimeout(resolve, 200))
       forceScreenShareTrackSettings(publication.track.mediaStreamTrack)
     }
 
+    const streamReady = !!publication.track?.mediaStream?.id
     const actual = peekUnpatchedVideoSize(publication.track?.mediaStreamTrack)
-    if (
-      !isLocalScreenShareTrackReady(publication) ||
-      actual.width <= 1 ||
-      actual.height <= 1
-    ) {
+    const sizeReady = !expectsCaptureSize || (actual.width > 1 && actual.height > 1)
+    if (!isLocalScreenShareTrackReady(publication) || !streamReady || !sizeReady) {
       try {
         await localParticipant.setScreenShareEnabled(false)
       } catch {
         // ignore cleanup failures
       }
       throw new Error(
-        'Screen share started without video frames. Update SHEconomy to the latest Android build, allow the capture prompt, and keep the sharing notification on.',
+        expectsCaptureSize
+          ? 'Screen share started without video frames. Update SHEconomy to the latest Android build, allow the capture prompt, and keep the sharing notification on.'
+          : 'Screen share started without video frames. Choose SHEconomy → Start Broadcast, keep the red status bar visible, and try again.',
       )
     }
   }

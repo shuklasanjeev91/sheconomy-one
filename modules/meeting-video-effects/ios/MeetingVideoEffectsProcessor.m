@@ -1,6 +1,7 @@
 #import "MeetingVideoEffectsProcessor.h"
 
 #import <CoreImage/CoreImage.h>
+#import <UIKit/UIKit.h>
 #import <Vision/Vision.h>
 #import <WebRTC/RTCCVPixelBuffer.h>
 #import <WebRTC/RTCVideoFrame.h>
@@ -36,15 +37,24 @@ static dispatch_queue_t gConfigQueue;
   return self;
 }
 
+- (CIImage *)imageFromPath:(NSString *)path {
+  if (path.length == 0) return nil;
+  NSString *filePath = path;
+  if ([path hasPrefix:@"file://"]) {
+    filePath = [NSURL URLWithString:path].path ?: [path substringFromIndex:7];
+  }
+  if (![path hasPrefix:@"http://"] && ![path hasPrefix:@"https://"]) {
+    UIImage *uiImage = [UIImage imageWithContentsOfFile:filePath];
+    if (uiImage.CGImage) return [CIImage imageWithCGImage:uiImage.CGImage];
+    return [CIImage imageWithContentsOfURL:[NSURL fileURLWithPath:filePath]];
+  }
+  NSURL *url = [NSURL URLWithString:path];
+  return url ? [CIImage imageWithContentsOfURL:url] : nil;
+}
+
 - (CIImage *)backgroundImageForPath:(NSString *)path extent:(CGRect)extent {
   if (![self.cachedBackgroundPath isEqualToString:path]) {
-    NSURL *url = nil;
-    if ([path hasPrefix:@"http://"] || [path hasPrefix:@"https://"] || [path hasPrefix:@"file://"]) {
-      url = [NSURL URLWithString:path];
-    } else if (path.length > 0) {
-      url = [NSURL fileURLWithPath:path];
-    }
-    self.cachedBackground = url ? [CIImage imageWithContentsOfURL:url] : nil;
+    self.cachedBackground = [self imageFromPath:path];
     self.cachedBackgroundPath = path;
   }
   CIImage *image = self.cachedBackground;

@@ -1,10 +1,11 @@
 /**
- * Fix Android blank screen-share race:
- * MediaProjectionService.launch() is async; createScreenStream()/startCapture()
- * used to run immediately and fail silently when the FGS was not yet in
- * FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION (issue #1799 / PR #1800 upstream).
+ * Fix Android blank screen-share race + Play-visible Present notification.
  *
- * Also keep the share notification ongoing + perceptible.
+ * MediaProjectionService.launch() is async; createScreenStream()/startCapture()
+ * must wait until startForeground(MEDIA_PROJECTION) completes.
+ *
+ * Play FGS policy: service starts only after the user grants the system share
+ * sheet (RESULT_OK), with a HIGH-importance ongoing notification.
  */
 const fs = require('node:fs')
 const path = require('node:path')
@@ -23,6 +24,19 @@ const root = path.join(
   'oney',
   'WebRTCModule',
 )
+const stringsPath = path.join(
+  __dirname,
+  '..',
+  'node_modules',
+  '@livekit',
+  'react-native-webrtc',
+  'android',
+  'src',
+  'main',
+  'res',
+  'values',
+  'strings.xml',
+)
 
 function patchFile(fileName, transform) {
   const target = path.join(root, fileName)
@@ -35,21 +49,66 @@ function patchFile(fileName, transform) {
   return true
 }
 
-// 1) Ongoing / perceptible notification while Present is active.
-patchFile('MediaProjectionNotification.java', (contents) =>
-  contents.replace(
+if (fs.existsSync(stringsPath)) {
+  const next = `<resources>
+    <string name="media_projection_notification_title">Sharing your screen</string>
+    <string name="media_projection_notification_text">SHEconomy Co-Work is sharing your screen in a live meeting. Tap Present again to stop.</string>
+    <string name="ongoing_notification_channel_name">Screen sharing</string>
+</resources>
+`
+  if (fs.readFileSync(stringsPath, 'utf8') !== next) {
+    fs.writeFileSync(stringsPath, next)
+    console.log('[patch-webrtc-media-projection] Patched strings.xml')
+  }
+}
+
+patchFile('MediaProjectionNotification.java', (contents) => {
+  let next = contents
+  next = next.replace(
+    'NotificationManager.IMPORTANCE_DEFAULT);',
+    'NotificationManager.IMPORTANCE_HIGH);',
+  )
+  next = next.replace(
+    'NotificationManager.IMPORTANCE_LOW);',
+    'NotificationManager.IMPORTANCE_HIGH);',
+  )
+  next = next.replace(
+    'builder.setCategory(NotificationCompat.CATEGORY_CALL)',
+    'builder.setCategory(NotificationCompat.CATEGORY_SERVICE)',
+  )
+  next = next.replace(
     `.setPriority(NotificationCompat.PRIORITY_LOW)
                 .setOngoing(false)
                 .setUsesChronometer(false)
                 .setAutoCancel(true)`,
+    `.setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setOngoing(true)
+                .setUsesChronometer(false)
+                .setAutoCancel(false)`,
+  )
+  next = next.replace(
     `.setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setOngoing(true)
                 .setUsesChronometer(false)
                 .setAutoCancel(false)`,
-  ),
-)
+    `.setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setOngoing(true)
+                .setUsesChronometer(false)
+                .setAutoCancel(false)`,
+  )
+  next = next.replace(
+    `.setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setOngoing(true)
+                .setUsesChronometer(false)
+                .setAutoCancel(false)`,
+    `.setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setOngoing(true)
+                .setUsesChronometer(false)
+                .setAutoCancel(false)`,
+  )
+  return next
+})
 
-// 2) Latch so callers can wait until startForeground(mediaProjection) completes.
 patchFile('MediaProjectionService.java', (contents) => {
   let next = contents
   if (!next.includes('import java.util.concurrent.CountDownLatch')) {
@@ -67,10 +126,10 @@ patchFile('MediaProjectionService.java', (contents) => {
   if (!next.includes('awaitForegroundReady')) {
     next = next.replace(
       'public static void launch(Context context) {\n        if (!WebRTCModuleOptions.getInstance().enableMediaProjectionService) {\n            return;\n        }\n\n        MediaProjectionNotification.createNotificationChannel(context);',
-      `public static boolean awaitForegroundReady(long timeoutMs) {\n        CountDownLatch latch = foregroundReadyLatch;\n        if (latch == null) {\n            // Service disabled or already finished — do not block capture.\n            return true;\n        }\n        try {\n            return latch.await(timeoutMs, TimeUnit.MILLISECONDS);\n        } catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n            return false;\n        }\n    }\n\n    public static void launch(Context context) {\n        if (!WebRTCModuleOptions.getInstance().enableMediaProjectionService) {\n            return;\n        }\n\n        foregroundReadyLatch = new CountDownLatch(1);\n        MediaProjectionNotification.createNotificationChannel(context);`,
+      `public static boolean awaitForegroundReady(long timeoutMs) {\n        CountDownLatch latch = foregroundReadyLatch;\n        if (latch == null) {\n            return true;\n        }\n        try {\n            return latch.await(timeoutMs, TimeUnit.MILLISECONDS);\n        } catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n            return false;\n        }\n    }\n\n    public static void launch(Context context) {\n        if (!WebRTCModuleOptions.getInstance().enableMediaProjectionService) {\n            return;\n        }\n\n        foregroundReadyLatch = new CountDownLatch(1);\n        MediaProjectionNotification.createNotificationChannel(context);`,
     )
   }
-  if (!next.includes('foregroundReadyLatch.countDown()')) {
+  if (!next.includes('latch.countDown()')) {
     next = next.replace(
       `if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
@@ -92,10 +151,6 @@ patchFile('MediaProjectionService.java', (contents) => {
 
         return START_NOT_STICKY;`,
     )
-  }
-  // If launch fails, never leave createScreenStream blocked forever.
-  if (!next.includes('foregroundReadyLatch.countDown();') || next.indexOf('Media projection service not started') < 0) {
-    // already handled below via replace of catch blocks
   }
   next = next.replace(
     `} catch (RuntimeException e) {
@@ -134,7 +189,6 @@ patchFile('MediaProjectionService.java', (contents) => {
   return next
 })
 
-// 3) Wait for FGS before startCapture — fixes blank Android Present tracks.
 patchFile('GetUserMediaImpl.java', (contents) => {
   if (contents.includes('awaitForegroundReady')) return contents
   return contents.replace(
@@ -153,7 +207,6 @@ patchFile('GetUserMediaImpl.java', (contents) => {
   )
 })
 
-// 4) Log swallowed startCapture failures (blank share debugging).
 patchFile('AbstractVideoCaptureController.java', (contents) => {
   let next = contents
   if (!next.includes('import android.util.Log')) {
@@ -177,7 +230,6 @@ patchFile('AbstractVideoCaptureController.java', (contents) => {
         try {
             videoCapturer.startCapture(targetWidth, targetHeight, targetFps);
         } catch (RuntimeException e) {
-            // MediaProjection race / missing FGS — log so Present blank tracks are diagnosable.
             Log.e("WebRTCModule", "Failed to start video capture", e);
         }
     }`,
@@ -185,3 +237,5 @@ patchFile('AbstractVideoCaptureController.java', (contents) => {
   }
   return next
 })
+
+console.log('[patch-webrtc-media-projection] done')

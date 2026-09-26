@@ -180,10 +180,13 @@ export function CommunityShell({
     >
       <PageSection paddingVertical="$3" flex={scroll ? undefined : 1} minHeight={scroll ? undefined : 0}>
         <YStack
-          flex={1}
+          flex={scroll ? undefined : 1}
           minWidth={0}
           minHeight={scroll ? undefined : 0}
           gap="$3"
+          // Tab bar is already inset by PageScroll. This extra space clears the
+          // sparkle assist button so it does not cover Accept on the last row.
+          paddingBottom={scroll ? 120 : 72}
           backgroundColor={communityUi.pageBg}
           {...LAYOUT_STRETCH}
         >

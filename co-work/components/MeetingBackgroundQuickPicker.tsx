@@ -1,4 +1,4 @@
-import { Image, Platform } from 'react-native'
+import { Image } from 'react-native'
 import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useState, type ReactNode } from 'react'
 
@@ -9,10 +9,7 @@ import {
   OFF_BACKGROUND,
   type VirtualBackgroundSelection,
 } from '~/co-work/lib/virtual-backgrounds'
-import {
-  getPresetThumbnailSource,
-  getVirtualBackgroundPresets,
-} from '~/co-work/lib/virtual-background-presets'
+import { getVirtualBackgroundPresets } from '~/co-work/lib/virtual-background-presets'
 
 export type MeetingBackgroundQuickCustomItem = {
   id: string
@@ -81,15 +78,6 @@ export function MeetingBackgroundQuickPicker({
   const active = (value: VirtualBackgroundSelection) =>
     selection.mode === value.mode && (value.mode !== 'image' || selection.id === value.id)
 
-  // Android: never drive Camera2 through VideoEffectProcessor on the join
-  // preview — show a soft composite (background image + oval camera) instead.
-  const softBackgroundSource =
-    Platform.OS === 'android' && selection.mode === 'image'
-      ? getPresetThumbnailSource(selection.id) ??
-        (selectedImageUri ? { uri: selectedImageUri } : null)
-      : null
-  const softPreviewActive = !!softBackgroundSource
-
   return (
     <YStack gap="$2.5" width="100%" style={{ position: 'relative' }}>
       {showHeader ? (
@@ -113,39 +101,7 @@ export function MeetingBackgroundQuickPicker({
         position="relative"
         flexShrink={0}
       >
-        {softPreviewActive ? (
-          <YStack position="absolute" top={0} right={0} bottom={0} left={0}>
-            <Image
-              source={softBackgroundSource}
-              resizeMode="cover"
-              style={{ width: '100%', height: '100%' }}
-            />
-            <YStack
-              position="absolute"
-              top={0}
-              right={0}
-              bottom={0}
-              left={0}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <YStack
-                width="42%"
-                aspectRatio={3 / 4}
-                maxHeight="78%"
-                borderRadius={999}
-                overflow="hidden"
-                borderWidth={2}
-                borderColor="rgba(255,255,255,0.35)"
-                backgroundColor="#0a0a0c"
-              >
-                {preview}
-              </YStack>
-            </YStack>
-          </YStack>
-        ) : (
-          preview
-        )}
+        {preview}
         {busy ? (
           <YStack
             position="absolute"
@@ -300,14 +256,6 @@ export function MeetingBackgroundQuickPicker({
         <Text fontSize={12} color={coworkUi.textMuted}>
           Live preview is limited on this device. Your selection is saved and will apply when you
           join.
-        </Text>
-      ) : Platform.OS === 'android' && selection.mode === 'image' ? (
-        <Text fontSize={12} color={coworkUi.textSecondary}>
-          Soft preview — your camera stays live (no freeze). Selection is saved for this meeting.
-        </Text>
-      ) : Platform.OS === 'android' && selection.mode === 'blur' ? (
-        <Text fontSize={12} color={coworkUi.textSecondary}>
-          Blur is saved. Your camera stays live so preview never freezes on this device.
         </Text>
       ) : null}
       {error ? (

@@ -237,29 +237,39 @@ export function MeetingLiveCaptions({
             styles.surface,
             {
               width: layout.maxWidth,
-              maxHeight: collapsed ? 58 : Math.min(layout.maxHeight, 160),
+              maxHeight: showSettings
+                ? Math.min(Math.round(viewportHeight * 0.62), Math.max(layout.maxHeight, 420))
+                : collapsed
+                  ? 58
+                  : Math.min(layout.maxHeight, 160),
               paddingVertical: collapsed ? 10 : 14,
               transform: [{ translateX: 0 }],
             },
           ]}
           pointerEvents="auto"
           collapsable={false}
-          {...panResponder.panHandlers}
         >
-          <View style={styles.header} accessibilityLabel="Drag to move captions">
-            <RNText
-              style={[styles.status, { fontSize: fonts.status }]}
-              numberOfLines={1}
-              allowFontScaling
+          <View style={styles.header}>
+            <View
+              style={styles.dragHandle}
+              accessibilityLabel="Drag to move captions"
+              {...panResponder.panHandlers}
             >
-              {collapsed
-                ? stableText || `CC · ${targetLangName || 'On'}`
-                : `CC · ${targetLangName || 'Captions'} · Drag`}
-            </RNText>
+              <RNText
+                style={[styles.status, { fontSize: fonts.status }]}
+                numberOfLines={1}
+                allowFontScaling
+              >
+                {collapsed
+                  ? stableText || `CC · ${targetLangName || 'On'}`
+                  : `CC · ${targetLangName || 'Captions'} · Drag`}
+              </RNText>
+            </View>
             <View style={styles.headerActions}>
               {!collapsed ? (
                 <CaptionIconButton
                   label={settingsOpen ? 'Hide caption settings' : 'Caption settings'}
+                  selected={settingsOpen}
                   onPress={() => setSettingsOpen((open) => !open)}
                 >
                   <Icons.Settings size={16} color={CAPTION_MUTED} />
@@ -296,7 +306,12 @@ export function MeetingLiveCaptions({
           ) : null}
 
           {showSettings ? (
-            <View style={styles.settings}>
+            <ScrollView
+              style={styles.settingsScroll}
+              contentContainerStyle={styles.settings}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
               <View style={styles.settingsRow}>
                 {availableLanguages.length && targetLang && onTargetLangChange ? (
                   <CaptionLanguageChips
@@ -362,7 +377,7 @@ export function MeetingLiveCaptions({
                 Drag the caption box to move it. Only the latest line is shown, translated into your
                 Show language.
               </RNText>
-            </View>
+            </ScrollView>
           ) : null}
         </View>
       ) : null}
@@ -446,11 +461,13 @@ function CaptionLineRow({
 function CaptionIconButton({
   label,
   disabled,
+  selected,
   onPress,
   children,
 }: {
   label: string
   disabled?: boolean
+  selected?: boolean
   onPress: () => void
   children: ReactNode
 }) {
@@ -458,12 +475,13 @@ function CaptionIconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
+      accessibilityState={{ disabled: !!disabled, selected: !!selected }}
       disabled={disabled}
       onPress={onPress}
-      hitSlop={8}
+      hitSlop={10}
       style={({ pressed }) => [
         styles.iconBtn,
+        selected && styles.iconBtnSelected,
         { opacity: disabled ? 0.35 : pressed ? 0.7 : 1 },
       ]}
     >
@@ -505,6 +523,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
+  dragHandle: {
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 34,
+  },
+  settingsScroll: {
+    marginTop: 10,
+    flexGrow: 0,
+  },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -540,8 +567,8 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   settings: {
-    marginTop: 10,
     gap: 8,
+    paddingBottom: 4,
   },
   settingsRow: {
     flexDirection: 'row',
@@ -600,6 +627,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 8,
     backgroundColor: '#1a1216',
+  },
+  iconBtnSelected: {
+    borderWidth: 1,
+    borderColor: CAPTION_BORDER,
+    backgroundColor: '#3b0a22',
   },
   errorBanner: {
     width: '100%',

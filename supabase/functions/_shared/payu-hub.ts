@@ -151,6 +151,96 @@ export async function listPayuChildMerchants(
     .filter((row): row is PayuChildMerchant => Boolean(row))
 }
 
+export type PayuCreatedChild = {
+  uuid: string
+  mid: string
+  onboardingStatus: string | null
+  documentStatus: string | null
+  kycStatus: string | null
+}
+
+function readProductAccount(json: Record<string, unknown>): Record<string, unknown> | null {
+  const account = json.product_account
+  if (account && typeof account === 'object') return account as Record<string, unknown>
+  return null
+}
+
+function payuErrorMessage(json: Record<string, unknown>, status: number): string {
+  if (typeof json.error === 'string' && json.error.trim()) return json.error
+  if (json.errors && typeof json.errors === 'object') {
+    const first = Object.values(json.errors as Record<string, unknown>)[0]
+    if (Array.isArray(first) && typeof first[0] === 'string') return first[0]
+  }
+  if (typeof json.message === 'string' && json.message.trim()) return json.message
+  return `PayU child merchant request failed (${status})`
+}
+
+function createdChildFromAccount(account: Record<string, unknown>): PayuCreatedChild {
+  const midRaw = account.mid ?? account.identifier
+  const kyc = account.kyc_status
+  const kycStatus =
+    kyc && typeof kyc === 'object'
+      ? String((kyc as Record<string, unknown>).kyc_status ?? (kyc as Record<string, unknown>).status ?? '')
+      : null
+  return {
+    uuid: typeof account.uuid === 'string' ? account.uuid : '',
+    mid: midRaw == null ? '' : String(midRaw).trim(),
+    onboardingStatus: typeof account.onboarding_status === 'string' ? account.onboarding_status : null,
+    documentStatus: typeof account.document_status === 'string' ? account.document_status : null,
+    kycStatus: kycStatus || null,
+  }
+}
+
+/** POST /api/v3/product_accounts — scope refer_child_merchant. */
+export async function createPayuChildMerchant(
+  config: PayuHubConfig,
+  accessToken: string,
+  productAccount: Record<string, unknown>,
+): Promise<PayuCreatedChild> {
+  const res = await fetch(`${config.onboardingBaseUrl}/api/v3/product_accounts`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ product_account: productAccount }),
+  })
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  const account = readProductAccount(json)
+  if (!res.ok || !account) {
+    throw new Error(payuErrorMessage(json, res.status))
+  }
+  const created = createdChildFromAccount(account)
+  if (!created.uuid) throw new Error('PayU did not return a child merchant id.')
+  return created
+}
+
+/** PUT bank details on the child product account. */
+export async function updatePayuChildBank(
+  config: PayuHubConfig,
+  accessToken: string,
+  productAccountUuid: string,
+  bankDetail: { bank_account_number: string; holder_name: string; ifsc_code: string },
+): Promise<PayuCreatedChild> {
+  const res = await fetch(
+    `${config.onboardingBaseUrl}/api/v3/product_accounts/${encodeURIComponent(productAccountUuid)}`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ product_account: { bank_detail: bankDetail } }),
+    },
+  )
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  const account = readProductAccount(json)
+  if (!res.ok || !account) {
+    throw new Error(payuErrorMessage(json, res.status))
+  }
+  return createdChildFromAccount(account)
+}
+
 /** Prefer shop-id match, then email, then phone. */
 export async function findPayuChildForShop(
   config: PayuHubConfig,

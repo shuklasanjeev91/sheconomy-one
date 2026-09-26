@@ -39,7 +39,7 @@ export function useMeetingLifecycle({
   screenSharing,
   viewingScreenShare,
   cameraEnabled,
-  speakerOn,
+  speakerOn: _speakerOn,
 }: UseMeetingLifecycleArgs) {
   useKeepAwake('sheconomy-meeting-native')
   const { syncLifecycle } = useMeetingStateManager()
@@ -55,11 +55,9 @@ export function useMeetingLifecycle({
   const intendedCameraRef = useRef(cameraEnabled)
   const wasSharingWhenBackgroundRef = useRef(false)
   const screenSharingRef = useRef(screenSharing)
-  const speakerOnRef = useRef(speakerOn)
   const appStateRef = useRef<AppStateStatus>(AppState.currentState)
   const backgroundPauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   screenSharingRef.current = screenSharing
-  speakerOnRef.current = speakerOn
 
   const platform: MeetingLifecyclePlatform = Platform.OS === 'ios' ? 'ios' : 'android'
 
@@ -129,7 +127,7 @@ export function useMeetingLifecycle({
     void (async () => {
       try {
         await configureLiveKitCallAudio(mediaMode)
-        await applyPreferredCallAudioOutput(mediaMode, speakerOnRef.current)
+        await applyPreferredCallAudioOutput(mediaMode)
         if (room.state === ConnectionState.Connected) {
           await pauseMeetingCameraForBackground(room)
         }
@@ -185,7 +183,7 @@ export function useMeetingLifecycle({
       void (async () => {
         try {
           await configureLiveKitCallAudio(mediaMode)
-          await applyPreferredCallAudioOutput(mediaMode, speakerOnRef.current)
+          await applyPreferredCallAudioOutput(mediaMode)
           if (room.state === ConnectionState.Connected) {
             await restoreMeetingMediaAfterForeground(room, mediaMode, {
               intendedCameraOn: getMeetingCameraIntent() || intendedCameraRef.current,
@@ -278,7 +276,7 @@ export function useMeetingLifecycle({
     void (async () => {
       try {
         await configureLiveKitCallAudio(mediaMode)
-        await applyPreferredCallAudioOutput(mediaMode, speakerOnRef.current)
+        await applyPreferredCallAudioOutput(mediaMode)
         if (room.state === ConnectionState.Connected) {
           await restoreMeetingMediaAfterForeground(room, mediaMode, {
             intendedCameraOn: intendedCameraRef.current,

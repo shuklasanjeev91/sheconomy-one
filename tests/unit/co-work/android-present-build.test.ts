@@ -22,22 +22,22 @@ describe('androidPresentUnavailable', () => {
     expect(ANDROID_PRESENT_UNAVAILABLE_MESSAGE).toMatch(/Play Store/i)
   })
 
-  it('allows Present when WebRTC MediaProjection is linked (even if versionCode < 182)', async () => {
+  it('blocks Present on 6.0.19 binaries that stripped FGS', async () => {
     vi.doMock('react-native', () => ({
       Platform: { OS: 'android' },
       NativeModules: { WebRTCModule: { getDisplayMedia: () => {} } },
     }))
     const { androidPresentUnavailable } = await import('~/co-work/lib/android-present-build')
-    expect(androidPresentUnavailable(173)).toBe(false)
+    expect(androidPresentUnavailable(196)).toBe(true)
   })
 
-  it('allows Present on Android binaries that ship MediaProjection version gate', async () => {
+  it('allows Present on Android binaries that ship MediaProjection again', async () => {
     vi.doMock('react-native', () => ({
       Platform: { OS: 'android' },
       NativeModules: { WebRTCModule: {} },
     }))
     const { androidPresentUnavailable } = await import('~/co-work/lib/android-present-build')
-    expect(androidPresentUnavailable(182)).toBe(false)
+    expect(androidPresentUnavailable(197)).toBe(false)
   })
 
   it('blocks Present when versionCode cannot be read and WebRTC is missing', async () => {

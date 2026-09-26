@@ -81,19 +81,46 @@ type PatchedMediaStreamTrack = MediaStreamTrack & {
   __sheconomyOriginalGetSettings?: () => MediaTrackSettings
 }
 
+function readUnpatchedSettings(
+  mediaStreamTrack: MediaStreamTrack,
+): MediaTrackSettings {
+  const patched = mediaStreamTrack as PatchedMediaStreamTrack
+  return (
+    (patched.__sheconomyOriginalGetSettings ?? mediaStreamTrack.getSettings)?.call(
+      mediaStreamTrack,
+    ) ?? {}
+  )
+}
+
 /** Real capture size — ignores the 720p fallback we inject for LiveKit publish. */
 export function peekUnpatchedVideoSize(
   mediaStreamTrack: MediaStreamTrack | null | undefined,
 ): { width: number; height: number } {
   if (!mediaStreamTrack) return { width: 0, height: 0 }
   try {
-    const patched = mediaStreamTrack as PatchedMediaStreamTrack
-    const settings = (patched.__sheconomyOriginalGetSettings ?? mediaStreamTrack.getSettings)?.call(
-      mediaStreamTrack,
-    ) ?? {}
+    const settings = readUnpatchedSettings(mediaStreamTrack)
     return { width: Number(settings.width) || 0, height: Number(settings.height) || 0 }
   } catch {
     return { width: 0, height: 0 }
+  }
+}
+
+/**
+ * Android MediaProjection reports width/height via AbstractVideoCaptureController.
+ * iOS ReplayKit's ScreenCaptureController.getSettings never includes size keys
+ * (only deviceId / groupId / frameRate) — and getDisplayMedia often omits settings
+ * entirely — so peekUnpatchedVideoSize stays 0×0 even while frames flow.
+ */
+export function nativeCapturerReportsVideoSize(
+  mediaStreamTrack: MediaStreamTrack | null | undefined,
+): boolean {
+  if (!mediaStreamTrack) return false
+  try {
+    const settings = readUnpatchedSettings(mediaStreamTrack) as Record<string, unknown>
+    return Object.prototype.hasOwnProperty.call(settings, 'width')
+      || Object.prototype.hasOwnProperty.call(settings, 'height')
+  } catch {
+    return false
   }
 }
 

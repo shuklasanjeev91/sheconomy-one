@@ -1,4 +1,5 @@
 import type { LiveKitMediaMode } from '~/co-work/lib/livekit-media-controls'
+import type { LiveKitSpeechShareLevel } from '~/co-work/lib/livekit-call-audio-options'
 
 export type CallAudioRoute = 'bluetooth' | 'headset' | 'speaker' | 'earpiece' | 'default'
 
@@ -7,6 +8,14 @@ let lastCallMediaMode: LiveKitMediaMode = 'meeting'
 export function getActiveCallMediaMode(): LiveKitMediaMode {
   return lastCallMediaMode
 }
+
+export function getLiveKitCallAudioSpeechShare(): LiveKitSpeechShareLevel {
+  return 'off'
+}
+
+export async function setLiveKitCallAudioSpeechShare(
+  _level: LiveKitSpeechShareLevel,
+): Promise<void> {}
 
 /** Web: browser handles Bluetooth / headset via the OS audio stack. */
 export async function configureLiveKitCallAudio(mediaMode: LiveKitMediaMode = 'meeting'): Promise<void> {
@@ -30,6 +39,8 @@ export async function toggleCallSpeaker(speakerOn: boolean): Promise<CallAudioRo
   // Web output follows the OS / browser device picker; UI reflects the request.
   return speakerOn ? 'speaker' : 'earpiece'
 }
+
+export async function showCallAudioOutputPicker(): Promise<void> {}
 
 export const CALL_AUDIO_CAPTURE = {
   echoCancellation: true,

@@ -65,11 +65,18 @@ Deno.serve(async (request) => {
 
   const { data: shop } = await admin
     .from('shops')
-    .select('id')
+    .select('id, user_id')
     .eq('id', shopId)
-    .eq('user_id', user.id)
     .maybeSingle()
-  if (!shop) return jsonResponse({ error: 'Forbidden: shop not found or not owned by you' }, 403)
+  if (!shop) return jsonResponse({ error: 'Shop not found' }, 404)
+  const { data: caller } = await admin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (shop.user_id !== user.id && caller?.role !== 'A') {
+    return jsonResponse({ error: 'Forbidden: shop not found or not owned by you' }, 403)
+  }
 
   const { data: account } = await admin
     .from('shop_payment_accounts')

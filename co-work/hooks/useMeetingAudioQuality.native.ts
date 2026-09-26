@@ -8,9 +8,9 @@ import {
 } from 'livekit-client'
 
 import {
+  applyPreferredCallAudioOutput,
   configureLiveKitCallAudio,
   getActiveCallMediaMode,
-  toggleCallSpeaker,
 } from '~/co-work/lib/livekit-call-audio'
 import {
   deriveMeetingConnectionStatus,
@@ -195,7 +195,7 @@ export function useMeetingAudioQuality(
       }
       try {
         await configureLiveKitCallAudio(mediaMode)
-        await toggleCallSpeaker(speakerOn)
+        await applyPreferredCallAudioOutput(mediaMode)
       } catch {
         // The room may already be closing.
       }
@@ -208,7 +208,7 @@ export function useMeetingAudioQuality(
     const mediaMode = getActiveCallMediaMode()
     try {
       await configureLiveKitCallAudio(mediaMode)
-      await toggleCallSpeaker(speakerOn)
+      await applyPreferredCallAudioOutput(mediaMode)
       if (
         room.state === ConnectionState.Connected ||
         room.state === ConnectionState.Reconnecting ||
