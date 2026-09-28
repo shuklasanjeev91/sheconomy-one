@@ -48,6 +48,7 @@ export type LiveCaptionPreferences = {
 const CAPTION_PREFERENCE_PREFIX = 'cowork.live-captions.v2'
 const VALID_LANGUAGES = new Set<string>(REGION_LANGUAGES.map((language) => language.code))
 const VALID_SIZES = new Set<CaptionOverlaySize>(['compact', 'comfortable', 'large'])
+const LIVE_TRANSLATE_INTERVAL_MS = 450
 
 export function normalizeLiveCaptionPreferences(
   value: Partial<LiveCaptionPreferences> | null | undefined,
@@ -157,6 +158,8 @@ export function useLiveCaptions({
   const activeRef = useRef(active)
   const publishingRef = useRef(publishing)
   const pendingLiveRawRef = useRef('')
+  const interimTextRef = useRef('')
+  const lastLiveTranslateAtRef = useRef(0)
   const lastGoodBySpeakerRef = useRef<Map<string, string>>(new Map())
   const localizedCacheRef = useRef<Map<string, LiveCaptionLine>>(new Map())
   const onFinalCaptionRef = useRef(onFinalCaption)
@@ -173,6 +176,7 @@ export function useLiveCaptions({
   speakLocaleRef.current = speakLocale
   activeRef.current = active
   publishingRef.current = publishing
+  interimTextRef.current = interimText
 
   const supported = isLiveCaptionsSupported()
   const canPublish = canPublishLiveCaptions()
@@ -242,10 +246,23 @@ export function useLiveCaptions({
         isFinal: true,
         timestamp: Date.now(),
       }
-      void localizeCaptionLine(line, targetLangRef.current).then((localized) => {
+      const lang = targetLangRef.current
+      void localizeCaptionLine(line, lang).then((localized) => {
         setLocalLines((current) => [...current.slice(-40), localized])
+        // The live overlay otherwise keeps the last raw interim once STT
+        // finalizes; show the localized final unless newer speech took over.
+        if (interimTextRef.current.trim() || targetLangRef.current !== lang) return
+        const shown = localized.text.trim()
+        if (!shown) return
+        if (captionLooksLikeTargetLang(shown, lang)) {
+          lastGoodBySpeakerRef.current.set(userId, shown)
+        }
+        setLiveCaptionText(shown)
+        setLiveCaptionSpeaker(displayNameRef.current)
       })
       publishCaption(text, true)
+      interimTextRef.current = ''
+      pendingLiveRawRef.current = ''
       setInterimText('')
       lastInterimBroadcastRef.current = ''
     },
@@ -603,13 +620,19 @@ export function useLiveCaptions({
     const snap = raw
     const snapSpeaker = speaker
     const snapSpeakerId = speakerId
+    // Throttle rather than debounce: STT emits interims faster than any fixed
+    // debounce, which starved translation until the speaker paused.
+    const wait = Math.max(0, LIVE_TRANSLATE_INTERVAL_MS - (Date.now() - lastLiveTranslateAtRef.current))
     const handle = setTimeout(() => {
+      lastLiveTranslateAtRef.current = Date.now()
       void translateCaptionText({
         text: snap,
         targetLang,
         sourceLang: 'auto',
       }).then((result) => {
         const pending = pendingLiveRawRef.current
+        // Cleared when a local final commits; its localized line owns the overlay.
+        if (!pending) return
         const stillRelevant =
           pending === snap ||
           pending.startsWith(snap) ||
@@ -636,7 +659,7 @@ export function useLiveCaptions({
         setLiveCaptionText(next)
         setLiveCaptionSpeaker(snapSpeaker)
       })
-    }, 220)
+    }, wait)
 
     return () => clearTimeout(handle)
   }, [active, displayName, interimText, remoteCaptions, roomWantsCaptions, targetLang, userId])

@@ -1011,13 +1011,16 @@ function MeetingRoomOverlay({
   }, [captions.active, captions.targetLang, captions.targetLangName, toast])
 
   // Interpretation channel → caption target language (Zoom language interpretation lite).
+  // Only on channel changes: `captions` is a new object every render, and
+  // re-applying the channel would keep overriding the viewer's own Show pick.
+  const setCaptionTargetLang = captions.setTargetLang
   useEffect(() => {
     const channel = presence.interpretationChannelId
     if (!channel || channel === 'floor') return
     if (channel === 'en' || channel === 'hi' || channel === 'es') {
-      captions.setTargetLang(channel)
+      setCaptionTargetLang(channel)
     }
-  }, [captions, presence.interpretationChannelId])
+  }, [setCaptionTargetLang, presence.interpretationChannelId])
 
   const recordingSession = useMeetingRecording({
     room: liveKit?.room,

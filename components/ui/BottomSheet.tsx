@@ -397,6 +397,10 @@ export function AppBottomSheet({
 
   const layerStore = useMemo(() => (isWeb ? null : createSheetLayerStore()), [])
 
+  // Web fit sheets only measure their frame if it already has content while
+  // closed; mounting it on open leaves it parked at Tamagui's 10000px offset.
+  const keepSurfaceMounted = isWeb && fitContent
+
   // Space taken by the handle/header/footer that sits outside the scroll body.
   const chromeHeight =
     (showHandle ? HANDLE_CHROME : 0) +
@@ -411,7 +415,7 @@ export function AppBottomSheet({
 
   const surfaceMaxHeight = screen.height - nativeKeyboardOffset
 
-  const surface = open ? (
+  const surface = open || keepSurfaceMounted ? (
     <SheetSurface
       title={title}
       onClose={close}

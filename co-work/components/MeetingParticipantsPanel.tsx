@@ -9,7 +9,6 @@ import {
   Icons,
   Input,
   Popover,
-  PopoverContent,
   Text,
   XStack,
   YStack,
@@ -664,34 +663,28 @@ function MoreActionsMenu({
     )
   }
 
+  // Popover.Trigger toggles `open` itself — a second toggle in the child's
+  // onPress cancels it out and the menu never appears.
   return (
     <Popover open={open} onOpenChange={setOpen} placement={placement} allowFlip>
       <Popover.Trigger asChild>
-        {trigger ? (
-          <Pressable onPress={(e) => {
-            e?.stopPropagation?.()
-            setOpen((current) => !current)
-          }}>
-            {trigger}
-          </Pressable>
-        ) : (
+        {trigger ?? (
           <Button
             tone="ghost"
             size="$1"
             circular
             icon={<Icons.MoreHorizontal size={15} color={coworkUi.textMuted} />}
             accessibilityLabel="More participant actions"
-            onPress={(event) => {
-              event?.stopPropagation?.()
-              setOpen((current) => !current)
-            }}
+            onPress={(event) => event?.stopPropagation?.()}
           />
         )}
       </Popover.Trigger>
-      <PopoverContent
+      <Popover.Content
         zIndex={400000}
         minWidth={210}
         padding="$2"
+        borderRadius={12}
+        borderWidth={1}
         backgroundColor={coworkUi.surfaceElevated}
         borderColor={coworkUi.borderSoft}
         style={{
@@ -720,7 +713,7 @@ function MoreActionsMenu({
             </XStack>
           ))}
         </YStack>
-      </PopoverContent>
+      </Popover.Content>
     </Popover>
   )
 }
