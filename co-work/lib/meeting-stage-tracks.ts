@@ -8,6 +8,11 @@ import {
   resolveMeetingFocusIdentity,
 } from '~/co-work/lib/meeting-stage-focus'
 import type { MeetingViewMode } from '~/co-work/lib/meeting-state-machine'
+import { participantDisplayName } from '~/co-work/lib/participant-avatar'
+import {
+  compareMeetingActivity,
+  type MeetingActivitySignals,
+} from '~/co-work/lib/meeting-participant-order'
 
 export type MeetingStageTracks = {
   stageTracks: TrackReferenceOrPlaceholder[]
@@ -48,22 +53,39 @@ export function meetingCameraVideoPriority(track: TrackReferenceOrPlaceholder): 
   return publication.track ? 1 : 0
 }
 
+function galleryActivitySignals(
+  track: TrackReferenceOrPlaceholder,
+  activeSpeakerIdentity: string | null | undefined,
+  localIdentity: string,
+): MeetingActivitySignals {
+  const participant = track.participant as typeof track.participant & {
+    isMicrophoneEnabled?: boolean
+  }
+  return {
+    id: participant.identity,
+    self: participant.identity === localIdentity,
+    name: participantDisplayName(participant),
+    activeSpeaker: !!activeSpeakerIdentity && participant.identity === activeSpeakerIdentity,
+    speaking: !!participant.isSpeaking,
+    micOn: participant.isMicrophoneEnabled === true,
+    videoOn: meetingCameraVideoPriority(track) > 0,
+  }
+}
+
 function compareGalleryCameras(
   left: TrackReferenceOrPlaceholder,
   right: TrackReferenceOrPlaceholder,
-  activeSpeakerIdentity?: string | null,
-  pinnedSet?: Set<string>,
+  activeSpeakerIdentity: string | null | undefined,
+  pinnedSet: Set<string>,
+  localIdentity: string,
 ): number {
-  const leftPinned = pinnedSet?.has(left.participant.identity) ? 1 : 0
-  const rightPinned = pinnedSet?.has(right.participant.identity) ? 1 : 0
+  const leftPinned = pinnedSet.has(left.participant.identity) ? 1 : 0
+  const rightPinned = pinnedSet.has(right.participant.identity) ? 1 : 0
   if (rightPinned !== leftPinned) return rightPinned - leftPinned
-  const videoDelta = meetingCameraVideoPriority(right) - meetingCameraVideoPriority(left)
-  if (videoDelta !== 0) return videoDelta
-  const leftActive =
-    left.participant.identity === activeSpeakerIdentity || left.participant.isSpeaking ? 1 : 0
-  const rightActive =
-    right.participant.identity === activeSpeakerIdentity || right.participant.isSpeaking ? 1 : 0
-  return rightActive - leftActive
+  return compareMeetingActivity(
+    galleryActivitySignals(left, activeSpeakerIdentity, localIdentity),
+    galleryActivitySignals(right, activeSpeakerIdentity, localIdentity),
+  )
 }
 
 /**
@@ -149,12 +171,9 @@ export function composeMeetingStageTracks(
   const localCamera =
     cameras.find((track) => track.participant.identity === localIdentity) ?? null
   const remoteCameras = cameras.filter((track) => track.participant.identity !== localIdentity)
-  const remotesOrdered = [...remoteCameras].sort((left, right) =>
-    compareGalleryCameras(left, right, focusIdentity, pinnedSet),
-  )
   const includeLocal = !hideSelfView && !!localCamera
-  const orderedCameras = [...remotesOrdered, ...(includeLocal && localCamera ? [localCamera] : [])].sort(
-    (left, right) => compareGalleryCameras(left, right, focusIdentity, pinnedSet),
+  const orderedCameras = [...remoteCameras, ...(includeLocal && localCamera ? [localCamera] : [])].sort(
+    (left, right) => compareGalleryCameras(left, right, focusIdentity, pinnedSet, localIdentity),
   )
 
   if (spotlightIdentity) {
@@ -173,6 +192,24 @@ export function composeMeetingStageTracks(
   }
 
   if (viewMode === 'gallery') {
+    // Zoom 1:1: the other person fills the stage, self-view floats on top.
+    const oneOnOneRemote = remoteCameras.length === 1 ? remoteCameras[0] : null
+    if (
+      oneOnOneRemote &&
+      includeLocal &&
+      localCamera &&
+      cameraByIdentity.size === 2 &&
+      screenShares.length === 0
+    ) {
+      return {
+        stageTracks: [oneOnOneRemote],
+        filmstripTracks: [],
+        pipTrack: localCamera,
+        totalTiles: 2,
+        hasScreenShare: false,
+        isLocalScreenSharing: false,
+      }
+    }
     return {
       stageTracks: orderedCameras,
       filmstripTracks: [],
@@ -186,7 +223,7 @@ export function composeMeetingStageTracks(
   if (focusedScreen && viewMode === 'screen-share') {
     return {
       stageTracks: [focusedScreen],
-      filmstripTracks: [...remotesOrdered, ...(includeLocal && localCamera ? [localCamera] : [])],
+      filmstripTracks: orderedCameras,
       pipTrack: null,
       totalTiles: remoteCameras.length + (includeLocal ? 1 : 0) + 1,
       hasScreenShare: true,

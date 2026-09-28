@@ -30,6 +30,9 @@ import {
   downloadMeetingChatText,
 } from '~/co-work/lib/meeting-chat-archive'
 
+/** Within this many px of the end still counts as reading the latest message. */
+const CHAT_BOTTOM_SLOP = 80
+
 type MeetingChatPanelProps = {
   messages: MeetingChatMessage[]
   participants?: MeetingParticipant[]
@@ -155,8 +158,33 @@ export function MeetingChatPanel({
     [audience, currentUserId, messages, recipientId],
   )
 
+  // Follow new messages only while the reader is at the bottom; otherwise count
+  // them so scrolling back through history isn't yanked away.
+  const stickToBottomRef = useRef(true)
+  const seenCountRef = useRef(visibleMessages.length)
+  const [unseenCount, setUnseenCount] = useState(0)
+
+  const scrollToLatest = (animated: boolean) => {
+    stickToBottomRef.current = true
+    setUnseenCount(0)
+    listRef.current?.scrollToEnd?.({ animated })
+  }
+
   useEffect(() => {
-    listRef.current?.scrollToEnd?.({ animated: true })
+    seenCountRef.current = visibleMessages.length
+    scrollToLatest(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audience, recipientId])
+
+  useEffect(() => {
+    const added = visibleMessages.length - seenCountRef.current
+    seenCountRef.current = visibleMessages.length
+    if (added <= 0) return
+    if (stickToBottomRef.current) {
+      listRef.current?.scrollToEnd?.({ animated: true })
+    } else {
+      setUnseenCount((count) => count + added)
+    }
   }, [visibleMessages.length])
 
   function send() {
@@ -413,7 +441,7 @@ export function MeetingChatPanel({
             </Pressable>
 
             {/* Anchored Tooltip Bubble: [NEW] New chat (Image 1) */}
-            {!newChatTooltipDismissed && !toMenuOpen ? (
+            {!newChatTooltipDismissed && !toMenuOpen && visibleMessages.length === 0 ? (
               <YStack
                 position="absolute"
                 top={50}
@@ -520,6 +548,7 @@ export function MeetingChatPanel({
         />
       )}
 
+      <YStack flex={1} minHeight={0} position="relative">
       <ScrollView
         flex={1}
         minHeight={0}
@@ -529,7 +558,17 @@ export function MeetingChatPanel({
         keyboardDismissMode="none"
         nestedScrollEnabled
         showsVerticalScrollIndicator
-        onContentSizeChange={() => listRef.current?.scrollToEnd?.({ animated: false })}
+        scrollEventThrottle={32}
+        onScroll={(event) => {
+          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+          const atBottom =
+            contentSize.height - (contentOffset.y + layoutMeasurement.height) < CHAT_BOTTOM_SLOP
+          stickToBottomRef.current = atBottom
+          if (atBottom) setUnseenCount(0)
+        }}
+        onContentSizeChange={() => {
+          if (stickToBottomRef.current) listRef.current?.scrollToEnd?.({ animated: false })
+        }}
       >
         <YStack gap="$3">
           {!chatEnabled ? (
@@ -673,6 +712,31 @@ export function MeetingChatPanel({
           })}
         </YStack>
       </ScrollView>
+      {unseenCount > 0 ? (
+        <XStack position="absolute" bottom={10} left={0} right={0} justifyContent="center" zIndex={5}>
+          <Pressable
+            onPress={() => scrollToLatest(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Show ${unseenCount} new message${unseenCount === 1 ? '' : 's'}`}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 999,
+              backgroundColor: pressed ? coworkUi.brandDark : coworkUi.brand,
+            })}
+          >
+            <Icons.ChevronDown size={14} color="#fff" />
+            <Text color="#fff" fontSize={12} fontWeight="800">
+              {unseenCount} new message{unseenCount === 1 ? '' : 's'}
+            </Text>
+          </Pressable>
+        </XStack>
+      ) : null}
+      </YStack>
 
       <YStack
         flexShrink={0}

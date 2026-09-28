@@ -124,12 +124,23 @@ describe('co-work feature matrix (web + native)', () => {
   })
 
   it(`subscribes all cameras below ${MEETING_SUBSCRIBE_ALL_BELOW} remotes`, () => {
-    const remotes = Array.from({ length: 10 }, (_, i) => `u${i}`)
+    const remotes = Array.from({ length: MEETING_SUBSCRIBE_ALL_BELOW }, (_, i) => `u${i}`)
     expect(
       resolveSubscribeCameraIdentities({
         remoteIdentities: remotes,
         pageIdentities: ['u0'],
       }),
     ).toEqual(remotes)
+  })
+
+  it('only subscribes on-screen cameras in larger rooms', () => {
+    const remotes = Array.from({ length: 25 }, (_, i) => `u${i}`)
+    expect(
+      resolveSubscribeCameraIdentities({
+        remoteIdentities: remotes,
+        pageIdentities: ['u0', 'u1'],
+        speakingIdentities: ['u20'],
+      }),
+    ).toEqual(['u0', 'u1', 'u20'])
   })
 })

@@ -6,6 +6,8 @@ import {
   meetingGalleryLayout,
   meetingGalleryPageForIndex,
   meetingGalleryPages,
+  meetingFilmstripWindow,
+  meetingGalleryScrollLayout,
   meetingGalleryPrefetchIdentities,
   paginateMeetingGallery,
   resolveMeetingGalleryPageSize,
@@ -158,5 +160,89 @@ describe('Zoom-style meeting gallery', () => {
       'u16',
       'u17',
     ])
+  })
+})
+
+describe('meetingFilmstripWindow', () => {
+  it('mounts an initial batch before the strip is measured', () => {
+    expect(
+      meetingFilmstripWindow({ total: 30, itemSize: 140, scrollOffset: 0, viewportSize: 0 }),
+    ).toEqual({ start: 0, end: 8 })
+    expect(
+      meetingFilmstripWindow({ total: 3, itemSize: 140, scrollOffset: 0, viewportSize: 0 }),
+    ).toEqual({ start: 0, end: 3 })
+  })
+
+  it('mounts only the visible tiles plus overscan at the top of the strip', () => {
+    // 400px viewport / 140px tiles → tiles 0..2 visible, +2 overscan.
+    expect(
+      meetingFilmstripWindow({ total: 30, itemSize: 140, scrollOffset: 0, viewportSize: 400 }),
+    ).toEqual({ start: 0, end: 5 })
+  })
+
+  it('loads later participants as the strip scrolls', () => {
+    const window = meetingFilmstripWindow({
+      total: 30,
+      itemSize: 140,
+      scrollOffset: 1400,
+      viewportSize: 400,
+      leadingOffset: 44,
+    })
+    expect(window.start).toBeLessThanOrEqual(9)
+    expect(window.end).toBeGreaterThanOrEqual(13)
+    expect(window.end - window.start).toBeLessThan(10)
+  })
+
+  it('clamps to the end of the list', () => {
+    expect(
+      meetingFilmstripWindow({ total: 30, itemSize: 140, scrollOffset: 99_999, viewportSize: 400 }),
+    ).toEqual({ start: 30, end: 30 })
+    expect(
+      meetingFilmstripWindow({ total: 30, itemSize: 140, scrollOffset: 3800, viewportSize: 400 }),
+    ).toEqual({ start: 25, end: 30 })
+    expect(
+      meetingFilmstripWindow({ total: 0, itemSize: 140, scrollOffset: 0, viewportSize: 400 }),
+    ).toEqual({ start: 0, end: 0 })
+  })
+})
+
+describe('meetingGalleryScrollLayout', () => {
+  it('fits small meetings on one screen without scrolling', () => {
+    const layout = meetingGalleryScrollLayout(4, {
+      width: 390,
+      height: 640,
+      screenSize: 12,
+      gap: 10,
+    })
+    expect(layout).toMatchObject({ columns: 2, rows: 2, visibleRows: 2, scrolls: false })
+    expect(layout.rowHeight).toBe(315)
+  })
+
+  it('shows one device-sized screen and scrolls for the rest of a large meeting', () => {
+    const layout = meetingGalleryScrollLayout(30, {
+      width: 390,
+      height: 700,
+      screenSize: 12,
+      gap: 10,
+    })
+    expect(layout.scrolls).toBe(true)
+    expect(layout.columns).toBe(3)
+    expect(layout.visibleRows).toBe(4)
+    expect(layout.rows).toBe(10)
+    // Four rows plus a peek of the fifth fit inside the stage height.
+    expect(layout.rowHeight * 4 + 10 * 4).toBeLessThan(700)
+    expect(layout.rowHeight * 5 + 10 * 4).toBeGreaterThan(700)
+  })
+
+  it('keeps rows readable on short stages', () => {
+    const layout = meetingGalleryScrollLayout(40, {
+      width: 800,
+      height: 200,
+      screenSize: 16,
+      gap: 10,
+      minRowHeight: 96,
+    })
+    expect(layout.scrolls).toBe(true)
+    expect(layout.rowHeight).toBe(96)
   })
 })

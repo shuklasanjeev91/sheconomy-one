@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { applyMeetingReactionTone, MEETING_REACTIONS } from '~/co-work/lib/meeting-reactions'
 import { meetingAudioCaptureConstraints, parseMeetingMediaPrefs } from '~/co-work/lib/meeting-media-prefs'
-import { parseMeetingGalleryPrefs } from '~/co-work/lib/meeting-gallery-prefs'
+import {
+  parseMeetingGalleryPrefs,
+  serializeMeetingGalleryPrefs,
+} from '~/co-work/lib/meeting-gallery-prefs'
 import { formatPersonalMeetingDisplayCode } from '~/co-work/lib/meeting-pmi'
+import { initialMeetingMachineState } from '~/co-work/lib/meeting-state-machine'
 
 describe('Zoom parity batch — reactions, media, PMI, gallery prefs', () => {
   it('applies skin tone modifiers to toneable reactions only', () => {
@@ -23,12 +27,26 @@ describe('Zoom parity batch — reactions, media, PMI, gallery prefs', () => {
 
   it('parses media and gallery prefs safely', () => {
     expect(parseMeetingMediaPrefs({ originalSound: true, hdVideo: false }).hdVideo).toBe(false)
-    expect(parseMeetingGalleryPrefs({ viewMode: 'speaker', denseGallery: true })).toEqual({
+    expect(parseMeetingGalleryPrefs({ viewMode: 'speaker', denseGalleryOptIn: true })).toEqual({
       viewMode: 'speaker',
       denseGallery: true,
       hideSelfView: undefined,
       participantStripMinimized: undefined,
     })
+  })
+
+  it('ignores the legacy persisted dense-gallery default so phones scroll', () => {
+    expect(parseMeetingGalleryPrefs({ denseGallery: true }).denseGallery).toBeUndefined()
+    const saved = JSON.parse(
+      serializeMeetingGalleryPrefs({ viewMode: 'gallery', denseGallery: true, hideSelfView: true }),
+    )
+    expect(saved.denseGallery).toBeUndefined()
+    expect(parseMeetingGalleryPrefs(saved)).toMatchObject({
+      viewMode: 'gallery',
+      denseGallery: true,
+      hideSelfView: true,
+    })
+    expect(initialMeetingMachineState.denseGallery).toBe(false)
   })
 
   it('formats a PMI display code from user id', () => {

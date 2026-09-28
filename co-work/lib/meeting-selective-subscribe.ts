@@ -1,8 +1,32 @@
 import type { RemoteTrackPublication, Room } from 'livekit-client'
-import { Track } from 'livekit-client'
+import { Track, VideoQuality } from 'livekit-client'
 
-/** Below this remote count, subscribe every camera (Zoom-like small/medium rooms). */
-export const MEETING_SUBSCRIBE_ALL_BELOW = 25
+/**
+ * Below this remote count, subscribe every camera. Kept at the smallest gallery
+ * page size — every extra subscribed camera is a live decoder, and phones run
+ * out of memory decoding a whole room.
+ */
+export const MEETING_SUBSCRIBE_ALL_BELOW = 6
+
+/** Tile side (layout px) below which the low simulcast layer is enough. */
+const CAMERA_LOW_QUALITY_MAX_SIDE = 240
+/** Tile side (layout px) below which the medium simulcast layer is enough. */
+const CAMERA_MEDIUM_QUALITY_MAX_SIDE = 560
+
+/**
+ * Simulcast layer for a remote camera tile. 720p is only worth decoding for
+ * large tiles; thumbnails and dense grids take the low / medium layer.
+ */
+export function meetingCameraQualityForTile(input: {
+  width: number
+  height: number
+  hdVideo?: boolean
+}): VideoQuality {
+  const side = Math.max(input.width, input.height)
+  if (!(side > 0) || side < CAMERA_LOW_QUALITY_MAX_SIDE) return VideoQuality.LOW
+  if (side < CAMERA_MEDIUM_QUALITY_MAX_SIDE || input.hdVideo === false) return VideoQuality.MEDIUM
+  return VideoQuality.HIGH
+}
 
 /**
  * Cap LiveKit camera subscriptions to identities that are actually on stage /

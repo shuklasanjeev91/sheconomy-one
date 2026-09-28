@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Alert, Platform } from 'react-native'
+import { useRef, useState } from 'react'
+import { Alert, Modal, Platform, StyleSheet, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
 import { RnPressable } from '~/co-work/components/RnPressable'
@@ -46,10 +47,15 @@ type MenuItem = {
   onPress: () => void
 }
 
+const isNative = Platform.OS !== 'web'
+
 /**
  * Zoom-style ⋮ menu on meeting cards: Start, Copy / Share invitation, Edit, Delete.
  * Opens an action sheet. A popover trigger toggles twice on the same press
  * (built-in toggle plus the button handler), so the menu never appears.
+ *
+ * Native uses an RN `Modal` (its own window): inside the teleported Tamagui
+ * sheet, gesture-handler taps on the card underneath won and cancelled the rows.
  */
 export function MeetingCardOverflowMenu({
   meeting,
@@ -59,8 +65,10 @@ export function MeetingCardOverflowMenu({
 }: MeetingCardOverflowMenuProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const toast = useAppToast()
+  const insets = useSafeAreaInsets()
   const [open, setOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const pendingActionRef = useRef<(() => void) | null>(null)
 
   const canManage = canEditOrCancelMeetingForUser({
     userId,
@@ -177,12 +185,51 @@ export function MeetingCardOverflowMenu({
       : null,
   ].filter(Boolean) as MenuItem[]
 
+  function runPendingAction() {
+    const action = pendingActionRef.current
+    pendingActionRef.current = null
+    action?.()
+  }
+
   function selectItem(item: MenuItem) {
     setOpen(false)
-    // iPad drops navigation and the delete alert while this sheet is still
-    // dismissing, so run the action after it has closed.
-    setTimeout(() => item.onPress(), 350)
+    if (!isNative) {
+      setTimeout(() => item.onPress(), 350)
+      return
+    }
+    // iOS drops navigation and alerts presented while the modal is still
+    // dismissing, so wait for `onDismiss` (with a fallback if it never fires).
+    pendingActionRef.current = item.onPress
+    setTimeout(runPendingAction, Platform.OS === 'ios' ? 700 : 0)
   }
+
+  const menuRows = items.map((item) => {
+    const Icon = item.icon
+    const color = item.danger ? coworkUi.danger : coworkUi.text
+    return (
+      <RnPressable
+        key={item.key}
+        accessibilityRole="button"
+        accessibilityLabel={item.label}
+        onPress={() => selectItem(item)}
+        collapsable={false}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+          minHeight: 48,
+          paddingHorizontal: 12,
+          borderRadius: 10,
+          backgroundColor: pressed ? coworkUi.surfaceMuted : coworkUi.surface,
+        })}
+      >
+        <Icon size={18} color={color} />
+        <Text fontSize={15} fontWeight="600" color={color} flex={1}>
+          {item.label}
+        </Text>
+      </RnPressable>
+    )
+  })
 
   return (
     <>
@@ -200,45 +247,96 @@ export function MeetingCardOverflowMenu({
         }}
       />
 
-      <AppBottomSheet
-        open={open}
-        onOpenChange={setOpen}
-        title={meeting.title}
-        fitContent
-        scrollable={false}
-      >
-        <YStack gap="$1" width="100%">
-          {items.map((item) => {
-            const Icon = item.icon
-            const color = item.danger ? coworkUi.danger : coworkUi.text
-            return (
-              <RnPressable
-                key={item.key}
-                accessibilityRole="button"
-                accessibilityLabel={item.label}
-                onPress={() => selectItem(item)}
-                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-              >
-                <XStack
-                  alignItems="center"
-                  gap="$3"
-                  minHeight={48}
-                  paddingHorizontal="$3"
-                  borderRadius={10}
-                  pointerEvents="none"
+      {isNative ? (
+        <Modal
+          visible={open}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          navigationBarTranslucent
+          supportedOrientations={['portrait', 'landscape']}
+          onRequestClose={() => setOpen(false)}
+          onDismiss={runPendingAction}
+        >
+          <View style={nativeMenuStyles.backdrop}>
+            <RnPressable
+              style={StyleSheet.absoluteFill}
+              accessibilityRole="button"
+              accessibilityLabel="Close menu"
+              onPress={() => setOpen(false)}
+            />
+            <View
+              style={[
+                nativeMenuStyles.sheet,
+                {
+                  backgroundColor: coworkUi.surface,
+                  paddingBottom: Math.max(insets.bottom, 12) + 8,
+                },
+              ]}
+            >
+              <XStack alignItems="center" gap="$3" paddingHorizontal="$4" paddingVertical="$3">
+                <Text flex={1} fontSize={17} fontWeight="700" color={coworkUi.text} numberOfLines={2}>
+                  {meeting.title}
+                </Text>
+                <RnPressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                  hitSlop={8}
+                  onPress={() => setOpen(false)}
+                  style={nativeMenuStyles.close}
                 >
-                  <Icon size={18} color={color} />
-                  <Text fontSize={15} fontWeight="600" color={color} flex={1}>
-                    {item.label}
-                  </Text>
-                </XStack>
-              </RnPressable>
-            )
-          })}
-        </YStack>
-      </AppBottomSheet>
+                  <Icons.X size={22} color={coworkUi.text} />
+                </RnPressable>
+              </XStack>
+              <View style={[nativeMenuStyles.divider, { backgroundColor: coworkUi.borderSoft }]} />
+              <YStack gap="$1" paddingHorizontal="$3" paddingTop="$2">
+                {menuRows}
+              </YStack>
+            </View>
+          </View>
+        </Modal>
+      ) : (
+        <AppBottomSheet
+          open={open}
+          onOpenChange={setOpen}
+          title={meeting.title}
+          fitContent
+          scrollable={false}
+        >
+          <YStack gap="$1" width="100%">
+            {menuRows}
+          </YStack>
+        </AppBottomSheet>
+      )}
 
       <MeetingShareSheet open={shareOpen} onOpenChange={setShareOpen} meeting={meeting} />
     </>
   )
 }
+
+const nativeMenuStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(10, 10, 15, 0.45)',
+  },
+  sheet: {
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+  },
+  close: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    width: '100%',
+  },
+})

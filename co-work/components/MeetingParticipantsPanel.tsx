@@ -21,6 +21,10 @@ import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { MeetingParticipant, MeetingRole } from '~/co-work/lib/types'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import {
+  compareMeetingActivity,
+  type MeetingActivitySignals,
+} from '~/co-work/lib/meeting-participant-order'
+import {
   canAdmitParticipants,
   canManageMeeting,
   meetingRoleFromFlags,
@@ -72,6 +76,23 @@ type MeetingParticipantsPanelProps = {
   onSetSpotlight?: (userId: string | null) => void
   pinnedUserIds?: string[]
   onTogglePin?: (userId: string) => void
+  /** Live LiveKit active speakers (identity === user_id), floated above everyone else. */
+  speakingUserIds?: string[]
+}
+
+function participantActivitySignals(
+  participant: MeetingParticipant,
+  speakingSet: Set<string>,
+): MeetingActivitySignals {
+  return {
+    id: participant.user_id,
+    name: safeMeetingDisplayName(
+      participant.display_name || participant.profile?.full_name || participant.profile?.username,
+    ),
+    speaking: speakingSet.has(participant.user_id),
+    micOn: participant.is_muted === false,
+    videoOn: participant.is_video_off === false,
+  }
 }
 
 export function MeetingParticipantsPanel({
@@ -112,6 +133,7 @@ export function MeetingParticipantsPanel({
   onSetSpotlight,
   pinnedUserIds = [],
   onTogglePin,
+  speakingUserIds = [],
 }: MeetingParticipantsPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const [query, setQuery] = useState('')
@@ -145,9 +167,11 @@ export function MeetingParticipantsPanel({
   })
   const filteredWaiting = waiting.filter(matchesQuery)
 
-  // Zoom participants ordering: You (Host, me) pinned at top, then hands raised, then hosts/cohosts, then alphabetical
+  // Zoom participants ordering: You at top, then hands raised, then hosts/cohosts,
+  // then talking → unmuted → video on, then everyone else alphabetically.
   const selfAdmitted = filteredAdmitted.find((p) => p.user_id === currentUserId)
   const otherAdmitted = filteredAdmitted.filter((p) => p.user_id !== currentUserId)
+  const speakingSet = new Set(speakingUserIds)
   const sortedOthers = [...otherAdmitted].sort((a, b) => {
     const handA = !!raisedHands[a.user_id]
     const handB = !!raisedHands[b.user_id]
@@ -155,9 +179,10 @@ export function MeetingParticipantsPanel({
     const isHostA = a.is_host || a.role === 'host' || a.role === 'co-host'
     const isHostB = b.is_host || b.role === 'host' || b.role === 'co-host'
     if (isHostA !== isHostB) return isHostA ? -1 : 1
-    const nameA = (a.display_name || a.profile?.full_name || '').toLowerCase()
-    const nameB = (b.display_name || b.profile?.full_name || '').toLowerCase()
-    return nameA.localeCompare(nameB)
+    return compareMeetingActivity(
+      participantActivitySignals(a, speakingSet),
+      participantActivitySignals(b, speakingSet),
+    )
   })
   const displayAdmitted = selfAdmitted ? [selfAdmitted, ...sortedOthers] : sortedOthers
 

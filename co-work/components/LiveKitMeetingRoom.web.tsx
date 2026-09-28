@@ -27,7 +27,7 @@ import { unlockWebAudioPlayback } from '~/co-work/lib/meeting-web'
 export type { LiveKitMediaControls, LiveKitMeetingRoomProps } from '~/co-work/lib/livekit-media-controls'
 export { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls.web'
 
-function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
+export function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
   return `
   .sheconomy-livekit-room {
     position: absolute;
@@ -45,6 +45,8 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     background: #0c080a;
     padding: 88px 12px 112px;
     box-sizing: border-box;
+    /* .sheconomy-livekit-room is pointer-events: none; the stage handles taps, swipes and wheel. */
+    pointer-events: auto;
   }
   .sheconomy-video-stage--landscape-phone {
     /* Padding comes from inline layout vars — keep CSS padding as fallback only. */
@@ -335,18 +337,49 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
   .sheconomy-video-stage--landscape-phone .sheconomy-gallery-pagination {
     bottom: 12px;
   }
-  .sheconomy-video-filmstrip__overflow {
-    min-width: 72px;
-    min-height: 56px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    background: rgba(255,255,255,0.12);
-    color: #fff;
-    font-weight: 800;
-    font-size: 15px;
+  .sheconomy-video-filmstrip__spacer {
     flex-shrink: 0;
+    pointer-events: none;
+  }
+  .sheconomy-video-gallery--scroll {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    overflow-anchor: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+  }
+  .sheconomy-video-gallery__rows {
+    display: grid;
+    gap: 10px;
+    width: 100%;
+    box-sizing: content-box;
+  }
+  .sheconomy-video-gallery__rows > .sheconomy-participant-tile,
+  .sheconomy-video-gallery__rows > .lk-participant-tile {
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .sheconomy-gallery-more {
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--stage-pad-bottom, 112px) + 8px);
+    transform: translateX(-50%);
+    z-index: 18;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(12, 8, 10, 0.88);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
   }
   .sheconomy-gallery-pagination {
     position: absolute;

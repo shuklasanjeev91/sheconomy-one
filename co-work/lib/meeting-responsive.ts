@@ -111,8 +111,9 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: 1,
         sidePanelMaxWidth: width,
         compactControls: true,
-        // Prefer denser pages so large meetings need fewer swipes.
-        pageSize: height < 640 ? 6 : height < 780 ? 9 : 12,
+        // Zoom phone gallery: 2×2 large tiles per screen, scroll for everyone else
+        // instead of shrinking tiles as people join.
+        pageSize: isLandscape ? 6 : 4,
       }
     case 'tablet':
       // Zoom desktop / tablet UI — side panels + roomy dock (not phone Mute·Chat·More).
@@ -126,7 +127,7 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: 0.4,
         sidePanelMaxWidth: 360,
         compactControls: false,
-        pageSize: 12,
+        pageSize: 9,
       }
     case 'laptop':
       return {

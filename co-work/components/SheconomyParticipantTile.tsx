@@ -42,19 +42,20 @@ import {
 
 type SheconomyParticipantTileProps = ParticipantTileProps & {
   mirrorLocalVideo?: boolean
-  hdVideo?: boolean
+  /** Simulcast layer to request for a remote camera — size it to the tile. */
+  cameraQuality?: VideoQuality
 }
 
 /** Branded LiveKit participant tile — profile avatar when camera is off. */
 export function SheconomyParticipantTile({
   mirrorLocalVideo = true,
-  hdVideo = true,
+  cameraQuality = VideoQuality.MEDIUM,
   ...props
 }: SheconomyParticipantTileProps) {
   return (
     <ParticipantTile className="sheconomy-participant-tile" {...props}>
       <ScreenShareQualityBooster />
-      <CameraHdQualityBooster enabled={hdVideo} />
+      <CameraQualityBooster quality={cameraQuality} />
       <SheconomyParticipantTileBody mirrorLocalVideo={mirrorLocalVideo} />
     </ParticipantTile>
   )
@@ -307,29 +308,33 @@ function ScreenShareQualityBooster() {
       remote.setVideoQuality(VideoQuality.HIGH)
     }
     boost()
+    // SFU renegotiation settles shortly after subscribe; don't re-assert forever.
     const id = setInterval(boost, 1500)
-    return () => clearInterval(id)
+    const stop = setTimeout(() => clearInterval(id), 45_000)
+    return () => {
+      clearInterval(id)
+      clearTimeout(stop)
+    }
   }, [trackRef.participant.isLocal, trackRef.publication, trackRef.source])
 
   return null
 }
 
-function CameraHdQualityBooster({ enabled }: { enabled: boolean }) {
+function CameraQualityBooster({ quality }: { quality: VideoQuality }) {
   const trackRef = useEnsureTrackRef()
 
   useEffect(() => {
-    if (!enabled) return
     const publication = trackRef.publication
     if (!publication || trackRef.participant.isLocal) return
     if (trackRef.source !== Track.Source.Camera) return
     const remote = publication as RemoteTrackPublication
     try {
       if (!remote.isSubscribed) remote.setSubscribed(true)
-      remote.setVideoQuality(VideoQuality.HIGH)
+      remote.setVideoQuality(quality)
     } catch {
       // ignore
     }
-  }, [enabled, trackRef.participant.isLocal, trackRef.publication, trackRef.source])
+  }, [quality, trackRef.participant.isLocal, trackRef.publication, trackRef.source])
 
   return null
 }

@@ -745,6 +745,29 @@ function MeetingRoomOverlay({
     }
   }, [liveKit?.room, liveKit?.videoEnabled, liveKit?.screenSharing])
 
+  const peoplePanelOpen = presence.panel === 'people'
+  const [speakingUserIds, setSpeakingUserIds] = useState<string[]>([])
+  useEffect(() => {
+    const room = liveKit?.room
+    if (!room || !peoplePanelOpen) {
+      setSpeakingUserIds((current) => (current.length ? [] : current))
+      return
+    }
+    const update = () => {
+      const next = room.activeSpeakers.map((speaker) => speaker.identity)
+      setSpeakingUserIds((current) =>
+        current.length === next.length && current.every((id, index) => id === next[index])
+          ? current
+          : next,
+      )
+    }
+    update()
+    room.on(RoomEvent.ActiveSpeakersChanged, update)
+    return () => {
+      room.off(RoomEvent.ActiveSpeakersChanged, update)
+    }
+  }, [liveKit?.room, peoplePanelOpen])
+
   const [shareOpen, setShareOpen] = useState(false)
   const [shareOptionsOpen, setShareOptionsOpen] = useState(false)
   const [shareOptionsInitialContent, setShareOptionsInitialContent] =
@@ -1090,11 +1113,21 @@ function MeetingRoomOverlay({
   const stageTrailingInsetValue = sidePanelOpen
     ? sidePanelWidth + Math.max(layout.panelTrailingInset, 8)
     : 0
-  const { setStageTrailingInset, pinnedUserIds, togglePinnedUserId } = useMeetingLiveSignals()
+  const {
+    setStageTrailingInset,
+    pinnedUserIds,
+    togglePinnedUserId,
+    stageHandlesTaps,
+    setStageTapHandler,
+  } = useMeetingLiveSignals()
   useEffect(() => {
     setStageTrailingInset(stageTrailingInsetValue)
     return () => setStageTrailingInset(0)
   }, [setStageTrailingInset, stageTrailingInsetValue])
+  useEffect(() => {
+    setStageTapHandler(toggleControls)
+    return () => setStageTapHandler(null)
+  }, [setStageTapHandler, toggleControls])
   const recording = isAuthoritativeHost || canModerate
     ? recordingSession.recording || recordingSession.isProcessing
     : presence.liveRecordingSignal ?? recordingIndicator.isRecording
@@ -2030,7 +2063,7 @@ function MeetingRoomOverlay({
       pointerEvents="box-none"
       zIndex={100}
     >
-      {!sheetPanelOpen ? (
+      {!sheetPanelOpen && !stageHandlesTaps ? (
         <YStack
           position={overlayPosition}
           top={0}
@@ -2375,6 +2408,7 @@ function MeetingRoomOverlay({
         trailingInset={panelTrailingInset}
         width={sidePanelWidth}
         overlayPosition={overlayPosition}
+        sheetHeightPercent={88}
       >
         <MeetingChatPanel
           messages={presence.chatMessages}
@@ -2412,6 +2446,7 @@ function MeetingRoomOverlay({
       >
         <MeetingParticipantsPanel
           participants={presence.participants}
+          speakingUserIds={speakingUserIds}
           isHost={isAuthoritativeHost}
           viewerRole={isAuthoritativeHost ? 'host' : presence.selfRole}
           currentUserId={userId}

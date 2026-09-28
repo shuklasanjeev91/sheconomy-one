@@ -7,13 +7,12 @@ import { Theme } from 'tamagui'
 import {
   Sheet,
   SheetFrame,
-  SheetHandle,
   SheetOverlay,
   YStack,
 } from '~/components/ui'
 import { MEETING_SIDE_PANEL_Z_INDEX } from '~/co-work/lib/meeting-toolbar'
 import type { MeetingPanelPresentation } from '~/co-work/lib/meeting-responsive'
-import { useCoWorkTheme } from '~/co-work/lib/theme'
+import { getCoWorkUi } from '~/co-work/lib/theme'
 import { useComposerKeyboardInset } from '~/hooks/useKeyboardVisible'
 
 type MeetingResponsivePanelProps = {
@@ -27,10 +26,13 @@ type MeetingResponsivePanelProps = {
   width?: number
   /** Overlay position strategy from the room screen. */
   overlayPosition?: 'absolute' | 'fixed'
+  /** Bottom-sheet height as a percent of the screen. */
+  sheetHeightPercent?: number
   children: ReactNode
 }
 
 const NATIVE_SHEET_Z = 200_000
+const DEFAULT_SHEET_HEIGHT_PERCENT = 62
 
 /**
  * Host for Chat / Participants / Invite / etc.
@@ -49,9 +51,10 @@ export function MeetingResponsivePanel({
   trailingInset = 12,
   width = 360,
   overlayPosition = Platform.OS === 'web' ? 'fixed' : 'absolute',
+  sheetHeightPercent = DEFAULT_SHEET_HEIGHT_PERCENT,
   children,
 }: MeetingResponsivePanelProps) {
-  const { ui: coworkUi } = useCoWorkTheme()
+  const coworkUi = getCoWorkUi('dark')
   const insets = useSafeAreaInsets()
   const keyboardInset = useComposerKeyboardInset()
 
@@ -77,6 +80,8 @@ export function MeetingResponsivePanel({
             style={[
               nativeSheetStyles.halfSheet,
               {
+                height: `${sheetHeightPercent}%`,
+                maxHeight: `${Math.max(sheetHeightPercent, 75)}%`,
                 backgroundColor: coworkUi.surface,
                 borderColor: coworkUi.glassBorder,
                 paddingBottom: keyboardInset > 0 ? keyboardInset : Math.max(insets.bottom, 8),
@@ -104,14 +109,16 @@ export function MeetingResponsivePanel({
           dismissOnSnapToBottom={false}
           dismissOnOverlayPress={false}
           disableDrag
-          snapPoints={[62]}
+          snapPoints={[sheetHeightPercent]}
           snapPointsMode="percent"
           zIndex={MEETING_SIDE_PANEL_Z_INDEX + 40}
           animation="quick"
           moveOnKeyboardChange={false}
         >
-          <SheetOverlay animation="quick" />
+          {/* Tamagui's default overlay z-index (99_999) sits above the frame and swallows touch/scroll on mobile web. */}
+          <SheetOverlay animation="quick" zIndex={0} />
           <SheetFrame
+            zIndex={1}
             padding={0}
             margin={0}
             backgroundColor={coworkUi.surface}
@@ -120,12 +127,10 @@ export function MeetingResponsivePanel({
             borderBottomLeftRadius={0}
             borderBottomRightRadius={0}
             overflow="hidden"
-            height="62%"
-            maxHeight="75%"
+            height="100%"
             width="100%"
             maxWidth="100%"
           >
-            <SheetHandle backgroundColor={coworkUi.borderSoft} marginTop="$2" />
             <YStack flex={1} minHeight={0} width="100%" overflow="hidden">
               {children}
             </YStack>
@@ -170,8 +175,6 @@ const nativeSheetStyles = StyleSheet.create({
   },
   halfSheet: {
     width: '100%',
-    height: '62%',
-    maxHeight: '75%',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderWidth: 1,

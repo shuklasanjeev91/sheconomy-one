@@ -123,11 +123,18 @@ describe('meeting responsive breakpoints', () => {
     expect(desk.compactControls).toBe(false)
     expect(desk.pageSize).toBe(25)
 
+    // Phones keep large tiles (2×2 portrait, 3×2 landscape) and scroll for the rest.
     const phoneLayout = resolveMeetingResponsiveLayout({ width: 390, height: 844 })
-    expect(phoneLayout.pageSize).toBe(12)
-    const midPhone = resolveMeetingResponsiveLayout({ width: 390, height: 700 })
-    expect(midPhone.pageSize).toBe(9)
+    expect(phoneLayout.pageSize).toBe(4)
     const shortPhone = resolveMeetingResponsiveLayout({ width: 390, height: 600 })
-    expect(shortPhone.pageSize).toBe(6)
+    expect(shortPhone.pageSize).toBe(4)
+    const landscapePhone = resolveMeetingResponsiveLayout({
+      width: 844,
+      height: 390,
+      isNative: true,
+    })
+    expect(landscapePhone.pageSize).toBe(6)
+    const tabletLayout = resolveMeetingResponsiveLayout({ width: 820, height: 1180 })
+    expect(tabletLayout.pageSize).toBe(9)
   })
 })

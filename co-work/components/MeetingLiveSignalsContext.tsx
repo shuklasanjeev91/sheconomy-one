@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 
 import type { MeetingNonverbalStatusId } from '~/co-work/lib/meeting-nonverbal'
 import {
@@ -44,6 +52,14 @@ export type MeetingLiveSignalsValue = {
   clearPinnedUserIds: () => void
   /** Host tile actions (spotlight / lower hand) — optional until room wires them. */
   tileHostActions: MeetingTileHostActions | null
+  /**
+   * The stage handles tap-to-toggle-controls itself. A full-screen tap catcher
+   * above the stage would swallow gallery swipes and filmstrip scrolling.
+   */
+  stageHandlesTaps: boolean
+  setStageHandlesTaps: (handles: boolean) => void
+  setStageTapHandler: (handler: (() => void) | null) => void
+  triggerStageTap: () => void
 }
 
 const MeetingLiveSignalsContext = createContext<MeetingLiveSignalsValue>({
@@ -63,6 +79,10 @@ const MeetingLiveSignalsContext = createContext<MeetingLiveSignalsValue>({
   togglePinnedUserId: () => {},
   clearPinnedUserIds: () => {},
   tileHostActions: null,
+  stageHandlesTaps: false,
+  setStageHandlesTaps: () => {},
+  setStageTapHandler: () => {},
+  triggerStageTap: () => {},
 })
 
 export function MeetingLiveSignalsProvider({
@@ -102,6 +122,14 @@ export function MeetingLiveSignalsProvider({
   const clearPinnedUserIds = useCallback(() => {
     setPinnedUserIds([])
   }, [])
+  const [stageHandlesTaps, setStageHandlesTaps] = useState(false)
+  const stageTapHandlerRef = useRef<(() => void) | null>(null)
+  const setStageTapHandler = useCallback((handler: (() => void) | null) => {
+    stageTapHandlerRef.current = handler
+  }, [])
+  const triggerStageTap = useCallback(() => {
+    stageTapHandlerRef.current?.()
+  }, [])
   const value = useMemo(
     () => ({
       localUserId,
@@ -120,6 +148,10 @@ export function MeetingLiveSignalsProvider({
       togglePinnedUserId,
       clearPinnedUserIds,
       tileHostActions,
+      stageHandlesTaps,
+      setStageHandlesTaps,
+      setStageTapHandler,
+      triggerStageTap,
     }),
     [
       blockVideoSurfaces,
@@ -132,13 +164,16 @@ export function MeetingLiveSignalsProvider({
       raisedHands,
       rolesByUserId,
       setExtraSurfaceBlockStable,
+      setStageTapHandler,
       setStageTrailingInsetStable,
       setStopIncomingVideo,
       spotlightUserId,
+      stageHandlesTaps,
       stageTrailingInset,
       stopIncomingVideo,
       tileHostActions,
       togglePinnedUserId,
+      triggerStageTap,
     ],
   )
   return (

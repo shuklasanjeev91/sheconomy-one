@@ -26,7 +26,10 @@ export function parseMeetingGalleryPrefs(raw: unknown): MeetingGalleryPrefs {
       : undefined
   return {
     viewMode,
-    denseGallery: typeof value.denseGallery === 'boolean' ? value.denseGallery : undefined,
+    // Stored as `denseGalleryOptIn`: the legacy `denseGallery` key persisted the old
+    // default (on), which squeezed phone galleries instead of scrolling.
+    denseGallery:
+      typeof value.denseGalleryOptIn === 'boolean' ? value.denseGalleryOptIn : undefined,
     hideSelfView: typeof value.hideSelfView === 'boolean' ? value.hideSelfView : undefined,
     hideNonVideoParticipants:
       typeof value.hideNonVideoParticipants === 'boolean'
@@ -53,6 +56,11 @@ export async function loadMeetingGalleryPrefs(): Promise<MeetingGalleryPrefs> {
   }
 }
 
+export function serializeMeetingGalleryPrefs(prefs: MeetingGalleryPrefs): string {
+  const { denseGallery, ...rest } = prefs
+  return JSON.stringify({ ...rest, denseGalleryOptIn: denseGallery })
+}
+
 export async function saveMeetingGalleryPrefs(prefs: MeetingGalleryPrefs): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
+  await AsyncStorage.setItem(STORAGE_KEY, serializeMeetingGalleryPrefs(prefs))
 }

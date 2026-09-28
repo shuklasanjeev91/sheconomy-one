@@ -133,7 +133,7 @@ export const initialMeetingMachineState: MeetingMachineState = {
   hideNonVideoParticipants: false,
   sideBySideShare: false,
   activeSpeakersOnly: false,
-  denseGallery: true,
+  denseGallery: false,
   controlsVisible: true,
   controlsPinned: false,
   participantStripMinimized: false,
