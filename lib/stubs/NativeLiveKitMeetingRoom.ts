@@ -6,7 +6,7 @@ type NativeLiveKitMeetingRoomProps = {
   displayName: string
   isHost: boolean
   enabled: boolean
-  onDisconnected: () => void
+  onDisconnected: (reason?: unknown) => void
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
 }
 

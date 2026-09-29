@@ -1,4 +1,4 @@
-import type { LocalParticipant, Room } from 'livekit-client'
+import type { DisconnectReason, LocalParticipant, Room } from 'livekit-client'
 import type { MeetingVideoEffects } from '~/co-work/lib/meeting-video-effects'
 import type { MeetingAudioQuality } from '~/co-work/lib/meeting-audio-quality'
 import type { ScreenShareStartOptions } from '~/co-work/lib/livekit-screen-share'
@@ -43,6 +43,6 @@ export type LiveKitMeetingRoomProps = {
   initialVideo?: boolean
   /** Fired once the SFU room is actually connected (not on token fetch). */
   onConnected?: () => void
-  onDisconnected: () => void
+  onDisconnected: (reason?: DisconnectReason) => void
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
 }

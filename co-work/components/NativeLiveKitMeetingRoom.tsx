@@ -119,7 +119,7 @@ type NativeLiveKitMeetingRoomProps = {
   initialAudio?: boolean
   initialVideo?: boolean
   onConnected?: () => void
-  onDisconnected: () => void
+  onDisconnected: (reason?: DisconnectReason) => void
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
 }
 
@@ -381,7 +381,7 @@ export function NativeLiveKitMeetingRoom({
         onConnected={onConnected}
         onDisconnected={(reason) => {
           if (reason === DisconnectReason.CLIENT_INITIATED) return
-          onDisconnected()
+          onDisconnected(reason)
         }}
         style={{ flex: 1, width: '100%', height: '100%' }}
       >

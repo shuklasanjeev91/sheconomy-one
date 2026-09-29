@@ -5,7 +5,7 @@ import '~/lib/polyfills/install-dom-exception'
 import { Platform, useWindowDimensions } from 'react-native'
 import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { RoomEvent, Track } from 'livekit-client'
+import { DisconnectReason, RoomEvent, Track } from 'livekit-client'
 
 import {
   ANDROID_PRESENT_UNAVAILABLE_MESSAGE,
@@ -196,6 +196,7 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
   // Video surfaces remain active behind/above bottom sheets (Image 1)
   const blockVideoSurfaces = false
   const [mediaReconnectFailed, setMediaReconnectFailed] = useState(false)
+  const [joinedElsewhere, setJoinedElsewhere] = useState(false)
   const [mediaReconnectKey, setMediaReconnectKey] = useState(0)
   const [breakoutRoomId, setBreakoutRoomId] = useState<string | null>(null)
   const mediaConnectedRef = useRef(false)
@@ -218,7 +219,15 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
     }, MEETING_MEDIA_REMOUNT_GUARD_MS)
   }, [])
 
-  const handleMediaDisconnected = useCallback(() => {
+  const handleMediaDisconnected = useCallback((reason?: DisconnectReason) => {
+    // LiveKit allows one connection per identity (our user id). Auto-rejoining
+    // here would kick the user's other device/tab, which then rejoins and kicks
+    // this one — an endless loop. Stop and let the user pick where to stay.
+    if (reason === DisconnectReason.DUPLICATE_IDENTITY) {
+      mediaConnectedRef.current = false
+      setJoinedElsewhere(true)
+      return
+    }
     // Ignore tear-down from remount / leave / credential retry — those are not
     // real network failures and previously flashed "Unable to reconnect".
     if (ignoreMediaDisconnectRef.current) return
@@ -340,6 +349,22 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
         message="The host must allow you to rejoin before this meeting link will work again."
         error={presence.error}
         onRetry={() => presence.retryJoinRequest()}
+        onLeave={leaveMeetingScreen}
+      />
+    )
+  }
+
+  if (joinedElsewhere) {
+    return (
+      <MeetingReconnectFallback
+        title="You joined from another device"
+        message="This meeting is open with your account on another device or browser tab. Join here to move the meeting to this screen."
+        retryLabel="Join here"
+        onRetry={async () => {
+          mediaAutoRetryRef.current = 0
+          setJoinedElsewhere(false)
+          remountMediaRoom()
+        }}
         onLeave={leaveMeetingScreen}
       />
     )
@@ -471,12 +496,14 @@ function MeetingReconnectFallback({
   title,
   message,
   error,
+  retryLabel = 'Rejoin meeting',
   onRetry,
   onLeave,
 }: {
   title: string
   message: string
   error?: string | null
+  retryLabel?: string
   onRetry: () => Promise<void>
   onLeave: () => Promise<void>
 }) {
@@ -545,7 +572,7 @@ function MeetingReconnectFallback({
             disabled={!!busy}
             onPress={() => void run('retry', onRetry)}
           >
-            {busy === 'retry' ? 'Rejoining…' : 'Rejoin meeting'}
+            {busy === 'retry' ? 'Rejoining…' : retryLabel}
           </Button>
           <Button
             tone="outline"

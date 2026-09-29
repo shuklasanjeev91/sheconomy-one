@@ -874,7 +874,7 @@ export function LiveKitMeetingRoom({
         onDisconnected={(reason) => {
           // User/leave/unmount initiated — do not escalate to "Unable to reconnect".
           if (reason === DisconnectReason.CLIENT_INITIATED) return
-          onDisconnected()
+          onDisconnected(reason)
         }}
         style={{
           flex: 1,
