@@ -1,7 +1,7 @@
 // Keep first: `livekit-client` extends DOMException while it evaluates.
 import '~/lib/polyfills/install-dom-exception'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Animated,
@@ -55,6 +55,10 @@ import {
 import { useMeetingLifecycle } from '~/co-work/hooks/useMeetingLifecycle.native'
 import { useMeetingActiveSpeaker } from '~/co-work/hooks/useMeetingActiveSpeaker'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
+import {
+  describeLiveKitConnectError,
+  isLiveKitRoomConnectError,
+} from '~/co-work/lib/livekit-connect-error'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
 import { bindRemoteScreenShareQuality } from '~/co-work/lib/livekit-screen-share'
 import { resolveNativeVideoStreamAttachId } from '~/co-work/lib/native-video-stream-ready'
@@ -228,6 +232,14 @@ export function NativeLiveKitMeetingRoom({
     }
   }, [audioReady, avatarUrl, displayName, enabled, meetingId, retryKey, roomId])
 
+  const handleRoomError = useCallback(
+    (cause: Error) => {
+      if (!credentials || !isLiveKitRoomConnectError(cause)) return
+      void describeLiveKitConnectError(cause, credentials).then(setError)
+    },
+    [credentials],
+  )
+
   if (!roomId) {
     return (
       <ScreenFill padding="$4" backgroundColor="#0c080a">
@@ -379,6 +391,7 @@ export function NativeLiveKitMeetingRoom({
         video={mediaMode !== 'audio' && initialVideo}
         options={getLiveKitRoomOptions('native')}
         onConnected={onConnected}
+        onError={handleRoomError}
         onDisconnected={(reason) => {
           if (reason === DisconnectReason.CLIENT_INITIATED) return
           onDisconnected()
