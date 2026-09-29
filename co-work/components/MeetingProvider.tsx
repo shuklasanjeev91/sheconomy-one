@@ -101,9 +101,7 @@ export function MeetingProvider({ children }: { children: ReactNode }) {
     void import('~/co-work/lib/meeting-gallery-prefs').then(({ loadMeetingGalleryPrefs }) =>
       loadMeetingGalleryPrefs().then((prefs) => {
         if (cancelled) return
-        if (prefs.viewMode === 'gallery' || prefs.viewMode === 'speaker') {
-          dispatch({ type: 'SET_VIEW', viewMode: prefs.viewMode })
-        }
+        // Like Zoom, every meeting opens on the active speaker; views change by swiping.
         if (typeof prefs.denseGallery === 'boolean') {
           dispatch({ type: 'SET_DENSE_GALLERY', enabled: prefs.denseGallery })
         }
@@ -136,7 +134,6 @@ export function MeetingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void import('~/co-work/lib/meeting-gallery-prefs').then(({ saveMeetingGalleryPrefs }) =>
       saveMeetingGalleryPrefs({
-        viewMode: state.viewMode === 'screen-share' ? 'gallery' : state.viewMode,
         denseGallery: state.denseGallery,
         hideSelfView: state.hideSelfView,
         hideNonVideoParticipants: state.hideNonVideoParticipants,
@@ -152,7 +149,6 @@ export function MeetingProvider({ children }: { children: ReactNode }) {
     state.hideSelfView,
     state.participantStripMinimized,
     state.sideBySideShare,
-    state.viewMode,
   ])
 
   const registerMediaAdapter = useCallback((adapter: MeetingMediaAdapter | null) => {

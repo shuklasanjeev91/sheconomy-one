@@ -72,10 +72,12 @@ installWebCryptoPolyfill()
 
 // LiveKit screen-share on iOS/Android often logs a recoverable dimensions miss;
 // keep it out of the red LogBox overlay in meeting builds.
-LogBox.ignoreLogs([
-  /could not determine track dimensions, using defaults/i,
-  'could not determine track dimensions, using defaults',
-])
+const LIVEKIT_DROPPED_ERRORS = /could not determine track dimensions, using defaults/i
+// LiveKit logs a timed-out signal resume ("Abort handler called") with console.error,
+// then retries on its own while the meeting shows "reconnecting automatically".
+const LIVEKIT_RECOVERABLE_ERRORS =
+  /Abort handler called|room connection has timed out \(signal\)|could not establish signal connection/i
+LogBox.ignoreLogs([LIVEKIT_DROPPED_ERRORS, LIVEKIT_RECOVERABLE_ERRORS])
 
 // LogBox.ignoreLogs alone is not enough in some Expo/OTA builds — console.error
 // still becomes a red SyntheticError overlay that covers the live meeting.
@@ -94,7 +96,11 @@ console.error = (...args: unknown[]) => {
       }
     })
     .join(' ')
-  if (/could not determine track dimensions, using defaults/i.test(text)) {
+  if (LIVEKIT_DROPPED_ERRORS.test(text)) {
+    return
+  }
+  if (LIVEKIT_RECOVERABLE_ERRORS.test(text)) {
+    console.log('[livekit]', ...args)
     return
   }
   originalConsoleError(...(args as Parameters<typeof console.error>))
