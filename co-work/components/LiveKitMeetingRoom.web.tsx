@@ -9,10 +9,6 @@ import { ScreenCenter, ScreenFill, ViewportOverlay } from '~/components/layout'
 import { MeetingVideoStage } from '~/co-work/components/MeetingVideoStage'
 import { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls.web'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
-import {
-  describeLiveKitConnectError,
-  isLiveKitRoomConnectError,
-} from '~/co-work/lib/livekit-connect-error'
 import { MeetingLifecycleBanner } from '~/co-work/components/MeetingLifecycleBanner'
 import { reinforceCallMediaOnConnect } from '~/co-work/lib/livekit-call-media'
 import { buildParticipantMetadata } from '~/co-work/lib/participant-avatar'
@@ -761,14 +757,6 @@ export function LiveKitMeetingRoom({
     void loadCredentials()
   }, [loadCredentials])
 
-  const handleRoomError = useCallback(
-    (cause: Error) => {
-      if (!credentials || !isLiveKitRoomConnectError(cause)) return
-      void describeLiveKitConnectError(cause, credentials).then(setError)
-    },
-    [credentials],
-  )
-
   if (!supportsLiveKitVideo()) {
     return (
       <ScreenFill padding="$5" alignItems="center" justifyContent="center" backgroundColor={coworkUi.pageBg}>
@@ -883,7 +871,6 @@ export function LiveKitMeetingRoom({
         video={mediaMode !== 'audio' && initialVideo}
         options={getLiveKitRoomOptions('web')}
         onConnected={onConnected}
-        onError={handleRoomError}
         onDisconnected={(reason) => {
           // User/leave/unmount initiated — do not escalate to "Unable to reconnect".
           if (reason === DisconnectReason.CLIENT_INITIATED) return
