@@ -48,14 +48,14 @@ describe('meeting state machine', () => {
     expect(stopped.lifecycle).toBe('CONNECTED_WITH_AUDIO_ONLY')
   })
 
-  it('selects screen-share view and restores gallery after sharing', () => {
+  it('selects screen-share view and returns to active speaker after sharing', () => {
     const sharing = meetingStateReducer(initialMeetingMachineState, { type: 'SHARE_STARTED' })
     expect(sharing.lifecycle).toBe('SCREEN_SHARING')
     expect(sharing.viewMode).toBe('screen-share')
     expect(sharing.uiMode).toBe('maximized')
     expect(sharing.participantStripMinimized).toBe(false)
     const stopped = meetingStateReducer(sharing, { type: 'SHARE_STOPPED' })
-    expect(stopped.viewMode).toBe('gallery')
+    expect(stopped.viewMode).toBe('speaker')
     expect(stopped.uiMode).toBe('normal')
     expect(stopped.controlsVisible).toBe(true)
   })
@@ -69,7 +69,11 @@ describe('meeting state machine', () => {
   })
 
   it('toggles maximized UI and can auto-hide controls', () => {
-    const maximized = meetingStateReducer(initialMeetingMachineState, {
+    const gallery = meetingStateReducer(initialMeetingMachineState, {
+      type: 'SET_VIEW',
+      viewMode: 'gallery',
+    })
+    const maximized = meetingStateReducer(gallery, {
       type: 'SET_UI_MODE',
       uiMode: 'maximized',
     })

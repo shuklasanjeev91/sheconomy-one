@@ -82,11 +82,20 @@ import {
   registerIosPipVideoRef,
 } from '~/lib/session/ios-pip-registry'
 import {
-  chunkGalleryRows,
   meetingGalleryLayout,
-  meetingGalleryScrollLayout,
+  meetingGalleryPrefetchIdentities,
+  paginateMeetingGallery,
   resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
+import {
+  meetingStageDragOffset,
+  meetingStageIsHorizontalDrag,
+  meetingStagePageKey,
+  meetingStagePageLabel,
+  meetingStageSwipeDirection,
+  type MeetingStageSwipeDirection,
+} from '~/co-work/lib/meeting-stage-pager'
+import { useMeetingStagePager } from '~/co-work/hooks/useMeetingStagePager'
 import {
   meetingStageContentBox,
   resolveMeetingUiLayout,
@@ -127,8 +136,8 @@ const STAGE_GAP = 10
 const FILMSTRIP_GAP = 8
 /** Filmstrip tiles subscribed before the first viewability callback fires. */
 const FILMSTRIP_INITIAL_VISIBLE = 8
-/** Gallery rows kept subscribed above/below the visible rows while scrolling. */
-const GALLERY_ROW_OVERSCAN = 1
+/** Distance the incoming page slides in from after a committed swipe. */
+const STAGE_PAGE_ENTER_OFFSET = 56
 
 type StageTrackRef = import('@livekit/components-core').TrackReferenceOrPlaceholder
 
@@ -680,27 +689,8 @@ function NativeMeetingVideoStage() {
   useEffect(() => {
     if (!pipTrack) setPipSwapped(false)
   }, [pipTrack])
-  const stageTracks = useMemo(
-    () => (pipTrack && pipSwapped ? [pipTrack] : layoutState.stageTracks),
-    [layoutState.stageTracks, pipSwapped, pipTrack],
-  )
   const floatingTrack = pipTrack ? (pipSwapped ? layoutState.stageTracks[0] : pipTrack) : undefined
   const filmstripTracks = layoutState.filmstripTracks
-  // Virtualized gallery: only rows scrolled into view get camera subscriptions.
-  const [galleryVisibleRowRange, setGalleryVisibleRowRange] = useState<{
-    first: number
-    last: number
-  } | null>(null)
-  const onGalleryViewableChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      const indices = viewableItems
-        .map((token) => token.index)
-        .filter((index): index is number => typeof index === 'number')
-      if (indices.length === 0) return
-      setGalleryVisibleRowRange({ first: Math.min(...indices), last: Math.max(...indices) })
-    },
-  ).current
-  const galleryViewabilityConfig = useRef({ itemVisiblePercentThreshold: 10 }).current
   // Virtualized filmstrip: only tiles scrolled into view get camera subscriptions.
   const [filmstripVisibleIds, setFilmstripVisibleIds] = useState<string[] | null>(null)
   const onFilmstripViewableChanged = useRef(
@@ -716,13 +706,18 @@ function NativeMeetingVideoStage() {
   const hasScreenShare = layoutState.hasScreenShare
   const isLocalScreenSharing = layoutState.isLocalScreenSharing
   const previousScreenShare = useRef(false)
+  const pager = useMeetingStagePager({
+    cameraTiles: layoutState.cameraTiles,
+    pageSize,
+    hasScreenShare,
+  })
 
   useEffect(() => {
     if (hasScreenShare && !previousScreenShare.current) {
       dispatch({ type: 'SET_VIEW', viewMode: 'screen-share' })
       setScreenShareBannerVisible(true)
     } else if (!hasScreenShare && state.viewMode === 'screen-share') {
-      dispatch({ type: 'SET_VIEW', viewMode: 'gallery' })
+      dispatch({ type: 'SET_VIEW', viewMode: 'speaker' })
       setScreenShareBannerVisible(false)
     } else if (!hasScreenShare) {
       setScreenShareBannerVisible(false)
@@ -760,44 +755,89 @@ function NativeMeetingVideoStage() {
     filmstripExpanded,
     stageTrailingInset,
   })
-  const gallery = meetingGalleryLayout(stageTracks.length, {
-    width: mainWidth,
-    height: mainHeight,
-    preferWide: layout.galleryPreferWide,
-  })
+  const galleryPaged = useMemo(
+    () => paginateMeetingGallery(layoutState.stageTracks, pager.galleryPage, pageSize),
+    [layoutState.stageTracks, pageSize, pager.galleryPage],
+  )
+  const stageTracks = useMemo(() => {
+    if (galleryMode) return galleryPaged.items
+    return pipTrack && pipSwapped ? [pipTrack] : layoutState.stageTracks
+  }, [galleryMode, galleryPaged.items, layoutState.stageTracks, pipSwapped, pipTrack])
+  // Every page keeps the full-page grid so a short last page doesn't blow tiles up.
+  const gallery = meetingGalleryLayout(
+    galleryPaged.pageCount > 1 ? pageSize : stageTracks.length,
+    {
+      width: mainWidth,
+      height: mainHeight,
+      preferWide: layout.galleryPreferWide,
+    },
+  )
   const minTileHeight = layout.policy === 'landscape-phone' ? 72 : 100
-  const galleryScroll = meetingGalleryScrollLayout(stageTracks.length, {
+
+  const pageSlide = useRef(new Animated.Value(0)).current
+  // Set when a touch starts on the filmstrip or floating tile, which own their drags.
+  const stageSwipeBlockedRef = useRef(false)
+  const stageSwipeRef = useRef<{
+    enabled: boolean
+    canGoNext: boolean
+    canGoPrev: boolean
+    width: number
+    turn: (direction: MeetingStageSwipeDirection) => boolean
+  }>({ enabled: false, canGoNext: false, canGoPrev: false, width: 0, turn: () => false })
+  stageSwipeRef.current = {
+    enabled: pager.pages.length > 1,
+    canGoNext: pager.canGoNext,
+    canGoPrev: pager.canGoPrev,
     width: mainWidth,
-    height: mainHeight,
-    preferWide: layout.galleryPreferWide,
-    screenSize: pageSize,
-    gap: STAGE_GAP,
-    minRowHeight: minTileHeight,
-  })
-  const galleryScrolls = galleryMode && galleryScroll.scrolls
-  const galleryRows = useMemo(
-    () => (galleryScrolls ? chunkGalleryRows(stageTracks, galleryScroll.columns) : []),
-    [galleryScroll.columns, galleryScrolls, stageTracks],
-  )
-  const galleryRowSize = galleryScroll.rowHeight + STAGE_GAP
-  const galleryTileWidth = Math.floor(
-    (mainWidth - STAGE_GAP * Math.max(galleryScroll.columns - 1, 0)) / galleryScroll.columns,
-  )
+    turn: pager.swipe,
+  }
+  const stagePanResponder = useMemo(() => {
+    const settle = () =>
+      Animated.timing(pageSlide, { toValue: 0, duration: 180, useNativeDriver: true }).start()
+    return PanResponder.create({
+      // Runs before the filmstrip's onTouchStart for the same touch.
+      onStartShouldSetPanResponderCapture: () => {
+        stageSwipeBlockedRef.current = false
+        return false
+      },
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        stageSwipeRef.current.enabled &&
+        !stageSwipeBlockedRef.current &&
+        meetingStageIsHorizontalDrag(gesture.dx, gesture.dy),
+      onPanResponderMove: (_, gesture) => {
+        const swipe = stageSwipeRef.current
+        pageSlide.setValue(meetingStageDragOffset(gesture.dx, swipe.canGoNext, swipe.canGoPrev))
+      },
+      onPanResponderRelease: (_, gesture) => {
+        const swipe = stageSwipeRef.current
+        const direction = meetingStageSwipeDirection({
+          dx: gesture.dx,
+          dy: gesture.dy,
+          vx: gesture.vx,
+          width: swipe.width,
+        })
+        if (direction && swipe.turn(direction)) {
+          pageSlide.setValue(
+            direction === 'next' ? STAGE_PAGE_ENTER_OFFSET : -STAGE_PAGE_ENTER_OFFSET,
+          )
+        }
+        settle()
+      },
+      onPanResponderTerminate: settle,
+      onPanResponderTerminationRequest: () => true,
+    })
+  }, [pageSlide])
+  const blockStageSwipe = () => {
+    stageSwipeBlockedRef.current = true
+  }
 
   useEffect(() => {
-    const identities = new Set<string>()
-    if (galleryScrolls) {
-      const first = Math.max(0, (galleryVisibleRowRange?.first ?? 0) - GALLERY_ROW_OVERSCAN)
-      const last = Math.min(
-        galleryRows.length - 1,
-        (galleryVisibleRowRange?.last ?? galleryScroll.visibleRows) + GALLERY_ROW_OVERSCAN,
-      )
-      for (let row = first; row <= last; row += 1) {
-        for (const track of galleryRows[row] ?? []) identities.add(track.participant.identity)
-      }
-    } else {
-      for (const track of stageTracks) identities.add(track.participant.identity)
-    }
+    // Current gallery page plus its neighbours, so a swipe lands on live video.
+    const identities = new Set<string>(
+      galleryMode
+        ? meetingGalleryPrefetchIdentities(layoutState.stageTracks, galleryPaged.page, pageSize)
+        : stageTracks.map((track) => track.participant.identity),
+    )
     const filmstripIdentities =
       filmstripVisibleIds ??
       filmstripTracks
@@ -813,47 +853,16 @@ function NativeMeetingVideoStage() {
     filmstripTracks,
     filmstripVisibleIds,
     floatingTrack,
-    galleryRows,
-    galleryScroll.visibleRows,
-    galleryScrolls,
-    galleryVisibleRowRange,
+    galleryMode,
+    galleryPaged.page,
+    layoutState.stageTracks,
+    pageSize,
     room,
     stageTracks,
   ])
 
-  const renderGalleryRow = (rowTracks: StageTrackRef[]) => (
-    <XStack
-      width={mainWidth}
-      height={galleryRowSize}
-      paddingBottom={STAGE_GAP}
-      justifyContent="center"
-      gap={STAGE_GAP}
-    >
-      {rowTracks.map((trackRef) => (
-        <NativeVideoTile
-          key={
-            (isTrackReference(trackRef) ? trackRef.publication.trackSid : null) ??
-            stageTrackKey(trackRef)
-          }
-          trackRef={trackRef}
-          name={participantDisplayName(trackRef.participant)}
-          isScreen={false}
-          localScreenShareActive={isLocalScreenSharing}
-          width={galleryTileWidth}
-          height={galleryScroll.rowHeight}
-          radius={14}
-          mirrorLocalVideo={state.mirrorLocalVideo}
-          hdVideo={hdVideoPref}
-          activeSpeaker={
-            trackRef.participant.isSpeaking ||
-            trackRef.participant.identity === activeSpeakerIdentity
-          }
-        />
-      ))}
-    </XStack>
-  )
-
   return (
+    <View style={{ flex: 1, width: '100%', height: '100%' }} {...stagePanResponder.panHandlers}>
     <Pressable
       onPress={triggerStageTap}
       accessible={false}
@@ -891,28 +900,7 @@ function NativeMeetingVideoStage() {
         </YStack>
       ) : (
         <YStack flex={1} width="100%" height="100%" position="relative">
-          {galleryScrolls ? (
-            <FlatList
-              key={`gallery-scroll-${galleryScroll.columns}`}
-              data={galleryRows}
-              keyExtractor={(_, rowIndex) => `gallery-row-${rowIndex}`}
-              renderItem={({ item }) => renderGalleryRow(item)}
-              style={{ width: mainWidth, height: mainHeight }}
-              showsVerticalScrollIndicator
-              indicatorStyle="white"
-              nestedScrollEnabled
-              getItemLayout={(_, rowIndex) => ({
-                length: galleryRowSize,
-                offset: galleryRowSize * rowIndex,
-                index: rowIndex,
-              })}
-              initialNumToRender={galleryScroll.visibleRows + 1}
-              maxToRenderPerBatch={2}
-              windowSize={3}
-              onViewableItemsChanged={onGalleryViewableChanged}
-              viewabilityConfig={galleryViewabilityConfig}
-            />
-          ) : (
+          <Animated.View style={{ transform: [{ translateX: pageSlide }] }}>
             <XStack
               width={mainWidth}
               height={mainHeight}
@@ -967,7 +955,7 @@ function NativeMeetingVideoStage() {
                 )
               })}
             </XStack>
-          )}
+          </Animated.View>
 
           {floatingTrack ? (
             <NativeFloatingVideoTile
@@ -1028,6 +1016,7 @@ function NativeMeetingVideoStage() {
               }}
               initialNumToRender={FILMSTRIP_INITIAL_VISIBLE}
               windowSize={5}
+              onTouchStart={blockStageSwipe}
               onViewableItemsChanged={onFilmstripViewableChanged}
               viewabilityConfig={filmstripViewabilityConfig}
             />
@@ -1066,33 +1055,43 @@ function NativeMeetingVideoStage() {
               </Text>
             </YStack>
           ) : null}
-          {(() => {
-            if (!galleryScrolls) return null
-            const lastVisibleRow = galleryVisibleRowRange?.last ?? galleryScroll.visibleRows - 1
-            const below = stageTracks.length - (lastVisibleRow + 1) * galleryScroll.columns
-            if (below <= 0) return null
-            return (
-              <XStack
-                position="absolute"
-                bottom={12}
-                alignSelf="center"
-                zIndex={28}
-                paddingHorizontal={12}
-                paddingVertical={6}
-                borderRadius={999}
-                backgroundColor="rgba(12,8,10,0.88)"
-                borderWidth={1}
-                borderColor="rgba(255,255,255,0.16)"
-                pointerEvents="none"
-              >
-                <Text color="#fff" fontSize={12} fontWeight="700">
-                  ↓ {below} more · {layoutState.totalTiles} people
-                </Text>
-              </XStack>
-            )
-          })()}
         </YStack>
       )}
+      {pager.pages.length > 1 && state.controlsVisible ? (
+        <XStack
+          position="absolute"
+          bottom={
+            layout.stagePaddingBottom +
+            (filmstripExpanded && !filmstripBeside ? layout.filmstripHeight + 8 : 6)
+          }
+          alignSelf="center"
+          zIndex={28}
+          alignItems="center"
+          gap={7}
+          paddingHorizontal={8}
+          paddingVertical={5}
+          borderRadius={999}
+          backgroundColor="rgba(12,8,10,0.55)"
+          accessibilityRole="tablist"
+        >
+          {pager.pages.map((page, index) => (
+            <Pressable
+              key={meetingStagePageKey(page)}
+              onPress={() => pager.goTo(page)}
+              hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+              accessibilityRole="tab"
+              accessibilityLabel={meetingStagePageLabel(page)}
+              accessibilityState={{ selected: index === pager.index }}
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: page.kind === 'safe-driving' ? 2 : 999,
+                backgroundColor: index === pager.index ? '#fff' : 'rgba(255,255,255,0.4)',
+              }}
+            />
+          ))}
+        </XStack>
+      ) : null}
       {(() => {
         if (!screenShareBannerVisible) return null
         const label = screenShareRoleLabel(
@@ -1125,6 +1124,7 @@ function NativeMeetingVideoStage() {
       })()}
     </YStack>
     </Pressable>
+    </View>
   )
 }
 

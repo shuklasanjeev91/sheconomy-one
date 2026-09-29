@@ -1146,6 +1146,7 @@ function MeetingRoomOverlay({
     togglePinnedUserId,
     stageHandlesTaps,
     setStageTapHandler,
+    setSafeDrivingHandler,
   } = useMeetingLiveSignals()
   useEffect(() => {
     setStageTrailingInset(stageTrailingInsetValue)
@@ -1662,6 +1663,22 @@ function MeetingRoomOverlay({
     else liveKit?.toggleAudio()
   }, [allowSelfUnmute, canModerate, liveKit, presence, session, toast])
 
+  const openSafeDrivingMode = useCallback(() => {
+    if (liveKit?.videoEnabled) {
+      void presence.syncMediaState({ is_video_off: true })
+      liveKit.toggleVideo()
+    }
+    if (liveKit?.audioEnabled) toggleMeetingAudio()
+    setSafeDrivingOpen(true)
+  }, [liveKit, presence, toggleMeetingAudio])
+
+  // Zoom offers the driving page only on phones.
+  useEffect(() => {
+    if (!layout.compactControls) return
+    setSafeDrivingHandler(openSafeDrivingMode)
+    return () => setSafeDrivingHandler(null)
+  }, [layout.compactControls, openSafeDrivingMode, setSafeDrivingHandler])
+
   const toggleHand = useCallback(() => {
     const raising = !presence.handRaised
     if (raising && !allowHandRaise && !canModerate) {
@@ -2126,7 +2143,6 @@ function MeetingRoomOverlay({
           title={presence.liveTopic || title}
           locked={!!presence.moderationSettings?.is_locked}
           recording={recording}
-          viewMode={meetingMachine.viewMode}
           speakerOn={liveKit?.speakerOn ?? true}
           onBack={() => minimizeMeeting()}
           onMinimize={() => minimizeMeeting()}
@@ -2197,12 +2213,6 @@ function MeetingRoomOverlay({
             if (canModerate) presence.togglePanel('host_tools')
             else presence.setPanel('info')
           }}
-          onToggleView={() =>
-            dispatchUi({
-              type: 'SET_VIEW',
-              viewMode: meetingMachine.viewMode === 'speaker' ? 'gallery' : 'speaker',
-            })
-          }
           onEnd={isAuthoritativeHost ? handleEnd : handleLeave}
           isHost={isAuthoritativeHost}
         />
@@ -3097,9 +3107,6 @@ function MeetingRoomOverlay({
             videoEnabled={liveKit?.videoEnabled ?? false}
             screenSharing={liveKit?.screenSharing ?? false}
             whiteboardActive={presence.whiteboard.active}
-            hasActiveScreenShare={
-              !!liveKit?.screenSharing || meetingMachine.viewMode === 'screen-share'
-            }
             handRaised={presence.handRaised}
             recording={recording}
             captionsActive={captions.active}
@@ -3119,7 +3126,6 @@ function MeetingRoomOverlay({
             participantCount={admittedCount}
             reactionTrayOpen={reactionTrayOpen}
             busy={exiting}
-            viewMode={meetingMachine.viewMode}
             mirrorLocalVideo={meetingMachine.mirrorLocalVideo}
             hideSelfView={meetingMachine.hideSelfView}
             hideNonVideoParticipants={meetingMachine.hideNonVideoParticipants}
@@ -3613,14 +3619,7 @@ function MeetingRoomOverlay({
             key: 'safe_driving',
             label: 'Safe driving mode',
             icon: Icons.Car,
-            onPress: () => {
-              if (liveKit?.videoEnabled) {
-                void presence.syncMediaState({ is_video_off: true })
-                liveKit.toggleVideo()
-              }
-              if (liveKit?.audioEnabled) toggleMeetingAudio()
-              setSafeDrivingOpen(true)
-            },
+            onPress: openSafeDrivingMode,
           },
         ]}
       />
@@ -3692,7 +3691,7 @@ function MeetingRoomOverlay({
       />
       <MeetingShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
-      {/* Immersive chrome-hidden: Zoom-style quick actions (flip / background / chat / view / driving). */}
+      {/* Immersive chrome-hidden: Zoom-style quick actions (flip / background / chat / driving). */}
       {layout.compactControls && !controlsVisible && !roomModalOpen && !sheetPanelOpen ? (
         <XStack
           position="absolute"
@@ -3784,36 +3783,6 @@ function MeetingRoomOverlay({
             }}
           >
             <Icons.MessageSquare size={14} color="#fff" />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              meetingMachine.viewMode === 'speaker'
-                ? 'Switch to gallery view'
-                : 'Switch to speaker view'
-            }
-            hitSlop={12}
-            onPress={() => {
-              dispatchUi({
-                type: 'SET_VIEW',
-                viewMode: meetingMachine.viewMode === 'speaker' ? 'gallery' : 'speaker',
-              })
-            }}
-            style={{
-              minWidth: 36,
-              height: 28,
-              borderRadius: 14,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingHorizontal: 8,
-              backgroundColor: 'rgba(255,255,255,0.12)',
-            }}
-          >
-            {meetingMachine.viewMode === 'speaker' ? (
-              <Icons.Grid2x2 size={14} color="#fff" />
-            ) : (
-              <Icons.User size={14} color="#fff" />
-            )}
           </Pressable>
           <Pressable
             accessibilityRole="button"

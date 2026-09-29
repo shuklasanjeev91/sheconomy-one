@@ -57,9 +57,6 @@ export type MeetingToolbarOverflowKey =
   | 'mute_on_join'
   | 'video_off_on_join'
   | 'manage_participants'
-  | 'view_gallery'
-  | 'view_speaker'
-  | 'view_screen_share'
   | 'view_dense_gallery'
   | 'mirror_video'
   | 'hide_self_view'
@@ -277,7 +274,8 @@ export function meetingToolbarMoreSections(input: {
 
   const view: MeetingToolbarOverflowKey[] = []
   if (input.hasViewControls !== false) {
-    view.push('view_gallery', 'view_speaker', 'view_screen_share', 'mirror_video', 'hide_self_view')
+    // Gallery / speaker / shared screen are stage pages reached by swiping (Zoom mobile).
+    view.push('mirror_video', 'hide_self_view')
     if (isMobile) {
       view.push('hide_non_video', 'stop_incoming_video', 'hd_video')
     } else {

@@ -38,8 +38,6 @@ type MeetingControlsProps = {
   videoEnabled: boolean
   screenSharing: boolean
   whiteboardActive?: boolean
-  /** True when local or remote screen share is on stage. */
-  hasActiveScreenShare?: boolean
   handRaised: boolean
   recording: boolean
   captionsActive: boolean
@@ -57,7 +55,6 @@ type MeetingControlsProps = {
   participantCount?: number
   reactionTrayOpen?: boolean
   busy?: boolean
-  viewMode?: MeetingViewMode
   mirrorLocalVideo?: boolean
   hideSelfView?: boolean
   denseGallery?: boolean
@@ -460,7 +457,6 @@ export function MeetingControls({
   backgroundActive = false,
   screenSharing,
   whiteboardActive = false,
-  hasActiveScreenShare,
   handRaised,
   recording,
   captionsActive,
@@ -475,7 +471,6 @@ export function MeetingControls({
   participantCount = 0,
   reactionTrayOpen = false,
   busy = false,
-  viewMode = 'gallery',
   mirrorLocalVideo = false,
   hideSelfView = false,
   denseGallery = false,
@@ -592,9 +587,6 @@ export function MeetingControls({
     Math.min(compact ? 460 : 420, Math.round(windowHeight * (compact ? 0.62 : 0.55))),
   )
   const flyoutWidth = roomy ? 280 : 248
-  const screenShareOnStage = hasActiveScreenShare ?? screenSharing
-  const effectiveViewMode: MeetingViewMode =
-    viewMode === 'screen-share' && !screenShareOnStage ? 'gallery' : viewMode
 
   // Prefer authoritative host flag over a stale participant role row — otherwise
   // iPad/Android lose Host tools / End / Record while web (faster role refresh) keeps them.
@@ -712,34 +704,6 @@ export function MeetingControls({
     onPress: () => void
   } | null => {
     switch (key) {
-      case 'view_gallery':
-        return onSetViewMode
-          ? {
-              label: 'Gallery view',
-              icon: Icons.LayoutGrid,
-              active: effectiveViewMode === 'gallery',
-              onPress: runFromFlyout(() => onSetViewMode('gallery')),
-            }
-          : null
-      case 'view_speaker':
-        return onSetViewMode
-          ? {
-              label: 'Speaker view',
-              icon: Icons.User,
-              active: effectiveViewMode === 'speaker',
-              onPress: runFromFlyout(() => onSetViewMode('speaker')),
-            }
-          : null
-      case 'view_screen_share':
-        return onSetViewMode
-          ? {
-              label: 'Screen share view',
-              icon: Icons.ScreenShare,
-              active: effectiveViewMode === 'screen-share' && screenShareOnStage,
-              disabled: !screenShareOnStage,
-              onPress: runFromFlyout(() => onSetViewMode('screen-share')),
-            }
-          : null
       case 'mirror_video':
         return onToggleMirror
           ? {

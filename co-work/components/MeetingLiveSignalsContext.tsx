@@ -60,6 +60,10 @@ export type MeetingLiveSignalsValue = {
   setStageHandlesTaps: (handles: boolean) => void
   setStageTapHandler: (handler: (() => void) | null) => void
   triggerStageTap: () => void
+  /** Zoom phone: swiping right past active speaker opens safe driving mode. */
+  safeDrivingAvailable: boolean
+  setSafeDrivingHandler: (handler: (() => void) | null) => void
+  openSafeDriving: () => void
 }
 
 const MeetingLiveSignalsContext = createContext<MeetingLiveSignalsValue>({
@@ -83,6 +87,9 @@ const MeetingLiveSignalsContext = createContext<MeetingLiveSignalsValue>({
   setStageHandlesTaps: () => {},
   setStageTapHandler: () => {},
   triggerStageTap: () => {},
+  safeDrivingAvailable: false,
+  setSafeDrivingHandler: () => {},
+  openSafeDriving: () => {},
 })
 
 export function MeetingLiveSignalsProvider({
@@ -130,6 +137,15 @@ export function MeetingLiveSignalsProvider({
   const triggerStageTap = useCallback(() => {
     stageTapHandlerRef.current?.()
   }, [])
+  const safeDrivingHandlerRef = useRef<(() => void) | null>(null)
+  const [safeDrivingAvailable, setSafeDrivingAvailable] = useState(false)
+  const setSafeDrivingHandler = useCallback((handler: (() => void) | null) => {
+    safeDrivingHandlerRef.current = handler
+    setSafeDrivingAvailable(!!handler)
+  }, [])
+  const openSafeDriving = useCallback(() => {
+    safeDrivingHandlerRef.current?.()
+  }, [])
   const value = useMemo(
     () => ({
       localUserId,
@@ -152,6 +168,9 @@ export function MeetingLiveSignalsProvider({
       setStageHandlesTaps,
       setStageTapHandler,
       triggerStageTap,
+      safeDrivingAvailable,
+      setSafeDrivingHandler,
+      openSafeDriving,
     }),
     [
       blockVideoSurfaces,
@@ -160,10 +179,13 @@ export function MeetingLiveSignalsProvider({
       handRaised,
       localUserId,
       nonverbalByUserId,
+      openSafeDriving,
       pinnedUserIds,
       raisedHands,
       rolesByUserId,
+      safeDrivingAvailable,
       setExtraSurfaceBlockStable,
+      setSafeDrivingHandler,
       setStageTapHandler,
       setStageTrailingInsetStable,
       setStopIncomingVideo,

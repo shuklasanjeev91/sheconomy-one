@@ -11,7 +11,6 @@ export type MeetingHeaderProps = {
   compact?: boolean
   locked?: boolean
   recording?: boolean
-  viewMode?: 'gallery' | 'speaker' | 'screen-share' | string
   speakerOn?: boolean
   onBack?: () => void
   onMinimize?: () => void
@@ -27,7 +26,6 @@ export type MeetingHeaderProps = {
   onFlipCamera?: () => void
   onSettings?: () => void
   onSecurity?: () => void
-  onToggleView?: () => void
   onEnd?: () => void
   isHost?: boolean
 }
@@ -81,7 +79,6 @@ export function MeetingHeader({
   compact = false,
   locked = false,
   recording = false,
-  viewMode = 'gallery',
   speakerOn = true,
   onBack,
   onMinimize,
@@ -97,7 +94,6 @@ export function MeetingHeader({
   onFlipCamera,
   onSettings,
   onSecurity,
-  onToggleView,
   onEnd,
   isHost = false,
 }: MeetingHeaderProps) {
@@ -256,19 +252,6 @@ export function MeetingHeader({
       </XStack>
 
       <XStack alignItems="center" gap="$1.5">
-        {onToggleView ? (
-          <HeaderIconButton
-            label={viewMode === 'speaker' ? 'Switch to gallery' : 'Switch to speaker'}
-            onPress={onToggleView}
-          >
-            {viewMode === 'speaker' ? (
-              <Icons.Grid2x2 size={18} color="#fff" />
-            ) : (
-              <Icons.User size={18} color="#fff" />
-            )}
-          </HeaderIconButton>
-        ) : null}
-
         {onTile ? (
           <HeaderIconButton label="Picture in Picture" onPress={onTile}>
             <Icons.Layers size={18} color="#fff" />

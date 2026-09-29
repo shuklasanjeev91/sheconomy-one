@@ -232,7 +232,7 @@ describe('meeting stage tracks', () => {
     expect(result.pipTrack).toBeNull()
   })
 
-  it('auto-layouts by headcount: alone fills the stage, 1:1 floats self-view, 3+ is gallery', () => {
+  it('gallery shows every camera as a tile, including 1:1 side by side', () => {
     const localCamera = track('local', Track.Source.Camera)
     const remoteCamera = track('remote', Track.Source.Camera)
     const secondRemote = track('remote-2', Track.Source.Camera)
@@ -242,10 +242,8 @@ describe('meeting stage tracks', () => {
     expect(alone.pipTrack).toBeNull()
 
     const oneOnOne = composeMeetingStageTracks([localCamera, remoteCamera], 'local', 'gallery')
-    expect(oneOnOne.stageTracks).toEqual([remoteCamera])
-    expect(oneOnOne.pipTrack).toBe(localCamera)
-    expect(oneOnOne.filmstripTracks).toEqual([])
-    expect(oneOnOne.totalTiles).toBe(2)
+    expect(oneOnOne.stageTracks).toHaveLength(2)
+    expect(oneOnOne.pipTrack).toBeNull()
 
     const group = composeMeetingStageTracks(
       [localCamera, remoteCamera, secondRemote],
@@ -256,7 +254,7 @@ describe('meeting stage tracks', () => {
     expect(group.pipTrack).toBeNull()
   })
 
-  it('keeps the side-by-side tiles for 1:1 outside gallery view', () => {
+  it('speaker view in 1:1 fills the stage with the other person and floats self-view (Zoom)', () => {
     const localCamera = track('local', Track.Source.Camera)
     const remoteCamera = track('remote', Track.Source.Camera)
     const speaker = composeMeetingStageTracks(
@@ -265,6 +263,9 @@ describe('meeting stage tracks', () => {
       'speaker',
       'remote',
     )
-    expect(speaker.pipTrack).toBeNull()
+    expect(speaker.stageTracks).toEqual([remoteCamera])
+    expect(speaker.pipTrack).toBe(localCamera)
+    expect(speaker.filmstripTracks).toEqual([])
+    expect(speaker.totalTiles).toBe(2)
   })
 })

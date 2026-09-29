@@ -6,12 +6,23 @@ import { TrackLoop, useRoomContext } from '@livekit/components-react'
 import { isTrackReference } from '@livekit/components-core'
 
 import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks'
+import { useMeetingStagePager } from '~/co-work/hooks/useMeetingStagePager'
 import {
   meetingFilmstripWindow,
   meetingGalleryLayout,
-  meetingGalleryScrollLayout,
+  meetingGalleryPrefetchIdentities,
+  paginateMeetingGallery,
   resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
+import {
+  meetingStageDragOffset,
+  meetingStageIsHorizontalDrag,
+  meetingStagePageKey,
+  meetingStagePageLabel,
+  meetingStageSwipeDirection,
+  MEETING_STAGE_SWIPE_SLOP,
+  type MeetingStageSwipeDirection,
+} from '~/co-work/lib/meeting-stage-pager'
 import {
   meetingStageContentBox,
   resolveMeetingUiLayout,
@@ -47,10 +58,18 @@ const FILMSTRIP_HEADER_SIZE_BESIDE = 30 + 4 + 8
 const FILMSTRIP_HEADER_SIZE_BOTTOM = 36 + 4 + 8
 /** Matches `.sheconomy-video-gallery` gap in the LiveKit web CSS. */
 const GALLERY_GAP = 10
-const GALLERY_MIN_ROW_HEIGHT = 96
 /** Clicks here are controls of their own, not a tap-to-toggle on the stage. */
 const STAGE_TAP_IGNORE_SELECTOR =
   'button, a, input, [role="menu"], .sheconomy-video-filmstrip__header, .sheconomy-video-pip'
+/** Drags starting here scroll or move something else instead of paging the stage. */
+const STAGE_SWIPE_IGNORE_SELECTOR =
+  'button, a, input, textarea, [role="menu"], .sheconomy-video-filmstrip, .sheconomy-video-pip'
+/** Accumulated horizontal trackpad delta that turns one page. */
+const STAGE_WHEEL_PAGE_DELTA = 80
+/** Quiet gap that ends one trackpad gesture (including its momentum tail). */
+const STAGE_WHEEL_IDLE_MS = 220
+/** Distance the incoming page slides in from after a committed swipe. */
+const STAGE_PAGE_ENTER_OFFSET = 56
 
 /** Scroll offset + viewport of an overflow container, measured once per frame. */
 function useScrollMetrics(vertical: boolean, active: boolean) {
@@ -143,8 +162,15 @@ export function MeetingVideoStage() {
     state.uiMode,
     width,
   ])
-  const { stageTracks, filmstripTracks, pipTrack, totalTiles, hasScreenShare, isLocalScreenSharing } =
-    useMeetingGalleryTracks()
+  const {
+    stageTracks,
+    filmstripTracks,
+    pipTrack,
+    totalTiles,
+    cameraTiles,
+    hasScreenShare,
+    isLocalScreenSharing,
+  } = useMeetingGalleryTracks()
   const stageRef = useRef<HTMLDivElement | null>(null)
   const [pipSwapped, setPipSwapped] = useState(false)
   const [pipCorner, setPipCorner] = useState<MeetingFloatingCorner>('bottom-right')
@@ -158,10 +184,6 @@ export function MeetingVideoStage() {
   useEffect(() => {
     if (!pipTrack) setPipSwapped(false)
   }, [pipTrack])
-  const mainStageTracks = useMemo(
-    () => (pipTrack && pipSwapped ? [pipTrack] : stageTracks),
-    [pipSwapped, pipTrack, stageTracks],
-  )
   const floatingTracks = useMemo(() => {
     if (!pipTrack) return []
     const floating = pipSwapped ? stageTracks[0] : pipTrack
@@ -208,52 +230,15 @@ export function MeetingVideoStage() {
     stageTrailingInset,
   })
   const galleryModeEarly = !screenLayoutEarly && !speakerLayoutEarly
-  const galleryScrollMetrics = useScrollMetrics(
-    true,
-    galleryModeEarly && stageTracks.length > pageSize,
+  const pager = useMeetingStagePager({ cameraTiles, pageSize, hasScreenShare })
+  const galleryPaged = useMemo(
+    () => paginateMeetingGallery(stageTracks, pager.galleryPage, pageSize),
+    [pageSize, pager.galleryPage, stageTracks],
   )
-  const galleryScroll = meetingGalleryScrollLayout(stageTracks.length, {
-    width: stageWidth,
-    height: galleryScrollMetrics.metrics.viewport || stageHeight,
-    preferWide: uiLayout.galleryPreferWide,
-    screenSize: pageSize,
-    gap: GALLERY_GAP,
-    minRowHeight: GALLERY_MIN_ROW_HEIGHT,
-  })
-  const galleryScrolls = galleryModeEarly && galleryScroll.scrolls
-  const galleryRowSize = galleryScroll.rowHeight + GALLERY_GAP
-  const galleryRowWindow = meetingFilmstripWindow({
-    total: galleryScroll.rows,
-    itemSize: galleryRowSize,
-    scrollOffset: galleryScrollMetrics.metrics.offset,
-    viewportSize: galleryScrollMetrics.metrics.viewport,
-    overscan: 1,
-    initialCount: galleryScroll.visibleRows + 1,
-  })
-  const galleryVisible = useMemo(
-    () =>
-      galleryScrolls
-        ? stageTracks.slice(
-            galleryRowWindow.start * galleryScroll.columns,
-            galleryRowWindow.end * galleryScroll.columns,
-          )
-        : stageTracks,
-    [galleryRowWindow.end, galleryRowWindow.start, galleryScroll.columns, galleryScrolls, stageTracks],
-  )
-  const galleryLeadSpace = galleryRowWindow.start * galleryRowSize
-  const galleryTrailSpace = Math.max(0, (galleryScroll.rows - galleryRowWindow.end) * galleryRowSize)
-  const galleryHiddenBelow = galleryScrolls
-    ? Math.max(
-        0,
-        stageTracks.length -
-          Math.ceil(
-            (galleryScrollMetrics.metrics.offset +
-              (galleryScrollMetrics.metrics.viewport || stageHeight)) /
-              galleryRowSize,
-          ) *
-            galleryScroll.columns,
-      )
-    : 0
+  const mainStageTracks = useMemo(() => {
+    if (galleryModeEarly) return galleryPaged.items
+    return pipTrack && pipSwapped ? [pipTrack] : stageTracks
+  }, [galleryModeEarly, galleryPaged.items, pipSwapped, pipTrack, stageTracks])
 
   const filmstripMounted = filmstripTracks.length > 0 && !state.participantStripMinimized
   const filmstripScroll = useScrollMetrics(filmstripBesideEarly, filmstripMounted)
@@ -281,24 +266,29 @@ export function MeetingVideoStage() {
   )
 
   useEffect(() => {
-    const identities = new Set<string>()
-    for (const track of galleryVisible) identities.add(track.participant.identity)
+    // Current gallery page plus its neighbours, so a swipe lands on live video.
+    const identities = new Set<string>(
+      galleryModeEarly
+        ? meetingGalleryPrefetchIdentities(stageTracks, galleryPaged.page, pageSize)
+        : stageTracks.map((track) => track.participant.identity),
+    )
+    for (const track of floatingTracks) identities.add(track.participant.identity)
     for (const track of filmstripVisible) identities.add(track.participant.identity)
-    // Always include anyone actively speaking even if scrolled out of view.
+    // Always include anyone actively speaking even if they are on another page.
     for (const track of stageTracks) {
       if (isTrackReference(track) && track.participant.isSpeaking) {
         identities.add(track.participant.identity)
       }
     }
     applyMeetingSelectiveCameraSubscribe(room, identities)
-  }, [filmstripVisible, galleryVisible, room, stageTracks])
+  }, [filmstripVisible, floatingTracks, galleryModeEarly, galleryPaged.page, pageSize, room, stageTracks])
 
   useEffect(() => {
     if (hasScreenShare && !previousScreenShare.current) {
       dispatch({ type: 'SET_VIEW', viewMode: 'screen-share' })
       setScreenShareBannerVisible(true)
     } else if (!hasScreenShare && state.viewMode === 'screen-share') {
-      dispatch({ type: 'SET_VIEW', viewMode: 'gallery' })
+      dispatch({ type: 'SET_VIEW', viewMode: 'speaker' })
       setScreenShareBannerVisible(false)
     } else if (!hasScreenShare) {
       setScreenShareBannerVisible(false)
@@ -363,14 +353,17 @@ export function MeetingVideoStage() {
     }
   }, [filmstripWidth, isDesktop, stageHeight, stageWidth])
 
+  // Every page keeps the full-page grid so a short last page doesn't blow tiles up.
+  const galleryLayoutCount =
+    galleryPaged.pageCount > 1 ? pageSize : galleryPaged.items.length
   const galleryLayout = useMemo(
     () =>
-      meetingGalleryLayout(stageTracks.length, {
+      meetingGalleryLayout(galleryLayoutCount, {
         width: stageWidth,
         height: stageHeight,
         preferWide: uiLayout.galleryPreferWide,
       }),
-    [uiLayout.galleryPreferWide, stageTracks.length, stageWidth, stageHeight],
+    [uiLayout.galleryPreferWide, galleryLayoutCount, stageWidth, stageHeight],
   )
   const screenLayout = screenLayoutEarly
   const speakerLayout = speakerLayoutEarly
@@ -405,11 +398,6 @@ export function MeetingVideoStage() {
     filmstripBeside ? filmstripWidth : uiLayout.filmstripWidth,
     speakerLayout ? 120 : 0,
   )
-  const scrollTileQuality = meetingCameraQualityForTile({
-    width: (stageWidth - GALLERY_GAP * (galleryScroll.columns - 1)) / galleryScroll.columns,
-    height: galleryScroll.rowHeight,
-    hdVideo: hdVideoPref,
-  })
   const stageTileQuality = meetingCameraQualityForTile({
     width: (stageWidth - GALLERY_GAP * (galleryCols - 1)) / galleryCols,
     height: (stageHeight - GALLERY_GAP * (galleryRows - 1)) / galleryRows,
@@ -431,6 +419,130 @@ export function MeetingVideoStage() {
   })
   const pipTop = pipCorner.startsWith('top')
   const pipLeft = pipCorner.endsWith('left')
+
+  const swipePointerRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    startTime: number
+    horizontal: boolean
+  } | null>(null)
+  const suppressStageClickRef = useRef(false)
+  const [pageSlide, setPageSlide] = useState({ offset: 0, animate: false })
+  const pageEnterFrameRef = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (pageEnterFrameRef.current != null) cancelAnimationFrame(pageEnterFrameRef.current)
+    },
+    [],
+  )
+  const swipePager = pager.swipe
+  const turnStagePage = useCallback(
+    (direction: MeetingStageSwipeDirection) => {
+      if (!swipePager(direction)) {
+        setPageSlide({ offset: 0, animate: true })
+        return
+      }
+      setPageSlide({
+        offset: direction === 'next' ? STAGE_PAGE_ENTER_OFFSET : -STAGE_PAGE_ENTER_OFFSET,
+        animate: false,
+      })
+      if (pageEnterFrameRef.current != null) cancelAnimationFrame(pageEnterFrameRef.current)
+      pageEnterFrameRef.current = requestAnimationFrame(() => {
+        pageEnterFrameRef.current = requestAnimationFrame(() => {
+          pageEnterFrameRef.current = null
+          setPageSlide({ offset: 0, animate: true })
+        })
+      })
+    },
+    [swipePager],
+  )
+  const turnStagePageRef = useRef(turnStagePage)
+  turnStagePageRef.current = turnStagePage
+
+  useEffect(() => {
+    const node = stageRef.current
+    if (!node) return
+    let accumulated = 0
+    let turned = false
+    let idleTimer: ReturnType<typeof setTimeout> | null = null
+    const onWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return
+      if ((event.target as HTMLElement | null)?.closest?.(STAGE_SWIPE_IGNORE_SELECTOR)) return
+      // Keeps the browser's two-finger back/forward gesture from leaving the meeting.
+      event.preventDefault()
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        accumulated = 0
+        turned = false
+      }, STAGE_WHEEL_IDLE_MS)
+      if (turned) return
+      accumulated += event.deltaX
+      if (Math.abs(accumulated) < STAGE_WHEEL_PAGE_DELTA) return
+      turned = true
+      turnStagePageRef.current(accumulated > 0 ? 'next' : 'prev')
+    }
+    node.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      node.removeEventListener('wheel', onWheel)
+      if (idleTimer) clearTimeout(idleTimer)
+    }
+  }, [])
+
+  function startStageSwipe(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    if (pager.pages.length < 2) return
+    if ((event.target as HTMLElement | null)?.closest?.(STAGE_SWIPE_IGNORE_SELECTOR)) return
+    swipePointerRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startTime: event.timeStamp,
+      horizontal: false,
+    }
+  }
+
+  function moveStageSwipe(event: ReactPointerEvent<HTMLDivElement>) {
+    const swipe = swipePointerRef.current
+    if (!swipe || swipe.pointerId !== event.pointerId) return
+    const dx = event.clientX - swipe.startX
+    const dy = event.clientY - swipe.startY
+    if (!swipe.horizontal) {
+      if (!meetingStageIsHorizontalDrag(dx, dy)) {
+        if (Math.abs(dy) > MEETING_STAGE_SWIPE_SLOP * 2) swipePointerRef.current = null
+        return
+      }
+      swipe.horizontal = true
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+    }
+    setPageSlide({
+      offset: meetingStageDragOffset(dx, pager.canGoNext, pager.canGoPrev),
+      animate: false,
+    })
+  }
+
+  function finishStageSwipe(event: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) {
+    const swipe = swipePointerRef.current
+    if (!swipe || swipe.pointerId !== event.pointerId) return
+    swipePointerRef.current = null
+    if (!swipe.horizontal) return
+    // The click that follows this pointerup belongs to the swipe, not a stage tap.
+    suppressStageClickRef.current = true
+    setTimeout(() => {
+      suppressStageClickRef.current = false
+    }, 0)
+    const dx = event.clientX - swipe.startX
+    const direction = cancelled
+      ? null
+      : meetingStageSwipeDirection({
+          dx,
+          dy: event.clientY - swipe.startY,
+          vx: dx / Math.max(1, event.timeStamp - swipe.startTime),
+          width: stageWidth,
+        })
+    if (direction) turnStagePage(direction)
+    else setPageSlide({ offset: 0, animate: true })
+  }
 
   function finishPipPointer(event: ReactPointerEvent<HTMLDivElement>) {
     const pointer = pipPointerRef.current
@@ -456,10 +568,15 @@ export function MeetingVideoStage() {
       ref={stageRef}
       className={stageClassName}
       onClick={(event) => {
+        if (suppressStageClickRef.current) return
         const target = event.target as HTMLElement | null
         if (target?.closest?.(STAGE_TAP_IGNORE_SELECTOR)) return
         triggerStageTap()
       }}
+      onPointerDown={startStageSwipe}
+      onPointerMove={moveStageSwipe}
+      onPointerUp={(event) => finishStageSwipe(event, false)}
+      onPointerCancel={(event) => finishStageSwipe(event, true)}
       style={
         {
           '--filmstrip-width': state.participantStripMinimized
@@ -475,60 +592,39 @@ export function MeetingVideoStage() {
           paddingLeft: uiLayout.stagePaddingLeft,
           paddingRight: uiLayout.stagePaddingRight + stageTrailingInset,
           boxSizing: 'border-box',
+          touchAction: 'pan-y pinch-zoom',
+          userSelect: 'none',
         } as CSSProperties
       }
     >
-      {galleryScrolls ? (
-        <div
-          ref={galleryScrollMetrics.ref}
-          className="sheconomy-video-gallery sheconomy-video-gallery--scroll"
-          onScroll={galleryScrollMetrics.measure}
-        >
-          <div
-            className="sheconomy-video-gallery__rows"
-            style={{
-              gridTemplateColumns: `repeat(${galleryScroll.columns}, minmax(0, 1fr))`,
-              gridAutoRows: `${galleryScroll.rowHeight}px`,
-              paddingTop: galleryLeadSpace,
-              paddingBottom: galleryTrailSpace,
-            }}
-          >
-            <TrackLoop tracks={galleryVisible}>
-              <SheconomyParticipantTile
-                mirrorLocalVideo={state.mirrorLocalVideo}
-                cameraQuality={scrollTileQuality}
-              />
-            </TrackLoop>
-          </div>
-        </div>
-      ) : (
-        <div
-          className={galleryClass}
-          style={
-            {
-              '--gallery-cols': String(galleryCols),
-              '--gallery-rows': String(galleryRows),
-              // Apply grid template directly — CSS vars alone are flaky in some WebViews.
-              gridTemplateColumns:
-                screenLayout || speakerLayout || solo
-                  ? undefined
-                  : `repeat(${galleryCols}, minmax(0, 1fr))`,
-              gridTemplateRows:
-                screenLayout || speakerLayout || solo
-                  ? undefined
-                  : `repeat(${galleryRows}, minmax(0, 1fr))`,
-              display: screenLayout || speakerLayout || solo ? undefined : 'grid',
-            } as CSSProperties
-          }
-        >
-          <TrackLoop tracks={mainStageTracks}>
-            <SheconomyParticipantTile
-              mirrorLocalVideo={state.mirrorLocalVideo}
-              cameraQuality={stageTileQuality}
-            />
-          </TrackLoop>
-        </div>
-      )}
+      <div
+        className={galleryClass}
+        style={
+          {
+            transform: pageSlide.offset ? `translateX(${pageSlide.offset}px)` : undefined,
+            transition: pageSlide.animate ? 'transform 0.2s ease-out' : 'none',
+            '--gallery-cols': String(galleryCols),
+            '--gallery-rows': String(galleryRows),
+            // Apply grid template directly — CSS vars alone are flaky in some WebViews.
+            gridTemplateColumns:
+              screenLayout || speakerLayout || solo
+                ? undefined
+                : `repeat(${galleryCols}, minmax(0, 1fr))`,
+            gridTemplateRows:
+              screenLayout || speakerLayout || solo
+                ? undefined
+                : `repeat(${galleryRows}, minmax(0, 1fr))`,
+            display: screenLayout || speakerLayout || solo ? undefined : 'grid',
+          } as CSSProperties
+        }
+      >
+        <TrackLoop tracks={mainStageTracks}>
+          <SheconomyParticipantTile
+            mirrorLocalVideo={state.mirrorLocalVideo}
+            cameraQuality={stageTileQuality}
+          />
+        </TrackLoop>
+      </div>
 
       {floatingTracks.length > 0 ? (
         <div
@@ -651,9 +747,30 @@ export function MeetingVideoStage() {
         </div>
       ) : null}
 
-      {galleryHiddenBelow > 0 ? (
-        <div className="sheconomy-gallery-more" aria-live="polite">
-          ↓ {galleryHiddenBelow} more · {totalTiles} people
+      {pager.pages.length > 1 ? (
+        <div
+          className={`sheconomy-gallery-pagination${
+            state.controlsVisible ? '' : ' sheconomy-gallery-pagination--hidden'
+          }`}
+          role="tablist"
+          aria-label="Meeting views"
+        >
+          <div className="sheconomy-gallery-pagination__dots">
+            {pager.pages.map((page, index) => (
+              <button
+                key={meetingStagePageKey(page)}
+                type="button"
+                role="tab"
+                aria-selected={index === pager.index}
+                aria-label={meetingStagePageLabel(page)}
+                title={meetingStagePageLabel(page)}
+                className={`sheconomy-gallery-pagination__dot${
+                  index === pager.index ? ' sheconomy-gallery-pagination__dot--active' : ''
+                }${page.kind === 'safe-driving' ? ' sheconomy-gallery-pagination__dot--driving' : ''}`}
+                onClick={() => pager.goTo(page)}
+              />
+            ))}
+          </div>
         </div>
       ) : null}
 

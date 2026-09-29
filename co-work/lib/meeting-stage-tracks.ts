@@ -19,6 +19,8 @@ export type MeetingStageTracks = {
   filmstripTracks: TrackReferenceOrPlaceholder[]
   pipTrack: TrackReferenceOrPlaceholder | null
   totalTiles: number
+  /** Camera tiles the gallery pages show, independent of the current view. */
+  cameraTiles: number
   hasScreenShare: boolean
   isLocalScreenSharing: boolean
 }
@@ -185,6 +187,7 @@ export function composeMeetingStageTracks(
         filmstripTracks: orderedCameras.filter((track) => track !== spotlightTrack),
         pipTrack: null,
         totalTiles: orderedCameras.length,
+        cameraTiles: orderedCameras.length,
         hasScreenShare: !!focusedScreen || isLocalScreenSharing,
         isLocalScreenSharing,
       }
@@ -192,29 +195,12 @@ export function composeMeetingStageTracks(
   }
 
   if (viewMode === 'gallery') {
-    // Zoom 1:1: the other person fills the stage, self-view floats on top.
-    const oneOnOneRemote = remoteCameras.length === 1 ? remoteCameras[0] : null
-    if (
-      oneOnOneRemote &&
-      includeLocal &&
-      localCamera &&
-      cameraByIdentity.size === 2 &&
-      screenShares.length === 0
-    ) {
-      return {
-        stageTracks: [oneOnOneRemote],
-        filmstripTracks: [],
-        pipTrack: localCamera,
-        totalTiles: 2,
-        hasScreenShare: false,
-        isLocalScreenSharing: false,
-      }
-    }
     return {
       stageTracks: orderedCameras,
       filmstripTracks: [],
       pipTrack: null,
       totalTiles: orderedCameras.length,
+      cameraTiles: orderedCameras.length,
       hasScreenShare: !!focusedScreen || isLocalScreenSharing,
       isLocalScreenSharing,
     }
@@ -226,6 +212,7 @@ export function composeMeetingStageTracks(
       filmstripTracks: orderedCameras,
       pipTrack: null,
       totalTiles: remoteCameras.length + (includeLocal ? 1 : 0) + 1,
+      cameraTiles: orderedCameras.length,
       hasScreenShare: true,
       isLocalScreenSharing,
     }
@@ -243,8 +230,30 @@ export function composeMeetingStageTracks(
       filmstripTracks: orderedCameras,
       pipTrack: null,
       totalTiles: orderedCameras.length,
+      cameraTiles: orderedCameras.length,
       hasScreenShare: true,
       isLocalScreenSharing: true,
+    }
+  }
+
+  // Zoom 1:1 active speaker: the other person fills the stage, self-view floats on top.
+  const oneOnOneRemote = remoteCameras.length === 1 ? remoteCameras[0] : null
+  if (
+    oneOnOneRemote &&
+    includeLocal &&
+    localCamera &&
+    cameraByIdentity.size === 2 &&
+    screenShares.length === 0 &&
+    pinnedIdentities.length === 0
+  ) {
+    return {
+      stageTracks: [oneOnOneRemote],
+      filmstripTracks: [],
+      pipTrack: localCamera,
+      totalTiles: 2,
+      cameraTiles: orderedCameras.length,
+      hasScreenShare: false,
+      isLocalScreenSharing: false,
     }
   }
 
@@ -263,6 +272,7 @@ export function composeMeetingStageTracks(
     filmstripTracks: orderedCameras.filter((track) => track !== activeSpeaker),
     pipTrack: null,
     totalTiles: orderedCameras.length,
+    cameraTiles: orderedCameras.length,
     hasScreenShare: !!focusedScreen || isLocalScreenSharing,
     isLocalScreenSharing,
   }

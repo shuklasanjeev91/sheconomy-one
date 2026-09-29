@@ -126,7 +126,7 @@ export const MEETING_LIFECYCLE_STATES: readonly MeetingLifecycleState[] = [
 export const initialMeetingMachineState: MeetingMachineState = {
   lifecycle: 'LOBBY',
   previousConnectedState: 'CONNECTED',
-  viewMode: 'gallery',
+  viewMode: 'speaker',
   uiMode: 'normal',
   mirrorLocalVideo: true,
   hideSelfView: false,
@@ -392,7 +392,7 @@ export function meetingStateReducer(
       return {
         ...state,
         lifecycle: state.previousConnectedState,
-        viewMode: state.viewMode === 'screen-share' ? 'gallery' : state.viewMode,
+        viewMode: state.viewMode === 'screen-share' ? 'speaker' : state.viewMode,
         uiMode: 'normal',
         controlsVisible: true,
         participantStripMinimized: false,

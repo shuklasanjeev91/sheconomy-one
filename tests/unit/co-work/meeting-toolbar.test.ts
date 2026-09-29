@@ -336,9 +336,6 @@ describe('meeting toolbar layout', () => {
       }),
     ).toEqual([
       'minimize',
-      'view_gallery',
-      'view_speaker',
-      'view_screen_share',
       'mirror_video',
       'hide_self_view',
       'hide_non_video',
@@ -377,9 +374,6 @@ describe('meeting toolbar layout', () => {
         inviteOnPrimary: false,
       }),
     ).toEqual([
-      'view_gallery',
-      'view_speaker',
-      'view_screen_share',
       'mirror_video',
       'hide_self_view',
       'hide_non_video',
@@ -429,9 +423,6 @@ describe('meeting toolbar layout', () => {
       }),
     ).toEqual([
       'minimize',
-      'view_gallery',
-      'view_speaker',
-      'view_screen_share',
       'mirror_video',
       'hide_self_view',
       'hide_non_video',
