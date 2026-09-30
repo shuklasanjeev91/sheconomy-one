@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 /**
  * Web must not call expo-updates. The web manager only fetches remote config.
@@ -11,7 +15,13 @@ describe('web platform fallback', () => {
     )
     expect(typeof fetchRemoteUpdateConfig).toBe('function')
     expect(typeof getUpdateConfigUrl).toBe('function')
-    // URL unset in test env → null (safe for SSR / browser without config)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('offline')
+      }),
+    )
+    // Unreachable config → null (safe for SSR / browser without config)
     await expect(fetchRemoteUpdateConfig()).resolves.toBeNull()
   })
 })

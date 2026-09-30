@@ -15,6 +15,7 @@ export default defineConfig({
       ),
       'react-native': path.resolve(__dirname, 'tests/mocks/react-native.ts'),
       one: path.resolve(__dirname, 'tests/mocks/one.ts'),
+      'expo-web-browser': path.resolve(__dirname, 'tests/mocks/expo-web-browser.ts'),
     },
   },
 })
