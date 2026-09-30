@@ -136,7 +136,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "172",
+      "buildNumber": "173",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -198,7 +198,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 203,
+      "versionCode": 204,
       "softwareKeyboardLayoutMode": "resize",
       "largeHeap": true,
       "adaptiveIcon": {
