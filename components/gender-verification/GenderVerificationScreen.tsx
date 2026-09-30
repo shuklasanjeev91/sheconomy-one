@@ -16,6 +16,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useGenderVerification } from '~/hooks/useGenderVerification'
 import { useProfile } from '~/hooks/useProfile'
 import {
+  FACE_QUALITY_TIPS,
   formatVerificationDiagnostics,
   HUMAN_VERIFICATION_DISCLAIMER,
   type VerificationDiagnostics,
@@ -62,6 +63,7 @@ export function GenderVerificationScreen() {
   const softRetrying = 'softRetrying' in verification && verification.softRetrying
   const diagnostics = (verification as { diagnostics?: VerificationDiagnostics | null }).diagnostics
   const diagnosticsLine = diagnostics ? formatVerificationDiagnostics(diagnostics) : null
+  const qualityTips = (diagnostics?.issues ?? []).map((issue) => FACE_QUALITY_TIPS[issue])
 
   const primaryLabel = softRetrying
     ? 'Starting…'
@@ -108,7 +110,7 @@ export function GenderVerificationScreen() {
               Confirm it&apos;s you
             </Text>
             <Text fontSize={15} color={ui.textMuted} textAlign="center" lineHeight={22} maxWidth={420}>
-              Optional check — center your face and blink naturally {verification.requiredBlinks}{' '}
+              Optional check — center your face and blink slowly {verification.requiredBlinks}{' '}
               times to unlock Community, Chat, and Create store. Your video stays on this device. Skip
               anytime to keep using Commerce, Classes, and Co-Work.
             </Text>
@@ -181,6 +183,18 @@ export function GenderVerificationScreen() {
                 <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
                   {verification.error}
                 </Text>
+                {qualityTips.length > 0 ? (
+                  <YStack gap="$1" marginTop="$1">
+                    <Text color={ui.text} fontSize={13} fontWeight="700">
+                      What may help
+                    </Text>
+                    {qualityTips.map((tip) => (
+                      <Text key={tip} color={ui.textSecondary} fontSize={13} lineHeight={19}>
+                        • {tip}
+                      </Text>
+                    ))}
+                  </YStack>
+                ) : null}
                 {diagnosticsLine ? (
                   <Text fontSize={11} color={ui.textMuted} lineHeight={16}>
                     {diagnosticsLine}

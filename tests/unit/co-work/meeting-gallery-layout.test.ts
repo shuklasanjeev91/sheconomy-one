@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { Participant } from 'livekit-client'
 
 import {
   capFilmstripTracks,
@@ -8,8 +7,7 @@ import {
   meetingGalleryPages,
   meetingFilmstripWindow,
   meetingGalleryScrollLayout,
-  meetingGalleryPrefetchIdentities,
-  paginateMeetingGallery,
+  meetingGalleryScrollWindow,
   resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
 import { participantDisplayName } from '~/co-work/lib/participant-avatar'
@@ -57,21 +55,11 @@ describe('Zoom-style meeting gallery', () => {
 
   it('does not expose internal user ids in participant labels', () => {
     expect(
-      participantDisplayName({ name: 'user_00bc8abb', identity: 'user_00bc8abb' } as Participant),
+      participantDisplayName({ name: 'user_00bc8abb', identity: 'user_00bc8abb' } as { name: string; identity: string }),
     ).toBe('Guest')
-    expect(participantDisplayName({ name: 'Ritu Singh', identity: 'user_123' } as Participant)).toBe(
+    expect(participantDisplayName({ name: 'Ritu Singh', identity: 'user_123' } as { name: string; identity: string })).toBe(
       'Ritu Singh',
     )
-  })
-
-  it('paginates large galleries and clamps stale pages', () => {
-    const participants = Array.from({ length: 14 }, (_, index) => index)
-    expect(paginateMeetingGallery(participants, 1, 6)).toEqual({
-      items: [6, 7, 8, 9, 10, 11],
-      page: 1,
-      pageCount: 3,
-    })
-    expect(paginateMeetingGallery(participants.slice(0, 2), 5, 6).page).toBe(0)
   })
 
   it('packs dense 25 and 49 tile pages for large rooms', () => {
@@ -136,31 +124,6 @@ describe('Zoom-style meeting gallery', () => {
     ])
   })
 
-  it('prefetches neighboring gallery pages for smooth Prev/Next video', () => {
-    const tracks = Array.from({ length: 20 }, (_, index) => ({
-      participant: { identity: `u${index}` },
-    }))
-    expect(meetingGalleryPrefetchIdentities(tracks, 1, 6)).toEqual([
-      'u0',
-      'u1',
-      'u2',
-      'u3',
-      'u4',
-      'u5',
-      'u6',
-      'u7',
-      'u8',
-      'u9',
-      'u10',
-      'u11',
-      'u12',
-      'u13',
-      'u14',
-      'u15',
-      'u16',
-      'u17',
-    ])
-  })
 })
 
 describe('meetingFilmstripWindow', () => {
@@ -244,5 +207,47 @@ describe('meetingGalleryScrollLayout', () => {
     })
     expect(layout.scrolls).toBe(true)
     expect(layout.rowHeight).toBe(96)
+  })
+})
+
+describe('meetingGalleryScrollWindow', () => {
+  it('mounts the first screen plus one row before the gallery is measured', () => {
+    expect(
+      meetingGalleryScrollWindow({
+        total: 30,
+        columns: 3,
+        rowStride: 160,
+        scrollOffset: 0,
+        viewportSize: 0,
+        rowsPerViewport: 5,
+      }),
+    ).toEqual({ start: 0, end: 18, visibleStart: 0, visibleEnd: 15 })
+  })
+
+  it('moves the mounted rows with the scroll position', () => {
+    // Rows 3..7 on screen (480..1180px), one overscan row either side.
+    expect(
+      meetingGalleryScrollWindow({
+        total: 30,
+        columns: 3,
+        rowStride: 160,
+        scrollOffset: 480,
+        viewportSize: 700,
+        rowsPerViewport: 5,
+      }),
+    ).toEqual({ start: 6, end: 27, visibleStart: 9, visibleEnd: 24 })
+  })
+
+  it('clamps to the last row', () => {
+    expect(
+      meetingGalleryScrollWindow({
+        total: 31,
+        columns: 3,
+        rowStride: 160,
+        scrollOffset: 99_999,
+        viewportSize: 700,
+        rowsPerViewport: 5,
+      }),
+    ).toEqual({ start: 27, end: 31, visibleStart: 30, visibleEnd: 31 })
   })
 })

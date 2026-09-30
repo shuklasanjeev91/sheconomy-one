@@ -12,6 +12,7 @@ import {
   loadRememberedMeetingDisplayName,
   saveRememberedMeetingDisplayName,
 } from '~/co-work/lib/meeting-display-name'
+import { meetingCodeFromInput } from '~/co-work/lib/meetings'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { saveMeetingJoinPrefs, meetingJoinPrefsFromCheckboxes } from '~/co-work/lib/meeting-join-prefs'
 import { unlockWebAudioPlayback } from '~/co-work/lib/meeting-web'
@@ -21,7 +22,7 @@ import { useProfile } from '~/hooks/useProfile'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
 export function CoWorkJoinScreen() {
-  const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
+  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const router = useRouter()
   const toast = useAppToast()
   const { profile, user } = useProfile()
@@ -52,7 +53,7 @@ export function CoWorkJoinScreen() {
   }, [profile])
 
   async function handleJoin(codeToJoin: string) {
-    const normalized = codeToJoin.replace(/\s/g, '').toUpperCase()
+    const normalized = meetingCodeFromInput(codeToJoin)
     if (!normalized) {
       toast.show('Please enter a Meeting ID', { tone: 'info' })
       return
@@ -76,9 +77,9 @@ export function CoWorkJoinScreen() {
   return (
     <AppPage
       scroll
-      backgroundColor="#0c080a"
+      backgroundColor={coworkUi.pageBg}
       paddingVertical="$6"
-      style={pageGradientStyle(coworkGradients.page, '#0c080a')}
+      style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
       <YStack
         gap="$5"
@@ -104,15 +105,15 @@ export function CoWorkJoinScreen() {
           padding={wide ? '$6' : '$5'}
           borderRadius={20}
           borderWidth={1}
-          borderColor="rgba(255, 255, 255, 0.12)"
-          backgroundColor="rgba(22, 18, 24, 0.96)"
+          borderColor={coworkUi.border}
+          backgroundColor={coworkUi.surface}
           style={{
-            boxShadow: '0 24px 64px rgba(0, 0, 0, 0.7)',
+            boxShadow: coworkShadows.panel,
           }}
         >
           {/* Header */}
           <XStack alignItems="center" justifyContent="space-between" paddingBottom="$1">
-            <Text fontSize={20} fontWeight="800" color="#ffffff" letterSpacing={-0.3}>
+            <Text fontSize={20} fontWeight="800" color={coworkUi.text} letterSpacing={-0.3}>
               Join a Meeting
             </Text>
             <XStack
@@ -137,9 +138,9 @@ export function CoWorkJoinScreen() {
                 onChangeText={setJoinCode}
                 placeholder="Enter Meeting ID"
                 autoCapitalize="characters"
-                backgroundColor="rgba(0, 0, 0, 0.5)"
+                backgroundColor={coworkUi.surfaceMuted}
                 borderColor={coworkUi.borderSoft}
-                color="#ffffff"
+                color={coworkUi.text}
                 placeholderTextColor={coworkUi.textMuted}
                 borderRadius={10}
                 fontSize={16}
@@ -155,9 +156,9 @@ export function CoWorkJoinScreen() {
                 value={displayName}
                 onChangeText={setDisplayName}
                 placeholder="Enter your name"
-                backgroundColor="rgba(0, 0, 0, 0.5)"
+                backgroundColor={coworkUi.surfaceMuted}
                 borderColor={coworkUi.borderSoft}
-                color="#ffffff"
+                color={coworkUi.text}
                 placeholderTextColor={coworkUi.textMuted}
                 borderRadius={10}
                 fontSize={16}
@@ -220,8 +221,8 @@ export function CoWorkJoinScreen() {
                 tone="outline"
                 size="$5"
                 borderRadius={10}
-                borderColor="rgba(255, 255, 255, 0.16)"
-                backgroundColor="rgba(255, 255, 255, 0.04)"
+                borderColor={coworkUi.border}
+                backgroundColor={coworkUi.surfaceMuted}
                 onPress={() => router.push(coWorkRoutes.home as never)}
               >
                 Cancel
@@ -231,7 +232,7 @@ export function CoWorkJoinScreen() {
 
           {/* Recent Meeting Codes — under the form on mobile/tablet */}
           {!wide && recentCodes.length > 0 ? (
-            <YStack gap="$2.5" paddingTop="$3" borderTopWidth={1} borderColor="rgba(255, 255, 255, 0.08)">
+            <YStack gap="$2.5" paddingTop="$3" borderTopWidth={1} borderColor={coworkUi.borderSoft}>
               <XStack alignItems="center" justifyContent="space-between">
                 <Text fontWeight="700" fontSize={12} color={coworkUi.meetingIconMuted}>
                   Recent Meetings
@@ -255,8 +256,8 @@ export function CoWorkJoinScreen() {
                     paddingVertical="$1.5"
                     borderRadius={8}
                     borderWidth={1}
-                    borderColor="rgba(255, 255, 255, 0.12)"
-                    backgroundColor="rgba(255, 255, 255, 0.04)"
+                    borderColor={coworkUi.border}
+                    backgroundColor={coworkUi.surfaceMuted}
                     cursor="pointer"
                     pressStyle={{ opacity: 0.8 }}
                     onPress={() => {
@@ -264,7 +265,7 @@ export function CoWorkJoinScreen() {
                       void handleJoin(code)
                     }}
                   >
-                    <Text fontSize={12} fontWeight="700" color="#ffffff" letterSpacing={0.5}>
+                    <Text fontSize={12} fontWeight="700" color={coworkUi.text} letterSpacing={0.5}>
                       {code}
                     </Text>
                   </XStack>
@@ -284,11 +285,11 @@ export function CoWorkJoinScreen() {
             padding="$6"
             borderRadius={20}
             borderWidth={1}
-            borderColor="rgba(255, 255, 255, 0.12)"
-            backgroundColor="rgba(22, 18, 24, 0.96)"
+            borderColor={coworkUi.border}
+            backgroundColor={coworkUi.surface}
           >
             <YStack gap="$2">
-              <Text fontSize={20} fontWeight="800" color="#ffffff">
+              <Text fontSize={20} fontWeight="800" color={coworkUi.text}>
                 Join from any device
               </Text>
               <Text fontSize={14} color={coworkUi.textSecondary} lineHeight={21}>
@@ -320,8 +321,8 @@ export function CoWorkJoinScreen() {
                       paddingVertical="$1.5"
                       borderRadius={8}
                       borderWidth={1}
-                      borderColor="rgba(255, 255, 255, 0.12)"
-                      backgroundColor="rgba(255, 255, 255, 0.04)"
+                      borderColor={coworkUi.border}
+                      backgroundColor={coworkUi.surfaceMuted}
                       cursor="pointer"
                       pressStyle={{ opacity: 0.8 }}
                       onPress={() => {
@@ -329,7 +330,7 @@ export function CoWorkJoinScreen() {
                         void handleJoin(code)
                       }}
                     >
-                      <Text fontSize={12} fontWeight="700" color="#ffffff" letterSpacing={0.5}>
+                      <Text fontSize={12} fontWeight="700" color={coworkUi.text} letterSpacing={0.5}>
                         {code}
                       </Text>
                     </XStack>

@@ -43,16 +43,31 @@ export default function AuthCallbackRoute() {
       }
     }
 
+    // The launch URL can be unrelated when the app was already running (the
+    // auth session delivers the code), so only act on actual callback URLs.
+    let started = false
+    const finishOnce = (url: string | null) => {
+      if (cancelled || started) return
+      started = true
+      void finish(url)
+    }
+    const isCallbackUrl = (url: string | null): url is string =>
+      Boolean(url && /auth\/callback/.test(url) && /[?&#](code|error)=/.test(url))
+
     void Linking.getInitialURL().then((url) => {
-      if (!cancelled) void finish(url)
+      if (isCallbackUrl(url)) finishOnce(url)
     })
 
     const sub = Linking.addEventListener('url', ({ url }) => {
-      void finish(url)
+      if (isCallbackUrl(url)) finishOnce(url)
     })
+
+    // No callback URL arrived: fall back to whatever session the auth session produced.
+    const fallback = setTimeout(() => finishOnce(null), 6_000)
 
     return () => {
       cancelled = true
+      clearTimeout(fallback)
       sub.remove()
     }
   }, [completeSignIn, router, toast])

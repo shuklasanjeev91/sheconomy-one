@@ -21,7 +21,7 @@ export async function startRegisteredIosPip(): Promise<void> {
     )
   }
   // Dynamic import keeps web/Android bundles free of the native module.
-  const { startIOSPIP } = require('@livekit/react-native-webrtc') as {
+  const { startIOSPIP } = require('react-native-webrtc') as {
     startIOSPIP: (ref: PipRef) => void
   }
   startIOSPIP(primaryPipRef)
@@ -30,7 +30,7 @@ export async function startRegisteredIosPip(): Promise<void> {
 export async function stopRegisteredIosPip(): Promise<void> {
   if (!primaryPipRef?.current) return
   try {
-    const { stopIOSPIP } = require('@livekit/react-native-webrtc') as {
+    const { stopIOSPIP } = require('react-native-webrtc') as {
       stopIOSPIP: (ref: PipRef) => void
     }
     stopIOSPIP(primaryPipRef)

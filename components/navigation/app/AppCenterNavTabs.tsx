@@ -7,7 +7,7 @@ import { useAccess } from '~/hooks/useAccess'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { openHumanVerification } from '~/lib/gender-verification/open-request'
 import { navigateApp } from '~/lib/platform/navigate'
-import { useAppUi } from '~/lib/theme/useAppUi'
+import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
 
 import { APP_CENTER_NAV, getAppColors } from '~/components/navigation/app/config'
 import { warmProductTabRoute } from '~/components/navigation/app/warm-product-tab-route'
@@ -31,6 +31,8 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
   const { resolveFeatureNavIntent } = useAccess()
   const ui = useAppUi()
   const colors = getAppColors(ui)
+  // Brand pink on its own light tint is below 4.5:1 for 9px labels.
+  const activeLabelColor = useIsDarkTheme() ? colors.brand : ui.brandDark
   const isInline = variant === 'mobile-inline'
   const isMobile = variant === 'mobile' || isInline
   const showMobileLabels = isMobile
@@ -139,7 +141,7 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
               <Text
                 fontSize={9}
                 fontWeight={isActive ? '700' : '500'}
-                color={isActive ? colors.brand : colors.textSecondary}
+                color={isActive ? activeLabelColor : colors.textSecondary}
                 numberOfLines={1}
                 textAlign="center"
                 width="100%"

@@ -1,6 +1,6 @@
 /**
  * Interpretation / webinar mode preferences (host-controlled UI state).
- * Channel routing is a soft preference — media still uses the main LiveKit room.
+ * Channel routing is a soft preference — media still uses the main SFU room.
  */
 
 export type MeetingInterpretationChannel = {

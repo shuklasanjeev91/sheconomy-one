@@ -60,7 +60,20 @@ export default defineConfig(({ mode }) => {
         path: '/__vxrnhmr',
       },
       watch: {
-        ignored: ['**/.vercel/**', '**/dist/**', '**/.tamagui/**', '**/.expo/**'],
+        // Native build output (tens of thousands of files) pegs the watcher, and any
+        // Gradle/Xcode write under it triggers a full web page reload mid-meeting.
+        ignored: [
+          '**/.vercel/**',
+          '**/dist/**',
+          '**/.tamagui/**',
+          '**/.expo/**',
+          fromProjectRoot('./android/**'),
+          fromProjectRoot('./ios/**'),
+          fromProjectRoot('./build/**'),
+          fromProjectRoot('./test-results/**'),
+          '**/modules/*/android/**',
+          '**/modules/*/ios/**',
+        ],
       },
       // OneSignal web push SW must be allowed to control the whole origin.
       headers: {
@@ -99,13 +112,11 @@ export default defineConfig(({ mode }) => {
         '@react-native-community/datetimepicker': fromProjectRoot('./lib/stubs/datetimepicker.ts'),
         '@react-native-voice/voice': fromProjectRoot('./lib/stubs/react-native-voice.ts'),
         'expo-print': fromProjectRoot('./lib/stubs/expo-print.ts'),
-        '@livekit/react-native': fromProjectRoot('./lib/stubs/livekit-react-native.ts'),
-        '@livekit/react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
         'react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
         'react-native-webview': fromProjectRoot('./lib/stubs/react-native-webview.ts'),
         // Published package ships JSX in `.js`; Rolldown parse fails during web build.
         'react-native-qrcode-svg': fromProjectRoot('./lib/stubs/react-native-qrcode-svg.tsx'),
-        // LiveKit/debug leave Node built-ins external; Hermes has no require.
+        // debug leaves Node built-ins external; Hermes has no require.
         tty: fromProjectRoot('./lib/stubs/node-empty.ts'),
         'node:tty': fromProjectRoot('./lib/stubs/node-empty.ts'),
         util: fromProjectRoot('./lib/stubs/node-util.ts'),
@@ -127,8 +138,6 @@ export default defineConfig(({ mode }) => {
         // Async meeting chunks must share this copy or Join paints "Missing theme.".
         '@tamagui/helpers-icon': fromProjectRoot('./node_modules/@tamagui/helpers-icon'),
         '@tamagui/sizable-context': fromProjectRoot('./node_modules/@tamagui/sizable-context'),
-        // `loglevel` ships legacy UMD (`root.log = definition()`) which crashes Vite SSR.
-        loglevel: fromProjectRoot('./lib/stubs/loglevel.ts'),
         zod: fromProjectRoot('./lib/zod.ts'),
       },
     },
@@ -136,7 +145,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       {
         name: 'sheconomy-stub-rolldown-node-require',
-        // LiveKit WebRTC nests `debug`, whose Node entry does require('tty').
+        // mediasoup-client uses `debug`, whose Node entry does require('tty').
         // Hermes has no Node require — force the browser build of `debug`.
         transform(code, id) {
           const normalized = id.replace(/\\/g, '/')
@@ -559,7 +568,7 @@ if (typeof g.Response !== 'function') {
       // One's native.suspendRoutes:false should set this, but the Release Hermes
       // bundle was still evaluating `process.env.ONE_SUSPEND_ROUTES_NATIVE === "0"`
       // at runtime (undefined) → every screen wrapped in <Suspense fallback={null}>.
-      // Instant meeting then painted a blank chromeless viewport while LiveKit inits.
+      // Instant meeting then painted a blank chromeless viewport while media inits.
       'process.env.ONE_SUSPEND_ROUTES_NATIVE': JSON.stringify('0'),
       'process.env.ONE_SUSPEND_ROUTES': JSON.stringify('0'),
       'import.meta.env.EXPO_PUBLIC_SUPABASE_URL': JSON.stringify(
@@ -595,8 +604,6 @@ if (typeof g.Response !== 'function') {
     optimizeDeps: {
       exclude: [
         '@react-native-community/datetimepicker',
-        '@livekit/react-native',
-        '@livekit/react-native-webrtc',
         'expo-camera',
         'expo-location',
         'expo-audio',
@@ -612,12 +619,10 @@ if (typeof g.Response !== 'function') {
         '@tamagui/sizable-context',
         '@tamagui/lucide-icons',
         'date-fns',
-        // LiveKit only — do not prebundle expo-* here; those thrash deps_ssr and
+        // Meeting media only — do not prebundle expo-* here; those thrash deps_ssr and
         // throw "new version of the pre-bundle … page reload" on meeting routes.
-        'livekit-client',
-        '@livekit/components-core',
-        '@livekit/components-react',
-        '@livekit/track-processors',
+        'mediasoup-client',
+        '@mediapipe/tasks-vision',
       ],
     },
 

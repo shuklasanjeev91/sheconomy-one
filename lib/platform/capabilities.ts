@@ -33,8 +33,8 @@ export function hasSpeechRecognition() {
   return !!(window.SpeechRecognition ?? window.webkitSpeechRecognition)
 }
 
-/** LiveKit video — web via getUserMedia; iOS/Android via react-native-webrtc. */
-export function supportsLiveKitVideo() {
+/** Meeting video — web via getUserMedia; iOS/Android via react-native-webrtc. */
+export function supportsMeetingVideo() {
   if (isWebRuntime()) return hasWebMediaDevices()
   return isNativeRuntime()
 }

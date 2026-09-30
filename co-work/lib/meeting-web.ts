@@ -7,6 +7,8 @@ export type MeetingWebFeature =
   | 'camera'
   | 'microphone'
   | 'screen_share'
+  | 'mobile_screen_share'
+  | 'embedded_screen_share'
   | 'tab_share'
   | 'window_share'
   | 'fullscreen'
@@ -75,6 +77,10 @@ export function meetingWebUnsupportedMessage(feature: MeetingWebFeature): string
       return 'Microphone is not available in this browser. Try Chrome, Edge, Firefox, or Safari on the latest version.'
     case 'screen_share':
       return 'Screen sharing is not supported in this browser. Use Chrome or Edge, or update Safari / Firefox to the latest version.'
+    case 'mobile_screen_share':
+      return 'Phone and tablet browsers can’t share the screen. Open this meeting in the Sheconomy app to present.'
+    case 'embedded_screen_share':
+      return 'Screen sharing is blocked in this built-in browser. Open the meeting in Chrome, Edge, Safari, or Firefox to share your screen.'
     case 'tab_share':
       return 'Browser tab sharing is not available here. Your browser may only offer the full screen or a window — pick one of those options in the share dialog.'
     case 'window_share':
@@ -183,10 +189,23 @@ export function mapWebMediaPermissionError(
 }
 
 /**
- * Map getDisplayMedia / LiveKit screen-share failures to clear web copy.
+ * Electron shells other than the SHEconomy desktop app (IDE previews, in-app
+ * webviews). They expose getDisplayMedia but reject it with NotSupportedError
+ * unless the host registers a display-media handler.
+ */
+export function isEmbeddedElectronBrowser(globalObject: typeof globalThis = globalThis): boolean {
+  const g = globalObject as typeof globalThis & { navigator?: Navigator; sheconomyDesktop?: unknown }
+  return !g.sheconomyDesktop && /\bElectron\//.test(g.navigator?.userAgent ?? '')
+}
+
+/**
+ * Map getDisplayMedia / SFU screen-share failures to clear web copy.
  * The OS picker itself chooses Screen / Window / Browser tab when the browser supports them.
  */
-export function mapWebScreenShareError(cause?: unknown): string {
+export function mapWebScreenShareError(
+  cause?: unknown,
+  globalObject: typeof globalThis = globalThis,
+): string {
   const raw =
     cause instanceof Error
       ? `${cause.name} ${cause.message}`
@@ -200,7 +219,9 @@ export function mapWebScreenShareError(cause?: unknown): string {
     return 'Screen share permission was denied. Allow screen sharing when prompted, or enable it in your browser site settings.'
   }
   if (/NotSupported|undefined is not a function|getDisplayMedia/i.test(raw)) {
-    return meetingWebUnsupportedMessage('screen_share')
+    return meetingWebUnsupportedMessage(
+      isEmbeddedElectronBrowser(globalObject) ? 'embedded_screen_share' : 'screen_share',
+    )
   }
   if (/NotReadable|InvalidState/i.test(raw)) {
     return 'Could not capture that display. Try a different tab, window, or screen in the picker.'
@@ -222,7 +243,7 @@ export function describeMeetingWebScreenShare(capabilities: MeetingWebCapabiliti
 
 /**
  * Prime the browser audio graph on a user gesture (Join / Start / Unmute).
- * Chrome autoplay blocks LiveKit remote audio after navigation unless an
+ * Chrome autoplay blocks remote meeting audio after navigation unless an
  * AudioContext is resumed in the same click that enters the meeting.
  */
 export function unlockWebAudioPlayback(globalObject: typeof globalThis = globalThis): void {
@@ -241,7 +262,7 @@ export function unlockWebAudioPlayback(globalObject: typeof globalThis = globalT
     source.connect(ctx.destination)
     source.start(0)
   } catch {
-    // LiveKit room.startAudio still runs after connect.
+    // Remote <audio> elements replay on the next gesture after connect.
   }
 }
 

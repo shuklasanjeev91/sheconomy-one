@@ -77,13 +77,13 @@ export function ScheduleTimezoneField({
         borderRadius={14}
         borderWidth={1}
         borderColor={error ? coworkUi.danger : coworkUi.borderSoft}
-        backgroundColor="rgba(255,255,255,0.05)"
+        backgroundColor={coworkUi.surfaceMuted}
         cursor="pointer"
         aria-label="Choose timezone"
         hoverStyle={{ borderColor: coworkUi.brand }}
         pressStyle={{ opacity: 0.85 }}
       >
-        <Icons.Globe size={18} color={coworkUi.brand} />
+        <Icons.Globe size={18} color={coworkUi.brandLight} />
         <YStack flex={1} gap={2} minWidth={0}>
           <Text fontSize={15} fontWeight="600" color={coworkUi.text} numberOfLines={1}>
             {formatScheduleTimeZoneLabel(selected)}
@@ -116,7 +116,7 @@ export function ScheduleTimezoneField({
             placeholder="Search city or GMT offset"
             autoCapitalize="none"
             autoCorrect={false}
-            backgroundColor="rgba(255,255,255,0.05)"
+            backgroundColor={coworkUi.surfaceMuted}
             borderColor={coworkUi.borderSoft}
             color={coworkUi.text}
             borderRadius={14}
@@ -134,7 +134,7 @@ export function ScheduleTimezoneField({
                     paddingVertical="$3"
                     paddingHorizontal="$3"
                     borderRadius={12}
-                    backgroundColor={active ? 'rgba(255,255,255,0.08)' : 'transparent'}
+                    backgroundColor={active ? coworkUi.brandMuted : 'transparent'}
                     onPress={() => selectZone(row.value)}
                     cursor="pointer"
                     pressStyle={{ opacity: 0.8 }}
@@ -147,7 +147,7 @@ export function ScheduleTimezoneField({
                         {row.region} · {row.value}
                       </Text>
                     </YStack>
-                    {active ? <Icons.Check size={18} color={coworkUi.brand} /> : null}
+                    {active ? <Icons.Check size={18} color={coworkUi.brandLight} /> : null}
                   </XStack>
                 )
               })}

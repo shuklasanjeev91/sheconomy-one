@@ -8,7 +8,6 @@ import {
   parseMeetingMediaPrefs,
   meetingAudioCaptureConstraints,
 } from '~/co-work/lib/meeting-media-prefs'
-import { resolveScreenShareCapture } from '~/co-work/lib/livekit-screen-share'
 import {
   MEETING_KEYBOARD_SHORTCUTS,
   resolveMeetingKeyboardAction,
@@ -22,11 +21,13 @@ describe('Zoom parity batch 5 — share options, chat export, waiting room, shor
     expect(meetingShareContentItems().map((item) => item.kind)).toEqual([
       'screen',
       'photos',
+      'video',
       'files',
       'whiteboard',
     ])
     expect(meetingShareContentItems({ supportsScreenShare: false }).map((i) => i.kind)).toEqual([
       'photos',
+      'video',
       'files',
       'whiteboard',
     ])
@@ -46,22 +47,6 @@ describe('Zoom parity batch 5 — share options, chat export, waiting room, shor
     })
     // Original sound constraints remain independent of share prefs.
     expect(meetingAudioCaptureConstraints({ originalSound: true }).noiseSuppression).toBe(false)
-  })
-
-  it('resolves screen-share capture with sound + motion hint', () => {
-    const web = resolveScreenShareCapture('web', {
-      shareComputerSound: true,
-      optimizeForVideo: true,
-    })
-    expect(web.audio).toBe(true)
-    expect(web.contentHint).toBe('motion')
-
-    const nativeQuiet = resolveScreenShareCapture('native', {
-      shareComputerSound: false,
-      optimizeForVideo: false,
-    })
-    expect(nativeQuiet.audio).toBe(false)
-    expect(nativeQuiet.contentHint).toBe('detail')
   })
 
   it('builds a plain-text chat archive for export', () => {

@@ -13,7 +13,7 @@ import { navigateApp } from '~/lib/platform/navigate'
 import type { Href } from 'one'
 
 /**
- * Keep LiveKit alive under InstantMeetingHost, collapse to the mini-player, and
+ * Keep the media room alive under InstantMeetingHost, collapse to the mini-player, and
  * optionally navigate so Commerce / Community / Chat / Class tabs are usable.
  *
  * Important: do not navigate inside browseAway/minimizeMeeting when a tab href

@@ -39,7 +39,7 @@ type UseMeetingSessionOptions = {
 /**
  * @deprecated Legacy mesh + signaling session.
  * Production Co-Work uses `useMeetingPresence` (signaling/presence/chat) +
- * LiveKit SFU via `MeetingProvider` / `useMeetingRealtimeSession`.
+ * mediasoup SFU via `MeetingProvider` / `useMeetingRealtimeSession`.
  * Do not use for large meetings.
  */
 export function useMeetingSession({

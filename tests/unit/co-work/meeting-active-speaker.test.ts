@@ -54,7 +54,7 @@ describe('meeting active speaker', () => {
     ).toBe('b')
   })
 
-  it('dedupes LiveKit active speaker payloads', () => {
+  it('dedupes active speaker payloads', () => {
     expect(
       identitiesFromActiveSpeakers([
         { identity: 'a' },

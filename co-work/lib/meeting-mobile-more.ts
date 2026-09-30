@@ -21,9 +21,9 @@ export function meetingMobileMoreGridKeys(input: {
   hasBackground?: boolean
   hasSafeDriving?: boolean
 }): MeetingToolbarOverflowKey[] {
+  // Share is a one-tap button on the phone dock (Zoom), not a More item.
   const keys: MeetingToolbarOverflowKey[] = [
     'manage_participants',
-    'share_screen',
     'captions',
     'polls', // Apps
     'disconnect_audio',

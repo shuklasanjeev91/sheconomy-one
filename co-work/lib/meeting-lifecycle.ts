@@ -17,11 +17,11 @@ export type MeetingLifecycleSnapshot = {
   isViewingSharedScreen: boolean
   /** User wants camera on (last known intent before OS paused it). */
   intendedCameraOn: boolean
-  /** LiveKit reports the local camera track as enabled. */
+  /** The SFU reports the local camera track as enabled. */
   cameraEnabled: boolean
   /** Screen share ended while we were backgrounded / tab-hidden. */
   screenShareStoppedByOs?: boolean
-  /** Network / LiveKit reconnect in progress. */
+  /** Network / SFU reconnect in progress. */
   reconnecting?: boolean
   /** Restoring media after returning to the app. */
   restoring?: boolean

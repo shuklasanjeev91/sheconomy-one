@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Platform, type AppStateStatus } from 'react-native'
-import { ConnectionState, RoomEvent, type Room } from 'livekit-client'
-import { useKeepAwake } from 'expo-keep-awake'
 
-import type { LiveKitMediaMode } from '~/co-work/lib/livekit-media-controls'
-import {
-  applyPreferredCallAudioOutput,
-  configureLiveKitCallAudio,
-} from '~/co-work/lib/livekit-call-audio'
+import { MEETING_RECONNECT_BANNER_DEBOUNCE_MS } from '~/co-work/lib/meeting-audio-quality'
+import type { MeetingMediaMode } from '~/co-work/lib/meeting-media-controls'
+import { applyPreferredCallAudioOutput, configureCallAudio } from '~/co-work/lib/call-audio'
 import {
   pauseMeetingCameraForBackground,
   restoreMeetingMediaAfterForeground,
-} from '~/co-work/lib/livekit-call-media'
+} from '~/co-work/lib/meeting-call-media'
 import {
   meetingLifecycleNotice,
   type MeetingLifecyclePlatform,
@@ -21,27 +17,28 @@ import {
   getMeetingCameraIntent,
   syncMeetingCameraIntentFromTrack,
 } from '~/co-work/lib/meeting-camera-intent'
+import type { MediasoupConnectionState, MediasoupRoom } from '~/co-work/lib/mediasoup/mediasoup-room'
 import { useMeetingStateManager } from '~/co-work/hooks/useMeetingStateManager'
+import { isAndroidPipActive, useAndroidPipActive } from '~/lib/session/android-pip'
 import { useOnReconnect } from '~/providers/ConnectivityProvider'
 
 type UseMeetingLifecycleArgs = {
-  room: Room
-  mediaMode: LiveKitMediaMode
+  room: MediasoupRoom | null
+  connection: MediasoupConnectionState
+  mediaMode: MeetingMediaMode
   screenSharing: boolean
   viewingScreenShare: boolean
   cameraEnabled: boolean
-  speakerOn: boolean
 }
 
 export function useMeetingLifecycle({
   room,
+  connection,
   mediaMode,
   screenSharing,
   viewingScreenShare,
   cameraEnabled,
-  speakerOn: _speakerOn,
 }: UseMeetingLifecycleArgs) {
-  useKeepAwake('sheconomy-meeting-native')
   const { syncLifecycle } = useMeetingStateManager()
   const [notice, setNotice] = useState<string | null>(null)
   // Initial state: only true OS background counts. Permission sheets often
@@ -59,7 +56,10 @@ export function useMeetingLifecycle({
   const backgroundPauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   screenSharingRef.current = screenSharing
 
+  const androidPip = useAndroidPipActive()
+
   const platform: MeetingLifecyclePlatform = Platform.OS === 'ios' ? 'ios' : 'android'
+  const audioOnly = mediaMode === 'audio'
 
   useEffect(() => {
     if (!inBackground) {
@@ -126,9 +126,9 @@ export function useMeetingLifecycle({
     })
     void (async () => {
       try {
-        await configureLiveKitCallAudio(mediaMode)
+        await configureCallAudio(mediaMode)
         await applyPreferredCallAudioOutput(mediaMode)
-        if (room.state === ConnectionState.Connected) {
+        if (room?.getSnapshot().connection === 'connected') {
           await pauseMeetingCameraForBackground(room)
         }
       } catch {
@@ -161,6 +161,8 @@ export function useMeetingLifecycle({
           backgroundPauseTimerRef.current = setTimeout(() => {
             backgroundPauseTimerRef.current = null
             if (appStateRef.current !== 'background') return
+            // Android PiP reports `background` but the room is still on screen.
+            if (isAndroidPipActive()) return
             confirmBackgroundPause()
           }, MEETING_BACKGROUND_CAMERA_PAUSE_DEBOUNCE_MS)
         }
@@ -169,6 +171,7 @@ export function useMeetingLifecycle({
 
       clearBackgroundPauseTimer()
       setPhoneCallInterrupted(false)
+      if (room?.getSnapshot().connection === 'failed') void room.reconnect()
 
       // Brief permission-sheet background never confirmed — no restore banner.
       if (!inBackground) {
@@ -182,9 +185,9 @@ export function useMeetingLifecycle({
 
       void (async () => {
         try {
-          await configureLiveKitCallAudio(mediaMode)
+          await configureCallAudio(mediaMode)
           await applyPreferredCallAudioOutput(mediaMode)
-          if (room.state === ConnectionState.Connected) {
+          if (room?.getSnapshot().connection === 'connected') {
             await restoreMeetingMediaAfterForeground(room, mediaMode, {
               intendedCameraOn: getMeetingCameraIntent() || intendedCameraRef.current,
             })
@@ -223,6 +226,15 @@ export function useMeetingLifecycle({
     room,
   ])
 
+  // PiP window closed while the app stays in the background → normal background pause.
+  useEffect(() => {
+    if (androidPip || inBackground) return
+    const timer = setTimeout(() => {
+      if (appStateRef.current === 'background' && !isAndroidPipActive()) confirmBackgroundPause()
+    }, MEETING_BACKGROUND_CAMERA_PAUSE_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [androidPip, confirmBackgroundPause, inBackground])
+
   useEffect(() => {
     if (screenSharing) {
       setScreenShareStoppedByOs(false)
@@ -240,137 +252,41 @@ export function useMeetingLifecycle({
     return () => clearTimeout(timer)
   }, [screenShareStoppedByOs])
 
-  useEffect(() => {
-    if (
-      room.state === ConnectionState.Reconnecting ||
-      room.state === ConnectionState.SignalReconnecting
-    ) {
-      return
-    }
-    if (room.state === ConnectionState.Connected && reconnecting) {
-      setReconnecting(false)
-      syncLifecycle({
-        inMeeting: true,
-        mediaReconnecting: false,
-        screenSharing,
-        audioOnly: mediaMode === 'audio',
-      })
-      refreshNotice({ reconnecting: false })
-    }
-  }, [mediaMode, reconnecting, refreshNotice, room.state, screenSharing, syncLifecycle])
-
   useOnReconnect(() => {
-    if (
-      room.state === ConnectionState.Connected ||
-      room.state === ConnectionState.Connecting
-    ) {
-      setReconnecting(false)
-      refreshNotice({ reconnecting: false })
-    } else if (
-      room.state === ConnectionState.Reconnecting ||
-      room.state === ConnectionState.SignalReconnecting
-    ) {
-      setReconnecting(true)
-      refreshNotice({ reconnecting: true })
-    }
+    if (room?.getSnapshot().connection === 'failed') void room.reconnect()
     void (async () => {
       try {
-        await configureLiveKitCallAudio(mediaMode)
+        await configureCallAudio(mediaMode)
         await applyPreferredCallAudioOutput(mediaMode)
-        if (room.state === ConnectionState.Connected) {
+        if (room?.getSnapshot().connection === 'connected') {
           await restoreMeetingMediaAfterForeground(room, mediaMode, {
             intendedCameraOn: intendedCameraRef.current,
           })
-          syncLifecycle({
-            inMeeting: true,
-            mediaReconnecting: false,
-            screenSharing: screenSharingRef.current,
-            audioOnly: mediaMode === 'audio',
-          })
         }
       } catch {
-        syncLifecycle({
-          inMeeting: true,
-          mediaReconnecting: true,
-          screenSharing: screenSharingRef.current,
-          audioOnly: mediaMode === 'audio',
-        })
-      } finally {
-        if (room.state === ConnectionState.Connected || room.state === ConnectionState.Connecting) {
-          setReconnecting(false)
-          refreshNotice({ reconnecting: false })
-        }
+        // Transport recovery is owned by the room; audio routing is best-effort.
       }
     })()
   })
 
+  // Brief blips recover silently — only surface the chip after a sustained reconnect.
   useEffect(() => {
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null
-    const onConnection = (state: ConnectionState) => {
-      if (
-        state === ConnectionState.Reconnecting ||
-        state === ConnectionState.SignalReconnecting
-      ) {
-        if (debounceTimer) return
-        debounceTimer = setTimeout(() => {
-          debounceTimer = null
-          if (
-            room.state !== ConnectionState.Reconnecting &&
-            room.state !== ConnectionState.SignalReconnecting
-          ) {
-            return
-          }
-          setReconnecting(true)
-          syncLifecycle({
-            inMeeting: true,
-            mediaReconnecting: true,
-            screenSharing: screenSharingRef.current,
-            audioOnly: mediaMode === 'audio',
-          })
-          refreshNotice({ reconnecting: true })
-        }, 1_500)
-        return
-      }
-      if (debounceTimer) {
-        clearTimeout(debounceTimer)
-        debounceTimer = null
-      }
+    if (connection !== 'reconnecting') {
       setReconnecting(false)
-      if (state === ConnectionState.Connected || state === ConnectionState.Connecting) {
-        syncLifecycle({
-          inMeeting: true,
-          mediaReconnecting: false,
-          screenSharing: screenSharingRef.current,
-          audioOnly: mediaMode === 'audio',
-        })
-      }
-      refreshNotice({ reconnecting: false })
+      return
     }
-    room.on(RoomEvent.ConnectionStateChanged, onConnection)
-    if (
-      room.state === ConnectionState.Connected ||
-      room.state === ConnectionState.Connecting ||
-      room.state === ConnectionState.Disconnected
-    ) {
-      setReconnecting(false)
-      refreshNotice({ reconnecting: false })
-    }
-    return () => {
-      room.off(RoomEvent.ConnectionStateChanged, onConnection)
-      if (debounceTimer) clearTimeout(debounceTimer)
-    }
-  }, [mediaMode, refreshNotice, room, syncLifecycle])
+    const timer = setTimeout(() => setReconnecting(true), MEETING_RECONNECT_BANNER_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [connection])
 
   useEffect(() => {
-    if (reconnecting) return
-    if (room.state !== ConnectionState.Connected) return
-    syncLifecycle({
-      inMeeting: true,
-      mediaReconnecting: false,
-      screenSharing,
-      audioOnly: mediaMode === 'audio',
-    })
-  }, [mediaMode, reconnecting, room.state, screenSharing, syncLifecycle])
+    if (reconnecting) {
+      syncLifecycle({ inMeeting: true, mediaReconnecting: true, screenSharing, audioOnly })
+      return
+    }
+    if (connection !== 'connected') return
+    syncLifecycle({ inMeeting: true, mediaReconnecting: false, screenSharing, audioOnly })
+  }, [audioOnly, connection, reconnecting, screenSharing, syncLifecycle])
 
   return {
     notice,

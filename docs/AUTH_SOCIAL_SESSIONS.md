@@ -10,12 +10,18 @@ Add each environment’s callback in **Supabase → Authentication → URL Confi
 
 | Environment | URL |
 | --- | --- |
-| Local web | `http://localhost:3000/auth/callback` (and/or `http://127.0.0.1:3000/auth/callback`) |
-| Production web | `https://<your-web-host>/auth/callback` |
-| Native deep link | `sheconomy://auth/callback` |
+| Local web | `http://localhost:8081/**` (One dev server; add `:3000` if you use it) |
+| Production web | `https://sheconomy.in/**` and `https://www.sheconomy.in/**` |
+| Native deep link | `sheconomy://auth/callback` (native OAuth always uses this) |
 | QR approve | `https://<your-web-host>/auth/qr` and `sheconomy://auth/qr` |
 
-Also set `EXPO_PUBLIC_WEB_APP_URL` for release builds so OAuth / QR URLs use the production host.
+Web OAuth redirects to `<current origin>/auth/callback?returnTo=…`, so the web
+entries need a `/**` glob. A redirect that is not allowlisted silently falls
+back to the Site URL (`https://www.sheconomy.in/`); `completeStrayOAuthRedirect`
+finishes those sign-ins in place, but native cannot recover from it — the
+auth browser never returns to the app.
+
+Also set `EXPO_PUBLIC_WEB_APP_URL` for release builds so QR URLs use the production host.
 
 ## Environment variables
 

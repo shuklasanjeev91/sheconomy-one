@@ -1,8 +1,7 @@
-import React from 'react'
-
 type Props = {
-  trackRef: any
+  track: MediaStreamTrack
   mirrored?: boolean
+  onTop?: boolean
 }
 
 export function SessionMiniPlayerVideo(_props: Props) {

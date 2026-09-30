@@ -97,7 +97,7 @@ export function MeetingBackgroundQuickPicker({
         overflow="hidden"
         backgroundColor="#0a0a0c"
         borderWidth={1}
-        borderColor="rgba(255, 255, 255, 0.1)"
+        borderColor={coworkUi.borderSoft}
         position="relative"
         flexShrink={0}
       >
@@ -185,7 +185,7 @@ export function MeetingBackgroundQuickPicker({
             onPress={togglePicker}
             maxWidth="55%"
           >
-            <Icons.Wand2 size={13} color={isPickerOpen ? coworkUi.brand : '#fff'} />
+            <Icons.Wand2 size={13} color={isPickerOpen ? coworkUi.brandLight : '#fff'} />
             <Text fontSize={11} fontWeight="700" color="#fff" numberOfLines={1} flexShrink={1}>
               {selection.mode !== 'off' ? 'Background active' : 'Background'}
             </Text>
@@ -199,9 +199,9 @@ export function MeetingBackgroundQuickPicker({
           gap="$2"
           padding="$2.5"
           borderRadius={12}
-          backgroundColor="rgba(0,0,0,0.4)"
+          backgroundColor={coworkUi.surface}
           borderWidth={1}
-          borderColor="rgba(255,255,255,0.08)"
+          borderColor={coworkUi.borderSoft}
         >
           <XStack gap="$2" flexWrap="wrap">
             <QuickTile
@@ -346,7 +346,7 @@ function QuickTile({
             </YStack>
           ) : null}
         </YStack>
-        <Text fontSize={9} color={active ? coworkUi.brand : coworkUi.textMuted} numberOfLines={1}>
+        <Text fontSize={9} color={active ? coworkUi.brandLight : coworkUi.textMuted} numberOfLines={1}>
           {label}
         </Text>
       </YStack>

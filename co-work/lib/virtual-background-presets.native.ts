@@ -1,5 +1,6 @@
-import { Image, Platform, type ImageSourcePropType } from 'react-native'
+import type { ImageSourcePropType } from 'react-native'
 
+import { nativeProcessorCanDecodeImageUri } from '~/co-work/lib/native-video-effects'
 import type { VirtualBackgroundSelection } from '~/co-work/lib/virtual-backgrounds'
 
 export type VirtualBackgroundPreset = {
@@ -36,18 +37,10 @@ function androidAssetUri(fileName: string): string {
 }
 
 /**
- * Prefer Metro asset module ids. On Android release, also fall back to
- * `Image.resolveAssetSource` when Hermes needs an explicit URI for `<Image>`.
+ * The module id, not `Image.resolveAssetSource(asset).uri`: on Android release that
+ * uri is a bare drawable name, which expo-image (Glide) opens as a missing file.
  */
 function thumbnailSource(asset: number, _fileName: string): ImageSourcePropType {
-  if (Platform.OS === 'android') {
-    try {
-      const resolved = Image.resolveAssetSource(asset)
-      if (resolved?.uri) return { uri: resolved.uri }
-    } catch {
-      // Fall through to the packed module id.
-    }
-  }
   return asset
 }
 
@@ -111,7 +104,8 @@ export async function resolveNativePresetFileUri(id: string | undefined): Promis
       await FileSystem.copyAsync({ from: local, to: dest })
       return asFileUri(dest)
     } catch {
-      return asFileUri(local)
+      const fallback = asFileUri(local)
+      return nativeProcessorCanDecodeImageUri(fallback) ? fallback : null
     }
   } catch {
     return null

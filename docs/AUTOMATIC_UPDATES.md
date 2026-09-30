@@ -202,7 +202,7 @@ Those require bumping `expo.version` (and store build numbers), then new Play St
 
 Create a new store build when:
 
-- You add/remove native dependencies (e.g. LiveKit, OneSignal, camera)
+- You add/remove native dependencies (e.g. react-native-webrtc, OneSignal, camera)
 - You change `app.json` native plugins / permissions / entitlements
 - You change icons, splash, bundle identifiers
 - You need clients below `minimumSupportedVersion` to upgrade via the stores

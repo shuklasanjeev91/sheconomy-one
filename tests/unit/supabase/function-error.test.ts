@@ -6,10 +6,10 @@ describe('readSupabaseFunctionError', () => {
   it('prefers data.error over the generic FunctionsHttpError message', async () => {
     const message = await readSupabaseFunctionError(
       new Error('Edge Function returned a non-2xx status code'),
-      { error: 'LiveKit is not configured on the server.' },
+      { error: 'Video meetings are not configured on the server.' },
       'fallback',
     )
-    expect(message).toBe('LiveKit is not configured on the server.')
+    expect(message).toBe('Video meetings are not configured on the server.')
   })
 
   it('ignores the generic non-2xx message when no body is available', async () => {

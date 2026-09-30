@@ -13,7 +13,7 @@ import {
   loadMeetingMediaPrefs,
   saveMeetingMediaPrefs,
 } from '~/co-work/lib/meeting-media-prefs'
-import { showCallAudioOutputPicker } from '~/co-work/lib/livekit-call-audio'
+import { showCallAudioOutputPicker } from '~/co-work/lib/call-audio'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 type MeetingAudioPanelProps = {
@@ -67,7 +67,7 @@ export function MeetingAudioPanel({
             padding="$4"
             gap="$3"
             borderRadius={16}
-            backgroundColor="rgba(255,255,255,0.04)"
+            backgroundColor={coworkUi.surfaceMuted}
             borderWidth={1}
             borderColor={coworkUi.borderSoft}
           >
@@ -123,7 +123,7 @@ export function MeetingAudioPanel({
               padding="$4"
               gap="$3"
               borderRadius={16}
-              backgroundColor="rgba(255,255,255,0.04)"
+              backgroundColor={coworkUi.surfaceMuted}
               borderWidth={1}
               borderColor={audio.microphoneTesting ? coworkUi.borderAccent : coworkUi.borderSoft}
             >

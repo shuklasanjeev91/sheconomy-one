@@ -7,6 +7,7 @@ import {
   closeInstantMeetingSession,
   useInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
+import { useCoWorkUi } from '~/co-work/lib/theme'
 import { MeetingLiveScreen } from '~/co-work/screens/MeetingLiveScreen'
 
 /**
@@ -14,11 +15,12 @@ import { MeetingLiveScreen } from '~/co-work/screens/MeetingLiveScreen'
  * Avoids navigating to `/meeting/:code?live=1` — that async route chunk
  * blanked under Suspense on native Release every time.
  *
- * Imported only from Co-Work screens (not AppShell) so LiveKit stays out of
+ * Imported only from Co-Work screens (not AppShell) so WebRTC stays out of
  * cold start / commerce home.
  */
 export function CoWorkLiveMeetingGate({ children }: { children: ReactNode }) {
   const session = useInstantMeetingSession()
+  const ui = useCoWorkUi()
 
   if (!session) return <>{children}</>
 
@@ -28,7 +30,7 @@ export function CoWorkLiveMeetingGate({ children }: { children: ReactNode }) {
       width="100%"
       height="100%"
       minHeight={0}
-      backgroundColor="#0c080a"
+      backgroundColor={ui.pageBg}
       position={Platform.OS === 'web' ? ('relative' as const) : 'relative'}
     >
       <AppErrorBoundary scope="InstantMeeting" alwaysShowError>

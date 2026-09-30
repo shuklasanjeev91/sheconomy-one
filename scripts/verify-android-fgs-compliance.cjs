@@ -10,6 +10,10 @@ const root = path.join(__dirname, '..')
 const appJsonPath = path.join(root, 'app.json')
 const callKeepPluginPath = path.join(root, 'plugins', 'withCallKeep.cjs')
 const fgsPluginPath = path.join(root, 'plugins', 'withAndroidFgsCompliance.cjs')
+const callAudioPackagePath = path.join(
+  root,
+  'modules/call-audio/android/src/main/java/com/sheconomy/callaudio/CallAudioPackage.kt',
+)
 const mergedManifestCandidates = [
   path.join(root, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
 ]
@@ -59,7 +63,7 @@ if (fgsPluginIndex < 0) {
   errors.push('app.json must register ./plugins/withAndroidFgsCompliance.cjs')
 } else if (fgsPluginIndex !== plugins.length - 1) {
   errors.push(
-    'withAndroidFgsCompliance.cjs must be the last Expo plugin so tools:node=remove wins over LiveKit/WebRTC merges',
+    'withAndroidFgsCompliance.cjs must be the last Expo plugin so tools:node=remove wins over WebRTC merges',
   )
 }
 
@@ -83,22 +87,17 @@ for (const forbidden of [
   }
 }
 
-const livekitPlugin = plugins.find(
-  (entry) => Array.isArray(entry) && entry[0] === '@livekit/react-native-expo-plugin',
-)
-if (livekitPlugin?.[1]?.android?.enableScreenShareService !== true) {
-  errors.push('LiveKit enableScreenShareService must be true on Android')
-}
-
 const screenSharePlugin = plugins.find(
-  (entry) => Array.isArray(entry) && entry[0] === 'expo-livekit-screen-share',
+  (entry) => (Array.isArray(entry) ? entry[0] : entry) === './plugins/withMeetingScreenShare.cjs',
 )
-if (
-  screenSharePlugin?.[1]?.android?.enableScreenShareService !== true ||
-  screenSharePlugin?.[1]?.android?.foregroundServicePermission !== true
-) {
-  errors.push('expo-livekit-screen-share Android screen-share FGS flags must be true')
+if (!screenSharePlugin) {
+  errors.push('app.json must register ./plugins/withMeetingScreenShare.cjs for Present')
 }
+mustInclude(
+  callAudioPackagePath,
+  'enableMediaProjectionService',
+  'call-audio enables the WebRTC MediaProjection service at startup',
+)
 
 mustInclude(callKeepPluginPath, 'withCallKeepIos', 'CallKeep is iOS-only')
 mustNotInclude(callKeepPluginPath, 'VoiceConnectionService', 'CallKeep must not register Android ConnectionService')
@@ -113,8 +112,8 @@ mustInclude(fgsPluginPath, 'tools:node', 'FGS compliance plugin uses tools:node=
   ) {
     errors.push('FGS plugin must not strip MediaProjectionService — Android Present needs it')
   }
-  if (!fgsSrc.includes("'android:value': 'true'") && !fgsSrc.includes('"android:value": "true"')) {
-    errors.push('ENABLE_SCREEN_SHARE_SERVICE meta-data must be true')
+  if (!fgsSrc.includes("'android:foregroundServiceType': 'mediaProjection'")) {
+    errors.push('FGS plugin must declare MediaProjectionService with foregroundServiceType=mediaProjection')
   }
   if (!fgsSrc.includes('SystemForegroundService')) {
     errors.push('FGS plugin must strip androidx.work SystemForegroundService')

@@ -30,6 +30,8 @@ type MeetingLiveCaptionsProps = {
   liveSpeaker?: string
   lines: LiveCaptionLine[]
   error?: string | null
+  /** Speech-to-text only runs while unmuted, so say so instead of a bare "Listening…". */
+  micMuted?: boolean
   targetLang?: string
   targetLangName?: string
   spokenLang?: string
@@ -81,6 +83,7 @@ export function MeetingLiveCaptions({
   liveSpeaker,
   lines,
   error,
+  micMuted = false,
   targetLang,
   targetLangName,
   spokenLang = 'auto',
@@ -300,7 +303,9 @@ export function MeetingLiveCaptions({
               </View>
             ) : (
               <RNText style={[styles.listening, { fontSize: fonts.body }]} allowFontScaling>
-                Listening… captions appear when someone speaks
+                {micMuted
+                  ? 'You’re muted — unmute to caption your speech. Others’ captions appear here.'
+                  : 'Listening… captions appear when someone speaks'}
               </RNText>
             )
           ) : null}

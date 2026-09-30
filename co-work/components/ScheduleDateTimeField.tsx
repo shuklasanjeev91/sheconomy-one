@@ -211,13 +211,13 @@ export function ScheduleDateTimeField({
           borderRadius={14}
           borderWidth={1}
           borderColor={coworkUi.borderSoft}
-          backgroundColor="rgba(255,255,255,0.05)"
+          backgroundColor={coworkUi.surfaceMuted}
           cursor="pointer"
           aria-label="Choose meeting date and time"
           hoverStyle={{ borderColor: coworkUi.brand }}
           pressStyle={{ opacity: 0.85 }}
         >
-          <Icons.CalendarDays size={18} color={coworkUi.brand} />
+          <Icons.CalendarDays size={18} color={coworkUi.brandLight} />
           <YStack flex={1} gap={2}>
             <Text
               fontSize={15}
@@ -264,7 +264,7 @@ export function ScheduleDateTimeField({
             <Text fontSize={20} fontWeight="800" color={coworkUi.text} letterSpacing={-0.4}>
               {formatWallDate(draft)}
             </Text>
-            <Text fontSize={16} fontWeight="700" color={coworkUi.brand}>
+            <Text fontSize={16} fontWeight="700" color={coworkUi.brandLight}>
               {formatWallTime(draft)}
             </Text>
             <Text fontSize={12} color={coworkUi.textMuted}>

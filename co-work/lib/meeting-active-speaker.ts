@@ -1,7 +1,7 @@
 /**
  * Active-speaker selection for Speaker view.
  *
- * Uses LiveKit audio levels with sticky hysteresis so the main tile does not
+ * Uses SFU audio levels with sticky hysteresis so the main tile does not
  * flicker between participants on short noise spikes.
  */
 
@@ -66,7 +66,7 @@ export function resolveActiveSpeakerIdentity(
   return top.identity
 }
 
-/** Ordered unique identities from LiveKit ActiveSpeakersChanged payloads. */
+/** Ordered unique identities from SFU active-speaker updates. */
 export function identitiesFromActiveSpeakers(
   speakers: Array<{ identity?: string | null }>,
 ): string[] {

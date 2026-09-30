@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { Platform, View } from 'react-native'
 
 import type { GenderEstimate } from '~/lib/gender-verification/constants'
+import type { FaceQualityMetrics } from '~/lib/gender-verification/face-quality'
 import { getNativeAnalyzerHtml } from '~/lib/gender-verification/native-analyzer-html'
 
 export type NativeFaceFrame = {
@@ -18,6 +19,7 @@ export type NativeFrameAnalysis = {
   eyesClosed: boolean
   liveScore: number
   realScore: number
+  quality: FaceQualityMetrics | null
 }
 
 /** `both` returns gender alongside the anti-spoof scores from a single pass. */
@@ -139,6 +141,7 @@ export const NativeFaceAnalyzer = forwardRef<NativeFaceAnalyzerHandle, NativeFac
             eyesClosed?: boolean
             liveScore?: number
             realScore?: number
+            quality?: FaceQualityMetrics | null
             message?: string
           }
 
@@ -174,6 +177,7 @@ export const NativeFaceAnalyzer = forwardRef<NativeFaceAnalyzerHandle, NativeFac
               eyesClosed: !!message.eyesClosed,
               liveScore: Number(message.liveScore ?? 0),
               realScore: Number(message.realScore ?? 0),
+              quality: message.quality ?? null,
             })
           }
         } catch {

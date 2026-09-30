@@ -147,7 +147,7 @@ export function DevicePrepCard() {
       style={coworkGlassStyle(coworkUi, true)}
     >
       <XStack alignItems="center" gap="$2">
-        <Icons.ShieldCheck size={18} color={coworkUi.brand} />
+        <Icons.ShieldCheck size={18} color={coworkUi.brandLight} />
         <Text fontWeight="800" fontSize={16} color={coworkUi.text}>
           Device prep
         </Text>

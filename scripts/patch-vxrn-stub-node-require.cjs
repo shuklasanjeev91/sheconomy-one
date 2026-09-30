@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Patch vxrn native production bundler to stub Rolldown `__require` for Node
- * built-ins (tty/util/…) before hermesc. LiveKit WebRTC pulls these via debug.
+ * built-ins (tty/util/…) before hermesc. WebRTC pulls these via debug.
  */
 const fs = require('node:fs')
 const path = require('node:path')

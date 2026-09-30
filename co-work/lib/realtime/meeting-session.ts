@@ -2,8 +2,8 @@ import type { MeetingChatMessage, MeetingParticipant } from '~/co-work/lib/types
 
 /**
  * Replaceable media transport for Co-Work meetings.
- * Production implementation: LiveKit SFU (`createLiveKitMeetingMediaAdapter`).
- * UI must depend on this interface — never on livekit-client types directly
+ * Production implementation: mediasoup SFU controls via `createSfuMeetingMediaAdapter`.
+ * UI must depend on this interface — never on SFU client types directly
  * for mic/camera/share/device control.
  */
 export type MeetingMediaAdapter = {

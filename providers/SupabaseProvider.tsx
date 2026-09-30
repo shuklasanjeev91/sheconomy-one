@@ -3,6 +3,7 @@ import { AppState, Platform, type AppStateStatus } from 'react-native'
 import type { Session, User } from '@supabase/supabase-js'
 
 import { heartbeatLoginSession, recordLoginSession } from '~/features/auth/services/login-sessions'
+import { completeStrayOAuthRedirect } from '~/features/auth/services/oauth'
 import { enrichProfileFromAuth } from '~/features/auth/services/profile-enrichment'
 import { applyPendingReferralForUser } from '~/lib/referral/invite'
 import { supabase } from '~/lib/supabase'
@@ -30,6 +31,8 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
           }, 1_500)
 
     let lastHandledUserId: string | null = null
+
+    void completeStrayOAuthRedirect()
 
     supabase.auth
       .getSession()

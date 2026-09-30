@@ -21,7 +21,7 @@ import {
 } from '~/co-work/lib/meeting-toolbar'
 import { resolveParticipantsToolbarBadge } from '~/co-work/lib/meeting-tile-actions'
 import type { MeetingViewMode } from '~/co-work/lib/meeting-state-machine'
-import { useCoWorkTheme } from '~/co-work/lib/theme'
+import { useCoWorkTheme, useMeetingControlPalette } from '~/co-work/lib/theme'
 import { controlGradientStyle } from '~/lib/platform/crossStyles'
 import type { MediaCapabilities, MeetingRole } from '~/co-work/lib/types'
 import {
@@ -84,12 +84,14 @@ type MeetingControlsProps = {
   onToggleAudio: () => void
   onOpenAudioSettings?: () => void
   onOpenAudioTest?: () => void
-  /** LiveKit device switching — mic/speaker/camera flyouts no-op without this. */
+  /** SFU device switching — mic/speaker/camera flyouts no-op without this. */
   audioQuality?: MeetingAudioQuality
   onToggleVideo: () => void
   onOpenVideoSettings?: () => void
   onToggleBackgrounds?: () => void
   onToggleScreen: () => void
+  /** Share sheet: whiteboard, photos, video, documents and screen options. */
+  onOpenShareOptions?: () => void
   onToggleHand: () => void
   onToggleReactions?: () => void
   /** Always close the tray — never toggle. Used after a reaction is picked. */
@@ -210,6 +212,7 @@ function SplitControlButton({
   caretLabel?: string
   compact?: boolean
 }) {
+  const palette = useMeetingControlPalette()
   const h = compact ? 40 : 44
   const isOff = variant === 'off'
 
@@ -218,9 +221,9 @@ function SplitControlButton({
       <XStack
         height={h}
         borderRadius={10}
-        backgroundColor={isOff ? 'rgba(239, 68, 68, 0.22)' : 'rgba(255, 255, 255, 0.12)'}
+        backgroundColor={isOff ? palette.offBg : palette.bgStrong}
         borderWidth={1}
-        borderColor={isOff ? 'rgba(239, 68, 68, 0.55)' : 'rgba(255, 255, 255, 0.18)'}
+        borderColor={isOff ? palette.offBorder : palette.border}
         alignItems="center"
         overflow="hidden"
         elevation={Platform.OS === 'android' ? 4 : undefined}
@@ -234,18 +237,18 @@ function SplitControlButton({
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: pressed
-              ? 'rgba(255,255,255,0.18)'
+              ? palette.bgPressed
               : hovered
-                ? 'rgba(255,255,255,0.12)'
+                ? palette.bgHover
                 : 'transparent',
           })}
           accessibilityRole="button"
           accessibilityLabel={label}
         >
-          {Icon ? <Icon size={compact ? 19 : 21} color={isOff ? '#EF4444' : '#FFFFFF'} /> : null}
+          {Icon ? <Icon size={compact ? 19 : 21} color={isOff ? palette.offIcon : palette.fg} /> : null}
         </Pressable>
 
-        <YStack width={1} height={20} backgroundColor="rgba(255, 255, 255, 0.2)" />
+        <YStack width={1} height={20} backgroundColor={palette.divider} />
 
         <Pressable
           onPress={onCaretPress}
@@ -256,25 +259,25 @@ function SplitControlButton({
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: pressed
-              ? 'rgba(255,255,255,0.18)'
+              ? palette.bgPressed
               : hovered
-                ? 'rgba(255,255,255,0.12)'
+                ? palette.bgHover
                 : 'transparent',
           })}
           accessibilityRole="button"
           accessibilityLabel={caretLabel ?? `${label} options`}
         >
-          <Icons.ChevronUp size={14} color="rgba(255, 255, 255, 0.85)" />
+          <Icons.ChevronUp size={14} color={palette.fgMuted} />
         </Pressable>
       </XStack>
 
       <Text
         fontSize={compact ? 10 : 11}
         fontWeight="700"
-        color={isOff ? '#FCA5A5' : '#F8FAFC'}
+        color={isOff ? palette.offFg : palette.fg}
         textAlign="center"
         numberOfLines={1}
-        style={{ textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}
+        style={palette.labelShadow ? { textShadow: palette.labelShadow } : undefined}
       >
         {label}
       </Text>
@@ -287,6 +290,8 @@ function ControlButton({
   icon: Icon,
   variant,
   onPress,
+  onMore,
+  moreLabel,
   compact,
   badgeCount,
 }: {
@@ -294,10 +299,14 @@ function ControlButton({
   icon: typeof Icons.Mic
   variant: ControlVariant
   onPress: () => void
+  /** Zoom-style caret / long-press for the button's options. */
+  onMore?: () => void
+  moreLabel?: string
   compact?: boolean
   badgeCount?: number
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const palette = useMeetingControlPalette()
   const size = compact ? 36 : 40
   const isBrand = variant === 'brand'
   const isDanger = variant === 'danger'
@@ -308,15 +317,15 @@ function ControlButton({
     : isDanger
       ? '#E02828'
       : isOff
-        ? 'rgba(239, 68, 68, 0.22)'
+        ? palette.offBg
         : 'transparent'
 
-  const iconColor = isOff ? '#EF4444' : '#FFFFFF'
+  const iconColor = isOff ? palette.offIcon : isBrand || isDanger ? '#FFFFFF' : palette.fg
   const labelColor = isBrand
     ? coworkUi.brandLight
     : isDanger || isOff
-      ? '#FCA5A5'
-      : '#F8FAFC'
+      ? palette.offFg
+      : palette.fg
 
   const badge =
     badgeCount && badgeCount > 0
@@ -337,6 +346,8 @@ function ControlButton({
       <XStack position="relative" alignItems="center">
         <Pressable
           onPress={onPress}
+          onLongPress={onMore}
+          delayLongPress={350}
           style={({ hovered, pressed }) => ({
             width: size,
             height: size,
@@ -344,10 +355,10 @@ function ControlButton({
             backgroundColor: bg !== 'transparent'
               ? bg
               : pressed
-                ? 'rgba(255, 255, 255, 0.2)'
+                ? palette.bgPressed
                 : hovered
-                  ? 'rgba(255, 255, 255, 0.12)'
-                  : 'rgba(255, 255, 255, 0.06)',
+                  ? palette.bgHover
+                  : palette.bg,
             justifyContent: 'center',
             alignItems: 'center',
             borderWidth: 1,
@@ -355,14 +366,39 @@ function ControlButton({
               isBrand || isDanger
                 ? 'transparent'
                 : isOff
-                  ? 'rgba(239, 68, 68, 0.55)'
-                  : 'rgba(255, 255, 255, 0.16)',
+                  ? palette.offBorder
+                  : palette.border,
           })}
           accessibilityRole="button"
           accessibilityLabel={label}
         >
           {Icon ? <Icon size={compact ? 18 : 20} color={iconColor} /> : null}
         </Pressable>
+
+        {onMore ? (
+          <Pressable
+            onPress={onMore}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={moreLabel ?? `${label} options`}
+            style={({ pressed }) => ({
+              position: 'absolute',
+              top: -6,
+              right: -8,
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: pressed ? palette.caretBgPressed : palette.caretBg,
+              borderWidth: 1,
+              borderColor: palette.caretBorder,
+              zIndex: 3,
+            })}
+          >
+            <Icons.ChevronUp size={11} color={palette.fg} />
+          </Pressable>
+        ) : null}
 
         {badge ? (
           <YStack
@@ -393,7 +429,7 @@ function ControlButton({
         color={labelColor}
         textAlign="center"
         numberOfLines={1}
-        style={{ textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}
+        style={palette.labelShadow ? { textShadow: palette.labelShadow } : undefined}
       >
         {label}
       </Text>
@@ -417,13 +453,14 @@ function OverflowItem({
   onPress: () => void
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const palette = useMeetingControlPalette()
   const color = danger
-    ? '#FCA5A5'
+    ? palette.offFg
     : active
       ? coworkUi.brandLight
       : disabled
-        ? 'rgba(255,255,255,0.45)'
-        : '#FFFFFF'
+        ? palette.fgDisabled
+        : palette.fg
   return (
     <Pressable
       disabled={!!disabled}
@@ -433,7 +470,7 @@ function OverflowItem({
       accessibilityState={{ disabled: !!disabled, selected: !!active && !disabled }}
       style={({ pressed }) => ({
         opacity: disabled ? 0.55 : pressed ? 0.85 : 1,
-        backgroundColor: active && !disabled ? 'rgba(216,27,96,0.22)' : pressed ? 'rgba(255,255,255,0.08)' : 'transparent',
+        backgroundColor: active && !disabled ? palette.activeBg : pressed ? palette.bg : 'transparent',
         borderRadius: 12,
         minHeight: 44,
         paddingVertical: 8,
@@ -505,6 +542,7 @@ export function MeetingControls({
   onOpenVideoSettings,
   onToggleBackgrounds,
   onToggleScreen,
+  onOpenShareOptions,
   onToggleHand,
   onToggleReactions,
   onCloseReactions,
@@ -660,6 +698,7 @@ export function MeetingControls({
     hasSettings: !!onOpenSettings,
     hasVideoEffects: !!onToggleBackgrounds,
     hasDisconnectAudio: !!onDisconnectAudio,
+    supportsRecording: caps.supportsRecording,
   })
   // When captions are already on the dock, still offer Captions & translations in More.
   if (captionsOnPrimary && caps.supportsLiveCaptions !== false && !wideMoreKeys.includes('captions')) {
@@ -1229,6 +1268,8 @@ export function MeetingControls({
             icon={Icons.ScreenShare}
             variant={screenSharing ? 'brand' : 'neutral'}
             onPress={onToggleScreen}
+            onMore={onOpenShareOptions}
+            moreLabel="Share options"
             compact={compact}
           />
         )
@@ -1362,7 +1403,7 @@ export function MeetingControls({
           backdropFilter: 'blur(24px)',
           boxShadow: roomy
             ? coworkShadows.dock
-            : '0 8px 32px rgba(24, 13, 20, 0.55), 0 0 0 1px rgba(216, 27, 96, 0.12)',
+            : coworkShadows.panel,
           elevation: Platform.OS === 'android' ? 16 : undefined,
           zIndex: MEETING_TOOLBAR_Z_INDEX,
         }}
@@ -1394,7 +1435,7 @@ export function MeetingControls({
             paddingBottom="$1"
             fontSize={11}
             fontWeight="800"
-            color={coworkUi.brand}
+            color={coworkUi.brandLight}
           >
             Security
           </Text>
@@ -1492,7 +1533,7 @@ export function MeetingControls({
                                   fontSize={11}
                                   fontWeight="800"
                                   letterSpacing={0.4}
-                                  color={coworkUi.brand}
+                                  color={coworkUi.brandLight}
                                 >
                                   {section.title}
                                 </Text>
@@ -1510,6 +1551,7 @@ export function MeetingControls({
                               ))}
                             </YStack>
                           ))}
+                          <OverflowItem label="Close" icon={Icons.X} onPress={closeFlyout} />
                         </YStack>
                       </MeetingFlyoutPanel>
                       <ControlButton
@@ -1547,6 +1589,17 @@ export function MeetingControls({
                   icon={videoEnabled ? Icons.Video : Icons.VideoOff}
                   variant={videoEnabled ? 'neutral' : 'off'}
                   onPress={onToggleVideo}
+                  compact={compact}
+                />
+              ) : null}
+              {primaryKeys.includes('share_screen') ? (
+                <ControlButton
+                  label={primaryLabel('share_screen')}
+                  icon={Icons.ScreenShare}
+                  variant={screenSharing ? 'danger' : 'neutral'}
+                  onPress={onToggleScreen}
+                  onMore={onOpenShareOptions}
+                  moreLabel="Share options"
                   compact={compact}
                 />
               ) : null}

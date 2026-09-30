@@ -717,7 +717,7 @@ def write_report(rows: list[dict]) -> None:
         "",
         "Device: SM_G781B / release `com.sheconomy.ecommerce`",
         "Scope: static routes, section tabs, bottom tabs, safe buttons, key forms",
-        "Excluded: real PayU charge, Sign out, Delete account, LiveKit media stress",
+        "Excluded: real PayU charge, Sign out, Delete account, meeting media stress",
         "",
         f"**Totals:** PASS={counts.get('PASS',0)} WARN={counts.get('WARN',0)} FAIL={counts.get('FAIL',0)} (n={len(rows)})",
         f"**Kinds:** {dict(kinds)}",

@@ -1,12 +1,10 @@
-import { useThemeName } from 'tamagui'
-
 import { type AppUiTokens, appUiDark, appUiLight } from '~/lib/theme/app-ui'
+import { useResolvedScheme } from '~/lib/theme/scheme-override'
 
 export function useAppUi(): AppUiTokens {
-  const themeName = useThemeName()
-  return themeName === 'dark' ? appUiDark : appUiLight
+  return useResolvedScheme() === 'dark' ? appUiDark : appUiLight
 }
 
 export function useIsDarkTheme() {
-  return useThemeName() === 'dark'
+  return useResolvedScheme() === 'dark'
 }

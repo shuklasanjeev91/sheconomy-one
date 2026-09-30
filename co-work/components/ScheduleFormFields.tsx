@@ -38,7 +38,7 @@ export function ScheduleToggleRow({ label, description, checked, onCheckedChange
         height={28}
         borderRadius={999}
         padding={3}
-        backgroundColor={checked ? coworkUi.brand : 'rgba(255,255,255,0.1)'}
+        backgroundColor={checked ? coworkUi.brand : coworkUi.border}
         alignItems={checked ? 'flex-end' : 'flex-start'}
         justifyContent="center"
         style={Platform.OS === 'web' ? { transition: 'background-color 0.2s ease' } : undefined}

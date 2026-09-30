@@ -42,7 +42,7 @@ export function MeetingEndedScreen({
   hasRecording,
   onDone,
 }: MeetingEndedScreenProps) {
-  const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
+  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const { safeTop, safeBottom } = useAppLayout()
   const router = useRouter()
   const duration = formatDuration(startedAt)
@@ -62,7 +62,7 @@ export function MeetingEndedScreen({
       width="100%"
       height="100%"
       minHeight={0}
-      backgroundColor="#0c080a"
+      backgroundColor={coworkUi.pageBg}
       alignItems="center"
       justifyContent="center"
       paddingHorizontal="$5"
@@ -77,10 +77,10 @@ export function MeetingEndedScreen({
         padding="$6"
         borderRadius={24}
         borderWidth={1}
-        borderColor="rgba(255, 255, 255, 0.10)"
-        backgroundColor="rgba(20, 14, 22, 0.97)"
+        borderColor={coworkUi.border}
+        backgroundColor={coworkUi.surface}
         style={{
-          boxShadow: '0 24px 72px rgba(0, 0, 0, 0.75)',
+          boxShadow: coworkShadows.panel,
         }}
       >
         {/* Icon */}
@@ -102,7 +102,7 @@ export function MeetingEndedScreen({
           <Text
             fontSize={24}
             fontWeight="800"
-            color="#ffffff"
+            color={coworkUi.text}
             textAlign="center"
             letterSpacing={-0.4}
           >
@@ -124,10 +124,10 @@ export function MeetingEndedScreen({
           <XStack
             gap="$3"
             width="100%"
-            backgroundColor="rgba(255,255,255,0.04)"
+            backgroundColor={coworkUi.surfaceMuted}
             borderRadius={14}
             borderWidth={1}
-            borderColor="rgba(255,255,255,0.08)"
+            borderColor={coworkUi.borderSoft}
             padding="$4"
             justifyContent="center"
           >
@@ -135,7 +135,7 @@ export function MeetingEndedScreen({
               <YStack alignItems="center" gap={4} flex={1}>
                 <XStack alignItems="center" gap="$1.5">
                   <Icons.Clock size={15} color={coworkUi.brandLight} />
-                  <Text fontSize={20} fontWeight="800" color="#ffffff">
+                  <Text fontSize={20} fontWeight="800" color={coworkUi.text}>
                     {duration}
                   </Text>
                 </XStack>
@@ -146,14 +146,14 @@ export function MeetingEndedScreen({
             ) : null}
 
             {duration && participantCount ? (
-              <YStack width={1} backgroundColor="rgba(255,255,255,0.10)" />
+              <YStack width={1} backgroundColor={coworkUi.border} />
             ) : null}
 
             {participantCount ? (
               <YStack alignItems="center" gap={4} flex={1}>
                 <XStack alignItems="center" gap="$1.5">
                   <Icons.Users size={15} color={coworkUi.brandLight} />
-                  <Text fontSize={20} fontWeight="800" color="#ffffff">
+                  <Text fontSize={20} fontWeight="800" color={coworkUi.text}>
                     {participantCount}
                   </Text>
                 </XStack>
@@ -189,7 +189,7 @@ export function MeetingEndedScreen({
               <YStack width={8} height={8} borderRadius={4} backgroundColor={coworkUi.danger} />
             </YStack>
             <YStack flex={1} gap={1}>
-              <Text fontSize={13} fontWeight="700" color="#ffffff">
+              <Text fontSize={13} fontWeight="700" color={coworkUi.text}>
                 Recording available
               </Text>
               <Text fontSize={11} color={coworkUi.textSecondary}>
@@ -223,7 +223,7 @@ export function MeetingEndedScreen({
                   >
                     <Icons.Star
                       size={22}
-                      color={star <= rating ? '#F5C542' : 'rgba(255,255,255,0.35)'}
+                      color={star <= rating ? '#F5C542' : coworkUi.textMuted}
                       fill={star <= rating ? '#F5C542' : 'transparent'}
                     />
                   </Button>
@@ -271,11 +271,11 @@ export function MeetingEndedScreen({
             size="$5"
             borderRadius={12}
             width="100%"
-            borderColor="rgba(255, 255, 255, 0.14)"
-            backgroundColor="rgba(255, 255, 255, 0.04)"
+            borderColor={coworkUi.border}
+            backgroundColor={coworkUi.surface}
             onPress={onDone}
           >
-            <Text fontSize={15} fontWeight="600" color="#ffffff">
+            <Text fontSize={15} fontWeight="600" color={coworkUi.text}>
               Return to Home
             </Text>
           </Button>

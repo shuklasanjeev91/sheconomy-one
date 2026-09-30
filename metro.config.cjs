@@ -123,13 +123,6 @@ function withTamaguiDedupe(config) {
           }
         }
 
-        if (moduleName === 'loglevel') {
-          return {
-            type: 'sourceFile',
-            filePath: path.join(projectRoot, 'lib/stubs/loglevel.ts'),
-          }
-        }
-
         const datetimepickerStub = datetimepickerSpecStub(
           moduleName,
           context.originModulePath,
@@ -138,7 +131,7 @@ function withTamaguiDedupe(config) {
           return datetimepickerStub
         }
 
-        // LiveKit WebRTC → nested `debug` Node entry does require('tty').
+        // WebRTC / mediasoup-client → `debug` Node entry does require('tty').
         // Hermes has no Node require (Rolldown `__require` throws). Force browser build.
         if (
           typeof moduleName === 'string' &&
@@ -157,7 +150,7 @@ function withTamaguiDedupe(config) {
             path.join(projectRoot, 'node_modules/debug/src/browser.js'),
             path.join(
               projectRoot,
-              'node_modules/@livekit/react-native-webrtc/node_modules/debug/src/browser.js',
+              'node_modules/react-native-webrtc/node_modules/debug/src/browser.js',
             ),
           ]
           for (const filePath of candidates) {

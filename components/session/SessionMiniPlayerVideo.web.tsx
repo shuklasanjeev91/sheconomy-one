@@ -1,13 +1,22 @@
-import React from 'react'
-import { VideoTrack, isTrackReference } from '@livekit/components-react'
+import { useEffect, useRef } from 'react'
 
 type Props = {
-  trackRef: any
+  track: MediaStreamTrack
   mirrored?: boolean
+  onTop?: boolean
 }
 
-export function SessionMiniPlayerVideo({ trackRef, mirrored = false }: Props) {
-  if (!trackRef || !isTrackReference(trackRef)) return null
+export function SessionMiniPlayerVideo({ track, mirrored = false }: Props) {
+  const ref = useRef<HTMLVideoElement | null>(null)
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return
+    node.srcObject = new MediaStream([track])
+    void node.play().catch(() => {})
+    return () => {
+      node.srcObject = null
+    }
+  }, [track])
 
   return (
     <div
@@ -21,9 +30,11 @@ export function SessionMiniPlayerVideo({ trackRef, mirrored = false }: Props) {
         overflow: 'hidden',
       }}
     >
-      <VideoTrack
-        trackRef={trackRef}
-        manageSubscription={false}
+      <video
+        ref={ref}
+        autoPlay
+        playsInline
+        muted
         style={{
           width: '100%',
           height: '100%',

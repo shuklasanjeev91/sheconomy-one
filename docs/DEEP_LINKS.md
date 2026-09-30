@@ -174,17 +174,16 @@ fallback, because that is an explicit user action.
 A verified link launches the app *directly* on the linked route, so
 `/co-work/meeting/:code/live` can be the very first screen Hermes evaluates —
 before any Co-Work screen has had a chance to prepare globals. Hermes ships no
-`DOMException`, and `livekit-client` runs
-`class DeferrableMapAbortError extends DOMException` at module scope, which made
-that cold start fail with:
+`DOMException`, and the WebRTC stack references it while its modules evaluate
+(`extends DOMException` at module scope), which made that cold start fail with:
 
 ```
 ERROR  [ReferenceError: Property 'DOMException' doesn't exist]
 ```
 
 The same code path works when you reach a meeting by tapping through the app,
-because something else has already pulled in `@livekit/react-native` (which
-installs its own polyfill) by then. Only the deep-link cold start is exposed.
+because an earlier screen has already installed the polyfill by then. Only the
+deep-link cold start is exposed.
 
 `lib/polyfills/install-dom-exception.ts` is a side-effect module that installs
 the polyfill, and `lib/polyfills-side-effects.native.ts` imports it first — that
@@ -193,10 +192,10 @@ before any route module.
 
 The ordering matters and is easy to break: **a guard has to be an `import`, not a
 function call**. ES import bindings hoist above every statement, so a
-`ensureLiveKitGlobals()` line sitting between two imports still runs *after*
-`livekit-client` has been evaluated. `tests/unit/polyfills/dom-exception.test.ts`
+`ensureWebRTCGlobals()` line sitting between two imports still runs *after*
+`react-native-webrtc` has been evaluated. `tests/unit/polyfills/dom-exception.test.ts`
 asserts the source order for the setup bundle and for each module that imports
-LiveKit eagerly.
+WebRTC eagerly.
 
 ## 8. Files involved
 

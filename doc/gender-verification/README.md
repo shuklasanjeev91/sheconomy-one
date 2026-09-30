@@ -168,6 +168,15 @@ Change behavior by editing **`lib/gender-verification/constants.ts`** only:
   `genderBorderlineBand` / `extraGenderSamplingMs` — how many reads the verdict
   needs and how long the follow-up round may run.
 - `GENDER_VERIFICATION.nativeGenderSampleEvery` — native gender sampling cadence.
+- Blinks are judged relative to each face's own open-eye EAR (`BLINK_CLOSED_RATIO` /
+  `BLINK_OPEN_RATIO` in `blink.ts`); no absolute EAR floors — open-eye EAR ranges
+  roughly 0.15–0.35 between people. `earCalibrationSamples` /
+  `nativeEarCalibrationSamples` set how many reads it takes to learn that baseline.
+- `GENDER_VERIFICATION.maxClosedMs` (web) / `nativeMaxClosedMs` — longest closure that
+  still counts. Native photos arrive only ~1–2 fps, so the app asks for a 2-second
+  eye close there; a quick natural blink falls between frames.
 - `GENDER_VERIFICATION_PROMPT.dismissCooldownMs` — quiet window (default **10 min**).
+- `GENDER_VERIFICATION_PROMPT.verificationFlowTtlMs` — how long an in-progress flow
+  reopens after a reload / permission prompt (default **15 min**); older flags are dropped.
 - Gender-restricted routes live in `config/route-protection.config.ts`
   (`GENDER_RESTRICTED_ROUTES`).

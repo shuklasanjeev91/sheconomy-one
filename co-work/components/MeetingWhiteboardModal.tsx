@@ -223,7 +223,7 @@ export function MeetingWhiteboardModal({
       flex={1}
       width="100%"
       height="100%"
-      backgroundColor="#0c080a"
+      backgroundColor={ui.pageBg}
       pointerEvents="auto"
     >
       <XStack
@@ -231,18 +231,18 @@ export function MeetingWhiteboardModal({
         paddingVertical="$2.5"
         alignItems="center"
         justifyContent="space-between"
-        backgroundColor="#161016"
+        backgroundColor={ui.surface}
         borderBottomWidth={1}
-        borderBottomColor="rgba(255,255,255,0.08)"
+        borderBottomColor={ui.borderSoft}
         gap="$3"
       >
         <XStack alignItems="center" gap="$3" minWidth={0} flex={1}>
-          <Icons.PenTool size={18} color={ui.brand} />
+          <Icons.PenTool size={18} color={ui.brandLight} />
           <YStack minWidth={0} flexShrink={1}>
-            <Text fontSize={15} fontWeight="800" color="#FFFFFF" numberOfLines={1}>
+            <Text fontSize={15} fontWeight="800" color={ui.text} numberOfLines={1}>
               Whiteboard
             </Text>
-            <Text fontSize={12} color="rgba(255,255,255,0.55)" numberOfLines={1}>
+            <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
               {startedByName
                 ? `Shared by ${startedByName} · everyone can draw`
                 : 'Shared with everyone in this meeting'}
@@ -254,7 +254,7 @@ export function MeetingWhiteboardModal({
             tone="ghost"
             size="$2"
             disabled={!lastLocalWhiteboardStrokeId(strokes, userId)}
-            icon={<Icons.RotateCcw size={15} color="#FFFFFF" />}
+            icon={<Icons.RotateCcw size={15} color={ui.text} />}
             onPress={handleUndo}
             accessibilityLabel="Undo"
           />
@@ -262,12 +262,12 @@ export function MeetingWhiteboardModal({
             tone="ghost"
             size="$2"
             disabled={redoStack.length === 0}
-            icon={<Icons.RotateCw size={15} color="#FFFFFF" />}
+            icon={<Icons.RotateCw size={15} color={ui.text} />}
             onPress={handleRedo}
             accessibilityLabel="Redo"
           />
           <Button tone="ghost" size="$2" onPress={onClear}>
-            <Text fontSize={12} color="rgba(255,255,255,0.72)">
+            <Text fontSize={12} color={ui.textSecondary}>
               Clear
             </Text>
           </Button>
@@ -275,7 +275,7 @@ export function MeetingWhiteboardModal({
             <Button
               tone="ghost"
               size="$2"
-              icon={<Icons.Download size={14} color="#FFFFFF" />}
+              icon={<Icons.Download size={14} color={ui.text} />}
               onPress={handleExport}
             >
               Save
@@ -294,7 +294,7 @@ export function MeetingWhiteboardModal({
             tone="ghost"
             size="$2"
             circular
-            icon={<Icons.X size={16} color="#FFFFFF" />}
+            icon={<Icons.X size={16} color={ui.text} />}
             onPress={canStopForEveryone && onStopSharing ? onStopSharing : onClose}
             accessibilityLabel="Close whiteboard"
           />
@@ -304,9 +304,9 @@ export function MeetingWhiteboardModal({
       <XStack flex={1} minHeight={0} minWidth={0}>
         <YStack
           width={72}
-          backgroundColor="#161016"
+          backgroundColor={ui.surface}
           borderRightWidth={1}
-          borderRightColor="rgba(255,255,255,0.08)"
+          borderRightColor={ui.borderSoft}
           paddingVertical="$2"
           alignItems="center"
           gap="$1.5"
@@ -329,11 +329,11 @@ export function MeetingWhiteboardModal({
                   backgroundColor: active ? 'rgba(216,27,96,0.22)' : 'transparent',
                 }}
               >
-                {Icon ? <Icon size={18} color={active ? ui.brandLight : '#FFFFFF'} /> : null}
+                {Icon ? <Icon size={18} color={active ? ui.brandLight : ui.text} /> : null}
               </Pressable>
             )
           })}
-          <YStack width={36} height={1} backgroundColor="rgba(255,255,255,0.12)" marginVertical="$1" />
+          <YStack width={36} height={1} backgroundColor={ui.border} marginVertical="$1" />
           {PALETTE.map((swatch) => (
             <Pressable
               key={swatch}
@@ -345,7 +345,7 @@ export function MeetingWhiteboardModal({
                 borderRadius: 11,
                 backgroundColor: swatch,
                 borderWidth: color === swatch ? 2 : 1,
-                borderColor: color === swatch ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
+                borderColor: color === swatch ? ui.text : ui.border,
               }}
             />
           ))}
@@ -361,14 +361,14 @@ export function MeetingWhiteboardModal({
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderWidth: lineWidth === size ? 2 : 1,
-                  borderColor: lineWidth === size ? ui.brandLight : 'rgba(255,255,255,0.3)',
+                  borderColor: lineWidth === size ? ui.brandLight : ui.border,
                 }}
               >
                 <YStack
                   width={Math.max(4, size / 2)}
                   height={Math.max(4, size / 2)}
                   borderRadius={99}
-                  backgroundColor="#FFFFFF"
+                  backgroundColor={ui.text}
                 />
               </Pressable>
             ))}
@@ -471,7 +471,7 @@ export function MeetingWhiteboardModal({
       showHandle
       scrollable={false}
     >
-      <YStack flex={1} minHeight={Math.max(windowHeight - 160, 320)} backgroundColor="#0c080a">
+      <YStack flex={1} minHeight={Math.max(windowHeight - 160, 320)} backgroundColor={ui.pageBg}>
         {board}
       </YStack>
     </AppBottomSheet>

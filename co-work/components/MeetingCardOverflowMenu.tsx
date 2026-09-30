@@ -239,8 +239,11 @@ export function MeetingCardOverflowMenu({
         circular
         zIndex={2}
         icon={<Icons.MoreHorizontal size={18} color={coworkUi.textMuted} />}
+        aria-label={`More actions for ${meeting.title}`}
         accessibilityLabel={`More actions for ${meeting.title}`}
-        accessibilityHint={`Meeting ${formatMeetingCode(meeting.meeting_code)}`}
+        {...(isNative
+          ? { accessibilityHint: `Meeting ${formatMeetingCode(meeting.meeting_code)}` }
+          : { title: `Meeting ${formatMeetingCode(meeting.meeting_code)}` })}
         onPress={(event) => {
           event?.stopPropagation?.()
           setOpen(true)

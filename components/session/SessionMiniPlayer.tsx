@@ -13,8 +13,10 @@ import {
   minimizeGlobalSession,
   enterGlobalSessionPip,
   clearGlobalSession,
+  peekGlobalSession,
   type GlobalSessionState,
   peekGlobalSessionHandlers,
+  type SessionVideoTrack,
 } from '~/lib/session/global-session'
 import {
   detectSessionPipCapabilities,
@@ -35,12 +37,8 @@ const BUBBLE_W = 118
 const BUBBLE_H = 178
 const EDGE = 12
 
-function hasLiveVideoTrack(trackRef: any): boolean {
-  if (!trackRef) return false
-  const pub = trackRef.publication
-  if (!pub) return false
-  if (pub.isMuted) return false
-  return !!pub.track
+function hasLiveVideoTrack(video: SessionVideoTrack | null | undefined): video is SessionVideoTrack {
+  return !!video && video.track.readyState !== 'ended'
 }
 
 type SessionMiniPlayerProps = {
@@ -74,6 +72,93 @@ function snapToNearestCorner(
     }
   }
   return best
+}
+
+/** Expand the floating bubble / PiP back into the live room. */
+export function maximizeSessionFromMiniPlayer(session: GlobalSessionState) {
+  // Meetings must expand InstantMeetingHost in place — never navigate to
+  // maximizeHref (that remounted MeetingLiveScreen on Join confirm).
+  if (session.kind === 'meeting') {
+    const instant = peekInstantMeetingSession()
+    openInstantMeetingSession({
+      code: session.code,
+      meeting: instant?.meeting ?? null,
+      autoJoin: true,
+      enteredRoom: true,
+      expand: true,
+      displayName: instant?.displayName ?? null,
+      audioEnabled: session.media.audioEnabled,
+      videoEnabled: session.media.videoEnabled,
+    })
+    // Belt-and-suspenders — expand even if openInstantMeetingSession no-op'd.
+    maximizeGlobalSession()
+    return
+  }
+
+  maximizeGlobalSession()
+  if (session.maximizeHref) {
+    navigateApp(session.maximizeHref as never)
+  }
+}
+
+/**
+ * Android Activity PiP: the whole app window is the PiP window, so show only
+ * the live video (or avatar) edge to edge. No controls — Android supplies them.
+ */
+export function SessionPipWindow({ session }: SessionMiniPlayerProps) {
+  const latest = useRef(session)
+  latest.current = session
+
+  // Expanding the PiP window returns to the room the user was watching.
+  useEffect(
+    () => () => {
+      const current = peekGlobalSession()
+      if (current?.code === latest.current.code && current.presentation === 'pip') {
+        maximizeSessionFromMiniPlayer(current)
+      }
+    },
+    [],
+  )
+
+  const liveLabel = session.kind === 'call' ? 'Call' : 'Meeting'
+  return (
+    <YStack
+      position="absolute"
+      top={0}
+      left={0}
+      right={0}
+      bottom={0}
+      zIndex={130_000}
+      elevation={48}
+      alignItems="center"
+      justifyContent="center"
+      gap="$2"
+      backgroundColor="#0c080a"
+      accessibilityLabel={`${liveLabel} in Picture-in-Picture`}
+    >
+      {hasLiveVideoTrack(session.activeTrackRef) ? (
+        <SessionMiniPlayerVideo
+          track={session.activeTrackRef.track}
+          mirrored={session.activeTrackRef.mirrored}
+          onTop
+        />
+      ) : (
+        <>
+          <Avatar
+            src={session.avatarUrl}
+            name={session.title}
+            size={56}
+            borderWidth={2}
+            borderColor="rgba(255,255,255,0.35)"
+          />
+          <Text color="#fff" fontSize={12} fontWeight="700" numberOfLines={1} paddingHorizontal="$2">
+            {session.title}
+          </Text>
+          {!session.media.audioEnabled ? <Icons.MicOff size={14} color="#ff8fa3" /> : null}
+        </>
+      )}
+    </YStack>
+  )
 }
 
 /**
@@ -139,31 +224,8 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
   )
 
   const onMaximize = useCallback(() => {
-    // Zoom-style: expand the floating bubble back into the live room overlay.
-    // Meetings must expand InstantMeetingHost in place — never navigate to
-    // maximizeHref (that remounted MeetingLiveScreen on Join confirm).
-    if (session.kind === 'meeting') {
-      const instant = peekInstantMeetingSession()
-      openInstantMeetingSession({
-        code: session.code,
-        meeting: instant?.meeting ?? null,
-        autoJoin: true,
-        enteredRoom: true,
-        expand: true,
-        displayName: instant?.displayName ?? null,
-        audioEnabled: session.media.audioEnabled,
-        videoEnabled: session.media.videoEnabled,
-      })
-      // Belt-and-suspenders — expand even if openInstantMeetingSession no-op'd.
-      maximizeGlobalSession()
-      return
-    }
-
-    maximizeGlobalSession()
-    if (session.maximizeHref) {
-      navigateApp(session.maximizeHref as never)
-    }
-  }, [session.code, session.kind, session.maximizeHref, session.media.audioEnabled, session.media.videoEnabled])
+    maximizeSessionFromMiniPlayer(session)
+  }, [session])
 
   const onPip = useCallback(() => {
     const caps = detectSessionPipCapabilities()
@@ -252,8 +314,8 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
       >
         {hasLiveVideoTrack(session.activeTrackRef) ? (
           <SessionMiniPlayerVideo
-            trackRef={session.activeTrackRef}
-            mirrored={session.activeTrackRef?.participant?.isLocal}
+            track={session.activeTrackRef.track}
+            mirrored={session.activeTrackRef.mirrored}
           />
         ) : (
           <>

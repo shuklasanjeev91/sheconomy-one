@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useWindowDimensions } from 'react-native'
 
-import { TrackLoop, useRoomContext } from '@livekit/components-react'
-import { isTrackReference } from '@livekit/components-core'
-
-import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks'
 import { useMeetingStagePager } from '~/co-work/hooks/useMeetingStagePager'
 import {
   meetingFilmstripWindow,
-  meetingGalleryLayout,
-  meetingGalleryPrefetchIdentities,
-  paginateMeetingGallery,
+  meetingGalleryScrollLayout,
+  meetingGalleryScrollWindow,
   resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
 import {
@@ -32,13 +27,12 @@ import {
   resolveMeetingUiPadding,
 } from '~/co-work/lib/meeting-ui-overlay'
 import {
-  applyMeetingSelectiveCameraSubscribe,
   meetingCameraQualityForTile,
+  type MeetingVideoQuality,
 } from '~/co-work/lib/meeting-selective-subscribe'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useMeetingMachine } from '~/co-work/components/MeetingProvider'
 
-import { SheconomyParticipantTile } from '~/co-work/components/SheconomyParticipantTile'
 import { useMeetingLiveSignals } from '~/co-work/components/MeetingLiveSignalsContext'
 import { screenShareRoleLabel } from '~/co-work/lib/meeting-lifecycle'
 import {
@@ -48,15 +42,18 @@ import {
   meetingFloatingTileSize,
   type MeetingFloatingCorner,
 } from '~/co-work/lib/meeting-floating-tile'
+import type { MeetingStageTrack, MeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
 
-/** Filmstrip tile length along the scroll axis, including the 8px flex gap (see livekit web CSS). */
+/** Filmstrip tile length along the scroll axis, including the 8px flex gap (see meeting web CSS). */
 const FILMSTRIP_ITEM_SIZE_BOTTOM = 132 + 8
 const FILMSTRIP_ITEM_SIZE_BESIDE = 110 + 8
 const FILMSTRIP_GAP = 8
+/** Tablet side-filmstrip width, used when speaker / share view forces a bottom layout beside. */
+const FORCED_BESIDE_FILMSTRIP_WIDTH = 148
 /** Header row + 4px padding + gap ahead of the first filmstrip tile. */
 const FILMSTRIP_HEADER_SIZE_BESIDE = 30 + 4 + 8
 const FILMSTRIP_HEADER_SIZE_BOTTOM = 36 + 4 + 8
-/** Matches `.sheconomy-video-gallery` gap in the LiveKit web CSS. */
+/** Matches `.sheconomy-video-gallery` gap in the meeting web CSS. */
 const GALLERY_GAP = 10
 /** Clicks here are controls of their own, not a tap-to-toggle on the stage. */
 const STAGE_TAP_IGNORE_SELECTOR =
@@ -111,8 +108,20 @@ function useScrollMetrics(vertical: boolean, active: boolean) {
   return { ref, measure, metrics }
 }
 
-/** SHEconomy-branded video gallery — web LiveKit stage (native uses NativeLiveKitMeetingRoom). */
-export function MeetingVideoStage() {
+/** Web stage layout, paging and floating self-view — independent of the SFU. */
+export function MeetingVideoStageView<T extends MeetingStageTrack>({
+  gallery,
+  renderTiles,
+  onVisibleIdentities,
+  onStopScreenShare,
+}: {
+  gallery: MeetingStageTracks<T>
+  renderTiles: (tracks: T[], cameraQuality: MeetingVideoQuality) => ReactNode
+  /** Remote cameras worth receiving: visible tiles, neighbouring pages, speakers. */
+  onVisibleIdentities: (identities: Set<string>) => void
+  /** Zoom's red Stop Share on the presenter's banner. */
+  onStopScreenShare?: () => void
+}) {
   const { isDesktop, isTablet, safeTop, safeBottom, safeLeft, safeRight } = useAppLayout()
   const { state, dispatch } = useMeetingMachine()
   const { stageTrailingInset, setStageHandlesTaps, triggerStageTap } = useMeetingLiveSignals()
@@ -120,7 +129,6 @@ export function MeetingVideoStage() {
     setStageHandlesTaps(true)
     return () => setStageHandlesTaps(false)
   }, [setStageHandlesTaps])
-  const room = useRoomContext()
   const { width, height } = useWindowDimensions()
   const [hdVideoPref, setHdVideoPref] = useState(true)
   useEffect(() => {
@@ -170,7 +178,7 @@ export function MeetingVideoStage() {
     cameraTiles,
     hasScreenShare,
     isLocalScreenSharing,
-  } = useMeetingGalleryTracks()
+  } = gallery
   const stageRef = useRef<HTMLDivElement | null>(null)
   const [pipSwapped, setPipSwapped] = useState(false)
   const [pipCorner, setPipCorner] = useState<MeetingFloatingCorner>('bottom-right')
@@ -212,6 +220,10 @@ export function MeetingVideoStage() {
     speakerLayoutEarly || screenLayoutEarly
       ? uiLayout.filmstripBeside || width >= 700 || state.sideBySideShare
       : uiLayout.filmstripBeside || state.sideBySideShare
+  const layoutFilmstripWidth =
+    filmstripBesideEarly && !uiLayout.filmstripBeside
+      ? FORCED_BESIDE_FILMSTRIP_WIDTH
+      : uiLayout.filmstripWidth
   const { width: stageWidth, height: stageHeight } = meetingStageContentBox({
     viewportWidth: width,
     viewportHeight: height,
@@ -219,7 +231,7 @@ export function MeetingVideoStage() {
       ...uiLayout,
       filmstripBeside: filmstripBesideEarly,
       filmstripWidth: filmstripBesideEarly
-        ? Math.max(uiLayout.filmstripWidth, speakerLayoutEarly ? 120 : uiLayout.filmstripWidth)
+        ? Math.max(layoutFilmstripWidth, speakerLayoutEarly ? 120 : layoutFilmstripWidth)
         : uiLayout.filmstripWidth,
       filmstripHeight:
         speakerLayoutEarly && !filmstripBesideEarly
@@ -230,15 +242,35 @@ export function MeetingVideoStage() {
     stageTrailingInset,
   })
   const galleryModeEarly = !screenLayoutEarly && !speakerLayoutEarly
-  const pager = useMeetingStagePager({ cameraTiles, pageSize, hasScreenShare })
-  const galleryPaged = useMemo(
-    () => paginateMeetingGallery(stageTracks, pager.galleryPage, pageSize),
-    [pageSize, pager.galleryPage, stageTracks],
+  const pager = useMeetingStagePager({ cameraTiles, hasScreenShare })
+  const galleryLayout = useMemo(
+    () =>
+      meetingGalleryScrollLayout(stageTracks.length, {
+        screenSize: pageSize,
+        width: stageWidth,
+        height: stageHeight,
+        gap: GALLERY_GAP,
+        preferWide: uiLayout.galleryPreferWide,
+      }),
+    [pageSize, stageHeight, stageTracks.length, stageWidth, uiLayout.galleryPreferWide],
   )
+  const galleryScrolls = galleryModeEarly && galleryLayout.scrolls
+  const galleryRowStride = galleryLayout.rowHeight + GALLERY_GAP
+  const galleryScroll = useScrollMetrics(true, galleryScrolls)
+  const galleryWindow = galleryScrolls
+    ? meetingGalleryScrollWindow({
+        total: stageTracks.length,
+        columns: galleryLayout.columns,
+        rowStride: galleryRowStride,
+        scrollOffset: galleryScroll.metrics.offset,
+        viewportSize: galleryScroll.metrics.viewport,
+        rowsPerViewport: galleryLayout.visibleRows + 1,
+      })
+    : { start: 0, end: stageTracks.length, visibleStart: 0, visibleEnd: stageTracks.length }
   const mainStageTracks = useMemo(() => {
-    if (galleryModeEarly) return galleryPaged.items
+    if (galleryModeEarly) return stageTracks.slice(galleryWindow.start, galleryWindow.end)
     return pipTrack && pipSwapped ? [pipTrack] : stageTracks
-  }, [galleryModeEarly, galleryPaged.items, pipSwapped, pipTrack, stageTracks])
+  }, [galleryModeEarly, galleryWindow.end, galleryWindow.start, pipSwapped, pipTrack, stageTracks])
 
   const filmstripMounted = filmstripTracks.length > 0 && !state.participantStripMinimized
   const filmstripScroll = useScrollMetrics(filmstripBesideEarly, filmstripMounted)
@@ -266,22 +298,26 @@ export function MeetingVideoStage() {
   )
 
   useEffect(() => {
-    // Current gallery page plus its neighbours, so a swipe lands on live video.
+    // Mounted gallery rows (on screen plus one row either side) or the whole stage.
     const identities = new Set<string>(
-      galleryModeEarly
-        ? meetingGalleryPrefetchIdentities(stageTracks, galleryPaged.page, pageSize)
-        : stageTracks.map((track) => track.participant.identity),
+      mainStageTracks.map((track) => track.participant.identity),
     )
     for (const track of floatingTracks) identities.add(track.participant.identity)
     for (const track of filmstripVisible) identities.add(track.participant.identity)
     // Always include anyone actively speaking even if they are on another page.
     for (const track of stageTracks) {
-      if (isTrackReference(track) && track.participant.isSpeaking) {
+      if (track.publication && track.participant.isSpeaking) {
         identities.add(track.participant.identity)
       }
     }
-    applyMeetingSelectiveCameraSubscribe(room, identities)
-  }, [filmstripVisible, floatingTracks, galleryModeEarly, galleryPaged.page, pageSize, room, stageTracks])
+    onVisibleIdentities(identities)
+  }, [
+    filmstripVisible,
+    floatingTracks,
+    mainStageTracks,
+    onVisibleIdentities,
+    stageTracks,
+  ])
 
   useEffect(() => {
     if (hasScreenShare && !previousScreenShare.current) {
@@ -303,12 +339,12 @@ export function MeetingVideoStage() {
   }, [hasScreenShare, screenShareBannerVisible])
 
   useEffect(() => {
-    setFilmstripWidth(uiLayout.filmstripWidth)
-  }, [uiLayout.filmstripWidth])
+    setFilmstripWidth(layoutFilmstripWidth)
+  }, [layoutFilmstripWidth])
 
   useEffect(() => {
     if (
-      !uiLayout.filmstripBeside ||
+      !filmstripBesideEarly ||
       uiLayout.policy === 'landscape-phone' ||
       state.participantStripMinimized ||
       !filmstripRef.current ||
@@ -321,7 +357,7 @@ export function MeetingVideoStage() {
     })
     observer.observe(filmstripRef.current)
     return () => observer.disconnect()
-  }, [filmstripRef, uiLayout.filmstripBeside, uiLayout.policy, state.participantStripMinimized])
+  }, [filmstripRef, filmstripBesideEarly, uiLayout.policy, state.participantStripMinimized])
 
   useEffect(() => {
     if (!isDesktop) {
@@ -353,18 +389,6 @@ export function MeetingVideoStage() {
     }
   }, [filmstripWidth, isDesktop, stageHeight, stageWidth])
 
-  // Every page keeps the full-page grid so a short last page doesn't blow tiles up.
-  const galleryLayoutCount =
-    galleryPaged.pageCount > 1 ? pageSize : galleryPaged.items.length
-  const galleryLayout = useMemo(
-    () =>
-      meetingGalleryLayout(galleryLayoutCount, {
-        width: stageWidth,
-        height: stageHeight,
-        preferWide: uiLayout.galleryPreferWide,
-      }),
-    [uiLayout.galleryPreferWide, galleryLayoutCount, stageWidth, stageHeight],
-  )
   const screenLayout = screenLayoutEarly
   const speakerLayout = speakerLayoutEarly
   const galleryMode = galleryModeEarly
@@ -376,7 +400,9 @@ export function MeetingVideoStage() {
       ? 'sheconomy-video-gallery sheconomy-video-gallery--speaker'
       : solo
         ? 'sheconomy-video-gallery sheconomy-video-gallery--solo'
-        : 'sheconomy-video-gallery sheconomy-video-gallery--grid'
+        : galleryScrolls
+          ? 'sheconomy-video-gallery sheconomy-video-gallery--grid sheconomy-video-gallery--scroll'
+          : 'sheconomy-video-gallery sheconomy-video-gallery--grid'
 
   const stageClassName = [
     'sheconomy-video-stage',
@@ -393,7 +419,7 @@ export function MeetingVideoStage() {
     .join(' ')
 
   const galleryCols = screenLayout || speakerLayout ? 1 : galleryLayout.columns
-  const galleryRows = screenLayout || speakerLayout ? 1 : galleryLayout.rows
+  const galleryRows = screenLayout || speakerLayout ? 1 : galleryLayout.visibleRows
   const speakerFilmstripWidth = Math.max(
     filmstripBeside ? filmstripWidth : uiLayout.filmstripWidth,
     speakerLayout ? 120 : 0,
@@ -598,7 +624,9 @@ export function MeetingVideoStage() {
       }
     >
       <div
+        ref={galleryScroll.ref}
         className={galleryClass}
+        onScroll={galleryScrolls ? galleryScroll.measure : undefined}
         style={
           {
             transform: pageSlide.offset ? `translateX(${pageSlide.offset}px)` : undefined,
@@ -610,20 +638,27 @@ export function MeetingVideoStage() {
               screenLayout || speakerLayout || solo
                 ? undefined
                 : `repeat(${galleryCols}, minmax(0, 1fr))`,
-            gridTemplateRows:
-              screenLayout || speakerLayout || solo
+            // Scrolling gallery: one fixed track per row so the scroll height is right
+            // while only the mounted rows hold tiles.
+            gridTemplateRows: galleryScrolls
+              ? `repeat(${galleryLayout.rows}, ${galleryLayout.rowHeight}px)`
+              : screenLayout || speakerLayout || solo
                 ? undefined
                 : `repeat(${galleryRows}, minmax(0, 1fr))`,
             display: screenLayout || speakerLayout || solo ? undefined : 'grid',
           } as CSSProperties
         }
       >
-        <TrackLoop tracks={mainStageTracks}>
-          <SheconomyParticipantTile
-            mirrorLocalVideo={state.mirrorLocalVideo}
-            cameraQuality={stageTileQuality}
+        {galleryScrolls && galleryWindow.start > 0 ? (
+          <div
+            aria-hidden
+            style={{
+              gridColumn: '1 / -1',
+              gridRow: `span ${galleryWindow.start / galleryLayout.columns}`,
+            }}
           />
-        </TrackLoop>
+        ) : null}
+        {renderTiles(mainStageTracks, stageTileQuality)}
       </div>
 
       {floatingTracks.length > 0 ? (
@@ -670,12 +705,7 @@ export function MeetingVideoStage() {
           onPointerUp={finishPipPointer}
           onPointerCancel={finishPipPointer}
         >
-          <TrackLoop tracks={floatingTracks}>
-            <SheconomyParticipantTile
-              mirrorLocalVideo={state.mirrorLocalVideo}
-              cameraQuality={pipTileQuality}
-            />
-          </TrackLoop>
+          {renderTiles(floatingTracks, pipTileQuality)}
         </div>
       ) : null}
 
@@ -729,12 +759,7 @@ export function MeetingVideoStage() {
                   style={{ flex: `0 0 ${filmstripLeadSpace}px` }}
                 />
               ) : null}
-              <TrackLoop tracks={filmstripVisible}>
-                <SheconomyParticipantTile
-                  mirrorLocalVideo={state.mirrorLocalVideo}
-                  cameraQuality={filmstripTileQuality}
-                />
-              </TrackLoop>
+              {renderTiles(filmstripVisible, filmstripTileQuality)}
               {filmstripTrailSpace > 0 ? (
                 <div
                   aria-hidden
@@ -766,7 +791,7 @@ export function MeetingVideoStage() {
                 title={meetingStagePageLabel(page)}
                 className={`sheconomy-gallery-pagination__dot${
                   index === pager.index ? ' sheconomy-gallery-pagination__dot--active' : ''
-                }${page.kind === 'safe-driving' ? ' sheconomy-gallery-pagination__dot--driving' : ''}`}
+                }`}
                 onClick={() => pager.goTo(page)}
               />
             ))}
@@ -776,7 +801,8 @@ export function MeetingVideoStage() {
 
       {totalTiles === 0 ? <div className="sheconomy-video-empty" /> : null}
       {(() => {
-        if (!screenShareBannerVisible) return null
+        const presenting = isLocalScreenSharing && !!onStopScreenShare
+        if (!screenShareBannerVisible && !presenting) return null
         const role = isLocalScreenSharing ? 'sharing' : hasScreenShare ? 'viewing' : 'none'
         const label = screenShareRoleLabel(role)
         return label ? (
@@ -784,11 +810,26 @@ export function MeetingVideoStage() {
             className={
               role === 'viewing'
                 ? 'sheconomy-screen-share-status sheconomy-screen-share-status--viewing'
-                : 'sheconomy-screen-share-status'
+                : presenting
+                  ? 'sheconomy-screen-share-status sheconomy-screen-share-status--presenting'
+                  : 'sheconomy-screen-share-status'
             }
             role="status"
           >
-            {label}
+            <span>{label}</span>
+            {presenting ? (
+              <button
+                type="button"
+                className="sheconomy-screen-share-stop"
+                aria-label="Stop sharing your screen"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onStopScreenShare?.()
+                }}
+              >
+                Stop Share
+              </button>
+            ) : null}
           </div>
         ) : null
       })()}

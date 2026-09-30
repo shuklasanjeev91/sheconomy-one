@@ -14,7 +14,6 @@ const target = path.join(
   __dirname,
   '..',
   'node_modules',
-  '@livekit',
   'react-native-callkeep',
   'android',
   'src',

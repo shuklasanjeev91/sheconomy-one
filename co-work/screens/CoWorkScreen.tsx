@@ -15,7 +15,7 @@ import {
   meetingJoinMediaFromPermissions,
 } from '~/co-work/lib/meeting-media-permissions'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
-import { meetingJoinPrefsFromCheckboxes } from '~/co-work/lib/meeting-join-prefs'
+import { meetingJoinPrefsFromCheckboxes, saveMeetingJoinPrefs } from '~/co-work/lib/meeting-join-prefs'
 import { formatPersonalMeetingDisplayCode } from '~/co-work/lib/meeting-pmi'
 import { unlockWebAudioPlayback } from '~/co-work/lib/meeting-web'
 import {
@@ -31,7 +31,7 @@ import {
 } from '~/components/ui'
 import { MeetingActionTile, MeetingDigitalClock } from '~/co-work/components/CoWorkUi'
 import { MeetingStartSheet } from '~/co-work/components/MeetingStartSheet'
-import { createMeeting, fetchMeetingByCode } from '~/co-work/lib/meetings'
+import { createMeeting, fetchMeetingByCode, meetingCodeFromInput } from '~/co-work/lib/meetings'
 import { SHECONOMY_MEETING_COLORS, useCoWorkTheme } from '~/co-work/lib/theme'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
@@ -197,9 +197,20 @@ export function CoWorkScreen() {
   }
 
   async function handleJoin(targetCode: string, directShare = false) {
-    const normalized = targetCode.replace(/\s/g, '').toUpperCase()
+    const normalized = meetingCodeFromInput(targetCode)
     if (!normalized || joining) return
     recordMeetingCode(normalized)
+    if (!directShare) {
+      // Same preview as an invite link: edit the name, pick a background, then join.
+      unlockWebAudioPlayback()
+      saveMeetingJoinPrefs({
+        ...meetingJoinPrefsFromCheckboxes({ doNotConnectAudio, turnOffVideo }),
+        displayName: joinDisplayName.trim() || undefined,
+      })
+      setShowJoinModal(false)
+      router.push(coWorkRoutes.meeting(normalized))
+      return
+    }
     setJoining(true)
     try {
       // Unlock playback and request mic in this click before any network await —
@@ -656,7 +667,7 @@ export function CoWorkScreen() {
                 <Button
                   tone="ghost"
                   size="$2"
-                  icon={<Icons.Copy size={14} color={ui.brand} />}
+                  icon={<Icons.Copy size={14} color={ui.brandLight} />}
                   onPress={() => void handleCopyPmi()}
                 >
                   Copy Link

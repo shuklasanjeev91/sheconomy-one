@@ -53,7 +53,7 @@ const COPY: Record<
       },
       {
         heading: 'Third parties',
-        body: 'We use service providers that process data on our behalf under contractual protections comparable to this policy, including hosting and auth (Supabase), push notifications (OneSignal), real-time meetings (LiveKit), payment processors for checkout, analytics (for example Microsoft Clarity where enabled), and Apple/Google for sign-in and store distribution. We do not sell your personal information.',
+        body: 'We use service providers that process data on our behalf under contractual protections comparable to this policy, including hosting and auth (Supabase), push notifications (OneSignal), real-time meetings (our media servers hosted on Amazon Web Services), payment processors for checkout, analytics (for example Microsoft Clarity where enabled), and Apple/Google for sign-in and store distribution. We do not sell your personal information.',
       },
       {
         heading: 'Retention and deletion',

@@ -52,9 +52,9 @@ export function MeetingElapsedTimer({ startedAt, compact = false }: MeetingElaps
       paddingHorizontal={compact ? 6 : 8}
       paddingVertical={compact ? 2 : 3}
       borderRadius={6}
-      backgroundColor="rgba(255,255,255,0.06)"
+      backgroundColor={coworkUi.surfaceMuted}
       borderWidth={1}
-      borderColor="rgba(255,255,255,0.1)"
+      borderColor={coworkUi.borderSoft}
     >
       <Text
         fontSize={compact ? 11 : 12}

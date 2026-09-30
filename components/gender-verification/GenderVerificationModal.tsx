@@ -13,6 +13,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useGenderVerification } from '~/hooks/useGenderVerification'
 import {
   toFriendlyGenderError,
+  FACE_QUALITY_TIPS,
   formatVerificationDiagnostics,
   HUMAN_VERIFICATION_DISCLAIMER,
   GENDER_ERROR_CODES,
@@ -62,6 +63,7 @@ export function GenderVerificationModal({
       title="Human verification"
       showHandle={dismissible}
       scrollable={false}
+      fillBody
     >
       {open ? shell : null}
     </AppBottomSheet>
@@ -73,16 +75,16 @@ function GenderVerificationModalShell({
   onClose,
   onVerified,
 }: Omit<GenderVerificationModalProps, 'open'>) {
-  const ui = useAppUi()
-  const { isDesktop, safeTop, safeBottom } = useAppLayout()
+  const { safeBottom } = useAppLayout()
 
+  // The native sheet already pads its body for the navigation bar.
   return (
-    <YStack width="100%" gap="$2" minHeight={420}>
+    <YStack width="100%" flex={1} minHeight={0}>
       <VerificationFlow
         onClose={onClose}
         onVerified={onVerified}
-        footerPad={Math.max(safeBottom, 12)}
-        fillHeight={false}
+        footerPad={Platform.OS === 'web' ? Math.max(safeBottom, 12) : 12}
+        fillHeight
       />
     </YStack>
   )
@@ -179,6 +181,7 @@ function VerificationFlow({
   const friendlyError = verification.error ? toFriendlyGenderError(verification.error) : null
   const diagnostics = (verification as { diagnostics?: VerificationDiagnostics | null }).diagnostics
   const diagnosticsLine = diagnostics ? formatVerificationDiagnostics(diagnostics) : null
+  const qualityTips = (diagnostics?.issues ?? []).map((issue) => FACE_QUALITY_TIPS[issue])
   const errorCode = verification.error ? classifyGenderError(verification.error) : null
   const errorTitle =
     errorCode === GENDER_ERROR_CODES.NOT_ELIGIBLE
@@ -346,6 +349,18 @@ function VerificationFlow({
               <Text color={ui.textSecondary} fontSize={13} lineHeight={19}>
                 {friendlyError}
               </Text>
+              {qualityTips.length > 0 ? (
+                <YStack gap="$1" marginTop="$1">
+                  <Text color={ui.text} fontSize={13} fontWeight="700">
+                    What may help
+                  </Text>
+                  {qualityTips.map((tip) => (
+                    <Text key={tip} color={ui.textSecondary} fontSize={13} lineHeight={19}>
+                      • {tip}
+                    </Text>
+                  ))}
+                </YStack>
+              ) : null}
               {diagnosticsLine ? (
                 <Text color={ui.textMuted} fontSize={11} lineHeight={16}>
                   {diagnosticsLine}

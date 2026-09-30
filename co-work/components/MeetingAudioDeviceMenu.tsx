@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { Icons, Text, XStack, YStack } from '~/components/ui'
-import { useCoWorkTheme } from '~/co-work/lib/theme'
+import { useCoWorkTheme, useMeetingControlPalette } from '~/co-work/lib/theme'
 import type { MeetingAudioQuality } from '~/co-work/lib/meeting-audio-quality'
 
 type DeviceItem = {
@@ -35,6 +35,7 @@ export function MeetingAudioDeviceFlyout({
   audioQuality,
 }: AudioDeviceMenuProps) {
   const { ui } = useCoWorkTheme()
+  const palette = useMeetingControlPalette()
   const [microphones, setMicrophones] = useState<DeviceItem[]>([])
   const [speakers, setSpeakers] = useState<DeviceItem[]>([])
   const [activeMic, setActiveMic] = useState<string>('default')
@@ -151,7 +152,7 @@ export function MeetingAudioDeviceFlyout({
             paddingHorizontal="$3"
             paddingVertical="$2"
             cursor="pointer"
-            hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+            hoverStyle={{ backgroundColor: palette.bgHover }}
             onPress={() => {
               setActiveMic(m.deviceId)
               void audioQuality?.selectInputDevice(m.deviceId)
@@ -188,7 +189,7 @@ export function MeetingAudioDeviceFlyout({
             paddingHorizontal="$3"
             paddingVertical="$2"
             cursor="pointer"
-            hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+            hoverStyle={{ backgroundColor: palette.bgHover }}
             onPress={() => {
               setActiveSpeaker(s.deviceId)
               void audioQuality?.selectOutputDevice(s.deviceId)
@@ -210,7 +211,7 @@ export function MeetingAudioDeviceFlyout({
         paddingHorizontal="$3"
         paddingVertical="$2"
         cursor="pointer"
-        hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+        hoverStyle={{ backgroundColor: palette.bgHover }}
         onPress={() => {
           onClose()
           onOpenAudioTest?.()
@@ -229,7 +230,7 @@ export function MeetingAudioDeviceFlyout({
           paddingHorizontal="$3"
           paddingVertical="$2"
           cursor="pointer"
-          hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+          hoverStyle={{ backgroundColor: palette.bgHover }}
           onPress={() => {
             onClose()
             onOpenAudioSettings()
@@ -262,6 +263,7 @@ export function MeetingVideoDeviceFlyout({
   audioQuality,
 }: VideoDeviceMenuProps) {
   const { ui } = useCoWorkTheme()
+  const palette = useMeetingControlPalette()
   const [cameras, setCameras] = useState<DeviceItem[]>([])
   const [activeCam, setActiveCam] = useState<string>('default')
 
@@ -398,7 +400,7 @@ export function MeetingVideoDeviceFlyout({
             paddingHorizontal="$3"
             paddingVertical="$2"
             cursor="pointer"
-            hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+            hoverStyle={{ backgroundColor: palette.bgHover }}
             onPress={() => {
               setActiveCam(c.deviceId)
               void audioQuality?.selectVideoDevice(c.deviceId)
@@ -421,7 +423,7 @@ export function MeetingVideoDeviceFlyout({
           paddingHorizontal="$3"
           paddingVertical="$2"
           cursor="pointer"
-          hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+          hoverStyle={{ backgroundColor: palette.bgHover }}
           onPress={() => {
             onClose()
             onOpenVideoSettings()

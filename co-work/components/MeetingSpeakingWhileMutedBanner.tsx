@@ -33,13 +33,13 @@ export function MeetingSpeakingWhileMutedBanner({
         paddingHorizontal="$3.5"
         paddingVertical="$2.5"
         borderRadius={14}
-        backgroundColor="rgba(20,15,18,0.94)"
+        backgroundColor={coworkUi.glassElevated}
         borderWidth={1}
         borderColor="rgba(245,197,66,0.45)"
       >
         <Text fontSize={14}>🔇</Text>
         <YStack gap={1} flexShrink={1}>
-          <Text color="#fff" fontSize={13} fontWeight="800">
+          <Text color={coworkUi.text} fontSize={13} fontWeight="800">
             You’re muted
           </Text>
           <Text color={coworkUi.textSecondary} fontSize={11} lineHeight={15}>
@@ -61,7 +61,7 @@ export function MeetingSpeakingWhileMutedBanner({
               borderColor: 'rgba(245,197,66,0.55)',
             }}
           >
-            <Text color="#F5C542" fontSize={12} fontWeight="800">
+            <Text color={coworkUi.warning} fontSize={12} fontWeight="800">
               Unmute
             </Text>
           </Pressable>

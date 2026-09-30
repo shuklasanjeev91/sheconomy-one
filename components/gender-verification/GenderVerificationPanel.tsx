@@ -10,7 +10,7 @@ import {
 } from '~/components/gender-verification/NativeFaceAnalyzer'
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import type { FaceTrackingStatus, VerificationPhase } from '~/lib/gender-verification'
-import { useAppUi } from '~/lib/theme/useAppUi'
+import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
 
 type FaceCaptureOverlayProps = {
   containerRef: RefObject<HTMLDivElement | null>
@@ -69,7 +69,8 @@ export function FaceCaptureOverlay({
   onAnalyzerError,
 }: FaceCaptureOverlayProps) {
   const ui = useAppUi()
-  const { width: windowWidth } = useWindowDimensions()
+  const hintColor = useIsDarkTheme() ? '#fbbf24' : '#b45309'
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   // Keep the preview mounted through error so Try again doesn't remount the
   // camera and land on a black "Preparing camera…" frame.
   const showCamera =
@@ -83,7 +84,14 @@ export function FaceCaptureOverlay({
   const progress = Math.min(1, blinkCount / Math.max(1, requiredBlinks))
 
   // Portrait frame — avoids the oversized circle on iPad while staying face-friendly.
-  const frameWidth = Math.min(320, Math.max(240, windowWidth - 64))
+  // Height-capped so the instruction and blink counter stay above the sheet's
+  // sticky Start / Skip footer on shorter phones.
+  const maxFrameHeight = Math.max(300, windowHeight - 520)
+  const frameWidth = Math.min(
+    320,
+    Math.max(240, windowWidth - 64),
+    Math.round(maxFrameHeight / 1.25),
+  )
   const frameHeight = Math.round(frameWidth * 1.25)
 
   const body = (
@@ -109,6 +117,7 @@ export function FaceCaptureOverlay({
               facing="front"
               mode="picture"
               mirror
+              animateShutter={false}
               onCameraReady={onCameraReady}
             />
           ) : (
@@ -216,6 +225,17 @@ export function FaceCaptureOverlay({
         <Text fontSize={17} fontWeight="700" color={ui.text} textAlign="center" lineHeight={24}>
           {instruction}
         </Text>
+
+        {(phase === 'position' || phase === 'blink') &&
+        tracking?.qualityHint &&
+        tracking.qualityHint !== instruction ? (
+          <XStack gap="$1.5" alignItems="center" justifyContent="center">
+            <Icons.AlertTriangle size={14} color={hintColor} />
+            <Text fontSize={13} fontWeight="700" color={hintColor} textAlign="center" lineHeight={18}>
+              {tracking.qualityHint}
+            </Text>
+          </XStack>
+        ) : null}
 
         {(phase === 'camera' || phase === 'position' || phase === 'blink') && (
           <YStack width="100%" gap="$2">

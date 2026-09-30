@@ -30,7 +30,7 @@ export type MeetingLiveSignalsValue = {
   /** Zoom: hide remote camera video (show avatars) to save bandwidth. */
   stopIncomingVideo: boolean
   setStopIncomingVideo: (stopped: boolean) => void
-  /** LiveKit identity → meeting role for tile badges. */
+  /** Participant identity → meeting role for tile badges. */
   rolesByUserId: Record<string, MeetingRole>
   /**
    * Native bottom sheets are in-tree. Android WebRTC SurfaceViews steal every
@@ -44,7 +44,7 @@ export type MeetingLiveSignalsValue = {
    */
   stageTrailingInset: number
   setStageTrailingInset: (inset: number) => void
-  /** Host spotlight — room-wide focus identity (user id / LiveKit identity). */
+  /** Host spotlight — room-wide focus identity (user id). */
   spotlightUserId: string | null
   /** Local multi-pin identities (max 3). */
   pinnedUserIds: string[]
@@ -207,7 +207,7 @@ export function useMeetingLiveSignals() {
   return useContext(MeetingLiveSignalsContext)
 }
 
-/** Whether this LiveKit identity currently has a raised hand. */
+/** Whether this participant identity currently has a raised hand. */
 export function useParticipantHandRaised(identity: string | undefined): boolean {
   const { localUserId, handRaised, raisedHands } = useMeetingLiveSignals()
   if (!identity) return false
@@ -215,7 +215,7 @@ export function useParticipantHandRaised(identity: string | undefined): boolean 
   return !!raisedHands[identity]
 }
 
-/** Sticky nonverbal feedback for a LiveKit identity. */
+/** Sticky nonverbal feedback for a participant identity. */
 export function useParticipantNonverbal(
   identity: string | undefined,
 ): MeetingNonverbalStatusId | null {
@@ -224,7 +224,7 @@ export function useParticipantNonverbal(
   return nonverbalByUserId[identity] ?? null
 }
 
-/** Host / co-host role for a LiveKit identity, if known. */
+/** Host / co-host role for a participant identity, if known. */
 export function useParticipantMeetingRole(identity: string | undefined): MeetingRole | null {
   const { rolesByUserId } = useMeetingLiveSignals()
   if (!identity) return null

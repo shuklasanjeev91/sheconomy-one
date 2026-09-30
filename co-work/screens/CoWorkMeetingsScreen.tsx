@@ -322,7 +322,7 @@ export function CoWorkMeetingsScreen() {
                       <YStack flex={1} gap={4} minWidth={0}>
                         <XStack alignItems="center" gap="$2">
                           <Icons.Clock size={14} color={ui.textMuted} />
-                          <Text fontSize={13} fontWeight="700" color={ui.brand}>
+                          <Text fontSize={13} fontWeight="700" color={ui.brandLight}>
                             {formatWhen(meeting)}
                           </Text>
                         </XStack>

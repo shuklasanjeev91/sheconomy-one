@@ -161,7 +161,7 @@ export function AppShell({ children }: AppShellProps) {
       <AppAccessGate>
         {/*
           One relative root so InstantMeetingHost / GlobalSessionHost / ImageCropHost
-          survive chromeless ↔ chrome flips. Dual mounts used to remount LiveKit and
+          survive chromeless ↔ chrome flips. Dual mounts used to remount the media room and
           land Maximize on Join Meeting.
         */}
         <YStack
@@ -246,8 +246,9 @@ export function AppShell({ children }: AppShellProps) {
           {/* Mount last so crop sits above InstantMeetingHost (z 96k) during live meetings. */}
           <ImageCropHost />
         </YStack>
-        <GenderVerificationHost />
       </AppAccessGate>
+      {/* Outside the gate so an intent redirect can still open the modal. */}
+      <GenderVerificationHost suspended={meetingEdgeToEdge} />
     </NativeSafeArea>
   )
 }

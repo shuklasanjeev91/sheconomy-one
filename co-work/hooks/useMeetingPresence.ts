@@ -14,6 +14,7 @@ import {
   fetchMeetingModerationSettings,
   fetchMeetingParticipants,
   joinMeetingParticipant,
+  updateMeetingParticipantDisplayName,
   leaveMeetingParticipant,
   removeMeetingParticipant,
   putMeetingParticipantInWaitingRoom,
@@ -29,9 +30,9 @@ import {
 } from '~/co-work/lib/meetings'
 import {
   hostLeaveConfirmCopy,
-  shouldEndLiveKitRoomAfterHostLeave,
+  shouldEndMediaRoomAfterHostLeave,
 } from '~/co-work/lib/meeting-end'
-import { disconnectLiveKitParticipant, endLiveKitRoom } from '~/co-work/lib/livekit'
+import { disconnectMediaParticipant, endMediaRoom } from '~/co-work/lib/meeting-media-moderation'
 import {
   broadcastSignal,
   joinMeetingChannel,
@@ -58,8 +59,24 @@ import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import {
   applyWhiteboardEvent,
   emptyWhiteboardSession,
+  WHITEBOARD_MAX_STROKES,
+  type WhiteboardSession,
   type WhiteboardStroke,
 } from '~/co-work/lib/meeting-whiteboard'
+import {
+  MEETING_CONTENT_HEARTBEAT_MS,
+  applyMeetingContentEvent,
+  createMeetingContentShareId,
+  emptyMeetingContentState,
+  isMeetingContentShare,
+  meetingContentIsStale,
+  meetingContentVideoPosition,
+  trimToPayloadBudget,
+  type MeetingContentItem,
+  type MeetingContentShare,
+  type MeetingContentState,
+} from '~/co-work/lib/meeting-content-share'
+import { supabaseConfig } from '~/lib/supabase/env'
 import {
   meetingPresenceHealDelayMs,
   meetingPresencePollIntervalMs,
@@ -157,6 +174,14 @@ export function useMeetingPresence({
   const [localNonverbal, setLocalNonverbal] = useState<MeetingNonverbalStatusId | null>(null)
   const [liveTopic, setLiveTopic] = useState<string | null>(null)
   const [whiteboard, setWhiteboard] = useState(emptyWhiteboardSession)
+  const whiteboardRef = useRef<WhiteboardSession>(whiteboard)
+  whiteboardRef.current = whiteboard
+  const [contentState, setContentState] = useState<MeetingContentState>(emptyMeetingContentState)
+  const contentStateRef = useRef(contentState)
+  contentStateRef.current = contentState
+  /** Our own late-join request, and requests someone already answered. */
+  const shareStateRequestIdRef = useRef<string | null>(null)
+  const answeredShareRequestsRef = useRef(new Set<string>())
   /** Host spotlight for everyone — synced via realtime broadcast. */
   const [spotlightUserId, setSpotlightUserId] = useState<string | null>(null)
   const [webinarMode, setWebinarMode] = useState(false)
@@ -167,6 +192,11 @@ export function useMeetingPresence({
   } | null>(null)
   const [breakoutEndsAt, setBreakoutEndsAt] = useState<number | null>(null)
   const [remoteControlRequest, setRemoteControlRequest] = useState<{
+    from: string
+    name: string
+    timestamp: number
+  } | null>(null)
+  const [recordingRequest, setRecordingRequest] = useState<{
     from: string
     name: string
     timestamp: number
@@ -416,8 +446,81 @@ export function useMeetingPresence({
     setFloatingReactions((prev) => prev.filter((row) => row.id !== id))
   }, [])
 
+  /** Our share with the video position brought up to now, for re-broadcasts. */
+  const freshOwnContentShare = useCallback((): MeetingContentShare | null => {
+    const { share, receivedAt } = contentStateRef.current
+    if (!share || share.from !== userId) return null
+    const now = Date.now()
+    return { ...share, positionSec: meetingContentVideoPosition(share, receivedAt, now), updatedAt: now }
+  }, [userId])
+
+  const answerShareStateRequest = useCallback(
+    (requestId: string) => {
+      const own = freshOwnContentShare()
+      if (own) sendSignal({ type: 'content-share', from: userId, share: own })
+      const board = whiteboardRef.current
+      if (!board.active) return
+      // Whoever started the board answers first; others only if nobody has.
+      const delay = board.startedBy === userId ? 0 : 300 + Math.floor(Math.random() * 900)
+      setTimeout(() => {
+        if (answeredShareRequestsRef.current.has(requestId)) return
+        const latest = whiteboardRef.current
+        if (!latest.active) return
+        answeredShareRequestsRef.current.add(requestId)
+        sendSignal({
+          type: 'whiteboard-sync',
+          from: userId,
+          requestId,
+          startedBy: latest.startedBy,
+          strokes: trimToPayloadBudget(latest.strokes),
+        })
+      }, delay)
+    },
+    [freshOwnContentShare, sendSignal, userId],
+  )
+
   const handleSignal = useCallback(
     (payload: SignalPayload) => {
+      if (payload.type === 'content-share') {
+        const share = payload.share
+        if (!isMeetingContentShare(share, supabaseConfig.url) || share.from !== payload.from) return
+        setContentState((current) =>
+          applyMeetingContentEvent(current, { type: 'share', share, receivedAt: Date.now() }),
+        )
+        return
+      }
+      if (payload.type === 'content-share-stop') {
+        setContentState((current) =>
+          current.share?.from === payload.from
+            ? applyMeetingContentEvent(current, { type: 'stop', id: payload.id })
+            : current,
+        )
+        return
+      }
+      if (payload.type === 'share-state-request') {
+        if (payload.from !== userId && typeof payload.requestId === 'string') {
+          answerShareStateRequest(payload.requestId)
+        }
+        return
+      }
+      if (payload.type === 'whiteboard-sync') {
+        if (answeredShareRequestsRef.current.size > 200) answeredShareRequestsRef.current.clear()
+        answeredShareRequestsRef.current.add(payload.requestId)
+        if (payload.requestId !== shareStateRequestIdRef.current) return
+        shareStateRequestIdRef.current = null
+        const incoming = Array.isArray(payload.strokes) ? payload.strokes.filter((row) => !!row?.id) : []
+        setWhiteboard((current) => {
+          const seen = new Set(current.strokes.map((row) => row.id))
+          return {
+            active: true,
+            startedBy: current.startedBy ?? payload.startedBy ?? payload.from,
+            strokes: [...incoming.filter((row) => !seen.has(row.id)), ...current.strokes].slice(
+              -WHITEBOARD_MAX_STROKES,
+            ),
+          }
+        })
+        return
+      }
       if (payload.type === 'chat' && payload.from !== userId) {
         ingestRemoteChatMessage(payload.message)
         return
@@ -606,6 +709,28 @@ export function useMeetingPresence({
         })
         return
       }
+      if (payload.type === 'recording-request' && payload.from !== userId) {
+        setRecordingRequest({
+          from: payload.from,
+          name: payload.name || 'Someone',
+          timestamp: payload.timestamp,
+        })
+        return
+      }
+      if (payload.type === 'recording-response') {
+        // Any host answering closes the prompt for the other hosts too.
+        setRecordingRequest((current) => (current?.from === payload.to ? null : current))
+        if (payload.to === userId) {
+          setLatestChatNotice({
+            id: `rec-resp-${payload.timestamp}`,
+            title: 'Recording',
+            message: payload.accepted
+              ? 'The host started recording this meeting'
+              : 'The host declined your recording request',
+          })
+        }
+        return
+      }
       if (payload.type === 'host-transferred') {
         void refreshParticipants()
         return
@@ -631,7 +756,7 @@ export function useMeetingPresence({
         })
       }
     },
-    [ingestRemoteChatMessage, pushFloatingReaction, userId],
+    [answerShareStateRequest, ingestRemoteChatMessage, pushFloatingReaction, userId],
   )
 
   const waitingRoomEnabled = !isHost && !!meeting.security_settings?.waitingRoom
@@ -716,6 +841,13 @@ export function useMeetingPresence({
         setRealtimeDegraded(false)
         healAttemptRef.current = 0
         startPolling('healthy')
+        // Broadcast has no history: ask presenters for the board and content on stage.
+        const requestId = `${userId}-${Date.now()}`
+        shareStateRequestIdRef.current = requestId
+        setTimeout(() => {
+          if (channelRef.current !== channel) return
+          broadcastSignal(channel, { type: 'share-state-request', from: userId, requestId })
+        }, 800)
         await refreshChat()
       } catch {
         if (generation !== connectGenerationRef.current) return
@@ -764,6 +896,11 @@ export function useMeetingPresence({
     setWhiteboard(emptyWhiteboardSession())
     setOnlineUserIds([])
     const channel = channelRef.current
+    const ownShare = contentStateRef.current.share
+    if (channel && ownShare?.from === userId) {
+      broadcastSignal(channel, { type: 'content-share-stop', from: userId, id: ownShare.id })
+    }
+    setContentState(emptyMeetingContentState())
     channelRef.current = null
     if (channel) {
       try {
@@ -795,6 +932,14 @@ export function useMeetingPresence({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, meeting.id, userId])
+
+  useEffect(() => {
+    if (!hasJoinedRef.current) return
+    void updateMeetingParticipantDisplayName(meeting.id, sessionIdRef.current, displayName)
+      .then(() => refreshParticipants())
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayName])
 
   const sendChat = useCallback(
     async (
@@ -945,13 +1090,11 @@ export function useMeetingPresence({
       const participant = participants.find((row) => row.id === participantId)
       if (!participant || participant.is_host) return
       await removeMeetingParticipant(meeting.id, participant.user_id)
-      try {
-        if (meeting.room_id) {
-          await disconnectLiveKitParticipant(meeting.id, meeting.room_id, participant.user_id)
-        }
-      } finally {
-        await refreshParticipants()
+      if (meeting.room_id) {
+        // Best-effort: the removed client also leaves the SFU on its own.
+        await disconnectMediaParticipant(meeting.id, meeting.room_id, participant.user_id).catch(() => {})
       }
+      await refreshParticipants()
     },
     [meeting.id, meeting.room_id, participants, refreshParticipants],
   )
@@ -961,13 +1104,11 @@ export function useMeetingPresence({
       const participant = participants.find((row) => row.id === participantId)
       if (!participant || participant.is_host) return
       await putMeetingParticipantInWaitingRoom(meeting.id, participant.user_id)
-      try {
-        if (meeting.room_id) {
-          await disconnectLiveKitParticipant(meeting.id, meeting.room_id, participant.user_id)
-        }
-      } finally {
-        await refreshParticipants()
+      if (meeting.room_id) {
+        // Best-effort: the removed client also leaves the SFU on its own.
+        await disconnectMediaParticipant(meeting.id, meeting.room_id, participant.user_id).catch(() => {})
       }
+      await refreshParticipants()
     },
     [meeting.id, meeting.room_id, participants, refreshParticipants],
   )
@@ -1000,15 +1141,15 @@ export function useMeetingPresence({
       try {
         const latest = await fetchMeetingById(meeting.id)
         if (
-          shouldEndLiveKitRoomAfterHostLeave({
+          shouldEndMediaRoomAfterHostLeave({
             previousRole: roleAtLeave,
             meetingStatus: latest?.status,
           })
         ) {
-          await endLiveKitRoom(meeting.id, meeting.room_id)
+          await endMediaRoom(meeting.id, meeting.room_id)
         }
       } catch {
-        // Transfer keeps the LiveKit room alive; ending is best-effort.
+        // Transfer keeps the media room alive; ending is best-effort.
       }
     }
   }, [
@@ -1027,7 +1168,7 @@ export function useMeetingPresence({
       // Notify peers immediately (control-event poll is the authoritative path).
       sendSignal({ type: 'meeting-ended', from: userId, timestamp: Date.now() })
       await endMeeting(meeting.id)
-      if (meeting.room_id) await endLiveKitRoom(meeting.id, meeting.room_id)
+      if (meeting.room_id) await endMediaRoom(meeting.id, meeting.room_id)
     } catch {
       // Still disconnect locally so the host can exit the room UI.
     }
@@ -1175,7 +1316,36 @@ export function useMeetingPresence({
     [sendSignal, userId],
   )
 
-  const roomWantsCaptions = Object.values(captionWantedByUser).some(Boolean)
+  // `caption-wanted` is only broadcast on toggle, so re-announce ours to peers
+  // who join afterwards or they never start publishing their speech.
+  const seenOnlineUserIdsRef = useRef<Set<string>>(new Set())
+  const captionAnnounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wantsCaptionsSelf = !!captionWantedByUser[userId]
+  const wantsCaptionsSelfRef = useRef(wantsCaptionsSelf)
+  wantsCaptionsSelfRef.current = wantsCaptionsSelf
+  useEffect(() => {
+    const seen = seenOnlineUserIdsRef.current
+    const newcomers = onlineUserIds.filter((id) => id !== userId && !seen.has(id))
+    seenOnlineUserIdsRef.current = new Set(onlineUserIds)
+    if (!wantsCaptionsSelf || newcomers.length === 0 || captionAnnounceTimerRef.current) return
+    captionAnnounceTimerRef.current = setTimeout(() => {
+      captionAnnounceTimerRef.current = null
+      if (!wantsCaptionsSelfRef.current) return
+      sendSignal({ type: 'caption-wanted', from: userId, wanted: true, timestamp: Date.now() })
+    }, 800)
+  }, [onlineUserIds, sendSignal, userId, wantsCaptionsSelf])
+  useEffect(
+    () => () => {
+      if (captionAnnounceTimerRef.current) clearTimeout(captionAnnounceTimerRef.current)
+    },
+    [],
+  )
+
+  const roomWantsCaptions = Object.entries(captionWantedByUser).some(
+    ([id, wanted]) =>
+      wanted &&
+      (id === userId || !isRealtimeConnected || onlineUserIds.length === 0 || onlineUserIds.includes(id)),
+  )
 
   const syncMediaState = useCallback(
     async (patch: { is_muted?: boolean; is_video_off?: boolean }) => {
@@ -1315,6 +1485,98 @@ export function useMeetingPresence({
     sendSignal({ type: 'whiteboard-clear', from: userId })
   }, [sendSignal, userId])
 
+  const publishOwnContentShare = useCallback(
+    (share: MeetingContentShare) => {
+      const next = { share, receivedAt: Date.now() }
+      contentStateRef.current = next
+      setContentState(next)
+      sendSignal({ type: 'content-share', from: userId, share })
+    },
+    [sendSignal, userId],
+  )
+
+  const startContentShare = useCallback(
+    (items: MeetingContentItem[]) => {
+      const now = Date.now()
+      publishOwnContentShare({
+        id: createMeetingContentShareId(userId, now),
+        from: userId,
+        presenterName: displayName,
+        items,
+        index: 0,
+        page: 1,
+        playing: false,
+        positionSec: 0,
+        startedAt: now,
+        updatedAt: now,
+      })
+    },
+    [displayName, publishOwnContentShare, userId],
+  )
+
+  /** Presenter only: slide, page or playback changes follow on every viewer. */
+  const updateContentShare = useCallback(
+    (patch: Partial<Pick<MeetingContentShare, 'index' | 'page' | 'playing' | 'positionSec'>>) => {
+      const { share } = contentStateRef.current
+      if (!share || share.from !== userId) return
+      const next: MeetingContentShare = { ...share, ...patch, updatedAt: Date.now() }
+      if (patch.index !== undefined && patch.index !== share.index) {
+        next.page = patch.page ?? 1
+        next.playing = patch.playing ?? false
+        next.positionSec = patch.positionSec ?? 0
+      }
+      publishOwnContentShare(next)
+    },
+    [publishOwnContentShare, userId],
+  )
+
+  const stopContentShare = useCallback(() => {
+    const { share } = contentStateRef.current
+    if (!share || share.from !== userId) return
+    const stop: SignalPayload = { type: 'content-share-stop', from: userId, id: share.id }
+    sendSignal(stop)
+    // Broadcasts are fire-and-forget; a dropped stop would leave viewers on the share until it goes stale.
+    for (const delay of [1_000, 3_000]) setTimeout(() => sendSignal(stop), delay)
+    contentStateRef.current = emptyMeetingContentState()
+    setContentState(contentStateRef.current)
+  }, [sendSignal, userId])
+
+  const contentShare = contentState.share
+  const presentingContentId = contentShare?.from === userId ? contentShare.id : null
+  useEffect(() => {
+    if (!presentingContentId) return
+    const timer = setInterval(() => {
+      const own = freshOwnContentShare()
+      if (own) sendSignal({ type: 'content-share', from: userId, share: own })
+    }, MEETING_CONTENT_HEARTBEAT_MS)
+    return () => clearInterval(timer)
+  }, [freshOwnContentShare, presentingContentId, sendSignal, userId])
+
+  // Viewers drop a share whose presenter went quiet or left the meeting.
+  const viewingContentFrom = contentShare && contentShare.from !== userId ? contentShare.from : null
+  useEffect(() => {
+    if (!viewingContentFrom) return
+    const timer = setInterval(() => {
+      const { share, receivedAt } = contentStateRef.current
+      if (share && share.from !== userId && meetingContentIsStale(receivedAt)) {
+        setContentState(emptyMeetingContentState())
+      }
+    }, 5_000)
+    return () => clearInterval(timer)
+  }, [userId, viewingContentFrom])
+
+  const contentPresenterStatus = viewingContentFrom
+    ? participants.find((row) => row.user_id === viewingContentFrom)?.status ?? null
+    : null
+  useEffect(() => {
+    if (!viewingContentFrom) return
+    if (contentPresenterStatus && contentPresenterStatus !== 'admitted') {
+      setContentState((current) =>
+        current.share?.from === viewingContentFrom ? emptyMeetingContentState() : current,
+      )
+    }
+  }, [contentPresenterStatus, viewingContentFrom])
+
   const setSpotlight = useCallback(
     (targetUserId: string | null) => {
       const next = targetUserId ? String(targetUserId) : null
@@ -1414,6 +1676,24 @@ export function useMeetingPresence({
   const clearRemoteControlRequest = useCallback(() => {
     setRemoteControlRequest(null)
   }, [])
+
+  const requestRecording = useCallback(() => {
+    sendSignal({ type: 'recording-request', from: userId, name: displayName, timestamp: Date.now() })
+  }, [displayName, sendSignal, userId])
+
+  const respondRecording = useCallback(
+    (toUserId: string, accepted: boolean) => {
+      sendSignal({
+        type: 'recording-response',
+        from: userId,
+        to: toUserId,
+        accepted,
+        timestamp: Date.now(),
+      })
+      setRecordingRequest(null)
+    },
+    [sendSignal, userId],
+  )
 
   const publishAnnotationStroke = useCallback(
     (stroke: {
@@ -1530,6 +1810,11 @@ export function useMeetingPresence({
     addWhiteboardStroke,
     undoWhiteboardStroke,
     clearWhiteboard,
+    contentShare,
+    contentShareReceivedAt: contentState.receivedAt,
+    startContentShare,
+    updateContentShare,
+    stopContentShare,
     spotlightUserId,
     setSpotlight,
     webinarMode,
@@ -1544,6 +1829,9 @@ export function useMeetingPresence({
     respondRemoteControl,
     clearRemoteControlRequest,
     remoteControlRequest,
+    requestRecording,
+    respondRecording,
+    recordingRequest,
     annotationOpen,
     annotationStrokes,
     publishAnnotationStroke,

@@ -7,7 +7,7 @@ export function resolveOnline(state: {
   if (state.isConnected === false) return false
 
   // NetInfo on web / localhost / some captive portals reports
-  // `isInternetReachable: false` even while the link is up and LiveKit works.
+  // `isInternetReachable: false` even while the link is up and WebRTC works.
   // Trust a positive `isConnected` over a negative reachability probe.
   if (state.isConnected === true) return true
 

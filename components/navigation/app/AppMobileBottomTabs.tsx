@@ -33,7 +33,7 @@ import {
   collapseLiveMeetingForBrowsing,
   shouldCollapseMeetingBeforeNavigate,
 } from '~/co-work/lib/meeting-browse'
-import { useAppUi } from '~/lib/theme/useAppUi'
+import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
 import { QA } from '~/lib/qa/test-ids'
 
 const TAB_ICON = { active: 24, inactive: 22 } as const
@@ -55,6 +55,7 @@ export function AppMobileBottomTabs() {
   const activePath = pendingPath ?? pathname
 
   const ui = useAppUi()
+  const isDarkTheme = useIsDarkTheme()
   const { ui: coworkUi } = useCoWorkTheme()
   const appColors = getAppColors(ui)
   const { width } = useWindowDimensions()
@@ -91,7 +92,8 @@ export function AppMobileBottomTabs() {
   const tabTestSection = section ?? 'app'
 
   const isCoWork = section === 'co-work'
-  const activeColor = isCoWork ? coworkUi.brandLight : appColors.brand
+  // Brand pink on its own light tint is below 4.5:1 for the small tab labels.
+  const activeColor = isCoWork ? coworkUi.brandLight : isDarkTheme ? appColors.brand : ui.brandDark
   const inactiveColor = isCoWork ? coworkUi.textMuted : appColors.icon
   const dockSurface = isCoWork ? coworkUi.controlsDock : ui.chromeBg
   const activePillBg = isCoWork ? coworkUi.brandMuted : `${appColors.brand}14`

@@ -5,8 +5,8 @@
 #import <Vision/Vision.h>
 #import <WebRTC/RTCCVPixelBuffer.h>
 #import <WebRTC/RTCVideoFrame.h>
-#import <livekit-react-native-webrtc/ProcessorProvider.h>
-#import <livekit-react-native-webrtc/VideoFrameProcessor.h>
+#import <react-native-webrtc/ProcessorProvider.h>
+#import <react-native-webrtc/VideoFrameProcessor.h>
 
 static NSString *const kProcessorName = @"sheconomyVirtualBackground";
 static NSString *gMode = @"off";
@@ -37,35 +37,75 @@ static dispatch_queue_t gConfigQueue;
   return self;
 }
 
+static CGImagePropertyOrientation SHEPropertyOrientation(UIImageOrientation orientation) {
+  switch (orientation) {
+    case UIImageOrientationDown: return kCGImagePropertyOrientationDown;
+    case UIImageOrientationLeft: return kCGImagePropertyOrientationLeft;
+    case UIImageOrientationRight: return kCGImagePropertyOrientationRight;
+    case UIImageOrientationUpMirrored: return kCGImagePropertyOrientationUpMirrored;
+    case UIImageOrientationDownMirrored: return kCGImagePropertyOrientationDownMirrored;
+    case UIImageOrientationLeftMirrored: return kCGImagePropertyOrientationLeftMirrored;
+    case UIImageOrientationRightMirrored: return kCGImagePropertyOrientationRightMirrored;
+    default: return kCGImagePropertyOrientationUp;
+  }
+}
+
 - (CIImage *)imageFromPath:(NSString *)path {
   if (path.length == 0) return nil;
   NSString *filePath = path;
   if ([path hasPrefix:@"file://"]) {
     filePath = [NSURL URLWithString:path].path ?: [path substringFromIndex:7];
   }
+  // Camera photos store "which way is up" as EXIF; the raw pixels can be sideways.
+  NSDictionary *applyOrientation = @{kCIImageApplyOrientationProperty : @YES};
   if (![path hasPrefix:@"http://"] && ![path hasPrefix:@"https://"]) {
     UIImage *uiImage = [UIImage imageWithContentsOfFile:filePath];
-    if (uiImage.CGImage) return [CIImage imageWithCGImage:uiImage.CGImage];
-    return [CIImage imageWithContentsOfURL:[NSURL fileURLWithPath:filePath]];
+    if (uiImage.CGImage) {
+      return [[CIImage imageWithCGImage:uiImage.CGImage]
+          imageByApplyingCGOrientation:SHEPropertyOrientation(uiImage.imageOrientation)];
+    }
+    return [CIImage imageWithContentsOfURL:[NSURL fileURLWithPath:filePath] options:applyOrientation];
   }
   NSURL *url = [NSURL URLWithString:path];
-  return url ? [CIImage imageWithContentsOfURL:url] : nil;
+  return url ? [CIImage imageWithContentsOfURL:url options:applyOrientation] : nil;
 }
 
-- (CIImage *)backgroundImageForPath:(NSString *)path extent:(CGRect)extent {
+/**
+ * The camera buffer is in sensor orientation and WebRTC turns it clockwise by
+ * `rotation` only when showing or sending it. Fit the picture upright for that
+ * final view, then turn it back into buffer space so the rotation leaves it
+ * upright (otherwise it shows upside down or sideways).
+ */
+- (CIImage *)backgroundImageForPath:(NSString *)path
+                             extent:(CGRect)extent
+                           rotation:(RTCVideoRotation)rotation {
   if (![self.cachedBackgroundPath isEqualToString:path]) {
     self.cachedBackground = [self imageFromPath:path];
     self.cachedBackgroundPath = path;
   }
   CIImage *image = self.cachedBackground;
   if (!image || CGRectIsEmpty(image.extent)) return nil;
-  CGFloat scale = MAX(CGRectGetWidth(extent) / CGRectGetWidth(image.extent),
-                      CGRectGetHeight(extent) / CGRectGetHeight(image.extent));
+  image = [image imageByApplyingTransform:CGAffineTransformMakeTranslation(-CGRectGetMinX(image.extent),
+                                                                           -CGRectGetMinY(image.extent))];
+
+  BOOL sideways = rotation == RTCVideoRotation_90 || rotation == RTCVideoRotation_270;
+  CGRect view = sideways ? CGRectMake(0, 0, CGRectGetHeight(extent), CGRectGetWidth(extent))
+                         : CGRectMake(0, 0, CGRectGetWidth(extent), CGRectGetHeight(extent));
+  CGFloat scale = MAX(CGRectGetWidth(view) / CGRectGetWidth(image.extent),
+                      CGRectGetHeight(view) / CGRectGetHeight(image.extent));
   CIImage *scaled = [image imageByApplyingTransform:CGAffineTransformMakeScale(scale, scale)];
-  CGFloat x = CGRectGetMidX(scaled.extent) - CGRectGetMidX(extent);
-  CGFloat y = CGRectGetMidY(scaled.extent) - CGRectGetMidY(extent);
-  return [[scaled imageByApplyingTransform:CGAffineTransformMakeTranslation(-x, -y)]
-      imageByCroppingToRect:extent];
+  CGFloat x = CGRectGetMidX(scaled.extent) - CGRectGetMidX(view);
+  CGFloat y = CGRectGetMidY(scaled.extent) - CGRectGetMidY(view);
+  CIImage *fitted = [[scaled imageByApplyingTransform:CGAffineTransformMakeTranslation(-x, -y)]
+      imageByCroppingToRect:view];
+
+  // Core Image is y-up, so a positive angle turns counter-clockwise: the inverse
+  // of WebRTC's clockwise display rotation.
+  CIImage *turned = [fitted imageByApplyingTransform:CGAffineTransformMakeRotation((CGFloat)rotation * M_PI / 180.0)];
+  turned = [turned imageByApplyingTransform:CGAffineTransformMakeTranslation(
+                                                CGRectGetMinX(extent) - CGRectGetMinX(turned.extent),
+                                                CGRectGetMinY(extent) - CGRectGetMinY(turned.extent))];
+  return [turned imageByCroppingToRect:extent];
 }
 
 - (RTCVideoFrame *)capturer:(RTCVideoCapturer *)capturer
@@ -110,7 +150,7 @@ static dispatch_queue_t gConfigQueue;
 
   CIImage *background = nil;
   if ([mode isEqualToString:@"image"] && imagePath.length > 0) {
-    background = [self backgroundImageForPath:imagePath extent:extent];
+    background = [self backgroundImageForPath:imagePath extent:extent rotation:frame.rotation];
     // Do not silently blur when an image was requested but failed to load —
     // that looked like the custom upload never applied.
     if (!background) background = foreground;

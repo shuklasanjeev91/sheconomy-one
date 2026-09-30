@@ -6,6 +6,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { Animated, Platform, StyleSheet, useWindowDimensions } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 
+import { brandColors } from '~/config/brand-colors'
 import { BrandGradient, Button, Icons, Image, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { BRAND_NAME } from '~/config/brand'
 import type { CommerceStats, HomeHeroImageSet } from '~/commerce/lib/commerce'
@@ -377,11 +378,11 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
               borderRadius={radius.pill}
               alignSelf="flex-start"
               backgroundColor="white"
-              color={ui.brand}
+              color={brandColors.primary}
               paddingHorizontal={isDesktop ? 24 : isPhone ? 14 : 20}
               hoverStyle={{ opacity: 0.94, scale: 1.02 }}
               pressStyle={{ opacity: 0.88, scale: 0.98 }}
-              iconAfter={<Icons.ArrowRight size={isPhone ? 14 : 18} color={ui.brand} strokeWidth={2.4} />}
+              iconAfter={<Icons.ArrowRight size={isPhone ? 14 : 18} color={brandColors.primary} strokeWidth={2.4} />}
             >
               {slide.cta}
             </Button>

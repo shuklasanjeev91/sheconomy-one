@@ -4,7 +4,7 @@ import {
   androidAudioTypeOptionsForCall,
   preferredCallAudioOutputId,
   speechRecognitionLocaleFallbacks,
-} from '~/co-work/lib/livekit-call-audio-options'
+} from '~/co-work/lib/call-audio-options'
 
 describe('androidAudioTypeOptionsForCall', () => {
   it('keeps exclusive communication focus when captions are off', () => {

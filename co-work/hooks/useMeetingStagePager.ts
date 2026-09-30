@@ -1,43 +1,33 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { useMeetingLiveSignals } from '~/co-work/components/MeetingLiveSignalsContext'
 import { useMeetingMachine } from '~/co-work/components/MeetingProvider'
 import {
+  meetingStageMainPage,
   meetingStagePageIndex,
   meetingStagePages,
+  meetingStageShouldReturnToSpeaker,
   meetingStageSwipeTarget,
   type MeetingStagePage,
   type MeetingStageSwipeDirection,
 } from '~/co-work/lib/meeting-stage-pager'
 
 /** Zoom-mobile swipe pages for the meeting stage (web + native). */
-export function useMeetingStagePager(input: {
-  cameraTiles: number
-  pageSize: number
-  hasScreenShare: boolean
-}) {
-  const { cameraTiles, pageSize, hasScreenShare } = input
+export function useMeetingStagePager(input: { cameraTiles: number; hasScreenShare: boolean }) {
+  const { cameraTiles, hasScreenShare } = input
   const { state, dispatch } = useMeetingMachine()
   const { safeDrivingAvailable, openSafeDriving } = useMeetingLiveSignals()
-  const [requestedGalleryPage, setRequestedGalleryPage] = useState(0)
 
   const pages = useMemo(
     () =>
       meetingStagePages({
         participantTiles: cameraTiles,
-        pageSize,
         hasScreenShare,
         safeDriving: safeDrivingAvailable,
       }),
-    [cameraTiles, hasScreenShare, pageSize, safeDrivingAvailable],
+    [cameraTiles, hasScreenShare, safeDrivingAvailable],
   )
-  const galleryPageCount = pages.filter((page) => page.kind === 'gallery').length
-  const galleryPage = Math.min(requestedGalleryPage, Math.max(0, galleryPageCount - 1))
-  const index = meetingStagePageIndex(pages, {
-    viewMode: state.viewMode,
-    galleryPage,
-    hasScreenShare,
-  })
+  const index = meetingStagePageIndex(pages, { viewMode: state.viewMode })
 
   const goTo = useCallback(
     (page: MeetingStagePage) => {
@@ -52,12 +42,20 @@ export function useMeetingStagePager(input: {
           dispatch({ type: 'SET_VIEW', viewMode: 'speaker' })
           return
         case 'gallery':
-          setRequestedGalleryPage(page.page)
           dispatch({ type: 'SET_VIEW', viewMode: 'gallery' })
       }
     },
     [dispatch, openSafeDriving],
   )
+
+  const previousTilesRef = useRef(cameraTiles)
+  useEffect(() => {
+    const previousTiles = previousTilesRef.current
+    previousTilesRef.current = cameraTiles
+    if (meetingStageShouldReturnToSpeaker({ previousTiles, participantTiles: cameraTiles })) {
+      goTo(meetingStageMainPage(hasScreenShare))
+    }
+  }, [cameraTiles, goTo, hasScreenShare])
 
   const swipe = useCallback(
     (direction: MeetingStageSwipeDirection) => {
@@ -71,7 +69,6 @@ export function useMeetingStagePager(input: {
   return {
     pages,
     index,
-    galleryPage,
     canGoNext: index < pages.length - 1,
     canGoPrev: index > 0,
     goTo,

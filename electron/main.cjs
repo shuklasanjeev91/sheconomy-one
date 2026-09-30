@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron')
+const { app, BrowserWindow, desktopCapturer, session, shell } = require('electron')
 const path = require('path')
 
 const PRODUCTION_URL = 'https://sheconomy.in'
@@ -51,7 +51,34 @@ function createWindow() {
   }
 }
 
+/**
+ * Without a handler Electron rejects every getDisplayMedia call with
+ * NotSupportedError, so meeting screen share never starts.
+ */
+function enableScreenShare() {
+  session.defaultSession.setDisplayMediaRequestHandler(
+    (request, callback) => {
+      desktopCapturer
+        .getSources({ types: ['screen'] })
+        .then((sources) => {
+          const screen = sources[0]
+          if (!screen) {
+            callback({})
+            return
+          }
+          callback({
+            video: screen,
+            ...(request.audioRequested && process.platform === 'win32' ? { audio: 'loopback' } : {}),
+          })
+        })
+        .catch(() => callback({}))
+    },
+    { useSystemPicker: true },
+  )
+}
+
 app.whenReady().then(() => {
+  enableScreenShare()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

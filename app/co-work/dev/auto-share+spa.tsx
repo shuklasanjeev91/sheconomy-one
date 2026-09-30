@@ -42,7 +42,7 @@ export default function DevAutoScreenShareRoute() {
           throw new Error('Meeting created without a join code')
         }
 
-        // Set the dev flag so the LiveKit content auto-starts screen share.
+        // Set the dev flag so the meeting room auto-starts screen share.
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore
         ;(globalThis as any).__AUTO_SCREEN_SHARE = true

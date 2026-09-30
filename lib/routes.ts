@@ -180,7 +180,7 @@ export const chatRoutes = {
   groups: '/chat/groups' as Href,
   calls: '/chat/calls' as Href,
   conversation: (id: string) => `/chat/${encodeURIComponent(id)}` as Href,
-  /** WhatsApp-style 1:1 LiveKit call (audio or video). */
+  /** WhatsApp-style 1:1 call (audio or video). */
   call: (code: string, options?: { type?: 'audio' | 'video'; callId?: string }) => {
     const params = new URLSearchParams()
     if (options?.type) params.set('type', options.type)
@@ -212,7 +212,7 @@ export const classRoutes = {
 export const coWorkRoutes = {
   home: '/co-work' as Href,
   meeting: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}` as Href,
-  // Prefer nested `/live` — keeps LiveKit out of the lobby route chunk.
+  // Prefer nested `/live` — keeps WebRTC out of the lobby route chunk.
   // Flat `?live=1` used to share a file with lobby and blanked Co-Work/lobby.
   meetingLive: (code: string) =>
     `/co-work/meeting/${encodeURIComponent(code)}/live` as Href,
@@ -326,7 +326,7 @@ export function isChatCallsPath(pathname: string) {
   return pathname === '/chat/calls'
 }
 
-/** Active 1:1 LiveKit call (`/chat/call/{code}`). */
+/** Active 1:1 call (`/chat/call/{code}`). */
 export function isChatCallPath(pathname: string) {
   return pathname === '/chat/call' || pathname.startsWith('/chat/call/')
 }

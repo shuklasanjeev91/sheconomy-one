@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { useWindowDimensions } from 'react-native'
+import { Dimensions, Platform, useWindowDimensions } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export type FullscreenOverlaySize = { width: number; height: number }
 
@@ -12,9 +13,19 @@ export type FullscreenOverlaySize = { width: number; height: number }
  * rather than the device. Measuring gives every sheet the same exact frame on
  * web, iOS, and Android, and it re-measures on rotation, split screen, and
  * browser resize because `useWindowDimensions` is reactive.
+ *
+ * Android draws edge-to-edge but its window height excludes the status and
+ * navigation bars, so a sheet sized to it stops short and the tab bar shows
+ * through underneath. Add the bar insets back, capped at the physical screen.
  */
 export function useFullscreenOverlaySize(): FullscreenOverlaySize {
   const { width, height } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
 
-  return useMemo(() => ({ width, height }), [width, height])
+  const overlayHeight =
+    Platform.OS === 'android'
+      ? Math.min(Dimensions.get('screen').height, height + insets.top + insets.bottom)
+      : height
+
+  return useMemo(() => ({ width, height: overlayHeight }), [width, overlayHeight])
 }

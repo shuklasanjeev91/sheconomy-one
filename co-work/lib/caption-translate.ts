@@ -17,6 +17,55 @@ function baseLang(code: string | null | undefined): string {
   return (code || '').split('-')[0]?.trim().toLowerCase() || ''
 }
 
+// Script alone cannot separate Latin-alphabet languages, so English speech used to
+// "match" a Spanish/French/… viewer and was never translated.
+const LATIN_STOPWORDS: Record<string, Set<string>> = {
+  en: new Set(
+    'the and is are was were you we i to of in it that this will would please hello hi be have has for with on can what do does not our your they them there here'.split(
+      ' ',
+    ),
+  ),
+  es: new Set(
+    'el los las que y es por una para con del como pero hola gracias está están somos usted ustedes nosotros muy también'.split(
+      ' ',
+    ),
+  ),
+  fr: new Set(
+    'le les des et est une pour pas vous nous je il elle dans sur avec ce bonjour merci sont être très aussi'.split(
+      ' ',
+    ),
+  ),
+  de: new Set(
+    'der die das und ist nicht ich sie wir ein eine zu mit den auf für es hallo danke sind auch sehr'.split(' '),
+  ),
+  pt: new Set(
+    'os que é em um uma para com não você nós do da por olá obrigado obrigada são está muito também'.split(' '),
+  ),
+  it: new Set(
+    'il lo gli di che è un una per con non sono noi voi del della ciao grazie anche molto questo'.split(' '),
+  ),
+}
+
+/** Best-guess Latin-script language from common words; null when unclear. */
+export function detectLatinCaptionLang(text: string): string | null {
+  const words = text.toLowerCase().match(/[a-zà-öø-ÿ']+/g) ?? []
+  if (!words.length) return null
+  let best: string | null = null
+  let bestScore = 0
+  let tied = false
+  for (const [lang, stopwords] of Object.entries(LATIN_STOPWORDS)) {
+    const score = words.reduce((total, word) => total + (stopwords.has(word) ? 1 : 0), 0)
+    if (score > bestScore) {
+      best = lang
+      bestScore = score
+      tied = false
+    } else if (score > 0 && score === bestScore) {
+      tied = true
+    }
+  }
+  return bestScore > 0 && !tied ? best : null
+}
+
 /** Heuristic: does this caption already look like the viewer's target language? */
 export function captionLooksLikeTargetLang(text: string, targetLang: string): boolean {
   const base = baseLang(targetLang) || 'en'
@@ -54,6 +103,8 @@ export function captionLooksLikeTargetLang(text: string, targetLang: string): bo
   if (base === 'zh' || base === 'ja' || base === 'ko') return hasCjk
   if (['en', 'es', 'fr', 'de', 'pt', 'it'].includes(base)) {
     if ((hasDevanagari || hasCjk || hasArabic || hasTamil || hasTelugu) && !hasLatin) return false
+    const detected = detectLatinCaptionLang(text)
+    if (detected && detected !== base) return false
     return hasLatin || !hasDevanagari
   }
   return true

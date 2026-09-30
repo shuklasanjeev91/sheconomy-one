@@ -1,5 +1,5 @@
 /**
- * Let SFSpeechRecognizer run during a LiveKit call.
+ * Let SFSpeechRecognizer run during a meeting call.
  * Stock @react-native-voice/voice replaces the audio category without
  * mixWithOthers and activates the session with NotifyOthersOnDeactivation,
  * which stops the meeting mic and makes captions fail to start on iPad.
@@ -36,7 +36,7 @@ if (setupStart < 0 || setupEnd < 0) {
 
 const setup = `/** Returns "YES" if no errors had occurred */
 -(BOOL) setupAudioSession {
-    // SHEconomy live-caption mic share: keep LiveKit's playAndRecord session
+    // SHEconomy live-caption mic share: keep the call's playAndRecord session
     // alive. NotifyOthersOnDeactivation deactivates WebRTC and speech never starts.
     AVAudioSessionCategoryOptions options =
         AVAudioSessionCategoryOptionMixWithOthers |

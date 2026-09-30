@@ -282,6 +282,29 @@ export function MeetingMoreSheet({
             )
           })}
         </XStack>
+
+        <Pressable
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            minHeight: 48,
+            borderRadius: 999,
+            backgroundColor: ui.meetingControl,
+            borderWidth: 1,
+            borderColor: ui.borderSoft,
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <Icons.X size={18} color={ui.text} strokeWidth={2} />
+          <Text color={ui.text} fontSize={15} fontWeight="700">
+            Close
+          </Text>
+        </Pressable>
       </YStack>
     </AppBottomSheet>
   )

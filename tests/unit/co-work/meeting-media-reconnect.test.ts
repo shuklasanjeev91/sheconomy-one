@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  MEETING_LIVEKIT_CREDENTIAL_MAX_ATTEMPTS,
   MEETING_MEDIA_AUTO_RETRY_LIMIT,
-  meetingLiveKitCredentialRetryDelayMs,
+  MEETING_MEDIA_CREDENTIAL_MAX_ATTEMPTS,
+  meetingMediaCredentialRetryDelayMs,
   shouldSilentRemountMedia,
 } from '~/co-work/lib/meeting-media-reconnect'
 
@@ -15,10 +15,10 @@ describe('meeting media reconnect', () => {
     expect(shouldSilentRemountMedia(MEETING_MEDIA_AUTO_RETRY_LIMIT)).toBe(false)
   })
 
-  it('backs off LiveKit credential fetches', () => {
-    expect(MEETING_LIVEKIT_CREDENTIAL_MAX_ATTEMPTS).toBeGreaterThanOrEqual(3)
-    expect(meetingLiveKitCredentialRetryDelayMs(0)).toBe(400)
-    expect(meetingLiveKitCredentialRetryDelayMs(1)).toBe(800)
-    expect(meetingLiveKitCredentialRetryDelayMs(10)).toBe(4_000)
+  it('backs off media token fetches', () => {
+    expect(MEETING_MEDIA_CREDENTIAL_MAX_ATTEMPTS).toBeGreaterThanOrEqual(3)
+    expect(meetingMediaCredentialRetryDelayMs(0)).toBe(400)
+    expect(meetingMediaCredentialRetryDelayMs(1)).toBe(800)
+    expect(meetingMediaCredentialRetryDelayMs(10)).toBe(4_000)
   })
 })

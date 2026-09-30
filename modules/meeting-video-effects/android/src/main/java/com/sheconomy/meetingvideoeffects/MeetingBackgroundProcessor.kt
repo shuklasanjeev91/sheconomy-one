@@ -4,6 +4,8 @@ import android.content.Context
 import android.app.ActivityManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -14,6 +16,9 @@ import com.google.mlkit.vision.segmentation.Segmentation
 import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
 import com.oney.WebRTCModule.videoEffects.VideoFrameProcessor
 import com.oney.WebRTCModule.videoEffects.VideoFrameProcessorFactoryInterface
+import java.io.File
+import java.io.FileInputStream
+import java.io.InputStream
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -271,18 +276,33 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
       return null
     }
 
-    // Mild downsample so the room stays recognizable, the way Zoom blurs a background.
+    return blurBitmap(source)
+  }
+
+  /**
+   * Roughly matches the web `blur(12px)` canvas filter. Halving step by step and
+   * growing back in doublings approximates a Gaussian; one big bilinear jump
+   * barely softens the frame once WebRTC compresses it.
+   */
+  private fun blurBitmap(source: Bitmap): Bitmap {
     val strength = MeetingBackgroundConfig.blurRadius.coerceIn(4.0, 24.0)
-    val scale = (16.0 / strength).coerceIn(0.1, 0.28)
-      val tiny = Bitmap.createScaledBitmap(
-        source,
-        (source.width * scale).toInt().coerceIn(64, 180),
-        (source.height * scale).toInt().coerceIn(64, 180),
-        true,
-      )
-    val blurred = Bitmap.createScaledBitmap(tiny, source.width, source.height, true)
-    tiny.recycle()
-    return blurred
+    val targetW = (source.width / (strength * 1.6)).toInt().coerceIn(24, 160)
+    val targetH = (targetW.toLong() * source.height / source.width).toInt().coerceAtLeast(16)
+    var current = source
+    var w = source.width
+    var h = source.height
+    fun step(nextW: Int, nextH: Int) {
+      val next = Bitmap.createScaledBitmap(current, nextW.coerceAtLeast(1), nextH.coerceAtLeast(1), true)
+      if (next !== current && current !== source) current.recycle()
+      current = next
+      w = next.width
+      h = next.height
+    }
+    while (w / 2 >= targetW) step(w / 2, h / 2)
+    if (w != targetW) step(targetW, targetH)
+    while (w * 2 < source.width) step(w * 2, h * 2)
+    step(source.width, source.height)
+    return current
   }
 
   private fun requestDecodeAsync(path: String) {
@@ -354,36 +374,64 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
     return MaskSnapshot(FloatArray(width * height), width.coerceAtLeast(1), height.coerceAtLeast(1))
   }
 
+  private fun openBackgroundStream(path: String): InputStream? {
+    return when {
+      path.contains("android_asset") -> {
+        val assetPath = path
+          .substringAfter("android_asset/")
+          .substringAfter("android_asset")
+          .trimStart('/')
+        if (assetPath.isBlank()) null else context.assets.open(assetPath)
+      }
+      path.startsWith("content:") || path.startsWith("android.resource:") ->
+        context.contentResolver.openInputStream(Uri.parse(path))
+      else -> {
+        val candidates = if (path.startsWith("file:")) {
+          listOfNotNull(Uri.parse(path).path, path.removePrefix("file://"), path.removePrefix("file:"))
+        } else {
+          listOf(path)
+        }
+        candidates.map(::File).firstOrNull { it.isFile }?.let(::FileInputStream)
+      }
+    }
+  }
+
   private fun decodeBackgroundBitmap(path: String): Bitmap? {
     return try {
-      when {
-        path.contains("android_asset") -> {
-          val assetPath = path
-            .substringAfter("android_asset/")
-            .substringAfter("android_asset")
-            .trimStart('/')
-          if (assetPath.isBlank()) null
-          else context.assets.open(assetPath).use { stream ->
-            BitmapFactory.decodeStream(stream)
-          }
+      val bitmap = openBackgroundStream(path)?.use { BitmapFactory.decodeStream(it) } ?: return null
+      // Camera photos store "which way is up" as EXIF; the raw pixels can be sideways.
+      val orientation = runCatching {
+        openBackgroundStream(path)?.use {
+          ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
         }
-        path.startsWith("file:") -> {
-          val parsed = Uri.parse(path).path
-          BitmapFactory.decodeFile(parsed)
-            ?: BitmapFactory.decodeFile(path.removePrefix("file://"))
-            ?: BitmapFactory.decodeFile(path.removePrefix("file:"))
-        }
-        path.startsWith("content:") || path.startsWith("android.resource:") -> {
-          context.contentResolver.openInputStream(Uri.parse(path))?.use { stream ->
-            BitmapFactory.decodeStream(stream)
-          }
-        }
-        path.startsWith("/") -> BitmapFactory.decodeFile(path)
-        else -> BitmapFactory.decodeFile(path)
-      }
+      }.getOrNull() ?: ExifInterface.ORIENTATION_NORMAL
+      applyExifOrientation(bitmap, orientation)
     } catch (_: Exception) {
       null
     }
+  }
+
+  private fun applyExifOrientation(bitmap: Bitmap, orientation: Int): Bitmap {
+    val matrix = Matrix()
+    when (orientation) {
+      ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+      ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+      ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+      ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+      ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+      ExifInterface.ORIENTATION_TRANSPOSE -> {
+        matrix.postRotate(90f)
+        matrix.postScale(-1f, 1f)
+      }
+      ExifInterface.ORIENTATION_TRANSVERSE -> {
+        matrix.postRotate(270f)
+        matrix.postScale(-1f, 1f)
+      }
+      else -> return bitmap
+    }
+    val oriented = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    if (oriented !== bitmap) bitmap.recycle()
+    return oriented
   }
 
   private fun centerCrop(image: Bitmap, width: Int, height: Int): Bitmap {

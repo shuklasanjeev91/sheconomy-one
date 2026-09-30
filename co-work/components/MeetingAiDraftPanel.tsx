@@ -101,10 +101,10 @@ export function MeetingAiDraftPanel({ timeZone, onApply, initialPrompt }: Meetin
       borderRadius={16}
       borderWidth={1}
       borderColor={coworkUi.glassBorder}
-      backgroundColor="rgba(255,255,255,0.04)"
+      backgroundColor={coworkUi.surfaceMuted}
     >
       <XStack alignItems="center" gap="$2">
-        <Icons.Sparkles size={16} color={coworkUi.brand} />
+        <Icons.Sparkles size={16} color={coworkUi.brandLight} />
         <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
           Create with AI
         </Text>
@@ -138,7 +138,7 @@ export function MeetingAiDraftPanel({ timeZone, onApply, initialPrompt }: Meetin
           value={prompt}
           onChangeText={setPrompt}
           placeholder="e.g. Investor update Friday 5pm — review Q2 metrics"
-          backgroundColor="rgba(255,255,255,0.05)"
+          backgroundColor={coworkUi.surface}
           borderColor={coworkUi.borderSoft}
           color={coworkUi.text}
           borderRadius={14}

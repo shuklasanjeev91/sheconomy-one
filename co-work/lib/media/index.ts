@@ -3,19 +3,19 @@ import {
   hasDisplayMedia,
   hasMediaRecorder,
   isNativeRuntime,
-  supportsLiveKitVideo,
+  supportsMeetingVideo,
 } from '~/lib/platform/capabilities'
 
 import type { MediaCapabilities } from '~/co-work/lib/types'
 
 export function getMediaCapabilities(): MediaCapabilities {
   const platform = getRuntimePlatform()
-  const liveKit = supportsLiveKitVideo()
+  const meetingVideo = supportsMeetingVideo()
 
   return {
     platform,
-    supportsVideo: liveKit,
-    // Production meetings use LiveKit SFU (getDisplayMedia / native broadcast).
+    supportsVideo: meetingVideo,
+    // Production meetings use the mediasoup SFU (getDisplayMedia / native broadcast).
     // iOS: ReplayKit. Android: MediaProjection from store build 182+.
     supportsScreenShare: hasDisplayMedia() || platform === 'ios' || platform === 'android',
     supportsRecording: hasMediaRecorder() || isNativeRuntime(),
@@ -38,7 +38,7 @@ const ICE_SERVERS: RTCIceServer[] = [
 /**
  * Legacy web peer-to-peer media session.
  *
- * @deprecated Production Co-Work meetings use LiveKit SFU (`createLiveKitMeetingMediaAdapter`).
+ * @deprecated Production Co-Work meetings use an SFU (`createSfuMeetingMediaAdapter`).
  * Do NOT use this mesh for large meetings — O(n²) peer connections will not scale.
  * `createMediaSession` returns null so callers cannot accidentally enable mesh.
  */
@@ -227,7 +227,7 @@ export class WebMediaSession {
 
 /**
  * Mesh media is disabled for Co-Work meetings.
- * Production path: LiveKit SFU via `~/co-work/lib/realtime`.
+ * Production path: mediasoup SFU via `~/co-work/lib/realtime`.
  */
 export function createMediaSession(
   _selfId: string,
@@ -236,7 +236,7 @@ export function createMediaSession(
 ): WebMediaSession | null {
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
     console.warn(
-      '[co-work] createMediaSession (P2P mesh) is disabled. Use LiveKit SFU MeetingMediaAdapter.',
+      '[co-work] createMediaSession (P2P mesh) is disabled. Use the SFU MeetingMediaAdapter.',
     )
   }
   return null

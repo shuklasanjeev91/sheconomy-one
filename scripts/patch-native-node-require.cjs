@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Patch Rolldown's Hermes-hostile `__require("tty")` in the native Vite entry.
- * LiveKit WebRTC → `debug` Node build requires `tty`; Hermes has no Node require.
+ * WebRTC → `debug` Node build requires `tty`; Hermes has no Node require.
  */
 const fs = require('node:fs')
 const path = require('node:path')

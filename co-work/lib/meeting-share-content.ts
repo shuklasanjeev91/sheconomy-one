@@ -1,8 +1,8 @@
 /**
- * Zoom-style share content kinds shown above share options (screen / photos / files / whiteboard).
+ * Zoom-style share content kinds shown above share options (screen / photos / video / files / whiteboard).
  */
 
-export type MeetingShareContentKind = 'screen' | 'photos' | 'files' | 'whiteboard'
+export type MeetingShareContentKind = 'screen' | 'photos' | 'video' | 'files' | 'whiteboard'
 
 export type MeetingShareContentItem = {
   kind: MeetingShareContentKind
@@ -14,6 +14,7 @@ export function meetingShareContentItems(input?: {
   supportsScreenShare?: boolean
   supportsWhiteboard?: boolean
   supportsPhotos?: boolean
+  supportsVideo?: boolean
   supportsFiles?: boolean
 }): MeetingShareContentItem[] {
   const items: MeetingShareContentItem[] = []
@@ -28,14 +29,21 @@ export function meetingShareContentItems(input?: {
     items.push({
       kind: 'photos',
       label: 'Photos',
-      hint: 'Share a photo in chat',
+      hint: 'Present photos on everyone’s stage',
+    })
+  }
+  if (input?.supportsVideo !== false) {
+    items.push({
+      kind: 'video',
+      label: 'Video',
+      hint: 'Play a video in sync for everyone',
     })
   }
   if (input?.supportsFiles !== false) {
     items.push({
       kind: 'files',
       label: 'Documents',
-      hint: 'Share a file in chat',
+      hint: 'Present a PDF, Word, Excel, PowerPoint or any file',
     })
   }
   if (input?.supportsWhiteboard !== false) {

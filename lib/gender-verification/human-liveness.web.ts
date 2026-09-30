@@ -6,6 +6,16 @@ import {
 } from '~/lib/gender-verification/constants'
 import type { GenderEstimate } from '~/lib/gender-verification/constants'
 import { eyeAspectRatio } from '~/lib/gender-verification/blink'
+import { FACE_QUALITY, type FaceQualityMetrics } from '~/lib/gender-verification/face-quality'
+import {
+  GLASSES_MESH_POINTS,
+  QUALITY_PATCH_SIZE,
+  horizontalEdgeCoverage,
+  meanOf,
+  noseBridgeRect,
+  rgbaToLuma,
+  toDegrees,
+} from '~/lib/gender-verification/face-quality-pixels'
 
 type HumanInstance = {
   load: () => Promise<void>
@@ -19,6 +29,7 @@ type HumanCtor = new (config?: Partial<Config>) => HumanInstance
 let humanPromise: Promise<HumanInstance> | null = null
 let detectCanvas: HTMLCanvasElement | null = null
 let genderCanvas: HTMLCanvasElement | null = null
+let patchCanvas: HTMLCanvasElement | null = null
 let frameSeq = 0
 
 const HUMAN_MODEL_BASE =
@@ -34,7 +45,8 @@ const humanConfig: Partial<Config> = {
   face: {
     enabled: true,
     detector: {
-      maxDetected: 1,
+      // More than one so a second person in view can be flagged.
+      maxDetected: 3,
       minConfidence: 0.45,
       rotation: false,
       return: true,
@@ -87,6 +99,7 @@ export type HumanLivenessFrame = {
   gender: GenderEstimate | null
   box: { xMin: number; xMax: number; yMin: number; yMax: number } | null
   gestures: string[]
+  quality: FaceQualityMetrics | null
 }
 
 type MeshPoint = number[] | { x: number; y: number; z?: number }
@@ -203,6 +216,68 @@ function prepareDetectInput(source: HTMLVideoElement | HTMLCanvasElement) {
   return { input: detectCanvas, width: w, height: h }
 }
 
+type DrawSource = HTMLVideoElement | HTMLCanvasElement
+
+function lumaPatch(
+  source: DrawSource,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  size: number,
+): Float32Array | null {
+  if (!patchCanvas) patchCanvas = document.createElement('canvas')
+  patchCanvas.width = size
+  patchCanvas.height = size
+  const context = patchCanvas.getContext('2d', { willReadFrequently: true })
+  if (!context) return null
+  context.drawImage(source, x, y, Math.max(1, width), Math.max(1, height), 0, 0, size, size)
+  return rgbaToLuma(context.getImageData(0, 0, size, size).data, size * size)
+}
+
+function largestFace(faces: FaceResult[]): FaceResult | undefined {
+  return faces.reduce<FaceResult | undefined>(
+    (best, face) => (!best || face.box[2] > best.box[2] ? face : best),
+    undefined,
+  )
+}
+
+/** Brightness, head angle, glasses, and face count — measured in detect-input space. */
+function measureFaceQuality(
+  input: DrawSource,
+  width: number,
+  height: number,
+  faces: FaceResult[],
+  primary: FaceResult,
+): FaceQualityMetrics {
+  const [x, y, w, h] = primary.box
+  const faceLuma = lumaPatch(input, x, y, w, h, QUALITY_PATCH_SIZE.luma)
+  const frameLuma = lumaPatch(input, 0, 0, width, height, QUALITY_PATCH_SIZE.luma)
+
+  let glassesScore: number | null = null
+  const mesh = primary.mesh as MeshPoint[] | undefined
+  if (mesh && mesh.length > GLASSES_MESH_POINTS.innerRight) {
+    const innerLeft = asPoint(mesh[GLASSES_MESH_POINTS.innerLeft])
+    const innerRight = asPoint(mesh[GLASSES_MESH_POINTS.innerRight])
+    const bridgeTop = asPoint(mesh[GLASSES_MESH_POINTS.bridgeTop])
+    if (innerLeft && innerRight && bridgeTop) {
+      const rect = noseBridgeRect(innerLeft, innerRight, bridgeTop)
+      const patch = lumaPatch(input, rect.x, rect.y, rect.width, rect.height, QUALITY_PATCH_SIZE.bridge)
+      if (patch) glassesScore = horizontalEdgeCoverage(patch, QUALITY_PATCH_SIZE.bridge)
+    }
+  }
+
+  const angle = primary.rotation?.angle
+  return {
+    faceCount: faces.filter((face) => face.box[2] >= w * FACE_QUALITY.extraFaceMinRatio).length,
+    faceLuma: faceLuma ? Math.round(meanOf(faceLuma)) : null,
+    frameLuma: frameLuma ? Math.round(meanOf(frameLuma)) : null,
+    yawDeg: toDegrees(angle?.yaw),
+    pitchDeg: toDegrees(angle?.pitch),
+    glassesScore,
+  }
+}
+
 async function detectGenderFromFace(
   human: HumanInstance,
   source: HTMLVideoElement | HTMLCanvasElement,
@@ -244,13 +319,14 @@ async function detectGenderFromFace(
   if (human.config.face?.antispoof) human.config.face.antispoof.enabled = false
   if (human.config.face?.liveness) human.config.face.liveness.enabled = false
   const result = await human.detect(genderCanvas)
-  const genderFace = result.face?.[0]
+  const genderFace = largestFace(result.face ?? [])
   if (!genderFace?.gender || genderFace.genderScore == null) return null
 
   return {
     isFemale: genderFace.gender === 'female',
     confidence: Number(genderFace.genderScore.toFixed(3)),
     facePixels: Math.round(width),
+    ...(typeof genderFace.age === 'number' ? { age: Math.round(genderFace.age) } : {}),
   }
 }
 
@@ -274,7 +350,8 @@ export async function detectHumanLivenessFrame(
 
   const { input, width, height } = prepareDetectInput(source)
   const result: Result = await human.detect(input)
-  const face = result.face?.[0]
+  const faces = result.face ?? []
+  const face = largestFace(faces)
   const gestures = (result.gesture ?? []).map((g) => String(g.gesture))
 
   if (!face) {
@@ -293,10 +370,12 @@ export async function detectHumanLivenessFrame(
       gender: null,
       box: null,
       gestures,
+      quality: null,
     }
   }
 
   const box = boxFromFace(face)
+  const quality = measureFaceQuality(input, width, height, faces, face)
   const { leftEar, rightEar } = earFromHumanFace(face)
   const avgEar = (leftEar + rightEar) / 2
   const eyesClosed = avgEar < GENDER_VERIFICATION.earBlinkThreshold
@@ -320,6 +399,7 @@ export async function detectHumanLivenessFrame(
     gender,
     box,
     gestures,
+    quality,
   }
 }
 

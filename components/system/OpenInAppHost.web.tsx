@@ -1,3 +1,4 @@
+import { usePathname } from 'one'
 import { useEffect, useState } from 'react'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -7,10 +8,12 @@ import {
   buildAndroidIntentUrl,
   buildOpenInAppSchemeUrl,
   getWebPathForApp,
+  launchNativeApp,
 } from '~/lib/platform/open-in-app'
 
 const DISMISS_KEY = 'sheconomy.openInApp.dismissed'
 const ATTEMPTED_KEY = 'sheconomy.openInApp.attempted'
+const MEETING_PATH = /^\/co-?work\/meeting\//i
 
 /**
  * Mobile-web handoff for links the OS did not route into the app.
@@ -28,6 +31,8 @@ const ATTEMPTED_KEY = 'sheconomy.openInApp.attempted'
 export function OpenInAppHost() {
   const [visible, setVisible] = useState(false)
   const device = detectMobileDevice()
+  // Meeting pages hand off from the lobby card; a banner there would cover call controls.
+  const onMeetingPage = MEETING_PATH.test(usePathname() ?? '')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -42,10 +47,7 @@ export function OpenInAppHost() {
     setVisible(true)
 
     const path = getWebPathForApp()
-    // Meeting lobby has its own immediate handoff — avoid a second delayed redirect.
-    if (path.startsWith('/co-work/meeting/') || path.startsWith('/cowork/meeting/')) {
-      return
-    }
+    if (MEETING_PATH.test(path)) return
 
     const canAutoAttempt = device.isAndroid || isInAppBrowser()
     if (!canAutoAttempt) return
@@ -66,7 +68,7 @@ export function OpenInAppHost() {
     return () => window.clearTimeout(timer)
   }, [device.isAndroid, device.isIOS, device.isMobile])
 
-  if (!visible) return null
+  if (!visible || onMeetingPage) return null
 
   return (
     <div
@@ -146,6 +148,5 @@ export function OpenInAppHost() {
 function openNativeApp(isAndroid: boolean) {
   if (typeof window === 'undefined') return
   const path = getWebPathForApp()
-  const target = isAndroid ? buildAndroidIntentUrl(path) : buildOpenInAppSchemeUrl(path)
-  window.location.href = target
+  launchNativeApp(isAndroid ? buildAndroidIntentUrl(path) : buildOpenInAppSchemeUrl(path))
 }

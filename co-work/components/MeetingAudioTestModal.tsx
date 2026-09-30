@@ -268,7 +268,7 @@ export function MeetingAudioTestModal({ open, onClose, onOpenChange }: MeetingAu
             alignItems="center"
             justifyContent="center"
           >
-            <Icons.Volume2 size={18} color={ui.brand} />
+            <Icons.Volume2 size={18} color={ui.brandLight} />
           </YStack>
           <Text fontSize={17} fontWeight="800" color={ui.text} numberOfLines={1}>
             Testing Audio
@@ -351,7 +351,7 @@ export function MeetingAudioTestModal({ open, onClose, onOpenChange }: MeetingAu
                 width="100%"
                 height={10}
                 borderRadius={5}
-                backgroundColor="rgba(255, 255, 255, 0.08)"
+                backgroundColor={ui.border}
                 overflow="hidden"
               >
                 <YStack

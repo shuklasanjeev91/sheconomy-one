@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
 import { Platform } from 'react-native'
-import { useThemeName } from 'tamagui'
-
 import { brandColors, sheconomyDark, sheconomyLight } from '~/config/brand-colors'
+import { useResolvedScheme } from '~/lib/theme/scheme-override'
 
 export type CoWorkUiTokens = {
   pageBg: string
@@ -110,7 +109,7 @@ export const SHECONOMY_MEETING_COLORS = {
   lightBorder: '#F5D7E4',
   lightText: '#230B17',
   lightTextSecondary: '#6E3350',
-  lightTextMuted: '#9E6882',
+  lightTextMuted: '#8A5470',
 } as const
 
 /** @deprecated Use SHECONOMY_MEETING_COLORS directly */
@@ -179,14 +178,15 @@ const coworkUiLight: CoWorkUiTokens = {
   textMuted: SHECONOMY_MEETING_COLORS.lightTextMuted,
   brand: brandColors.primary,
   brandDark: brandColors.primaryDark,
-  brandLight: brandColors.primaryLight,
+  /** Accent text / icons — the pale logo pink is unreadable on light surfaces. */
+  brandLight: brandColors.primaryDark,
   brandMuted: 'rgba(216, 27, 96, 0.1)',
   brandGlow: 'rgba(216, 27, 96, 0.22)',
   coral: brandColors.coral,
   coralMuted: 'rgba(255, 140, 66, 0.12)',
-  live: SHECONOMY_MEETING_COLORS.green,
+  live: '#047857',
   liveMuted: 'rgba(16, 185, 129, 0.12)',
-  success: SHECONOMY_MEETING_COLORS.green,
+  success: '#047857',
   warning: '#D97706',
   warningMuted: 'rgba(217, 119, 6, 0.12)',
   danger: SHECONOMY_MEETING_COLORS.red,
@@ -213,8 +213,7 @@ export function getCoWorkUi(scheme: 'light' | 'dark'): CoWorkUiTokens {
 }
 
 export function useCoWorkUi(): CoWorkUiTokens {
-  const themeName = useThemeName()
-  return getCoWorkUi(themeName === 'dark' ? 'dark' : 'light')
+  return getCoWorkUi(useResolvedScheme())
 }
 
 export function getCoWorkGradients(scheme: 'light' | 'dark', ui: CoWorkUiTokens): CoWorkGradients {
@@ -257,6 +256,74 @@ export function getCoWorkShadows(scheme: 'light' | 'dark'): CoWorkShadows {
   }
 }
 
+/** Toolbar / header / stage buttons that sit on the meeting bars. */
+export type MeetingControlPalette = {
+  fg: string
+  fgMuted: string
+  fgDisabled: string
+  bg: string
+  bgStrong: string
+  bgHover: string
+  bgPressed: string
+  border: string
+  divider: string
+  offFg: string
+  offIcon: string
+  offBg: string
+  offBorder: string
+  caretBg: string
+  caretBgPressed: string
+  caretBorder: string
+  activeBg: string
+  labelShadow: string | undefined
+}
+
+const meetingControlsDark: MeetingControlPalette = {
+  fg: '#FFFFFF',
+  fgMuted: 'rgba(255, 255, 255, 0.85)',
+  fgDisabled: 'rgba(255, 255, 255, 0.45)',
+  bg: 'rgba(255, 255, 255, 0.06)',
+  bgStrong: 'rgba(255, 255, 255, 0.12)',
+  bgHover: 'rgba(255, 255, 255, 0.12)',
+  bgPressed: 'rgba(255, 255, 255, 0.18)',
+  border: 'rgba(255, 255, 255, 0.16)',
+  divider: 'rgba(255, 255, 255, 0.2)',
+  offFg: '#FCA5A5',
+  offIcon: '#EF4444',
+  offBg: 'rgba(239, 68, 68, 0.22)',
+  offBorder: 'rgba(239, 68, 68, 0.55)',
+  caretBg: '#27272A',
+  caretBgPressed: '#3F3F46',
+  caretBorder: 'rgba(255, 255, 255, 0.28)',
+  activeBg: 'rgba(216, 27, 96, 0.22)',
+  labelShadow: '0 1px 2px rgba(0,0,0,0.55)',
+}
+
+const meetingControlsLight: MeetingControlPalette = {
+  fg: SHECONOMY_MEETING_COLORS.lightText,
+  fgMuted: SHECONOMY_MEETING_COLORS.lightTextSecondary,
+  fgDisabled: 'rgba(35, 11, 23, 0.4)',
+  bg: 'rgba(216, 27, 96, 0.06)',
+  bgStrong: 'rgba(216, 27, 96, 0.08)',
+  bgHover: 'rgba(216, 27, 96, 0.12)',
+  bgPressed: 'rgba(216, 27, 96, 0.18)',
+  border: 'rgba(216, 27, 96, 0.16)',
+  divider: 'rgba(216, 27, 96, 0.2)',
+  offFg: '#C51E1E',
+  offIcon: SHECONOMY_MEETING_COLORS.red,
+  offBg: 'rgba(239, 68, 68, 0.12)',
+  offBorder: 'rgba(239, 68, 68, 0.45)',
+  caretBg: '#FFFFFF',
+  caretBgPressed: '#FAF0F5',
+  caretBorder: SHECONOMY_MEETING_COLORS.lightBorder,
+  activeBg: 'rgba(216, 27, 96, 0.12)',
+  labelShadow: undefined,
+}
+
+export function useMeetingControlPalette(): MeetingControlPalette {
+  return useResolvedScheme() === 'dark' ? meetingControlsDark : meetingControlsLight
+}
+
 /** Flat meeting UI (no heavy glass blur) for live room bars. */
 export function meetingBarStyle(ui: CoWorkUiTokens, elevated = false) {
   return {
@@ -266,9 +333,8 @@ export function meetingBarStyle(ui: CoWorkUiTokens, elevated = false) {
 }
 
 export function useCoWorkTheme() {
-  const themeName = useThemeName()
-  const scheme = themeName === 'dark' ? 'dark' : 'light'
-  const ui = useCoWorkUi()
+  const scheme = useResolvedScheme()
+  const ui = getCoWorkUi(scheme)
   const gradients = useMemo(() => getCoWorkGradients(scheme, ui), [scheme, ui])
   const shadows = useMemo(() => getCoWorkShadows(scheme), [scheme])
   return { ui, gradients, shadows, scheme }

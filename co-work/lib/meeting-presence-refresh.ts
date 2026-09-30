@@ -34,7 +34,7 @@ export function shouldShowMeetingJoiningOverlay(input: {
   return !input.heal && !input.hasJoined
 }
 
-/** Stacked connect() calls were aborting in-flight retries and remounting LiveKit. */
+/** Stacked connect() calls were aborting in-flight retries and remounting the media room. */
 export function shouldSkipStackedPresenceConnect(inFlight: boolean): boolean {
   return inFlight
 }

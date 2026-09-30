@@ -72,7 +72,7 @@ export async function saveMeetingMediaPrefs(prefs: MeetingMediaPrefs): Promise<v
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
 }
 
-/** Capture constraints for LiveKit / getUserMedia based on prefs. */
+/** getUserMedia capture constraints based on prefs. */
 export function meetingAudioCaptureConstraints(prefs: MeetingMediaPrefs): {
   echoCancellation: boolean
   noiseSuppression: boolean

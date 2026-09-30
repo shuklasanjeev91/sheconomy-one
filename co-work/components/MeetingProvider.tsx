@@ -10,8 +10,6 @@ import {
   type ReactNode,
 } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Platform } from 'react-native'
-
 import {
   initialMeetingMachineState,
   meetingStateReducer,
@@ -24,14 +22,14 @@ import {
 } from '~/co-work/lib/meeting-feature-flags'
 import {
   composeMeetingRealtimeSession,
-  createLiveKitMeetingMediaAdapter,
+  createSfuMeetingMediaAdapter,
   createPresenceCollaborationAdapter,
   type MeetingCollaborationAdapter,
   type MeetingMediaAdapter,
   type MeetingPresenceCollaborationSource,
   type MeetingRealtimeSession,
 } from '~/co-work/lib/realtime'
-import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
+import type { MeetingMediaControls } from '~/co-work/lib/meeting-media-controls'
 
 /** @deprecated Import from `~/co-work/lib/realtime` — kept for existing imports. */
 export type { MeetingMediaAdapter, MeetingCollaborationAdapter }
@@ -44,8 +42,8 @@ type MeetingContextValue = {
   session: MeetingRealtimeSession
   registerMediaAdapter: (adapter: MeetingMediaAdapter | null) => void
   registerCollaborationAdapter: (adapter: MeetingCollaborationAdapter | null) => void
-  /** Bind LiveKit SFU controls as the media layer (replaceable). */
-  bindLiveKitMedia: (liveKit: LiveKitMediaControls | null) => void
+  /** Bind SFU controls as the media layer (replaceable). */
+  bindSfuMedia: (media: MeetingMediaControls | null) => void
   /** Bind presence/chat/hands as the collaboration layer. */
   bindPresenceCollaboration: (source: MeetingPresenceCollaborationSource | null) => void
 }
@@ -55,13 +53,13 @@ const MIRROR_LOCAL_VIDEO_KEY = 'sheconomy.meeting.mirror-local-video.v1'
 
 /**
  * Owns meeting state machine + replaceable realtime session adapters.
- * Media = LiveKit SFU; presence/chat stay on Supabase — never a P2P mesh.
+ * Media = mediasoup SFU; presence/chat stay on Supabase — never a P2P mesh.
  */
 export function MeetingProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(meetingStateReducer, initialMeetingMachineState)
   const [adapterEpoch, bumpAdapters] = useReducer((n: number) => n + 1, 0)
   const mirrorPreferenceLoaded = useRef(false)
-  const liveKitRef = useRef<LiveKitMediaControls | null>(null)
+  const sfuMediaRef = useRef<MeetingMediaControls | null>(null)
   const presenceRef = useRef<MeetingPresenceCollaborationSource | null>(null)
   const mediaBoundRef = useRef(false)
   const collabBoundRef = useRef(false)
@@ -70,9 +68,7 @@ export function MeetingProvider({ children }: { children: ReactNode }) {
 
   const defaultMediaAdapter = useMemo(
     () =>
-      createLiveKitMeetingMediaAdapter(() => liveKitRef.current, {
-        platform: Platform.OS === 'web' ? 'web' : 'native',
-      }),
+      createSfuMeetingMediaAdapter(() => sfuMediaRef.current),
     [],
   )
   const defaultCollabAdapter = useMemo(
@@ -163,10 +159,10 @@ export function MeetingProvider({ children }: { children: ReactNode }) {
     bumpAdapters()
   }, [])
 
-  const bindLiveKitMedia = useCallback((liveKit: LiveKitMediaControls | null) => {
-    liveKitRef.current = liveKit
+  const bindSfuMedia = useCallback((media: MeetingMediaControls | null) => {
+    sfuMediaRef.current = media
     customMediaRef.current = null
-    const nextBound = !!liveKit
+    const nextBound = !!media
     if (mediaBoundRef.current === nextBound) return
     mediaBoundRef.current = nextBound
     bumpAdapters()
@@ -202,7 +198,7 @@ export function MeetingProvider({ children }: { children: ReactNode }) {
       session,
       registerMediaAdapter,
       registerCollaborationAdapter,
-      bindLiveKitMedia,
+      bindSfuMedia,
       bindPresenceCollaboration,
     }),
     [
@@ -210,7 +206,7 @@ export function MeetingProvider({ children }: { children: ReactNode }) {
       session,
       registerMediaAdapter,
       registerCollaborationAdapter,
-      bindLiveKitMedia,
+      bindSfuMedia,
       bindPresenceCollaboration,
     ],
   )

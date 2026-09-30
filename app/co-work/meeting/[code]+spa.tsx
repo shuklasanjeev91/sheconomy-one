@@ -20,7 +20,7 @@ function useMeetingCode(): string {
 }
 
 /**
- * SPA lobby — avoid Vite SSR + deps_ssr pre-bundle thrash when LiveKit /
+ * SPA lobby — avoid Vite SSR + deps_ssr pre-bundle thrash when mediasoup /
  * expo-image-manipulator first load (outdated pre-bundle → forced reload errors).
  * Open Graph SEO for share links can be restored via a lightweight edge meta route later.
  */

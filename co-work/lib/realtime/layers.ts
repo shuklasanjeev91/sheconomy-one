@@ -1,5 +1,5 @@
 /**
- * Co-Work real-time architecture — production meetings use an SFU (LiveKit).
+ * Co-Work real-time architecture — production meetings use an SFU (mediasoup).
  *
  * Layers are intentionally separate so UI never talks to WebRTC peers directly
  * and the media backend can be swapped without rewriting screens.
@@ -15,7 +15,7 @@
  *             │                   │                    │
  *   ┌─────────▼─────────┐ ┌───────▼────────┐ ┌─────────▼──────────┐
  *   │ Signaling         │ │ Presence       │ │ Media (SFU only)   │
- *   │ Supabase Realtime │ │ participants + │ │ LiveKit adapter    │
+ *   │ Supabase Realtime │ │ participants + │ │ mediasoup adapter  │
  *   │ broadcast/postgres│ │ waiting room   │ │ (replaceable)      │
  *   └───────────────────┘ └────────────────┘ └────────────────────┘
  *
@@ -44,7 +44,7 @@ export const MEETING_REALTIME_LAYERS: readonly MeetingRealtimeLayer[] = [
 
 export type MeetingMediaTransport = 'sfu' | 'mesh_legacy_disabled'
 
-/** Production Co-Work meetings always use SFU media (LiveKit). */
+/** Production Co-Work meetings always use SFU media (mediasoup). */
 export function meetingMediaTransport(): MeetingMediaTransport {
   return 'sfu'
 }
@@ -58,7 +58,7 @@ export function meetingRealtimeLayerDescription(layer: MeetingRealtimeLayer): st
     case 'signaling':
       return 'Supabase Realtime channel for control signals and postgres change fan-out.'
     case 'media':
-      return 'LiveKit SFU for audio, video, and screen share — never a P2P mesh for meetings.'
+      return 'mediasoup SFU for audio, video, and screen share — never a P2P mesh for meetings.'
     case 'presence':
       return 'meeting_participants rows + channel presence for who is in / waiting.'
     case 'chat':

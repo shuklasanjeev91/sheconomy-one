@@ -4,7 +4,7 @@ import {
   endMeetingConfirmCopy,
   hostLeaveConfirmCopy,
   pickEligibleHostSuccessor,
-  shouldEndLiveKitRoomAfterHostLeave,
+  shouldEndMediaRoomAfterHostLeave,
 } from '~/co-work/lib/meeting-end'
 
 describe('meeting end / host leave policy', () => {
@@ -61,21 +61,21 @@ describe('meeting end / host leave policy', () => {
     expect(end.willEndMeeting).toBe(true)
   })
 
-  it('only tears down LiveKit after host leave when the meeting ended', () => {
+  it('only tears down the media room after host leave when the meeting ended', () => {
     expect(
-      shouldEndLiveKitRoomAfterHostLeave({
+      shouldEndMediaRoomAfterHostLeave({
         previousRole: 'host',
         meetingStatus: 'ended',
       }),
     ).toBe(true)
     expect(
-      shouldEndLiveKitRoomAfterHostLeave({
+      shouldEndMediaRoomAfterHostLeave({
         previousRole: 'host',
         meetingStatus: 'active',
       }),
     ).toBe(false)
     expect(
-      shouldEndLiveKitRoomAfterHostLeave({
+      shouldEndMediaRoomAfterHostLeave({
         previousRole: 'participant',
         meetingStatus: 'ended',
       }),

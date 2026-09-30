@@ -1,23 +1,26 @@
-import React from 'react'
+import { useEffect, useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { VideoTrack, isTrackReference } from '@livekit/react-native'
+import { MediaStream, RTCView } from 'react-native-webrtc'
 
 type Props = {
-  trackRef: any
+  track: MediaStreamTrack
   mirrored?: boolean
+  /** Draw above every other video surface (Android PiP window covers the live room). */
+  onTop?: boolean
 }
 
-export function SessionMiniPlayerVideo({ trackRef, mirrored = false }: Props) {
-  if (!trackRef || !isTrackReference(trackRef)) return null
+export function SessionMiniPlayerVideo({ track, mirrored = false, onTop = false }: Props) {
+  const stream = useMemo(() => new MediaStream([track as never]), [track])
+  useEffect(() => () => stream.release(false), [stream])
 
   return (
     <View style={styles.container}>
-      <VideoTrack
-        trackRef={trackRef}
+      <RTCView
+        streamURL={stream.toURL()}
         style={styles.video}
         objectFit="cover"
         mirror={mirrored}
-        zOrder={0}
+        zOrder={onTop ? 2 : 0}
       />
     </View>
   )

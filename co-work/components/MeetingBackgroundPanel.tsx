@@ -99,7 +99,7 @@ export function MeetingBackgroundPanel({
       try {
         if (value.mode !== 'off' && !cameraEnabled && onEnsureCamera) {
           await onEnsureCamera()
-          // Give LiveKit a beat to publish the camera track before attaching effects.
+          // Give the SFU a beat to publish the camera track before attaching effects.
           await new Promise((resolve) => setTimeout(resolve, 450))
         }
         const resolved = await resolveVirtualBackgroundSelection(value)
@@ -213,7 +213,7 @@ export function MeetingBackgroundPanel({
       <MeetingPanelHeader
         title={showAll ? 'All backgrounds' : 'Background'}
         subtitle="Visible to everyone in the meeting"
-        icon={<Icons.Sparkles size={19} color={coworkUi.brand} />}
+        icon={<Icons.Sparkles size={19} color={coworkUi.brandLight} />}
         onClose={onClose}
       />
       <ScrollView flex={1} contentContainerStyle={{ padding: 16, gap: 18 }}>
@@ -288,7 +288,7 @@ export function MeetingBackgroundPanel({
         <YStack gap="$3">
           <XStack justifyContent="space-between" alignItems="center">
             <Text fontWeight="800" color={coworkUi.text}>My backgrounds</Text>
-            {loadingLibrary ? <Spinner size="small" color={coworkUi.brand} /> : null}
+            {loadingLibrary ? <Spinner size="small" color={coworkUi.brandLight} /> : null}
           </XStack>
           <XStack gap="$3" flexWrap="wrap">
             <EffectTile
@@ -378,7 +378,7 @@ function EffectTile({
           borderColor={borderColor}
           alignItems="center"
           justifyContent="center"
-          backgroundColor="#1a1218"
+          backgroundColor={coworkUi.tileBg}
         >
           {imageSource || imageUri ? (
             <Image
@@ -409,7 +409,7 @@ function EffectTile({
         <Text
           flex={1}
           fontSize={11}
-          color={active ? coworkUi.brand : coworkUi.textSecondary}
+          color={active ? coworkUi.brandLight : coworkUi.textSecondary}
           numberOfLines={1}
         >
           {label}

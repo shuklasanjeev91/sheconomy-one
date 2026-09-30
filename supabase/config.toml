@@ -153,6 +153,7 @@ additional_redirect_urls = [
   "https://127.0.0.1:3000",
   "http://127.0.0.1:3000/auth/callback",
   "http://localhost:3000/auth/callback",
+  "http://localhost:8081/auth/callback",
   "sheconomy://auth/callback",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
@@ -500,8 +501,8 @@ verify_jwt = false
 [functions.onesignal-config]
 verify_jwt = false
 
-# LiveKit URL for client join (API secrets stay server-side).
-[functions.livekit-config]
+# Recorder callbacks carry a MEDIASOUP_JWT_SECRET token; host calls are checked in-function.
+[functions.mediasoup-recording]
 verify_jwt = false
 
 [functions.rest-gateway]

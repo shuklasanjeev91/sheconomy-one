@@ -15,7 +15,6 @@ const target = path.join(
   __dirname,
   '..',
   'node_modules',
-  '@livekit',
   'react-native-webrtc',
   'android',
   'src',
@@ -29,7 +28,7 @@ const target = path.join(
 
 if (!fs.existsSync(target)) process.exit(0)
 
-const MARKER = 'names.size() == 0'
+const MARKER = 'names.size() > 0'
 let contents = fs.readFileSync(target, 'utf8')
 if (contents.includes(MARKER)) process.exit(0)
 

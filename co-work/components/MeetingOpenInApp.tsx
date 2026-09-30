@@ -1,39 +1,62 @@
 import { useEffect, useRef, useState } from 'react'
-import { Platform } from 'react-native'
+import { Linking, Platform } from 'react-native'
 
 import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import {
+  ANDROID_PACKAGE_ID,
+  ANDROID_PLAY_STORE_URL,
+  IOS_APP_STORE_URL,
   buildAndroidAutoIntentUrl,
   buildAndroidIntentUrl,
   buildOpenInAppSchemeUrl,
+  launchNativeApp,
+  readAppInstalledHint,
 } from '~/lib/platform/open-in-app'
 import { detectMobileDevice, isInAppBrowser } from '~/lib/utils/mobile-detection'
 
+const HANDOFF_KEY = 'sheconomy.meetingHandoff.'
+
+function readHandoffDone(code: string): boolean {
+  try {
+    return window.sessionStorage.getItem(HANDOFF_KEY + code) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markHandoffDone(code: string) {
+  try {
+    window.sessionStorage.setItem(HANDOFF_KEY + code, '1')
+  } catch {
+    // ignore storage failures
+  }
+}
+
 /**
- * Mobile-web bridge for meeting links when Universal Links did not fire
- * (in-app browsers, typed URLs). Prefer opening the native app immediately;
- * keep Continue in Browser as an explicit fallback.
+ * Mobile-web bridge for meeting links the OS did not route into the app (typed or
+ * pasted URLs, in-app browsers, old apex links). Opens the installed app straight
+ * away wherever a missing app cannot raise an error, once per meeting per browser
+ * session so coming back to the browser never bounces the user again.
  */
 export function MeetingOpenInApp({ meetingCode }: { meetingCode: string }) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const code = meetingCode.replace(/\s/g, '')
+  const meetingPath = `/co-work/meeting/${encodeURIComponent(code)}`
+  const [device] = useState(() =>
+    Platform.OS === 'web' ? detectMobileDevice() : null,
+  )
+  const mobileWeb = !!device && device.isMobile && (device.isAndroid || device.isIOS)
+  const [installed, setInstalled] = useState<boolean | null>(() =>
+    mobileWeb ? readAppInstalledHint() : null,
+  )
   const [dismissed, setDismissed] = useState(false)
-  const [attempted, setAttempted] = useState(false)
-  const [installed, setInstalled] = useState<boolean | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [opening, setOpening] = useState(false)
+  const [missed, setMissed] = useState(false)
   const autoTriedRef = useRef(false)
 
-  const meetingPath = `/co-work/meeting/${encodeURIComponent(meetingCode.replace(/\s/g, ''))}`
-
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
-    },
-    [],
-  )
-
   useEffect(() => {
-    if (Platform.OS !== 'web' || typeof navigator === 'undefined') return
+    if (!mobileWeb || typeof navigator === 'undefined') return
     const relatedApps = (
       navigator as Navigator & {
         getInstalledRelatedApps?: () => Promise<Array<{ id?: string; platform?: string }>>
@@ -44,43 +67,59 @@ export function MeetingOpenInApp({ meetingCode }: { meetingCode: string }) {
     void relatedApps
       .call(navigator)
       .then((apps) => {
-        if (!cancelled) {
-          setInstalled(apps.some((app) => app.id === 'com.sheconomy.ecommerce'))
-        }
+        if (!cancelled && apps.some((app) => app.id === ANDROID_PACKAGE_ID)) setInstalled(true)
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [mobileWeb])
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined' || autoTriedRef.current) return
-    const device = detectMobileDevice()
-    if (!device.isMobile || (!device.isAndroid && !device.isIOS)) return
-
-    // Silent attempt only where a missing app does not show an error sheet.
+    if (!mobileWeb || !device || !code || autoTriedRef.current) return
+    // iOS Safari shows "address is invalid" for a missing app, so it only tries
+    // automatically once a previous hand-off proved the app is installed.
     if (!(device.isAndroid || isInAppBrowser() || installed === true)) return
+    if (readHandoffDone(code)) return
 
     autoTriedRef.current = true
-    setAttempted(true)
-    const target = device.isAndroid
-      ? buildAndroidAutoIntentUrl(meetingPath)
-      : buildOpenInAppSchemeUrl(meetingPath)
-    // Immediate handoff — avoid painting the lobby before the app opens.
-    window.location.replace(target)
-  }, [installed, meetingPath])
+    markHandoffDone(code)
+    setOpening(true)
+    launchNativeApp(
+      device.isAndroid ? buildAndroidAutoIntentUrl(meetingPath) : buildOpenInAppSchemeUrl(meetingPath),
+      {
+        automatic: true,
+        onResult: (opened) => {
+          setOpening(false)
+          if (!opened) {
+            setMissed(true)
+            setInstalled(false)
+          }
+        },
+      },
+    )
+  }, [code, device, installed, meetingPath, mobileWeb])
 
-  if (Platform.OS !== 'web' || dismissed) return null
+  if (!mobileWeb || !device || dismissed) return null
 
   const openApp = () => {
-    if (typeof window === 'undefined') return
-    setAttempted(true)
-    const device = detectMobileDevice()
-    window.location.href = device.isAndroid
-      ? buildAndroidIntentUrl(meetingPath)
-      : buildOpenInAppSchemeUrl(meetingPath)
-    timerRef.current = setTimeout(() => setAttempted(true), 1400)
+    markHandoffDone(code)
+    setOpening(true)
+    launchNativeApp(
+      device.isAndroid ? buildAndroidIntentUrl(meetingPath) : buildOpenInAppSchemeUrl(meetingPath),
+      {
+        onResult: (opened) => {
+          setOpening(false)
+          if (opened) setInstalled(true)
+          else setMissed(true)
+        },
+      },
+    )
+  }
+
+  const continueInBrowser = () => {
+    markHandoffDone(code)
+    setDismissed(true)
   }
 
   return (
@@ -96,26 +135,36 @@ export function MeetingOpenInApp({ meetingCode }: { meetingCode: string }) {
         <Icons.Smartphone size={22} color={coworkUi.brandLight} />
         <YStack flex={1} gap={2}>
           <Text fontWeight="800" color={coworkUi.text}>
-            {installed ? 'Sheconomy is installed' : 'Join in the Sheconomy app'}
+            {opening
+              ? 'Opening the Sheconomy app…'
+              : installed
+                ? 'Join in the Sheconomy app'
+                : 'Join faster in the Sheconomy app'}
           </Text>
           <Text fontSize={12} color={coworkUi.textSecondary}>
-            Opens the app directly when it is installed — use the browser only if you prefer.
+            {missed
+              ? "The app didn't open. Install it, or continue here in the browser."
+              : 'Opens this meeting in the app when it is installed.'}
           </Text>
         </YStack>
       </XStack>
       <XStack gap="$2" flexWrap="wrap">
-        <Button tone="primary" borderRadius={999} onPress={openApp}>
+        <Button tone="primary" borderRadius={999} onPress={openApp} disabled={opening}>
           Open in Sheconomy
         </Button>
-        <Button tone="outline" borderRadius={999} onPress={() => setDismissed(true)}>
+        {missed ? (
+          <Button
+            tone="outline"
+            borderRadius={999}
+            onPress={() => void Linking.openURL(device.isAndroid ? ANDROID_PLAY_STORE_URL : IOS_APP_STORE_URL)}
+          >
+            Get the app
+          </Button>
+        ) : null}
+        <Button tone="outline" borderRadius={999} onPress={continueInBrowser}>
           Continue in Browser
         </Button>
       </XStack>
-      {attempted ? (
-        <Text fontSize={11} color={coworkUi.textMuted}>
-          App did not open? Continue in Browser to join here.
-        </Text>
-      ) : null}
     </YStack>
   )
 }

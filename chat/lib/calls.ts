@@ -56,7 +56,7 @@ const CALL_SELECT =
   'id, conversation_id, caller_id, receiver_id, call_type, status, meeting_code, created_at'
 
 /**
- * Start a 1:1 call: spin up an instant LiveKit room and create a ringing
+ * Start a 1:1 call: spin up an instant meeting room and create a ringing
  * call row the receiver picks up via realtime.
  */
 export async function startCall(input: {
@@ -84,7 +84,7 @@ export async function startCall(input: {
 }
 
 /**
- * WhatsApp-style group / multi-party call: one LiveKit room, one ringing row
+ * WhatsApp-style group / multi-party call: one meeting room, one ringing row
  * per callee so each device can accept independently (1:many / many:many).
  */
 export async function startMultiPartyCall(input: {

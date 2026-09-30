@@ -1,12 +1,4 @@
-import '~/lib/polyfills/install-dom-exception'
-
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import {
-  BackgroundProcessor,
-  supportsBackgroundProcessors,
-  type BackgroundProcessorWrapper,
-} from '@livekit/track-processors'
-import { createLocalVideoTrack, type LocalVideoTrack } from 'livekit-client'
 
 import {
   MeetingBackgroundQuickPicker,
@@ -14,6 +6,7 @@ import {
 } from '~/co-work/components/MeetingBackgroundQuickPicker'
 import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import { clearImageCropQueue } from '~/lib/media/crop-session'
+import { meetingVideoMirrorTransform, selfViewMirrorAllowed } from '~/co-work/lib/meeting-video-mirror'
 import {
   customBackgroundSelection,
   listCustomVirtualBackgrounds,
@@ -28,7 +21,19 @@ import {
   webBackgroundResourceWarning,
   type VirtualBackgroundSelection,
 } from '~/co-work/lib/virtual-backgrounds'
+import {
+  supportsWebBackgroundProcessor,
+  webBackgroundOptionsFor,
+  WebBackgroundProcessor,
+} from '~/co-work/lib/web-background-processor'
 import { useAppToast } from '~/components/ui'
+
+const PREVIEW_CAPTURE: MediaTrackConstraints = { width: 640, height: 360, frameRate: 15 }
+
+function showTrack(video: HTMLVideoElement | null, track: MediaStreamTrack | null) {
+  if (!video) return
+  video.srcObject = track ? new MediaStream([track]) : null
+}
 
 type MeetingBackgroundPreviewProps = {
   userId?: string | null
@@ -50,8 +55,8 @@ export function MeetingBackgroundPreview({
 }: MeetingBackgroundPreviewProps = {}) {
   const toast = useAppToast()
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const trackRef = useRef<LocalVideoTrack | null>(null)
-  const processorRef = useRef<BackgroundProcessorWrapper | null>(null)
+  const trackRef = useRef<MediaStreamTrack | null>(null)
+  const processorRef = useRef<WebBackgroundProcessor | null>(null)
   const effectsAvailableRef = useRef(false)
   const [selection, setSelection] = useState<VirtualBackgroundSelection>(OFF_BACKGROUND)
   const [busy, setBusy] = useState(true)
@@ -116,13 +121,7 @@ export function MeetingBackgroundPreview({
     setBusy(true)
     setError(null)
     try {
-      if (next.mode === 'blur') {
-        await processor.switchTo({ mode: 'background-blur', blurRadius: next.blurRadius })
-      } else if (next.mode === 'image' && next.imageUrl) {
-        await processor.switchTo({ mode: 'virtual-background', imagePath: next.imageUrl })
-      } else {
-        await processor.switchTo({ mode: 'disabled' })
-      }
+      await processor.switchTo(webBackgroundOptionsFor(next))
     } catch (cause) {
       try {
         await processor.switchTo({ mode: 'disabled' })
@@ -193,17 +192,18 @@ export function MeetingBackgroundPreview({
   }, [refreshCustoms])
 
   useEffect(() => {
-    if (!active) {
-      const track = trackRef.current
+    const stopPreview = () => {
+      processorRef.current?.stop()
       processorRef.current = null
+      trackRef.current?.stop()
       trackRef.current = null
       effectsAvailableRef.current = false
+      showTrack(videoRef.current, null)
+    }
+
+    if (!active) {
+      stopPreview()
       setBusy(false)
-      if (track) {
-        track.detach()
-        void track.stopProcessor().catch(() => undefined)
-        track.stop()
-      }
       return
     }
 
@@ -214,19 +214,19 @@ export function MeetingBackgroundPreview({
           typeof navigator === 'undefined'
             ? null
             : webBackgroundResourceWarning(navigator as Navigator & { deviceMemory?: number })
-        const supported = !resourceWarning && supportsBackgroundProcessors()
+        const supported = !resourceWarning && supportsWebBackgroundProcessor()
         effectsAvailableRef.current = supported
         if (!cancelled) setEffectsAvailable(supported)
 
-        const track = await createLocalVideoTrack({
-          resolution: { width: 640, height: 360, frameRate: 15 },
-        })
+        const stream = await navigator.mediaDevices.getUserMedia({ video: PREVIEW_CAPTURE })
+        const track = stream.getVideoTracks()[0]
+        if (!track) throw new Error('Could not start camera preview.')
         if (cancelled || !active) {
           track.stop()
           return
         }
         trackRef.current = track
-        if (videoRef.current) track.attach(videoRef.current)
+        showTrack(videoRef.current, track)
         if (!cancelled) setBusy(false)
 
         if (!supported) {
@@ -243,9 +243,14 @@ export function MeetingBackgroundPreview({
         }
 
         try {
-          const processor = BackgroundProcessor({ mode: 'disabled', maxFps: 15 })
-          await track.setProcessor(processor)
+          const processor = new WebBackgroundProcessor({ maxFps: 15 })
+          const processed = await processor.start(track)
+          if (cancelled || !active) {
+            processor.stop()
+            return
+          }
           processorRef.current = processor
+          showTrack(videoRef.current, processed)
           const saved = await loadVirtualBackgroundPreference()
           if (!cancelled && active) await apply(saved)
         } catch (cause) {
@@ -269,15 +274,7 @@ export function MeetingBackgroundPreview({
     })()
     return () => {
       cancelled = true
-      const track = trackRef.current
-      processorRef.current = null
-      trackRef.current = null
-      effectsAvailableRef.current = false
-      if (track) {
-        track.detach()
-        void track.stopProcessor().catch(() => undefined)
-        track.stop()
-      }
+      stopPreview()
     }
   }, [active, apply])
 
@@ -304,7 +301,12 @@ export function MeetingBackgroundPreview({
           autoPlay
           playsInline
           muted
-          style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            transform: meetingVideoMirrorTransform(selfViewMirrorAllowed(true, selection.mode)),
+          }}
         />
       }
     />

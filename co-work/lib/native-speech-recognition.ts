@@ -15,8 +15,8 @@ export type NativeSpeechSession = {
 }
 
 export type NativeSpeechSessionOptions = {
-  /** Release exclusive LiveKit audio focus so STT can run during a meeting. */
-  shareLiveKitMic?: boolean
+  /** Release exclusive call audio focus so STT can run during a meeting. */
+  shareCallMic?: boolean
 }
 
 /** Web: SpeechRecognition when available; native Voice lives in `.native.ts`. */

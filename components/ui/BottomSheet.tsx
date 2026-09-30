@@ -219,6 +219,8 @@ type SheetSurfaceProps = {
    * Used for short sheets (share picker, confirm, end meeting).
    */
   fitContent?: boolean
+  /** Stretch a non-scrolling body to the sheet height (see `AppBottomSheet`). */
+  fillBody?: boolean
   /** Zoom More-style: grab handle only (no title / close row). */
   hideHeader?: boolean
   /** Override sheet fill (e.g. Sheconomy meeting plum). */
@@ -243,6 +245,7 @@ function SheetSurface({
   scrollMaxHeight,
   staticHandle,
   fitContent = false,
+  fillBody = false,
   hideHeader = false,
   surfaceColor,
   handleColor,
@@ -251,9 +254,17 @@ function SheetSurface({
   const isKeyboardOpen = keyboardHeight > 0
   const sheetBg = surfaceColor ?? ui.surface
   const grabber = handleColor ?? ui.border
+  const stretchBody = fillBody && !scrollable && !fitContent
 
   const body = (
-    <YStack paddingHorizontal="$4" paddingTop="$3" paddingBottom="$3" gap="$3" width="100%">
+    <YStack
+      paddingHorizontal="$4"
+      paddingTop="$3"
+      paddingBottom="$3"
+      gap="$3"
+      width="100%"
+      {...(stretchBody ? { flex: 1, minHeight: 0 } : {})}
+    >
       {children}
     </YStack>
   )
@@ -306,6 +317,7 @@ function SheetSurface({
       ) : (
         <YStack
           {...(fitContent ? {} : { flex: 1 })}
+          {...(stretchBody ? { minHeight: 0 } : {})}
           width="100%"
           paddingBottom={footer ? 0 : (isKeyboardOpen ? 16 : overlayInsets.bottom)}
         >
@@ -349,6 +361,11 @@ type AppBottomSheetProps = {
    * Use for short pickers / confirms (share, end meeting, apps).
    */
   fitContent?: boolean
+  /**
+   * With `scrollable={false}`, give the body the full sheet height so children
+   * can run their own scroll area with a sticky footer (`flex: 1` children).
+   */
+  fillBody?: boolean
   /** Grab handle only — skip title / close row (Zoom More style). */
   hideHeader?: boolean
   /** Override sheet fill (Sheconomy meeting plum, etc.). */
@@ -381,6 +398,7 @@ export function AppBottomSheet({
   scrollable = true,
   onScroll,
   fitContent = false,
+  fillBody = false,
   hideHeader = false,
   surfaceColor,
   handleColor,
@@ -428,6 +446,7 @@ export function AppBottomSheet({
       maxHeight={surfaceMaxHeight}
       staticHandle={asLayer}
       fitContent={fitContent}
+      fillBody={fillBody}
       hideHeader={hideHeader}
       surfaceColor={surfaceColor}
       handleColor={handleColor}

@@ -101,7 +101,7 @@ export function meetingToolbarMode(input: {
  * Zoom primary dock:
  *
  * Mobile (Zoom phone — Sheconomy branded):
- *   Mute · Video · Chat · More · End
+ *   Mute · Video · Share · Chat · More · End
  *
  * iPad / large (Zoom tablet & desktop):
  *   Mute · Stop Video · Participants · Chat · Reactions · Start Share ·
@@ -133,6 +133,7 @@ export function meetingToolbarPrimaryKeys(input: {
   if (input.supportsVideo !== false) keys.push('camera')
 
   if (mode === 'mobile') {
+    if (input.supportsScreenShare) keys.push('share_screen')
     keys.push('chat')
     if (input.supportsRecording && input.recording) keys.push('stop_record')
     keys.push('more', 'leave')
@@ -149,6 +150,7 @@ export function meetingToolbarPrimaryKeys(input: {
   if (input.hasWhiteboard !== false) keys.push('whiteboard')
   if (input.hasDocs !== false) keys.push('docs')
   if (input.hasApps !== false) keys.push('apps')
+  if (input.supportsRecording && input.recording) keys.push('stop_record')
   keys.push('more')
   if (canEndMeetingForEveryone(input.viewerRole)) keys.push('end_meeting')
   else keys.push('leave')
@@ -165,12 +167,15 @@ export function meetingToolbarWideMoreKeys(input: {
   hasVideoEffects?: boolean
   hasDisconnectAudio?: boolean
   hasRaiseHand?: boolean
+  /** Record (host) or request-to-record (participant), as in Zoom's More. */
+  supportsRecording?: boolean
 }): MeetingToolbarOverflowKey[] {
   const keys: MeetingToolbarOverflowKey[] = []
   if (input.hasHostTools ?? canOpenHostTools(input.viewerRole)) keys.push('host_tools')
   if (input.hasRaiseHand !== false) keys.push('raise_hand')
   if (input.hasAudioSettings !== false) keys.push('audio_settings')
   if (input.hasCaptions !== false) keys.push('captions')
+  if (input.supportsRecording) keys.push('record')
   if (input.hasSettings !== false) keys.push('settings')
   if (input.hasVideoEffects !== false) keys.push('background')
   if (input.hasDisconnectAudio !== false) keys.push('disconnect_audio')
@@ -340,14 +345,13 @@ export function meetingToolbarMoreSections(input: {
 
   const sections: MeetingToolbarMoreSection[] = []
   if (isMobile) {
-    // Zoom mobile More: Meeting grid actions + captions/share live here (not on dock).
+    // Zoom mobile More: Meeting grid actions + captions live here; Share is on the dock.
     const mobileMeeting: MeetingToolbarOverflowKey[] = ['meeting_info', 'manage_participants']
     if (input.raiseHandOnPrimary !== true) mobileMeeting.push('raise_hand')
     if (input.reactionsOnPrimary !== true) mobileMeeting.push('reactions')
     if (input.captionsOnPrimary !== true && input.supportsLiveCaptions !== false) {
       mobileMeeting.push('captions')
     }
-    if (input.supportsScreenShare !== false) mobileMeeting.push('share_screen')
     mobileMeeting.push('disconnect_audio', 'settings', 'safe_driving')
     if (input.supportsRecording && !input.recording && input.recordOnPrimary !== true) {
       mobileMeeting.push('record')

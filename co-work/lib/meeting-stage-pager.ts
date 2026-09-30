@@ -1,73 +1,74 @@
 import type { MeetingViewMode } from '~/co-work/lib/meeting-state-machine'
 
 /**
- * Zoom-mobile stage pages, left → right:
- * [Safe driving] · [Shared screen] · Active speaker · Gallery 1 · Gallery 2 · …
- * Swiping left moves to the next page, swiping right to the previous one.
+ * Zoom-mobile stage pages, left → right — never more than three:
+ * Tap to speak (safe driving) · Active speaker (or the shared screen) · Gallery
+ * The gallery is one page; participants beyond the first screenful scroll
+ * vertically inside it. Swiping left moves to the next page.
  */
 export type MeetingStagePage =
   | { kind: 'safe-driving' }
   | { kind: 'screen-share' }
   | { kind: 'speaker' }
-  | { kind: 'gallery'; page: number }
+  | { kind: 'gallery' }
 
 export type MeetingStageSwipeDirection = 'next' | 'prev'
 
 export function meetingStagePages(input: {
   /** Camera tiles in the meeting (self included unless hidden). */
   participantTiles: number
-  pageSize: number
   hasScreenShare: boolean
   safeDriving: boolean
 }): MeetingStagePage[] {
   const pages: MeetingStagePage[] = []
   if (input.safeDriving) pages.push({ kind: 'safe-driving' })
-  if (input.hasScreenShare) pages.push({ kind: 'screen-share' })
-  pages.push({ kind: 'speaker' })
+  pages.push(meetingStageMainPage(input.hasScreenShare))
   // Alone in the room there is nothing to lay out as a gallery.
-  if (input.participantTiles >= 2) {
-    const size = Math.max(1, Math.floor(input.pageSize))
-    const count = Math.ceil(input.participantTiles / size)
-    for (let page = 0; page < count; page += 1) pages.push({ kind: 'gallery', page })
-  }
+  if (input.participantTiles >= 2) pages.push({ kind: 'gallery' })
   return pages
+}
+
+/** The middle page: the shared screen while someone shares, otherwise the active speaker. */
+export function meetingStageMainPage(hasScreenShare: boolean): MeetingStagePage {
+  return hasScreenShare ? { kind: 'screen-share' } : { kind: 'speaker' }
 }
 
 export function meetingStagePageLabel(page: MeetingStagePage): string {
   switch (page.kind) {
     case 'safe-driving':
-      return 'Safe driving mode'
+      return 'Tap to speak'
     case 'screen-share':
       return 'Shared screen'
     case 'speaker':
       return 'Active speaker'
     case 'gallery':
-      return `Gallery page ${page.page + 1}`
+      return 'Gallery'
   }
 }
 
 export function meetingStagePageKey(page: MeetingStagePage): string {
-  return page.kind === 'gallery' ? `gallery-${page.page}` : page.kind
+  return page.kind
 }
 
+/** The safe-driving page opens its own overlay, so it is never the current stage page. */
 export function meetingStagePageIndex(
   pages: MeetingStagePage[],
-  current: { viewMode: MeetingViewMode; galleryPage: number; hasScreenShare: boolean },
+  current: { viewMode: MeetingViewMode },
 ): number {
-  const find = (predicate: (page: MeetingStagePage) => boolean) => pages.findIndex(predicate)
-  if (current.viewMode === 'screen-share' && current.hasScreenShare) {
-    const index = find((page) => page.kind === 'screen-share')
+  if (current.viewMode === 'gallery') {
+    const index = pages.findIndex((page) => page.kind === 'gallery')
     if (index >= 0) return index
   }
-  if (current.viewMode === 'gallery') {
-    const galleryPages = pages.filter((page) => page.kind === 'gallery')
-    if (galleryPages.length > 0) {
-      const target = Math.min(Math.max(0, current.galleryPage), galleryPages.length - 1)
-      const index = find((page) => page.kind === 'gallery' && page.page === target)
-      if (index >= 0) return index
-    }
-  }
-  return Math.max(0, find((page) => page.kind === 'speaker'))
+  const main = pages.findIndex((page) => page.kind === 'screen-share' || page.kind === 'speaker')
+  return Math.max(0, main)
+}
+
+/** Someone new joined: Zoom lands back on the active speaker page. */
+export function meetingStageShouldReturnToSpeaker(input: {
+  previousTiles: number
+  participantTiles: number
+}): boolean {
+  return input.previousTiles > 0 && input.participantTiles > input.previousTiles
 }
 
 export function meetingStageSwipeTarget(

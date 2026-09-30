@@ -62,7 +62,7 @@ export function MeetingAppsSheet({ open, onClose, actions }: MeetingAppsSheetPro
                 justifyContent="center"
                 backgroundColor={ui.meetingControl}
               >
-                <Icon size={18} color={ui.brand} />
+                <Icon size={18} color={ui.brandLight} />
               </YStack>
               <YStack flex={1} gap={3} minWidth={0}>
                 <Text color={ui.text} fontSize={15} fontWeight="800">

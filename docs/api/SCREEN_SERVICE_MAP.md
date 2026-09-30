@@ -32,9 +32,9 @@ OpenAPI: `GET /functions/v1/rest-gateway/openapi.json`
 | Commerce | `/`, `/shops`, `/listing`, `/cart`, `/checkout`, `/orders` | `commerce/lib/*`, `lib/listing`, `lib/shop`, `lib/orders` |
 | Vendor | `/vendor/*`, `/create-my-shop` | `commerce/screens/vendor/*`, `lib/shop`, `lib/orders` |
 | Community | `/community/*` | `community/lib/*` |
-| Chat | `/chat/*` | `chat/lib/*`, LiveKit edge |
+| Chat | `/chat/*` | `chat/lib/*`, mediasoup edge |
 | Class | `/class/*` | `class/lib/*` |
-| Co-Work | `/co-work/*` | `co-work/lib/*`, LiveKit edge |
+| Co-Work | `/co-work/*` | `co-work/lib/*`, mediasoup edge |
 | Auth | `/auth/*` | `features/auth`, `lib/supabase/auth`, `lib/gender-verification` |
 | Profile / Settings | `/profile`, `/settings`, `/notifications` | `lib/profile`, settings screens |
 | Admin | `/admin/*` | Admin pages + `lib/cms`, direct Supabase admin queries |
@@ -80,14 +80,14 @@ OpenAPI: `GET /functions/v1/rest-gateway/openapi.json`
 
 ### Chat
 - Inbox / thread → `chat/lib/chats.ts` (RPCs `get_user_chats`, `send_message_with_status`, …)
-- Calls → LiveKit `livekit-token` / `livekit-config`
+- Calls → mediasoup `mediasoup-token`
 
 ### Class
 - Catalog / player → `class/lib/*` + `programs` tables
 
 ### Co-Work
 - Meetings → `co-work/lib/*` + `meetings` tables
-- Live / recording → `livekit-token`, `livekit-recording`, `meeting-recording-share`
+- Live / recording → `mediasoup-token`, `mediasoup-recording`, `meeting-recording-share`
 
 ### Admin
 - Users / shops / products / orders → direct Supabase in `app/admin/*`
@@ -96,7 +96,7 @@ OpenAPI: `GET /functions/v1/rest-gateway/openapi.json`
 - Sale events → `sale_events`
 
 ### Existing edge functions (not replaced)
-`ai-assist`, `cleanup-expired-stories`, `commerce-payment-webhook`, `dispatch-notifications`, `exchange-rates`, `link-preview`, `livekit-*`, `meeting-invite`, `meeting-recording-share`, `network-invite`, `places`, `qr-login-redeem`, `shedelivery-*`, `shepay-*`, `visual-commerce`, **`rest-gateway`**
+`ai-assist`, `cleanup-expired-stories`, `commerce-payment-webhook`, `dispatch-notifications`, `exchange-rates`, `link-preview`, `mediasoup-recording`, `mediasoup-token`, `meeting-invite`, `meeting-recording-share`, `network-invite`, `places`, `qr-login-redeem`, `shedelivery-*`, `shepay-*`, `visual-commerce`, **`rest-gateway`**
 
 ---
 

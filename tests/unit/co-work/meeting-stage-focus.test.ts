@@ -7,15 +7,14 @@ import {
   togglePinnedIdentity,
 } from '~/co-work/lib/meeting-stage-focus'
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
-import { Track } from 'livekit-client'
-import type { TrackReferenceOrPlaceholder } from '@livekit/components-core'
+import type { MeetingStageTrack } from '~/co-work/lib/meeting-stage-tracks'
 
-function track(identity: string): TrackReferenceOrPlaceholder {
+function track(identity: string): MeetingStageTrack {
   return {
     participant: { identity },
-    source: Track.Source.Camera,
-    publication: { source: Track.Source.Camera, trackSid: `${identity}-cam` },
-  } as TrackReferenceOrPlaceholder
+    source: 'camera',
+    publication: { source: 'camera', trackSid: `${identity}-cam` },
+  } as MeetingStageTrack
 }
 
 describe('meeting stage focus', () => {
@@ -44,7 +43,9 @@ describe('meeting stage focus', () => {
       pinnedIdentities: ['c'],
     })
     expect(result.stageTracks).toEqual([b])
-    expect(result.filmstripTracks.map((row) => row.participant.identity).sort()).toEqual(['a', 'c'])
+    expect(result.pipTrack).toBe(a)
+    expect(result.filmstripTracks).toEqual([])
+    expect(result.cameraTiles).toBe(3)
   })
 
   it('floats pinned tiles in gallery order', () => {

@@ -6,20 +6,10 @@ import {
   hashShareToken,
   isActiveRecordingStatus,
   isTerminalRecordingStatus,
-  mapEgressStatusToRecordingStatus,
   recordingStatusLabel,
 } from '~/co-work/lib/meeting-recording-status'
 
 describe('meeting recording status mapping', () => {
-  it('maps LiveKit egress statuses onto app lifecycle states', () => {
-    expect(mapEgressStatusToRecordingStatus('EGRESS_STARTING')).toBe('starting')
-    expect(mapEgressStatusToRecordingStatus(1)).toBe('recording')
-    expect(mapEgressStatusToRecordingStatus('EGRESS_ENDING')).toBe('processing')
-    expect(mapEgressStatusToRecordingStatus('EGRESS_COMPLETE')).toBe('ready')
-    expect(mapEgressStatusToRecordingStatus('EGRESS_FAILED')).toBe('failed')
-    expect(mapEgressStatusToRecordingStatus('EGRESS_ABORTED')).toBe('failed')
-  })
-
   it('classifies active vs terminal statuses', () => {
     expect(isActiveRecordingStatus('starting')).toBe(true)
     expect(isActiveRecordingStatus('recording')).toBe(true)

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { Track } from 'livekit-client'
-import type { TrackReferenceOrPlaceholder } from '@livekit/components-core'
+import type { MeetingStageTrack } from '~/co-work/lib/meeting-stage-tracks'
 
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
 import {
@@ -25,7 +24,7 @@ import { meetingToolbarMoreKeys } from '~/co-work/lib/meeting-toolbar'
 function cameraTrack(
   identity: string,
   opts?: { cameraOn?: boolean; isLocal?: boolean },
-): TrackReferenceOrPlaceholder {
+): MeetingStageTrack {
   return {
     participant: {
       identity,
@@ -33,9 +32,9 @@ function cameraTrack(
       isLocal: !!opts?.isLocal,
       isCameraEnabled: opts?.cameraOn !== false,
     },
-    source: Track.Source.Camera,
+    source: 'camera',
     publication: opts?.cameraOn === false ? { isMuted: true } : { isMuted: false, track: {} },
-  } as TrackReferenceOrPlaceholder
+  } as MeetingStageTrack
 }
 
 describe('Zoom parity batch 3 — hide non-video, nonverbal, sounds, shortcuts', () => {

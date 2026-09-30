@@ -1,10 +1,8 @@
-import type { Participant } from 'livekit-client'
-
 export type ParticipantAvatarMeta = {
   avatarUrl?: string | null
 }
 
-/** Parse LiveKit participant metadata for a profile image URL. */
+/** Parse participant metadata for a profile image URL. */
 export function getParticipantAvatarUrl(participant: {
   metadata?: string | undefined
 } | null | undefined): string | null {
@@ -42,7 +40,9 @@ export function isCameraTileOff(input: {
   return false
 }
 
-export function participantDisplayName(participant: Participant | null | undefined): string {
+export function participantDisplayName(
+  participant: { name?: string; identity?: string } | null | undefined,
+): string {
   const name = participant?.name?.trim()
   if (name && !/^user_[a-z0-9]+$/i.test(name)) return name
   const identity = participant?.identity?.trim()

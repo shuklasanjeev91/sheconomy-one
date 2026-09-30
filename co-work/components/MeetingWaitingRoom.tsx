@@ -27,7 +27,7 @@ export function MeetingWaitingRoom({
   onRetry,
   onCancel,
 }: MeetingWaitingRoomProps) {
-  const { ui: coworkUi } = useCoWorkTheme()
+  const { ui: coworkUi, shadows: coworkShadows } = useCoWorkTheme()
   const [elapsedMs, setElapsedMs] = useState(0)
   const [action, setAction] = useState<'retry' | 'cancel' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -66,7 +66,7 @@ export function MeetingWaitingRoom({
       flex={1}
       width="100%"
       minHeight="100%"
-      backgroundColor="#0c080a"
+      backgroundColor={coworkUi.pageBg}
       alignItems="center"
       justifyContent="center"
       padding="$5"
@@ -77,13 +77,13 @@ export function MeetingWaitingRoom({
         maxWidth="100%"
         padding="$6"
         borderRadius={20}
-        backgroundColor="rgba(22, 18, 24, 0.96)"
+        backgroundColor={coworkUi.surface}
         borderWidth={1}
-        borderColor="rgba(255, 255, 255, 0.12)"
+        borderColor={coworkUi.border}
         alignItems="center"
         gap="$4"
         style={{
-          boxShadow: '0 24px 64px rgba(0, 0, 0, 0.7)',
+          boxShadow: coworkShadows.panel,
         }}
       >
         {/* Pulsing indicator */}
@@ -97,11 +97,11 @@ export function MeetingWaitingRoom({
           borderWidth={1}
           borderColor="rgba(224, 30, 90, 0.3)"
         >
-          <Spinner size="large" color={coworkUi.brand} />
+          <Spinner size="large" color={coworkUi.brandLight} />
         </YStack>
 
         <YStack gap="$2" alignItems="center">
-          <Text fontSize={22} fontWeight="800" color="#ffffff" textAlign="center" letterSpacing={-0.3}>
+          <Text fontSize={22} fontWeight="800" color={coworkUi.text} textAlign="center" letterSpacing={-0.3}>
             Please wait, the meeting host will let you in soon.
           </Text>
           <Text color={coworkUi.brandLight} fontSize={16} fontWeight="700" textAlign="center">
@@ -116,9 +116,9 @@ export function MeetingWaitingRoom({
           paddingHorizontal="$3"
           paddingVertical="$1.5"
           borderRadius={999}
-          backgroundColor="rgba(255, 255, 255, 0.06)"
+          backgroundColor={coworkUi.surfaceMuted}
           borderWidth={1}
-          borderColor="rgba(255, 255, 255, 0.1)"
+          borderColor={coworkUi.borderSoft}
         >
           <YStack
             width={8}
@@ -167,12 +167,12 @@ export function MeetingWaitingRoom({
             tone="outline"
             size="$4"
             borderRadius={10}
-            borderColor="rgba(255, 255, 255, 0.16)"
-            backgroundColor="rgba(255, 255, 255, 0.05)"
-            icon={<Icons.Volume2 size={17} color="#fff" />}
+            borderColor={coworkUi.border}
+            backgroundColor={coworkUi.surfaceMuted}
+            icon={<Icons.Volume2 size={17} color={coworkUi.text} />}
             onPress={() => setShowAudioTest(true)}
           >
-            <Text fontSize={14} fontWeight="700" color="#fff">
+            <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
               Test Computer Audio
             </Text>
           </Button>
@@ -184,12 +184,12 @@ export function MeetingWaitingRoom({
               size="$4"
               borderRadius={10}
               disabled={!!action}
-              borderColor="rgba(255, 255, 255, 0.16)"
-              backgroundColor="rgba(255, 255, 255, 0.05)"
-              icon={action === 'retry' ? <Spinner size="small" /> : <Icons.RefreshCw size={15} color="#fff" />}
+              borderColor={coworkUi.border}
+              backgroundColor={coworkUi.surfaceMuted}
+              icon={action === 'retry' ? <Spinner size="small" /> : <Icons.RefreshCw size={15} color={coworkUi.text} />}
               onPress={() => void run('retry', onRetry)}
             >
-              <Text fontSize={13} fontWeight="600" color="#fff">
+              <Text fontSize={13} fontWeight="600" color={coworkUi.text}>
                 Send Again
               </Text>
             </Button>

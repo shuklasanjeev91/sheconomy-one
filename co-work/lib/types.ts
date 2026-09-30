@@ -1,3 +1,4 @@
+import type { MeetingContentShare } from '~/co-work/lib/meeting-content-share'
 import type { WhiteboardStroke } from '~/co-work/lib/meeting-whiteboard'
 
 export type MeetingStatus = 'scheduled' | 'instant' | 'active' | 'ended' | 'cancelled'
@@ -245,11 +246,27 @@ export type SignalPayload =
   | { type: 'whiteboard-stroke'; from: string; stroke: WhiteboardStroke }
   | { type: 'whiteboard-undo'; from: string; strokeId?: string }
   | { type: 'whiteboard-clear'; from: string }
+  /** Current board for a late joiner that asked with `share-state-request`. */
+  | {
+      type: 'whiteboard-sync'
+      from: string
+      requestId: string
+      startedBy: string | null
+      strokes: WhiteboardStroke[]
+    }
+  /** Start, update (page / slide / playback) or heartbeat a content share. */
+  | { type: 'content-share'; from: string; share: MeetingContentShare }
+  | { type: 'content-share-stop'; from: string; id: string }
+  /** A joiner asks presenters for the current whiteboard and content share. */
+  | { type: 'share-state-request'; from: string; requestId: string }
   /** Host/co-host spotlight — every viewer focuses this participant. */
   | { type: 'spotlight'; from: string; targetUserId: string | null; timestamp: number }
   /** Request remote control of a screen share (ack is UI-only). */
   | { type: 'remote-control-request'; from: string; to: string; name?: string; timestamp: number }
   | { type: 'remote-control-response'; from: string; to: string; accepted: boolean; timestamp: number }
+  /** Zoom-style "Request recording permission" from a participant to the host/co-hosts. */
+  | { type: 'recording-request'; from: string; name?: string; timestamp: number }
+  | { type: 'recording-response'; from: string; to: string; accepted: boolean; timestamp: number }
   /** Live interpretation channel hint (UI routing). */
   | { type: 'interpretation-channel'; from: string; channelId: string | null; timestamp: number }
   /** Host webinar mode — attendees stay muted with hand-raise privileges. */

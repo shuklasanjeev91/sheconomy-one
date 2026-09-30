@@ -26,13 +26,13 @@ type BreakoutParticipant = {
 type MeetingBreakoutPanelProps = {
   meetingId: string
   userId: string
-  meetingLiveKitRoomId: string
+  meetingRoomId: string
   participants: BreakoutParticipant[]
   canModerate: boolean
   onClose: () => void
   onOpenBreakouts?: () => void
   onCloseBreakouts?: () => void
-  onJoinBreakoutRoom?: (liveKitRoomName: string) => void
+  onJoinBreakoutRoom?: (mediaRoomName: string) => void
   /** Host broadcast message into open breakouts (chat notice). */
   onBroadcastToBreakouts?: (message: string) => void
   /** Host sets breakout end timestamp (ms) for participant countdown. */
@@ -62,7 +62,7 @@ function breakoutStatusTone(status: MeetingBreakoutRoom['status']): 'warning' | 
 export function MeetingBreakoutPanel({
   meetingId,
   userId,
-  meetingLiveKitRoomId,
+  meetingRoomId,
   participants,
   canModerate,
   onClose,
@@ -106,7 +106,7 @@ export function MeetingBreakoutPanel({
       const created = await createRooms({
         count,
         createdBy: userId,
-        meetingLiveKitRoomId,
+        meetingRoomId,
       })
       const ids = created.map((r) => r.id)
       if (assignableUserIds.length && ids.length) {
@@ -250,7 +250,7 @@ export function MeetingBreakoutPanel({
               borderRadius={14}
               borderWidth={1}
               borderColor={coworkUi.borderSoft}
-              backgroundColor="rgba(255,255,255,0.03)"
+              backgroundColor={coworkUi.surfaceMuted}
             >
               <CoWorkSectionLabel>Host controls</CoWorkSectionLabel>
               <Field label="Number of rooms">
@@ -259,7 +259,7 @@ export function MeetingBreakoutPanel({
                   onChangeText={setRoomCount}
                   keyboardType="number-pad"
                   placeholder="3"
-                  backgroundColor="rgba(255,255,255,0.05)"
+                  backgroundColor={coworkUi.surface}
                   borderColor={coworkUi.borderSoft}
                   color={coworkUi.text}
                   borderRadius={14}
@@ -271,7 +271,7 @@ export function MeetingBreakoutPanel({
                   onChangeText={setTimerMinutes}
                   keyboardType="number-pad"
                   placeholder="10"
-                  backgroundColor="rgba(255,255,255,0.05)"
+                  backgroundColor={coworkUi.surface}
                   borderColor={coworkUi.borderSoft}
                   color={coworkUi.text}
                   borderRadius={14}
@@ -363,7 +363,7 @@ export function MeetingBreakoutPanel({
                       value={broadcastText}
                       onChangeText={setBroadcastText}
                       placeholder="Return to the main room in 2 minutes…"
-                      backgroundColor="rgba(255,255,255,0.05)"
+                      backgroundColor={coworkUi.surface}
                       borderColor={coworkUi.borderSoft}
                       color={coworkUi.text}
                       borderRadius={14}

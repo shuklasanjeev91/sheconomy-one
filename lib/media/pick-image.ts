@@ -316,8 +316,9 @@ export async function pickDocument(): Promise<PickedDocument | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
+    // MIME subtype wildcards are ignored by browsers, so Office files need extensions.
     input.accept =
-      'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.*,application/vnd.ms-excel,application/vnd.ms-powerpoint,text/plain,application/zip,audio/*,video/*'
+      'application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.rtf,.csv,.txt,.md,text/plain,application/msword,application/vnd.ms-excel,application/vnd.ms-powerpoint,application/zip,image/*,audio/*,video/*'
     input.style.display = 'none'
 
     input.onchange = () => {

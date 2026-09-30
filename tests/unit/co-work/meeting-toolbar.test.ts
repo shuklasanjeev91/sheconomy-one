@@ -87,7 +87,7 @@ describe('meeting toolbar layout', () => {
     ).not.toContain('record')
   })
 
-  it('uses Zoom mobile primary dock: Mute · Video · Chat · More · End', () => {
+  it('uses Zoom mobile primary dock: Mute · Video · Share · Chat · More · End', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -99,6 +99,7 @@ describe('meeting toolbar layout', () => {
     ).toEqual([
       'mic',
       'camera',
+      'share_screen',
       'chat',
       'more',
       'leave',
@@ -117,7 +118,7 @@ describe('meeting toolbar layout', () => {
       meetingToolbarPrimaryKeys({
         viewerRole: 'participant',
         supportsVideo: true,
-        supportsScreenShare: true,
+        supportsScreenShare: false,
         mode: 'mobile',
       }),
     ).not.toContain('share_screen')
@@ -137,6 +138,7 @@ describe('meeting toolbar layout', () => {
     ).toEqual([
       'mic',
       'camera',
+      'share_screen',
       'chat',
       'stop_record',
       'more',
@@ -227,7 +229,6 @@ describe('meeting toolbar layout', () => {
         'raise_hand',
         'reactions',
         'captions',
-        'share_screen',
         'disconnect_audio',
         'settings',
         'safe_driving',
@@ -235,6 +236,7 @@ describe('meeting toolbar layout', () => {
       ]),
     )
     expect(sections.find((s) => s.title === 'Meeting')?.keys).not.toContain('chat')
+    expect(sections.find((s) => s.title === 'Meeting')?.keys).not.toContain('share_screen')
     expect(sections.find((s) => s.title === 'View')?.keys).not.toContain('active_speakers_only')
     expect(sections.find((s) => s.title === 'View')?.keys).toContain('hd_video')
 
@@ -267,7 +269,6 @@ describe('meeting toolbar layout', () => {
         'raise_hand',
         'reactions',
         'captions',
-        'share_screen',
         'disconnect_audio',
         'settings',
         'safe_driving',

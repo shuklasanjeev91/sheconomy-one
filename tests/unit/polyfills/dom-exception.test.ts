@@ -44,17 +44,16 @@ describe('DOMException install order', () => {
   })
 
   // ES imports hoist above statements, so a guard call placed between imports runs
-  // too late — these modules must import the polyfill before they import LiveKit.
+  // too late — these modules must import the polyfill before they import WebRTC.
   it.each([
-    'co-work/screens/MeetingRoomScreen.tsx',
-    'co-work/components/NativeLiveKitMeetingRoom.tsx',
-    'co-work/hooks/useLiveKitMediaControls.native.tsx',
-  ])('installs before LiveKit loads in %s', (file) => {
+    'co-work/components/MediasoupMeetingRoom.native.tsx',
+    'co-work/components/MeetingBackgroundPreview.native.tsx',
+  ])('installs before WebRTC loads in %s', (file) => {
     const imports = importOrder(file)
-    const liveKit = imports.findIndex((specifier) => /^(livekit-client|@livekit\/)/.test(specifier))
+    const webrtc = imports.findIndex((specifier) => /^(react-native-webrtc|mediasoup-client)/.test(specifier))
 
-    expect(liveKit, 'expected a LiveKit import to guard').toBeGreaterThanOrEqual(0)
+    expect(webrtc, 'expected a WebRTC import to guard').toBeGreaterThanOrEqual(0)
     expect(imports.indexOf(POLYFILL)).toBeGreaterThanOrEqual(0)
-    expect(imports.indexOf(POLYFILL)).toBeLessThan(liveKit)
+    expect(imports.indexOf(POLYFILL)).toBeLessThan(webrtc)
   })
 })

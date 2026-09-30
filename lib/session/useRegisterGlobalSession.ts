@@ -12,6 +12,7 @@ import {
   type GlobalSessionHandlers,
   type GlobalSessionKind,
   type GlobalSessionPresentation,
+  type SessionVideoTrack,
 } from '~/lib/session/global-session'
 import {
   detectSessionPipCapabilities,
@@ -39,14 +40,14 @@ type UseRegisterGlobalSessionArgs = {
     speakerOn?: boolean
   }
   handlers: GlobalSessionHandlers
-  activeTrackRef?: any
+  activeTrackRef?: SessionVideoTrack | null
 }
 
 function codesMatch(a: string, b: string) {
   return normalizeInstantMeetingCode(a) === normalizeInstantMeetingCode(b)
 }
 
-/** Keep the mini-player / overlay alive across LiveKit flaps and Maximize. */
+/** Keep the mini-player / overlay alive across media reconnects and Maximize. */
 function shouldPreserveGlobalSession(code: string): boolean {
   const current = peekGlobalSession()
   if (!current || !codesMatch(current.code, code)) return false
@@ -129,7 +130,7 @@ export function useRegisterGlobalSession({
 
   useEffect(() => {
     if (!active) return
-    updateGlobalSessionActiveTrack(activeTrackRef)
+    updateGlobalSessionActiveTrack(activeTrackRef ?? null)
   }, [active, activeTrackRef])
 
   useEffect(() => {

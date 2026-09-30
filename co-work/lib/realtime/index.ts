@@ -17,7 +17,7 @@ export {
   type MeetingRealtimeSession,
 } from '~/co-work/lib/realtime/meeting-session'
 
-export { createLiveKitMeetingMediaAdapter } from '~/co-work/lib/realtime/livekit-media-adapter'
+export { createSfuMeetingMediaAdapter } from '~/co-work/lib/realtime/sfu-media-adapter'
 export {
   createPresenceCollaborationAdapter,
   type MeetingPresenceCollaborationSource,

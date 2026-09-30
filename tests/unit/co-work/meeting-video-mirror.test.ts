@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   meetingVideoMirrorTransform,
+  selfViewMirrorAllowed,
   shouldMirrorMeetingVideo,
 } from '~/co-work/lib/meeting-video-mirror'
 
@@ -68,6 +69,15 @@ describe('meeting video mirror policy', () => {
         cameraFacing: 'environment',
       }),
     ).toBe(false)
+  })
+
+  it('stops mirroring while an image background is composited into the camera', () => {
+    const camera = { mirrorLocalVideo: true, isLocal: true, source: 'camera' }
+    expect(shouldMirrorMeetingVideo({ ...camera, backgroundMode: 'image' })).toBe(false)
+    expect(shouldMirrorMeetingVideo({ ...camera, backgroundMode: 'blur' })).toBe(true)
+    expect(shouldMirrorMeetingVideo({ ...camera, backgroundMode: 'off' })).toBe(true)
+    expect(selfViewMirrorAllowed(true, 'image')).toBe(false)
+    expect(selfViewMirrorAllowed(false, 'off')).toBe(false)
   })
 
   it('exposes the web scaleX transform only when mirrored', () => {

@@ -47,8 +47,6 @@ const SCREEN_SHARE_PERMISSIONS = [
   'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
 ]
 
-const SCREEN_SHARE_SERVICE_META = 'io.livekit.reactnative.expo.ENABLE_SCREEN_SHARE_SERVICE'
-
 function ensureToolsNamespace(doc) {
   const manifest = doc?.manifest
   if (!manifest) return
@@ -132,17 +130,6 @@ function withAndroidFgsCompliance(config) {
     for (const name of SCREEN_SHARE_PERMISSIONS) {
       ensurePermission(manifest, name)
     }
-
-    if (!application['meta-data']) application['meta-data'] = []
-    application['meta-data'] = application['meta-data'].filter(
-      (item) => item?.$?.['android:name'] !== SCREEN_SHARE_SERVICE_META,
-    )
-    application['meta-data'].push({
-      $: {
-        'android:name': SCREEN_SHARE_SERVICE_META,
-        'android:value': 'true',
-      },
-    })
 
     return mod
   })

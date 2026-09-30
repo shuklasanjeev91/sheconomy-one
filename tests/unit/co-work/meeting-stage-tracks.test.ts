@@ -1,47 +1,50 @@
 import { describe, expect, it } from 'vitest'
-import { Track } from 'livekit-client'
-import type { TrackReferenceOrPlaceholder } from '@livekit/components-core'
+import type { MeetingStageTrack } from '~/co-work/lib/meeting-stage-tracks'
+import type { MediasoupTileSource } from '~/co-work/lib/mediasoup/mediasoup-stage-tracks'
 
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
 
 function track(
   identity: string,
-  source: Track.Source,
-  published = source === Track.Source.ScreenShare,
-): TrackReferenceOrPlaceholder {
+  source: MediasoupTileSource,
+  published = source === 'screen_share',
+): MeetingStageTrack {
   const participant = { identity }
   if (published) {
     return {
       participant,
       source,
       publication: { source, trackSid: `${identity}-${source}` },
-    } as TrackReferenceOrPlaceholder
+    } as MeetingStageTrack
   }
-  return { participant, source } as TrackReferenceOrPlaceholder
+  return { participant, source } as MeetingStageTrack
 }
 
 describe('meeting stage tracks', () => {
-  it('keeps all participant cameras visible without mirroring the local share', () => {
-    const localScreen = track('local', Track.Source.ScreenShare)
-    const localCamera = track('local', Track.Source.Camera)
-    const remoteCamera = track('remote', Track.Source.Camera)
+  it('stays one-on-one while presenting without mirroring the local share', () => {
+    const localScreen = track('local', 'screen_share')
+    const localCamera = track('local', 'camera')
+    const remoteCamera = track('remote', 'camera')
+    const otherRemote = track('remote-2', 'camera')
 
     const result = composeMeetingStageTracks(
-      [localScreen, localCamera, remoteCamera],
+      [localScreen, localCamera, remoteCamera, otherRemote],
       'local',
       'screen-share',
+      'remote',
     )
 
     expect(result.isLocalScreenSharing).toBe(true)
     expect(result.hasScreenShare).toBe(true)
     expect(result.stageTracks).toEqual([remoteCamera])
-    expect(result.filmstripTracks).toEqual([localCamera, remoteCamera])
+    expect(result.pipTrack).toBe(localCamera)
+    expect(result.filmstripTracks).toEqual([])
     expect(result.stageTracks).not.toContain(localScreen)
-    expect(result.filmstripTracks).not.toContain(localScreen)
+    expect(result.cameraTiles).toBe(3)
   })
 
   it('keeps a local share published while showing an empty non-recursive stage', () => {
-    const localScreen = track('local', Track.Source.ScreenShare)
+    const localScreen = track('local', 'screen_share')
     const result = composeMeetingStageTracks([localScreen], 'local')
 
     expect(result.isLocalScreenSharing).toBe(true)
@@ -50,9 +53,9 @@ describe('meeting stage tracks', () => {
   })
 
   it('focuses a remote participant screen share on every viewer platform', () => {
-    const remoteScreen = track('remote', Track.Source.ScreenShare)
-    const localCamera = track('local', Track.Source.Camera)
-    const remoteCamera = track('remote', Track.Source.Camera)
+    const remoteScreen = track('remote', 'screen_share')
+    const localCamera = track('local', 'camera')
+    const remoteCamera = track('remote', 'camera')
     const result = composeMeetingStageTracks(
       [remoteScreen, localCamera, remoteCamera],
       'local',
@@ -62,13 +65,14 @@ describe('meeting stage tracks', () => {
     expect(result.isLocalScreenSharing).toBe(false)
     expect(result.hasScreenShare).toBe(true)
     expect(result.stageTracks[0]).toBe(remoteScreen)
-    expect(result.filmstripTracks).toEqual([localCamera, remoteCamera])
+    expect(result.pipTrack).toBe(remoteCamera)
+    expect(result.filmstripTracks).toEqual([])
   })
 
-  it('uses the active speaker — including local — as the main tile in speaker view', () => {
-    const localCamera = track('local', Track.Source.Camera)
-    const firstRemote = track('remote-1', Track.Source.Camera)
-    const activeRemote = track('remote-2', Track.Source.Camera)
+  it('shows the active remote speaker large with self-view floating in speaker view', () => {
+    const localCamera = track('local', 'camera')
+    const firstRemote = track('remote-1', 'camera')
+    const activeRemote = track('remote-2', 'camera')
     const result = composeMeetingStageTracks(
       [localCamera, firstRemote, activeRemote],
       'local',
@@ -77,25 +81,28 @@ describe('meeting stage tracks', () => {
     )
 
     expect(result.stageTracks).toEqual([activeRemote])
-    expect(result.filmstripTracks).toEqual([localCamera, firstRemote])
+    expect(result.pipTrack).toBe(localCamera)
+    expect(result.filmstripTracks).toEqual([])
 
+    // Speaking yourself keeps a remote on the stage; you stay in the floating tile.
     const localSpeaking = composeMeetingStageTracks(
       [localCamera, firstRemote, activeRemote],
       'local',
       'speaker',
       'local',
     )
-    expect(localSpeaking.stageTracks).toEqual([localCamera])
-    expect(localSpeaking.filmstripTracks.map((item) => item.participant.identity).sort()).toEqual([
-      'remote-1',
-      'remote-2',
-    ])
+    expect(localSpeaking.stageTracks[0]?.participant.identity).not.toBe('local')
+    expect(localSpeaking.pipTrack).toBe(localCamera)
+
+    const alone = composeMeetingStageTracks([localCamera], 'local', 'speaker', null)
+    expect(alone.stageTracks).toEqual([localCamera])
+    expect(alone.pipTrack).toBeNull()
   })
 
   it('keeps every camera on stage in gallery mode', () => {
-    const localCamera = track('local', Track.Source.Camera)
-    const firstRemote = track('remote-1', Track.Source.Camera)
-    const secondRemote = track('remote-2', Track.Source.Camera)
+    const localCamera = track('local', 'camera')
+    const firstRemote = track('remote-1', 'camera')
+    const secondRemote = track('remote-2', 'camera')
     const result = composeMeetingStageTracks(
       [localCamera, firstRemote, secondRemote],
       'local',
@@ -119,9 +126,9 @@ describe('meeting stage tracks', () => {
       extra: { isSpeaking?: boolean; isMicrophoneEnabled?: boolean; isCameraEnabled?: boolean } = {},
     ) =>
       ({
-        ...track(identity, Track.Source.Camera),
+        ...track(identity, 'camera'),
         participant: { identity, name, isCameraEnabled: false, ...extra },
-      }) as TrackReferenceOrPlaceholder
+      }) as MeetingStageTrack
 
     const result = composeMeetingStageTracks(
       [
@@ -150,9 +157,9 @@ describe('meeting stage tracks', () => {
   })
 
   it('keeps pinned participants ahead of the active speaker', () => {
-    const local = track('local', Track.Source.Camera)
-    const pinned = track('remote-pinned', Track.Source.Camera)
-    const speaker = track('remote-speaker', Track.Source.Camera)
+    const local = track('local', 'camera')
+    const pinned = track('remote-pinned', 'camera')
+    const speaker = track('remote-speaker', 'camera')
     const result = composeMeetingStageTracks([local, speaker, pinned], 'local', 'gallery', null, {
       pinnedIdentities: ['remote-pinned'],
     })
@@ -172,19 +179,19 @@ describe('meeting stage tracks', () => {
   })
 
   it('floats active and video-on participants ahead of camera-off in gallery order', () => {
-    const localCamera = track('local', Track.Source.Camera)
+    const localCamera = track('local', 'camera')
     const cameraOff = {
-      ...track('remote-off', Track.Source.Camera),
+      ...track('remote-off', 'camera'),
       participant: { identity: 'remote-off', isCameraEnabled: false },
-    } as TrackReferenceOrPlaceholder
+    } as MeetingStageTrack
     const cameraOn = {
-      ...track('remote-on', Track.Source.Camera),
+      ...track('remote-on', 'camera'),
       participant: { identity: 'remote-on', isCameraEnabled: true },
-    } as TrackReferenceOrPlaceholder
+    } as MeetingStageTrack
     const speakingOff = {
-      ...track('remote-speaking', Track.Source.Camera),
+      ...track('remote-speaking', 'camera'),
       participant: { identity: 'remote-speaking', isCameraEnabled: false, isSpeaking: true },
-    } as TrackReferenceOrPlaceholder
+    } as MeetingStageTrack
 
     const result = composeMeetingStageTracks(
       [localCamera, cameraOff, speakingOff, cameraOn],
@@ -202,9 +209,9 @@ describe('meeting stage tracks', () => {
   })
 
   it('does not collapse gallery when a remote screen share is also present', () => {
-    const localCamera = track('local', Track.Source.Camera)
-    const remoteCamera = track('remote', Track.Source.Camera)
-    const remoteScreen = track('remote', Track.Source.ScreenShare)
+    const localCamera = track('local', 'camera')
+    const remoteCamera = track('remote', 'camera')
+    const remoteScreen = track('remote', 'screen_share')
     const result = composeMeetingStageTracks(
       [localCamera, remoteCamera, remoteScreen],
       'local',
@@ -213,12 +220,12 @@ describe('meeting stage tracks', () => {
 
     expect(result.stageTracks).toHaveLength(2)
     expect(result.hasScreenShare).toBe(true)
-    expect(result.stageTracks.every((item) => item.source === Track.Source.Camera)).toBe(true)
+    expect(result.stageTracks.every((item) => item.source === 'camera')).toBe(true)
   })
 
   it('hides the local camera tile when hideSelfView is on', () => {
-    const localCamera = track('local', Track.Source.Camera)
-    const remoteCamera = track('remote', Track.Source.Camera)
+    const localCamera = track('local', 'camera')
+    const remoteCamera = track('remote', 'camera')
     const result = composeMeetingStageTracks(
       [localCamera, remoteCamera],
       'local',
@@ -233,9 +240,9 @@ describe('meeting stage tracks', () => {
   })
 
   it('gallery shows every camera as a tile, including 1:1 side by side', () => {
-    const localCamera = track('local', Track.Source.Camera)
-    const remoteCamera = track('remote', Track.Source.Camera)
-    const secondRemote = track('remote-2', Track.Source.Camera)
+    const localCamera = track('local', 'camera')
+    const remoteCamera = track('remote', 'camera')
+    const secondRemote = track('remote-2', 'camera')
 
     const alone = composeMeetingStageTracks([localCamera], 'local', 'gallery')
     expect(alone.stageTracks).toEqual([localCamera])
@@ -255,8 +262,8 @@ describe('meeting stage tracks', () => {
   })
 
   it('speaker view in 1:1 fills the stage with the other person and floats self-view (Zoom)', () => {
-    const localCamera = track('local', Track.Source.Camera)
-    const remoteCamera = track('remote', Track.Source.Camera)
+    const localCamera = track('local', 'camera')
+    const remoteCamera = track('remote', 'camera')
     const speaker = composeMeetingStageTracks(
       [localCamera, remoteCamera],
       'local',

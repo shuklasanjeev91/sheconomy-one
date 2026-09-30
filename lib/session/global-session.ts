@@ -25,10 +25,16 @@ export type GlobalSessionHandlers = {
   enterPip?: () => void | Promise<void>
   exitPip?: () => void | Promise<void>
   /**
-   * Hand off LiveKit to InstantMeetingHost + mini-player so the member can use
+   * Hand off the media room to InstantMeetingHost + mini-player so the member can use
    * Commerce / Community / Chat / Class without ending the meeting.
    */
   browseAway?: () => void | Promise<void>
+}
+
+/** Live camera shown in the mini-player / bubble. */
+export type SessionVideoTrack = {
+  track: MediaStreamTrack
+  mirrored: boolean
 }
 
 export type GlobalSessionState = {
@@ -49,8 +55,8 @@ export type GlobalSessionState = {
   pipSupported: boolean
   /** User-facing reason when PiP is unavailable. */
   pipUnsupportedMessage: string | null
-  /** LiveKit TrackReference for rendering real-time video in the mini-player. */
-  activeTrackRef?: any
+  /** Real-time video for the mini-player. */
+  activeTrackRef?: SessionVideoTrack | null
 }
 
 type GlobalSessionStore = {
@@ -101,7 +107,7 @@ export type RegisterGlobalSessionInput = {
   pipSupported?: boolean
   pipUnsupportedMessage?: string | null
   handlers?: GlobalSessionHandlers
-  activeTrackRef?: any
+  activeTrackRef?: SessionVideoTrack | null
 }
 
 export function registerGlobalSession(input: RegisterGlobalSessionInput): void {
@@ -147,7 +153,7 @@ export function registerGlobalSession(input: RegisterGlobalSessionInput): void {
   emit()
 }
 
-export function updateGlobalSessionActiveTrack(activeTrackRef: any): void {
+export function updateGlobalSessionActiveTrack(activeTrackRef: SessionVideoTrack | null): void {
   if (!store.session) return
   if (store.session.activeTrackRef === activeTrackRef) return
   store = {

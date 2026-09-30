@@ -35,6 +35,8 @@ export type MeetingMachineState = {
   viewMode: MeetingViewMode
   uiMode: MeetingUiMode
   mirrorLocalVideo: boolean
+  /** Local virtual background — an image background disables self-view mirroring. */
+  localBackgroundMode: 'off' | 'blur' | 'image'
   /** Zoom-style: hide the local camera tile from gallery / filmstrip. */
   hideSelfView: boolean
   /** Zoom: hide participants with camera off from the gallery stage. */
@@ -68,6 +70,7 @@ export type MeetingMachineAction =
   | { type: 'SET_UI_MODE'; uiMode: MeetingUiMode }
   | { type: 'TOGGLE_UI_MODE' }
   | { type: 'SET_MIRROR_LOCAL_VIDEO'; enabled: boolean }
+  | { type: 'SET_LOCAL_BACKGROUND_MODE'; mode: 'off' | 'blur' | 'image' }
   | { type: 'SET_HIDE_SELF_VIEW'; enabled: boolean }
   | { type: 'SET_HIDE_NON_VIDEO'; enabled: boolean }
   | { type: 'SET_SIDE_BY_SIDE_SHARE'; enabled: boolean }
@@ -96,7 +99,7 @@ export type MeetingLifecycleSignals = {
   leaving?: boolean
   connectionFailed?: boolean
   mediaReconnecting?: boolean
-  /** LiveKit (or equivalent) is in the room. */
+  /** The SFU media room is connected. */
   inMeeting?: boolean
   screenSharing?: boolean
   audioOnly?: boolean
@@ -129,6 +132,7 @@ export const initialMeetingMachineState: MeetingMachineState = {
   viewMode: 'speaker',
   uiMode: 'normal',
   mirrorLocalVideo: true,
+  localBackgroundMode: 'off',
   hideSelfView: false,
   hideNonVideoParticipants: false,
   sideBySideShare: false,
@@ -312,7 +316,7 @@ export function resolveMeetingLifecycleAction(
     if (signals.screenSharing === false && current === 'SCREEN_SHARING') {
       return { type: 'SHARE_STOPPED' }
     }
-    // Presence admits the viewer before LiveKit reports share state — do not
+    // Presence admits the viewer before the SFU reports share state — do not
     // clear SCREEN_SHARING unless screenSharing was explicitly false.
     if (current === 'SCREEN_SHARING' && signals.screenSharing === undefined) {
       return null
@@ -438,6 +442,9 @@ export function meetingStateReducer(
     case 'SET_MIRROR_LOCAL_VIDEO':
       if (state.mirrorLocalVideo === action.enabled) return state
       return { ...state, mirrorLocalVideo: action.enabled }
+    case 'SET_LOCAL_BACKGROUND_MODE':
+      if (state.localBackgroundMode === action.mode) return state
+      return { ...state, localBackgroundMode: action.mode }
     case 'SET_HIDE_SELF_VIEW':
       if (state.hideSelfView === action.enabled) return state
       return { ...state, hideSelfView: action.enabled }

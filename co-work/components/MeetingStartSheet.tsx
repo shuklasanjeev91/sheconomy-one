@@ -92,7 +92,7 @@ export function MeetingStartSheet({
             value={title}
             onChangeText={setTitle}
             placeholder="e.g. Weekly standup"
-            backgroundColor="rgba(255,255,255,0.05)"
+            backgroundColor={ui.surfaceMuted}
             borderColor={ui.borderSoft}
             color={ui.text}
             borderRadius={12}
@@ -114,6 +114,8 @@ export function MeetingStartSheet({
             Video on
           </Text>
           <RNSwitch
+            aria-label="Video on"
+            accessibilityLabel="Video on"
             value={videoOn}
             onValueChange={setVideoOn}
             trackColor={{ false: ui.borderSoft, true: ui.brand }}
@@ -142,6 +144,8 @@ export function MeetingStartSheet({
             )}
           </YStack>
           <RNSwitch
+            aria-label="Use personal meeting ID (PMI)"
+            accessibilityLabel="Use personal meeting ID (PMI)"
             value={usePmi && !!pmiCode}
             onValueChange={setUsePmi}
             disabled={!pmiCode}

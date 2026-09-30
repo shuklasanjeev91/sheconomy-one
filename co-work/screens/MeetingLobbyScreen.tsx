@@ -10,6 +10,7 @@ import { BRAND_MEMBER_LABEL } from '~/config/brand'
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
 import { MeetingCalendarIconButton } from '~/co-work/components/MeetingCalendarIconButton'
 import { MeetingAudioTestModal } from '~/co-work/components/MeetingAudioTestModal'
+import { MeetingOpenInApp } from '~/co-work/components/MeetingOpenInApp'
 import {
   Avatar,
   Button,
@@ -50,6 +51,11 @@ import {
   meetingJoinMediaFromPermissions,
 } from '~/co-work/lib/meeting-media-permissions'
 import { loadMeetingJoinPrefs } from '~/co-work/lib/meeting-join-prefs'
+import {
+  loadRememberedMeetingDisplayName,
+  resolveMeetingDisplayName,
+  saveRememberedMeetingDisplayName,
+} from '~/co-work/lib/meeting-display-name'
 import { unlockWebAudioPlayback } from '~/co-work/lib/meeting-web'
 import { maximizeGlobalSession } from '~/lib/session/global-session'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
@@ -115,7 +121,13 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
 }
 
 function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
-  const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
+  const {
+    ui: coworkUi,
+    gradients: coworkGradients,
+    shadows: coworkShadows,
+    scheme: coworkScheme,
+  } = useCoWorkTheme()
+  const linkBlue = coworkScheme === 'dark' ? '#5AA2FF' : '#0E72ED'
   const router = useRouter()
   const { isDesktop, isTablet, safeTop, safeBottom } = useAppLayout()
   const wide = isDesktop || isTablet
@@ -136,6 +148,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   const [doNotConnectAudio, setDoNotConnectAudio] = useState(false)
   const [turnOffVideo, setTurnOffVideo] = useState(false)
   const [joinDisplayName, setJoinDisplayName] = useState<string | undefined>(undefined)
+  const nameEditedRef = useRef(false)
   const joiningRef = useRef(false)
 
   useEffect(() => {
@@ -153,7 +166,8 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   const isHost = !!meeting && !!user && meeting.host_id === user.id
   const hostDisplayName =
     meeting?.host?.full_name || meeting?.host?.username || (isHost ? 'You' : BRAND_MEMBER_LABEL)
-  const viewerName = profile?.full_name || profile?.username || 'You'
+  const viewerName =
+    joinDisplayName?.trim() || resolveMeetingDisplayName({ profile, user }) || 'You'
   const normalizedCode = code.replace(/\s/g, '').trim()
 
   useSyncMeetingLifecycle({
@@ -218,8 +232,25 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
     if (!prefs) return
     setDoNotConnectAudio(!prefs.audioEnabled)
     setTurnOffVideo(!prefs.videoEnabled)
-    if (prefs.displayName) setJoinDisplayName(prefs.displayName)
   }, [])
+
+  // Pre-fill the editable name from the Join form, the remembered name or the account.
+  useEffect(() => {
+    let cancelled = false
+    void loadRememberedMeetingDisplayName().then((remembered) => {
+      if (cancelled || nameEditedRef.current) return
+      const name = resolveMeetingDisplayName({
+        typed: loadMeetingJoinPrefs()?.displayName,
+        remembered,
+        profile,
+        user,
+      })
+      if (name) setJoinDisplayName(name)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [profile, user])
 
   useEffect(() => {
     if (!meeting?.scheduled_at || meeting.status !== 'scheduled' || meeting.started_at) return
@@ -268,6 +299,8 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
     }
     joiningRef.current = true
     setPreviewActive(false)
+    const typedName = joinDisplayName?.trim() || ''
+    if (nameEditedRef.current && typedName) void saveRememberedMeetingDisplayName(typedName)
     const preferredAudio = opts?.audioEnabled ?? !doNotConnectAudio
     const preferredVideo = opts?.videoEnabled ?? !turnOffVideo
     unlockWebAudioPlayback()
@@ -350,13 +383,13 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   if (loadingMeeting || (isLoading && !user)) {
     return (
       <ScreenCenter
-        backgroundColor="#0c080a"
+        backgroundColor={coworkUi.pageBg}
         style={{
           paddingTop: Math.max(safeTop, 16),
           paddingBottom: Math.max(safeBottom, 16),
         }}
       >
-        <Spinner size="large" color={coworkUi.brand} />
+        <Spinner size="large" color={coworkUi.brandLight} />
         <Text color={coworkUi.textSecondary} marginTop="$3">
           Preparing video preview…
         </Text>
@@ -374,8 +407,8 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   return (
     <FullWidthLayout
       scroll
-      backgroundColor="#0c080a"
-      style={{ minHeight: '100%', backgroundColor: '#0c080a' }}
+      backgroundColor={coworkUi.pageBg}
+      style={{ minHeight: '100%', backgroundColor: coworkUi.pageBg }}
     >
       <PageSection
         paddingTop={wide ? 20 : Math.max(safeTop, 14)}
@@ -390,12 +423,12 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
           alignSelf="stretch"
           borderRadius={wide ? 20 : 16}
           borderWidth={1}
-          borderColor="rgba(255, 255, 255, 0.12)"
-          backgroundColor="rgba(22, 18, 24, 0.96)"
+          borderColor={coworkUi.border}
+          backgroundColor={coworkUi.surface}
           padding={wide ? '$5' : '$3.5'}
           gap={wide ? '$4' : '$3'}
           style={{
-            boxShadow: '0 24px 64px rgba(0, 0, 0, 0.7)',
+            boxShadow: coworkShadows.panel,
           }}
         >
           {/* Zoom Window Header Bar (Image 3: Cancel on top-left) */}
@@ -411,13 +444,13 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
               accessibilityRole="button"
               accessibilityLabel="Cancel"
             >
-              <Text fontSize={15} fontWeight="700" color="#0E72ED">
+              <Text fontSize={15} fontWeight="700" color={linkBlue}>
                 Cancel
               </Text>
             </Pressable>
             <XStack alignItems="center" gap="$1.5">
               <Icons.ShieldCheck size={16} color="#22C55E" />
-              <Text fontSize={14} fontWeight="700" color="#fff">
+              <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
                 Sheconomy
               </Text>
             </XStack>
@@ -433,15 +466,15 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
           </XStack>
 
           {/* Meeting Details Sub-Header */}
-          <YStack gap="$1" paddingBottom="$2" borderBottomWidth={1} borderColor="rgba(255, 255, 255, 0.08)">
-            <Text fontSize={wide ? 22 : 18} fontWeight="800" color="#ffffff" letterSpacing={-0.3} numberOfLines={2}>
+          <YStack gap="$1" paddingBottom="$2" borderBottomWidth={1} borderColor={coworkUi.borderSoft}>
+            <Text fontSize={wide ? 22 : 18} fontWeight="800" color={coworkUi.text} letterSpacing={-0.3} numberOfLines={2}>
               {title}
             </Text>
             <XStack alignItems="center" gap="$2" flexWrap="wrap">
               <Text color={coworkUi.brandLight} fontSize={13} fontWeight="700" letterSpacing={1}>
                 {codeLabel}
               </Text>
-              <Text color="rgba(255,255,255,0.4)" fontSize={13}>
+              <Text color={coworkUi.textMuted} fontSize={13}>
                 ·
               </Text>
               <Text color={coworkUi.textSecondary} fontSize={13} flexShrink={1} numberOfLines={1}>
@@ -449,7 +482,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
               </Text>
               {meeting?.scheduled_at ? (
                 <>
-                  <Text color="rgba(255,255,255,0.4)" fontSize={13}>
+                  <Text color={coworkUi.textMuted} fontSize={13}>
                     ·
                   </Text>
                   <Text color={coworkUi.textSecondary} fontSize={13} flexShrink={1}>
@@ -459,6 +492,8 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
               ) : null}
             </XStack>
           </YStack>
+
+          {normalizedCode ? <MeetingOpenInApp meetingCode={normalizedCode} /> : null}
 
           {/* Error Banner */}
           {error ? (
@@ -481,14 +516,14 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
               gap="$3"
               padding="$4"
               borderRadius={14}
-              backgroundColor="rgba(32, 26, 34, 0.9)"
+              backgroundColor={coworkUi.surfaceMuted}
               borderWidth={1}
               borderColor={coworkUi.borderSoft}
             >
               <XStack alignItems="center" gap="$3">
                 <CoWorkIconBadge icon={Icons.Lock} />
                 <YStack gap={2} flex={1}>
-                  <Text fontWeight="700" fontSize={15} color="#fff">
+                  <Text fontWeight="700" fontSize={15} color={coworkUi.text}>
                     Meeting Passcode Required
                   </Text>
                   <Text color={coworkUi.textSecondary} fontSize={12}>
@@ -504,9 +539,9 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                     onChangeText={setPasscode}
                     secureTextEntry
                     placeholder="Enter passcode"
-                    backgroundColor="rgba(0,0,0,0.5)"
+                    backgroundColor={coworkUi.surfaceMuted}
                     borderColor={coworkUi.borderSoft}
-                    color="#fff"
+                    color={coworkUi.text}
                     borderRadius={10}
                   />
                   <Button
@@ -528,9 +563,9 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                     onChangeText={setPasscode}
                     secureTextEntry
                     placeholder="Enter passcode"
-                    backgroundColor="rgba(0,0,0,0.5)"
+                    backgroundColor={coworkUi.surfaceMuted}
                     borderColor={coworkUi.borderSoft}
-                    color="#fff"
+                    color={coworkUi.text}
                     borderRadius={10}
                   />
                   <Button
@@ -693,7 +728,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                           justifyContent="center"
                           gap="$2"
                         >
-                          <Spinner size="small" color={coworkUi.brand} />
+                          <Spinner size="small" color={coworkUi.brandLight} />
                           <Text fontSize={12} color={coworkUi.textMuted}>
                             Starting camera preview…
                           </Text>
@@ -712,9 +747,9 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                       aspectRatio={16 / 9}
                       borderRadius={16}
                       overflow="hidden"
-                      backgroundColor="#0a0a0c"
+                      backgroundColor={coworkUi.tileBg}
                       borderWidth={1}
-                      borderColor="rgba(255, 255, 255, 0.12)"
+                      borderColor={coworkUi.border}
                       position="relative"
                       alignItems="center"
                       justifyContent="center"
@@ -725,9 +760,9 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                           size="$6"
                           name={viewerName}
                           src={profile?.avatar_url || undefined}
-                          fallbackBackgroundColor="rgba(255,255,255,0.08)"
+                          fallbackBackgroundColor={coworkUi.brandMuted}
                         />
-                        <Text fontSize={14} fontWeight="700" color="#fff">
+                        <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
                           {viewerName}
                         </Text>
                         <Text fontSize={12} color={coworkUi.textMuted}>
@@ -740,25 +775,28 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                 </YStack>
 
                 <YStack width="100%" maxWidth={wide ? 560 : undefined} alignSelf="center" gap="$3">
-                  {!user ? (
-                    <YStack gap="$1.5" width="100%">
+                  <YStack gap="$1.5" width="100%">
                       <Text fontSize={12} fontWeight="700" color={coworkUi.textSecondary}>
                         Your Name (Display Name)
                       </Text>
                       <Input
-                        value={joinDisplayName}
-                        onChangeText={setJoinDisplayName}
+                        value={joinDisplayName ?? ''}
+                        onChangeText={(value) => {
+                          nameEditedRef.current = true
+                          setJoinDisplayName(value)
+                        }}
+                        maxLength={80}
+                        accessibilityLabel="Your name in the meeting"
                         placeholder="Enter your name"
-                        backgroundColor="rgba(0, 0, 0, 0.5)"
+                        backgroundColor={coworkUi.surfaceMuted}
                         borderColor={coworkUi.borderSoft}
-                        color="#ffffff"
+                        color={coworkUi.text}
                         placeholderTextColor={coworkUi.textMuted}
                         borderRadius={10}
                         fontSize={15}
                         height={46}
                       />
                     </YStack>
-                  ) : null}
 
                   {/* Zoom Start / Join CTA button */}
                   <Button
@@ -811,7 +849,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                           )
                         }
                       >
-                        <Text fontSize={12} fontWeight="700" color="#0E72ED">
+                        <Text fontSize={12} fontWeight="700" color={linkBlue}>
                           Sign in
                         </Text>
                       </Pressable>
@@ -859,12 +897,12 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                     padding="$3.5"
                     borderRadius={12}
                     borderWidth={1}
-                    borderColor="rgba(255, 255, 255, 0.1)"
-                    backgroundColor="rgba(255, 255, 255, 0.04)"
+                    borderColor={coworkUi.border}
+                    backgroundColor={coworkUi.surfaceMuted}
                   >
                     <XStack alignItems="center" gap="$2">
-                      <Icons.Clock size={16} color={coworkUi.brand} />
-                      <Text fontWeight="700" fontSize={14} color="#fff">
+                      <Icons.Clock size={16} color={coworkUi.brandLight} />
+                      <Text fontWeight="700" fontSize={14} color={coworkUi.text}>
                         This meeting has not started yet
                       </Text>
                     </XStack>
@@ -883,18 +921,18 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                   flexWrap="wrap"
                   width="100%"
                   borderTopWidth={1}
-                  borderColor="rgba(255, 255, 255, 0.08)"
+                  borderColor={coworkUi.borderSoft}
                 >
                   <Button
                     tone="outline"
                     size="$3"
                     borderRadius={8}
-                    borderColor="rgba(255, 255, 255, 0.14)"
-                    backgroundColor="rgba(255, 255, 255, 0.04)"
+                    borderColor={coworkUi.border}
+                    backgroundColor={coworkUi.surface}
                     onPress={handleCopyLink}
-                    icon={<Icons.Copy size={14} color="#fff" />}
+                    icon={<Icons.Copy size={14} color={coworkUi.text} />}
                   >
-                    <Text fontSize={12} fontWeight="600" color="#fff">
+                    <Text fontSize={12} fontWeight="600" color={coworkUi.text}>
                       Copy Link
                     </Text>
                   </Button>
@@ -903,12 +941,12 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                     tone="outline"
                     size="$3"
                     borderRadius={8}
-                    borderColor="rgba(255, 255, 255, 0.14)"
-                    backgroundColor="rgba(255, 255, 255, 0.04)"
+                    borderColor={coworkUi.border}
+                    backgroundColor={coworkUi.surface}
                     onPress={() => setShareOpen(true)}
-                    icon={<Icons.Share2 size={14} color="#fff" />}
+                    icon={<Icons.Share2 size={14} color={coworkUi.text} />}
                   >
-                    <Text fontSize={12} fontWeight="600" color="#fff">
+                    <Text fontSize={12} fontWeight="600" color={coworkUi.text}>
                       Share
                     </Text>
                   </Button>
@@ -918,12 +956,12 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                       tone="outline"
                       size="$3"
                       borderRadius={8}
-                      borderColor="rgba(255, 255, 255, 0.14)"
-                      backgroundColor="rgba(255, 255, 255, 0.04)"
-                      icon={<Icons.UserPlus size={14} color="#fff" />}
+                      borderColor={coworkUi.border}
+                      backgroundColor={coworkUi.surface}
+                      icon={<Icons.UserPlus size={14} color={coworkUi.text} />}
                       onPress={() => setShowInvite((open) => !open)}
                     >
-                      <Text fontSize={12} fontWeight="600" color="#fff">
+                      <Text fontSize={12} fontWeight="600" color={coworkUi.text}>
                         {showInvite ? 'Hide Invite' : 'Invite'}
                       </Text>
                     </Button>
@@ -945,7 +983,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
               borderWidth={1}
               borderColor={coworkUi.borderSoft}
               overflow="hidden"
-              backgroundColor="rgba(18, 14, 20, 0.95)"
+              backgroundColor={coworkUi.surface}
             >
               <MeetingInvitePanel
                 meeting={meeting}
@@ -972,20 +1010,6 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
             <AppLink href={coWorkRoutes.home} asChild>
               <Text fontSize={13} color={coworkUi.textMuted} cursor="pointer" pressStyle={{ opacity: 0.7 }}>
                 Back to Meetings
-              </Text>
-            </AppLink>
-            <Text color="rgba(255,255,255,0.2)" fontSize={12}>
-              ·
-            </Text>
-            <AppLink href={`sheconomy://co-work/meeting/${normalizedCode}` as never} asChild>
-              <Text
-                fontSize={13}
-                color={coworkUi.brandLight}
-                cursor="pointer"
-                pressStyle={{ opacity: 0.7 }}
-                textAlign="center"
-              >
-                Prefer mobile app? Open in Sheconomy
               </Text>
             </AppLink>
           </XStack>

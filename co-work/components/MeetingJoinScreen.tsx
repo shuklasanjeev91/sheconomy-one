@@ -47,7 +47,7 @@ export function MeetingJoinScreen({
   onJoin,
   onBack,
 }: MeetingJoinScreenProps) {
-  const { ui: coworkUi } = useCoWorkTheme()
+  const { ui: coworkUi, shadows: coworkShadows } = useCoWorkTheme()
   const { isTablet, isDesktop } = useAppLayout()
   const centered = isTablet || isDesktop
   const safeProfileName = safeMeetingDisplayName(profileName)
@@ -120,11 +120,11 @@ export function MeetingJoinScreen({
       padding="$4"
       paddingVertical={centered ? '$4' : '$5'}
       gap="$4"
-      backgroundColor={centered ? 'rgba(16, 7, 13, 0.98)' : undefined}
+      backgroundColor={centered ? coworkUi.surface : undefined}
       borderRadius={centered ? 18 : 0}
       borderWidth={centered ? 1 : 0}
-      borderColor={centered ? 'rgba(255,255,255,0.12)' : undefined}
-      style={centered ? { boxShadow: '0 24px 64px rgba(0,0,0,0.45)' } : undefined}
+      borderColor={centered ? coworkUi.border : undefined}
+      style={centered ? { boxShadow: coworkShadows.panel } : undefined}
     >
       <XStack alignItems="center" justifyContent="space-between">
         <Pressable onPress={onBack} accessibilityLabel="Close join preview" hitSlop={10}>
@@ -139,9 +139,9 @@ export function MeetingJoinScreen({
               borderRadius={999}
               alignItems="center"
               justifyContent="center"
-              backgroundColor="rgba(255,255,255,0.08)"
+              backgroundColor={coworkUi.surfaceMuted}
             >
-              <Icons.X size={18} color="#fff" />
+              <Icons.X size={18} color={coworkUi.text} />
             </YStack>
           )}
         </Pressable>
@@ -159,7 +159,7 @@ export function MeetingJoinScreen({
         borderRadius={18}
         overflow="hidden"
         borderWidth={1}
-        borderColor="rgba(255,255,255,0.12)"
+        borderColor={coworkUi.border}
         backgroundColor="#0a0a0c"
       >
         <MeetingBackgroundPreview userId={userId} joinChrome />
@@ -213,7 +213,7 @@ export function MeetingJoinScreen({
       </YStack>
 
       <YStack gap="$1.5" alignItems="center">
-        <Text fontSize={18} fontWeight="800" color="#fff" textAlign="center" letterSpacing={-0.3}>
+        <Text fontSize={18} fontWeight="800" color={coworkUi.text} textAlign="center" letterSpacing={-0.3}>
           {meetingTitle}
         </Text>
         <Text color={coworkUi.textMuted} fontSize={13} textAlign="center">
@@ -261,7 +261,7 @@ export function MeetingJoinScreen({
                 placeholder="Enter your name"
                 autoFocus
                 maxLength={80}
-                backgroundColor="rgba(255,255,255,0.05)"
+                backgroundColor={coworkUi.surfaceMuted}
                 borderColor={coworkUi.borderSoft}
                 color={coworkUi.text}
                 borderRadius={14}
@@ -311,7 +311,7 @@ export function MeetingJoinScreen({
             onChangeText={setPasscode}
             secureTextEntry
             placeholder="Enter meeting passcode"
-            backgroundColor="rgba(255,255,255,0.05)"
+            backgroundColor={coworkUi.surfaceMuted}
             borderColor={coworkUi.borderSoft}
             color={coworkUi.text}
             borderRadius={14}
@@ -361,7 +361,7 @@ export function MeetingJoinScreen({
     <YStack
       flex={1}
       width="100%"
-      backgroundColor={centered ? 'rgba(0,0,0,0.55)' : '#10070D'}
+      backgroundColor={centered ? 'rgba(0,0,0,0.55)' : coworkUi.pageBg}
       alignItems={centered ? 'center' : 'stretch'}
       justifyContent={centered ? 'center' : 'flex-start'}
       paddingHorizontal={centered ? 24 : 0}

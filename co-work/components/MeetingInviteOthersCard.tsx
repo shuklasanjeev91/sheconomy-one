@@ -67,7 +67,7 @@ export function MeetingInviteOthersCard({
         paddingHorizontal="$3.5"
         paddingVertical="$3"
         borderRadius={14}
-        backgroundColor="rgba(32, 17, 27, 0.94)"
+        backgroundColor={ui.glassElevated}
         borderWidth={1}
         borderColor={ui.borderSoft}
       >
@@ -84,7 +84,7 @@ export function MeetingInviteOthersCard({
           <Icons.Users size={16} color={ui.brandLight} />
         </YStack>
         <YStack flex={1} gap={4}>
-          <Text color="#fff" fontSize={14} fontWeight="800">
+          <Text color={ui.text} fontSize={14} fontWeight="800">
             Invite others
           </Text>
           <Pressable onPress={onInvite} accessibilityRole="button">

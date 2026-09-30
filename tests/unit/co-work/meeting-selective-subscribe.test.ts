@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { VideoQuality } from 'livekit-client'
 
 import {
   MEETING_SUBSCRIBE_ALL_BELOW,
+  MeetingVideoQuality,
   meetingCameraQualityForTile,
   resolveSubscribeCameraIdentities,
 } from '~/co-work/lib/meeting-selective-subscribe'
@@ -43,20 +43,20 @@ describe('resolveSubscribeCameraIdentities', () => {
 
 describe('meetingCameraQualityForTile', () => {
   it('uses the low layer for thumbnails and dense phone grids', () => {
-    expect(meetingCameraQualityForTile({ width: 132, height: 84 })).toBe(VideoQuality.LOW)
-    expect(meetingCameraQualityForTile({ width: 120, height: 155 })).toBe(VideoQuality.LOW)
-    expect(meetingCameraQualityForTile({ width: 0, height: 0 })).toBe(VideoQuality.LOW)
+    expect(meetingCameraQualityForTile({ width: 132, height: 84 })).toBe(MeetingVideoQuality.LOW)
+    expect(meetingCameraQualityForTile({ width: 120, height: 155 })).toBe(MeetingVideoQuality.LOW)
+    expect(meetingCameraQualityForTile({ width: 0, height: 0 })).toBe(MeetingVideoQuality.LOW)
   })
 
   it('uses the medium layer for mid-size tiles', () => {
-    expect(meetingCameraQualityForTile({ width: 190, height: 300 })).toBe(VideoQuality.MEDIUM)
-    expect(meetingCameraQualityForTile({ width: 340, height: 200 })).toBe(VideoQuality.MEDIUM)
+    expect(meetingCameraQualityForTile({ width: 190, height: 300 })).toBe(MeetingVideoQuality.MEDIUM)
+    expect(meetingCameraQualityForTile({ width: 340, height: 200 })).toBe(MeetingVideoQuality.MEDIUM)
   })
 
   it('only decodes 720p for large tiles with HD video on', () => {
-    expect(meetingCameraQualityForTile({ width: 390, height: 640 })).toBe(VideoQuality.HIGH)
+    expect(meetingCameraQualityForTile({ width: 390, height: 640 })).toBe(MeetingVideoQuality.HIGH)
     expect(meetingCameraQualityForTile({ width: 390, height: 640, hdVideo: false })).toBe(
-      VideoQuality.MEDIUM,
+      MeetingVideoQuality.MEDIUM,
     )
   })
 })

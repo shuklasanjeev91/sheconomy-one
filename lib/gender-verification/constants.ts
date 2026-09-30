@@ -1,3 +1,8 @@
+import {
+  FACE_QUALITY_LABELS,
+  type FaceQualityIssue,
+} from '~/lib/gender-verification/face-quality'
+
 export const GENDER_VERIFICATION = {
   /** Natural blinks required for liveness (close → open cycles). */
   requiredBlinks: 2,
@@ -9,8 +14,16 @@ export const GENDER_VERIFICATION = {
    * low enough that a single closed sample still counts on reopen.
    */
   minClosedMs: 50,
-  /** Reject intentional long squint / eyes held shut. */
-  maxClosedMs: 900,
+  /**
+   * Reject eyes held shut. Generous on purpose: native frames arrive ~1–2 fps,
+   * so users are asked for a slow blink that the sampler can actually catch.
+   */
+  maxClosedMs: 2500,
+  /**
+   * Native measures closure between photos up to ~1.5 s apart, so a 2 s
+   * "close your eyes" can read as ~3.5 s; still rejects eyes kept shut.
+   */
+  nativeMaxClosedMs: 4000,
   /** Avoid counting the same blink twice. */
   minBlinkGapMs: 280,
   /**
@@ -49,8 +62,10 @@ export const GENDER_VERIFICATION = {
   nativeCameraSettleMs: 1200,
   /** Warm restart: camera already running, so settle can be much shorter. */
   nativeCameraResettleMs: 350,
-  /** Open-eye EAR samples before blink thresholds adapt to this face/camera. */
+  /** Open-eye EAR samples before blinks count (thresholds are relative to this face). */
   earCalibrationSamples: 6,
+  /** Native frames are slow, so learn the open-eye baseline from fewer reads. */
+  nativeEarCalibrationSamples: 3,
   /** One soft auto-retry for lighting / face / liveness failures (never eligibility). */
   softRetryDelayMs: 1400,
   /** Downscale side length for face location, mesh, and anti-spoof detection. */
@@ -83,6 +98,8 @@ export const GENDER_VERIFICATION_PROMPT = {
   returnToQueryParam: 'returnTo',
   /** Survives SPA redirect / reload so an in-progress verify session stays open. */
   verificationFlowStorageKey: 'sheconomy:gender-verify:flow-open',
+  /** How long that flag counts as "still open" before it is treated as abandoned. */
+  verificationFlowTtlMs: 15 * 60 * 1000,
   /** Persisted return path after verify success (when query is cleaned). */
   returnToStorageKey: 'sheconomy:human-verify:return-to',
 } as const
@@ -110,6 +127,8 @@ export type GenderEstimate = {
   confidence: number
   /** Face width in source-image pixels before the dedicated 256px crop. */
   facePixels?: number
+  /** Model age estimate — gender reads are least reliable for children. */
+  age?: number
 }
 
 export type LivenessMetrics = {
@@ -120,20 +139,27 @@ export type LivenessMetrics = {
 
 /** What the last submitted read measured — shown on failure so it is diagnosable. */
 export type VerificationDiagnostics = {
-  femaleScore: number
+  femaleScore: number | null
   samples: number
   blinks: number
   maxFacePixels: number
+  /** Median model age across samples. */
+  age?: number | null
+  /** Capture problems seen through much of the run (lighting, glasses, …). */
+  issues?: FaceQualityIssue[]
 }
 
 /** One-line summary of the last read: numbers only, no imagery or identity. */
 export function formatVerificationDiagnostics(diagnostics: VerificationDiagnostics): string {
-  const score = Math.round(diagnostics.femaleScore * 100)
   return [
-    `Read ${score}% female`,
+    diagnostics.femaleScore == null
+      ? 'No usable read'
+      : `Read ${Math.round(diagnostics.femaleScore * 100)}% female`,
     `${diagnostics.samples} samples`,
     `${diagnostics.blinks} blinks`,
     `${diagnostics.maxFacePixels}px face`,
+    ...(diagnostics.age != null ? [`age ~${diagnostics.age}`] : []),
+    ...(diagnostics.issues ?? []).map((issue) => FACE_QUALITY_LABELS[issue]),
   ].join(' · ')
 }
 
@@ -147,5 +173,7 @@ export type FaceTrackingStatus = {
   liveScore?: number
   realScore?: number
   facingCamera?: boolean
+  /** Coaching line for a persistent capture problem (lighting, glasses, …). */
+  qualityHint?: string | null
 }
 

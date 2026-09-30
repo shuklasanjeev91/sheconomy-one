@@ -1,5 +1,5 @@
 /**
- * Hermes does not provide DOMException. LiveKit + react-native-webrtc reference it
+ * Hermes does not provide DOMException. WebRTC / mediasoup code references it
  * (e.g. `new DOMException(...)`, `extends DOMException`, bare `DOMException == null`)
  * and crash with: Property 'DOMException' doesn't exist.
  */

@@ -107,7 +107,7 @@ export function MeetingInvitePanel({
             gap="$2"
             padding="$3"
             borderRadius={14}
-            backgroundColor="rgba(255,255,255,0.04)"
+            backgroundColor={coworkUi.surfaceMuted}
             borderWidth={1}
             borderColor={coworkUi.borderSoft}
           >
@@ -158,7 +158,7 @@ export function MeetingInvitePanel({
             value={message}
             onChangeText={setMessage}
             placeholder="Add a note for your invitees"
-            backgroundColor="rgba(255,255,255,0.05)"
+            backgroundColor={coworkUi.surfaceMuted}
             borderColor={coworkUi.borderSoft}
             color={coworkUi.text}
             borderRadius={14}

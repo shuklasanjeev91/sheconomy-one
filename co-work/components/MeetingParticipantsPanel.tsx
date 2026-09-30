@@ -17,7 +17,7 @@ import { CoWorkPanelShell, CoWorkSectionLabel } from '~/co-work/components/CoWor
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { MeetingRoleBadge } from '~/co-work/components/MeetingRoleBadge'
-import { useCoWorkTheme } from '~/co-work/lib/theme'
+import { useCoWorkTheme, useMeetingControlPalette } from '~/co-work/lib/theme'
 import type { MeetingParticipant, MeetingRole } from '~/co-work/lib/types'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import {
@@ -76,7 +76,7 @@ type MeetingParticipantsPanelProps = {
   onSetSpotlight?: (userId: string | null) => void
   pinnedUserIds?: string[]
   onTogglePin?: (userId: string) => void
-  /** Live LiveKit active speakers (identity === user_id), floated above everyone else. */
+  /** Live SFU active speakers (identity === user_id), floated above everyone else. */
   speakingUserIds?: string[]
 }
 
@@ -310,7 +310,7 @@ export function MeetingParticipantsPanel({
           value={query}
           onChangeText={setQuery}
           placeholder="Search participants"
-          backgroundColor="rgba(255,255,255,0.05)"
+          backgroundColor={coworkUi.surfaceMuted}
           borderColor={coworkUi.borderSoft}
           color={coworkUi.text}
           placeholderTextColor={coworkUi.textMuted}
@@ -633,6 +633,7 @@ function MoreActionsMenu({
   trigger?: ReactNode
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const palette = useMeetingControlPalette()
   const [open, setOpen] = useState(false)
 
   if (Platform.OS !== 'web') {
@@ -725,7 +726,7 @@ function MoreActionsMenu({
               paddingHorizontal="$3"
               borderRadius={8}
               cursor="pointer"
-              hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+              hoverStyle={{ backgroundColor: palette.bgHover }}
               pressStyle={{ opacity: 0.8 }}
               onPress={() => {
                 setOpen(false)
@@ -757,6 +758,7 @@ function ParticipantRow({
   isSpotlighted?: boolean
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const palette = useMeetingControlPalette()
   const baseName = safeMeetingDisplayName(
     participant.display_name ||
       participant.profile?.full_name ||
@@ -792,10 +794,10 @@ function ParticipantRow({
       paddingHorizontal="$3"
       paddingVertical="$2"
       borderRadius={10}
-      backgroundColor={isSpotlighted ? 'rgba(216,27,96,0.08)' : 'rgba(255,255,255,0.03)'}
+      backgroundColor={isSpotlighted ? 'rgba(216,27,96,0.08)' : coworkUi.surfaceMuted}
       borderWidth={1}
       borderColor={isSpotlighted ? coworkUi.borderAccent : handRaised ? coworkUi.borderAccent : 'transparent'}
-      hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.07)' }}
+      hoverStyle={{ backgroundColor: palette.bgHover }}
     >
       <XStack alignItems="center" gap="$2.5" flex={1} minWidth={0}>
         <Avatar name={baseName} src={participant.profile?.avatar_url ?? undefined} size="$4" />

@@ -1,8 +1,3 @@
-import { Track } from 'livekit-client'
-
-import { isTrackReference, type TrackReferenceOrPlaceholder } from '@livekit/components-core'
-
-import { isScreenSharePublication, isScreenShareSource } from '~/co-work/lib/livekit-screen-share'
 import {
   normalizePinnedIdentities,
   resolveMeetingFocusIdentity,
@@ -14,10 +9,29 @@ import {
   type MeetingActivitySignals,
 } from '~/co-work/lib/meeting-participant-order'
 
-export type MeetingStageTracks = {
-  stageTracks: TrackReferenceOrPlaceholder[]
-  filmstripTracks: TrackReferenceOrPlaceholder[]
-  pipTrack: TrackReferenceOrPlaceholder | null
+/**
+ * What stage ordering reads from a tile; a missing `publication` means camera
+ * placeholder.
+ */
+export type MeetingStageTrack = {
+  source: string
+  participant: {
+    identity: string
+    name?: string
+    isSpeaking?: boolean
+    isCameraEnabled?: boolean
+    isMicrophoneEnabled?: boolean
+  }
+  publication?: { source?: string; isMuted?: boolean; track?: unknown }
+}
+
+const CAMERA_SOURCE = 'camera'
+const SCREEN_SHARE_SOURCE = 'screen_share'
+
+export type MeetingStageTracks<T extends MeetingStageTrack = MeetingStageTrack> = {
+  stageTracks: T[]
+  filmstripTracks: T[]
+  pipTrack: T | null
   totalTiles: number
   /** Camera tiles the gallery pages show, independent of the current view. */
   cameraTiles: number
@@ -37,32 +51,28 @@ export type MeetingStageFocusInput = {
   pinnedIdentities?: string[]
 }
 
-function isScreenShareTrack(track: TrackReferenceOrPlaceholder) {
-  if (isScreenShareSource(track.source)) return true
-  return isTrackReference(track) && isScreenSharePublication(track.publication)
+function isScreenShareTrack(track: MeetingStageTrack) {
+  return track.source === SCREEN_SHARE_SOURCE || track.publication?.source === SCREEN_SHARE_SOURCE
 }
 
 /** Prefer live camera tiles ahead of camera-off avatars in gallery / filmstrip. */
-export function meetingCameraVideoPriority(track: TrackReferenceOrPlaceholder): number {
-  const participant = track.participant as { isCameraEnabled?: boolean; isSpeaking?: boolean }
+export function meetingCameraVideoPriority(track: MeetingStageTrack): number {
+  const participant = track.participant
   if (typeof participant.isCameraEnabled === 'boolean') {
     return participant.isCameraEnabled ? 1 : 0
   }
-  if (!isTrackReference(track)) return 0
-  const publication = track.publication as { isMuted?: boolean; track?: unknown } | undefined
+  const publication = track.publication
   if (!publication) return 0
   if (publication.isMuted) return 0
   return publication.track ? 1 : 0
 }
 
 function galleryActivitySignals(
-  track: TrackReferenceOrPlaceholder,
+  track: MeetingStageTrack,
   activeSpeakerIdentity: string | null | undefined,
   localIdentity: string,
 ): MeetingActivitySignals {
-  const participant = track.participant as typeof track.participant & {
-    isMicrophoneEnabled?: boolean
-  }
+  const participant = track.participant
   return {
     id: participant.identity,
     self: participant.identity === localIdentity,
@@ -75,8 +85,8 @@ function galleryActivitySignals(
 }
 
 function compareGalleryCameras(
-  left: TrackReferenceOrPlaceholder,
-  right: TrackReferenceOrPlaceholder,
+  left: MeetingStageTrack,
+  right: MeetingStageTrack,
   activeSpeakerIdentity: string | null | undefined,
   pinnedSet: Set<string>,
   localIdentity: string,
@@ -94,15 +104,15 @@ function compareGalleryCameras(
  * Normalize camera + screen-share tracks into a focused stage layout.
  * Host spotlight forces a speaker-style focus for every viewer.
  */
-export function composeMeetingStageTracks(
-  tracks: TrackReferenceOrPlaceholder[],
+export function composeMeetingStageTracks<T extends MeetingStageTrack>(
+  tracks: T[],
   localIdentity: string,
   viewMode: MeetingViewMode = 'gallery',
   activeSpeakerIdentity?: string | null,
   hideSelfViewOrFocus: boolean | MeetingStageFocusInput = false,
   spotlightIdentityArg?: string | null,
   pinnedIdentitiesArg?: string[],
-): MeetingStageTracks {
+): MeetingStageTracks<T> {
   const focus: MeetingStageFocusInput =
     typeof hideSelfViewOrFocus === 'boolean'
       ? {
@@ -123,16 +133,16 @@ export function composeMeetingStageTracks(
     activeSpeakerIdentity,
   })
 
-  const screenShares: TrackReferenceOrPlaceholder[] = []
-  const cameraByIdentity = new Map<string, TrackReferenceOrPlaceholder>()
+  const screenShares: T[] = []
+  const cameraByIdentity = new Map<string, T>()
 
   for (const track of tracks) {
     if (isScreenShareTrack(track)) {
-      if (isTrackReference(track)) screenShares.push(track)
+      if (track.publication) screenShares.push(track)
       continue
     }
 
-    if (track.source !== Track.Source.Camera) continue
+    if (track.source !== CAMERA_SOURCE) continue
 
     const identity = track.participant.identity
     const existing = cameraByIdentity.get(identity)
@@ -141,7 +151,7 @@ export function composeMeetingStageTracks(
       continue
     }
 
-    if (!isTrackReference(existing) && isTrackReference(track)) {
+    if (!existing.publication && track.publication) {
       cameraByIdentity.set(identity, track)
     }
   }
@@ -178,39 +188,40 @@ export function composeMeetingStageTracks(
     (left, right) => compareGalleryCameras(left, right, focusIdentity, pinnedSet, localIdentity),
   )
 
-  if (spotlightIdentity) {
-    const spotlightTrack =
-      orderedCameras.find((track) => track.participant.identity === spotlightIdentity) ?? null
-    if (spotlightTrack) {
-      return {
-        stageTracks: [spotlightTrack],
-        filmstripTracks: orderedCameras.filter((track) => track !== spotlightTrack),
-        pipTrack: null,
-        totalTiles: orderedCameras.length,
-        cameraTiles: orderedCameras.length,
-        hasScreenShare: !!focusedScreen || isLocalScreenSharing,
-        isLocalScreenSharing,
-      }
-    }
-  }
+  const hasScreenShare = !!focusedScreen || isLocalScreenSharing
+  const spotlightTrack = spotlightIdentity
+    ? orderedCameras.find((track) => track.participant.identity === spotlightIdentity)
+    : undefined
 
-  if (viewMode === 'gallery') {
+  if (viewMode === 'gallery' && !spotlightTrack) {
     return {
       stageTracks: orderedCameras,
       filmstripTracks: [],
       pipTrack: null,
       totalTiles: orderedCameras.length,
       cameraTiles: orderedCameras.length,
-      hasScreenShare: !!focusedScreen || isLocalScreenSharing,
+      hasScreenShare,
       isLocalScreenSharing,
     }
   }
 
-  if (focusedScreen && viewMode === 'screen-share') {
+  // Zoom one-on-one: exactly one large tile and one floating tile; everyone else
+  // lives on the gallery page, never in a strip beside the stage.
+  const remoteOrdered = orderedCameras.filter((track) => track.participant.identity !== localIdentity)
+  const remoteSpeaker =
+    remoteOrdered.find((track) => track.participant.identity === focusIdentity) ??
+    remoteOrdered.find((track) => track.participant.isSpeaking) ??
+    null
+
+  if (focusedScreen && viewMode === 'screen-share' && !spotlightTrack) {
+    const presenterCamera =
+      remoteOrdered.find(
+        (track) => track.participant.identity === focusedScreen.participant.identity,
+      ) ?? null
     return {
       stageTracks: [focusedScreen],
-      filmstripTracks: orderedCameras,
-      pipTrack: null,
+      filmstripTracks: [],
+      pipTrack: remoteSpeaker ?? presenterCamera ?? (includeLocal ? localCamera : null),
       totalTiles: remoteCameras.length + (includeLocal ? 1 : 0) + 1,
       cameraTiles: orderedCameras.length,
       hasScreenShare: true,
@@ -218,62 +229,23 @@ export function composeMeetingStageTracks(
     }
   }
 
-  if (isLocalScreenSharing && viewMode === 'screen-share') {
-    const activeSpeaker =
-      remoteCameras.find((track) => track.participant.identity === focusIdentity) ??
-      remoteCameras.find((track) => track.participant.isSpeaking) ??
-      remoteCameras[0] ??
-      (includeLocal ? localCamera : null)
-
-    return {
-      stageTracks: activeSpeaker ? [activeSpeaker] : [],
-      filmstripTracks: orderedCameras,
-      pipTrack: null,
-      totalTiles: orderedCameras.length,
-      cameraTiles: orderedCameras.length,
-      hasScreenShare: true,
-      isLocalScreenSharing: true,
-    }
-  }
-
-  // Zoom 1:1 active speaker: the other person fills the stage, self-view floats on top.
-  const oneOnOneRemote = remoteCameras.length === 1 ? remoteCameras[0] : null
-  if (
-    oneOnOneRemote &&
-    includeLocal &&
-    localCamera &&
-    cameraByIdentity.size === 2 &&
-    screenShares.length === 0 &&
-    pinnedIdentities.length === 0
-  ) {
-    return {
-      stageTracks: [oneOnOneRemote],
-      filmstripTracks: [],
-      pipTrack: localCamera,
-      totalTiles: 2,
-      cameraTiles: orderedCameras.length,
-      hasScreenShare: false,
-      isLocalScreenSharing: false,
-    }
-  }
-
   const preferredPin = pinnedIdentities
     .map((id) => orderedCameras.find((track) => track.participant.identity === id))
     .find(Boolean)
   const activeSpeaker =
+    spotlightTrack ??
     preferredPin ??
-    orderedCameras.find((track) => track.participant.identity === focusIdentity) ??
-    orderedCameras.find((track) => track.participant.isSpeaking) ??
-    remoteCameras[0] ??
+    remoteSpeaker ??
+    remoteOrdered[0] ??
     (includeLocal ? localCamera : null)
-  const stageTracks = activeSpeaker ? [activeSpeaker] : []
+  const selfFloats = includeLocal && !!localCamera && !!activeSpeaker && activeSpeaker !== localCamera
   return {
-    stageTracks,
-    filmstripTracks: orderedCameras.filter((track) => track !== activeSpeaker),
-    pipTrack: null,
+    stageTracks: activeSpeaker ? [activeSpeaker] : [],
+    filmstripTracks: [],
+    pipTrack: selfFloats ? localCamera : null,
     totalTiles: orderedCameras.length,
     cameraTiles: orderedCameras.length,
-    hasScreenShare: !!focusedScreen || isLocalScreenSharing,
+    hasScreenShare,
     isLocalScreenSharing,
   }
 }

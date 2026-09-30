@@ -2,7 +2,9 @@ import { forwardRef } from 'react'
 import type { ComponentType } from 'react'
 import type { GetProps, ThemeName } from 'tamagui'
 import { Button as TButton } from 'tamagui'
+import { brandColors } from '~/config/brand-colors'
 import { BRAND_THEME } from '~/config/tokens'
+import { useForcedScheme } from '~/lib/theme/scheme-override'
 
 const AnyButton = TButton as unknown as ComponentType<any>
 
@@ -14,12 +16,14 @@ export type ButtonProps = GetProps<typeof TButton> & {
 }
 
 const TONE_STYLE: Record<ButtonTone, Record<string, unknown>> = {
+  // Fixed colors: the dark theme's $color1 / $color10 are near-black / pale pink,
+  // which fail contrast on the brand fill.
   primary: {
-    backgroundColor: '$color9',
-    color: '$color1',
+    backgroundColor: brandColors.primary,
+    color: '#FFFFFF',
     borderWidth: 0,
-    hoverStyle: { backgroundColor: '$color10', y: -1 },
-    pressStyle: { backgroundColor: '$color10', scale: 0.98, y: 0 },
+    hoverStyle: { backgroundColor: brandColors.primaryDark, y: -1 },
+    pressStyle: { backgroundColor: brandColors.primaryDark, scale: 0.98, y: 0 },
   },
   secondary: {
     backgroundColor: '$color3',
@@ -52,6 +56,14 @@ const TONE_STYLE: Record<ButtonTone, Record<string, unknown>> = {
   },
 }
 
+const CHROMELESS_STYLE: Record<string, unknown> = {
+  backgroundColor: 'transparent',
+  borderWidth: 0,
+  color: '$color12',
+  hoverStyle: { backgroundColor: '$color3' },
+  pressStyle: { backgroundColor: '$color4', scale: 0.97 },
+}
+
 const TONE_THEME: Partial<Record<ButtonTone, ThemeName>> = {
   primary: BRAND_THEME,
   destructive: 'red',
@@ -68,10 +80,18 @@ export const Button = forwardRef<any, ButtonProps>(function Button(
   { tone = 'primary', ...props },
   ref
 ) {
+  // Tone fills are explicit props, so they would override Tamagui's chromeless variant.
+  const chromeless = !!(props as { chromeless?: boolean }).chromeless
+  const forcedScheme = useForcedScheme()
+  const toneTheme = chromeless ? undefined : TONE_THEME[tone]
+  // Inside a forced-scheme subtree Tamagui may resolve sub-themes from the root scheme.
+  const theme = forcedScheme
+    ? ((toneTheme ? `${forcedScheme}_${toneTheme}` : forcedScheme) as ThemeName)
+    : toneTheme
   return (
     <AnyButton
       ref={ref}
-      theme={TONE_THEME[tone]}
+      theme={theme}
       borderRadius="$7"
       fontWeight="700"
       letterSpacing={0.15}
@@ -79,7 +99,7 @@ export const Button = forwardRef<any, ButtonProps>(function Button(
       disabledStyle={{ opacity: 0.5 }}
       // HTML default for <button> inside a form is type=submit, which reloads the page.
       {...({ type: 'button' } as object)}
-      {...TONE_STYLE[tone]}
+      {...(chromeless ? CHROMELESS_STYLE : TONE_STYLE[tone])}
       {...props}
     />
   )

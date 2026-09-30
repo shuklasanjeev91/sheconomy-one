@@ -228,25 +228,6 @@ export function resolveMeetingGalleryPageSize(input: {
   return Math.min(MEETING_DENSE_GALLERY_PAGE_SIZE, MEETING_GALLERY_MAX_VISIBLE)
 }
 
-/** Identities on the current page plus neighbors so swipe/prev-next has video ready. */
-export function meetingGalleryPrefetchIdentities<T extends { participant: { identity: string } }>(
-  tracks: T[],
-  page: number,
-  pageSize: number,
-): string[] {
-  const size = Math.max(1, Math.floor(pageSize))
-  const pageCount = Math.max(1, Math.ceil(tracks.length / size))
-  const safePage = Math.min(Math.max(0, Math.floor(page)), pageCount - 1)
-  const start = Math.max(0, (safePage - 1) * size)
-  const end = Math.min(tracks.length, (safePage + 2) * size)
-  const identities = new Set<string>()
-  for (let i = start; i < end; i += 1) {
-    const track = tracks[i]
-    if (track) identities.add(track.participant.identity)
-  }
-  return [...identities]
-}
-
 /** Split participants into visual rows for an explicit Meet-style grid. */
 export function chunkGalleryRows<T>(items: T[], columns: number): T[][] {
   const cols = Math.max(columns, 1)
@@ -257,18 +238,39 @@ export function chunkGalleryRows<T>(items: T[], columns: number): T[][] {
   return rows
 }
 
-export function paginateMeetingGallery<T>(
-  items: T[],
-  page: number,
-  pageSize: number,
-): { items: T[]; page: number; pageCount: number } {
-  const size = Math.max(1, Math.floor(pageSize))
-  const pageCount = Math.max(1, Math.ceil(items.length / size))
-  const safePage = Math.min(Math.max(0, Math.floor(page)), pageCount - 1)
+/**
+ * Tile index windows for a vertically scrolling gallery. `start`/`end` (end
+ * exclusive) are the tiles to mount; `visibleStart`/`visibleEnd` are on screen.
+ */
+export function meetingGalleryScrollWindow(input: {
+  total: number
+  columns: number
+  rowStride: number
+  scrollOffset: number
+  /** Visible height; 0 before first measure. */
+  viewportSize: number
+  /** Rows that fit before the first measure. */
+  rowsPerViewport: number
+  overscanRows?: number
+}): { start: number; end: number; visibleStart: number; visibleEnd: number } {
+  const total = Math.max(0, Math.floor(input.total))
+  const columns = Math.max(1, Math.floor(input.columns))
+  const totalRows = Math.ceil(total / columns)
+  const stride = Math.max(1, input.rowStride)
+  const overscan = Math.max(0, Math.floor(input.overscanRows ?? 1))
+  const offset = Math.max(0, input.scrollOffset)
+  const firstRow = Math.min(Math.floor(offset / stride), Math.max(totalRows - 1, 0))
+  const lastRow =
+    input.viewportSize > 0
+      ? Math.ceil((offset + input.viewportSize) / stride)
+      : firstRow + Math.max(1, input.rowsPerViewport)
+  const clampRow = (row: number) => Math.max(0, Math.min(totalRows, row))
+  const toIndex = (row: number) => Math.min(total, clampRow(row) * columns)
   return {
-    items: items.slice(safePage * size, safePage * size + size),
-    page: safePage,
-    pageCount,
+    start: toIndex(firstRow - overscan),
+    end: toIndex(lastRow + overscan),
+    visibleStart: toIndex(firstRow),
+    visibleEnd: toIndex(lastRow),
   }
 }
 

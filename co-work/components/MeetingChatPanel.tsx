@@ -7,7 +7,7 @@ import { Avatar, Button, Icons, Input, ScrollView, Text, XStack, YStack, useAppT
 import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { CoWorkPanelShell } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
-import { useCoWorkTheme } from '~/co-work/lib/theme'
+import { useCoWorkTheme, useMeetingControlPalette } from '~/co-work/lib/theme'
 import { useComposerKeyboardInset } from '~/hooks/useKeyboardVisible'
 import type {
   MeetingChatMessage,
@@ -70,6 +70,7 @@ export function MeetingChatPanel({
   onAttach,
 }: MeetingChatPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const palette = useMeetingControlPalette()
   const toast = useAppToast()
   const keyboardInset = useComposerKeyboardInset()
   const [draft, setDraft] = useState('')
@@ -251,7 +252,7 @@ export function MeetingChatPanel({
             width={36}
             height={4}
             borderRadius={2}
-            backgroundColor="rgba(255, 255, 255, 0.28)"
+            backgroundColor={coworkUi.border}
             alignSelf="center"
             marginTop={8}
             marginBottom={4}
@@ -264,7 +265,7 @@ export function MeetingChatPanel({
             paddingHorizontal="$3.5"
             paddingVertical="$2"
             borderBottomWidth={1}
-            borderBottomColor="rgba(255, 255, 255, 0.08)"
+            borderBottomColor={coworkUi.borderSoft}
           >
             <Pressable
               onPress={onClose}
@@ -277,10 +278,10 @@ export function MeetingChatPanel({
                 borderRadius: 999,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: pressed ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.12)',
+                backgroundColor: pressed ? palette.bgPressed : palette.bgStrong,
               })}
             >
-              <Icons.X size={18} color="#fff" />
+              <Icons.X size={18} color={palette.fg} />
             </Pressable>
 
             <Pressable
@@ -295,16 +296,16 @@ export function MeetingChatPanel({
                 paddingHorizontal: 14,
                 paddingVertical: 6,
                 borderRadius: 999,
-                backgroundColor: pressed ? 'rgba(255, 255, 255, 0.16)' : 'transparent',
+                backgroundColor: pressed ? palette.bgPressed : 'transparent',
               })}
             >
-              <Text fontSize={17} fontWeight="800" color="#fff" letterSpacing={-0.3}>
+              <Text fontSize={17} fontWeight="800" color={coworkUi.text} letterSpacing={-0.3}>
                 {toLabel}
               </Text>
               {toMenuOpen ? (
-                <Icons.ChevronUp size={16} color="rgba(255, 255, 255, 0.85)" />
+                <Icons.ChevronUp size={16} color={palette.fgMuted} />
               ) : (
-                <Icons.ChevronDown size={16} color="rgba(255, 255, 255, 0.85)" />
+                <Icons.ChevronDown size={16} color={palette.fgMuted} />
               )}
             </Pressable>
 
@@ -385,12 +386,12 @@ export function MeetingChatPanel({
                 borderRadius: 12,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: audience === 'everyone' ? coworkUi.brandMuted : 'rgba(255, 255, 255, 0.08)',
+                backgroundColor: audience === 'everyone' ? coworkUi.brandMuted : palette.bgStrong,
                 borderWidth: audience === 'everyone' ? 2 : 1,
                 borderColor: audience === 'everyone' ? coworkUi.brand : coworkUi.borderSoft,
               }}
             >
-              <Icons.Users size={20} color={audience === 'everyone' ? coworkUi.brandLight : '#fff'} />
+              <Icons.Users size={20} color={audience === 'everyone' ? coworkUi.brandLight : palette.fg} />
             </Pressable>
 
             {/* Active Direct Message / Host Tab */}
@@ -412,7 +413,7 @@ export function MeetingChatPanel({
                 }}
               >
                 <Icons.User size={16} color={coworkUi.brandLight} />
-                <Text fontSize={13} fontWeight="700" color="#fff" numberOfLines={1} maxWidth={110}>
+                <Text fontSize={13} fontWeight="700" color={coworkUi.text} numberOfLines={1} maxWidth={110}>
                   {toLabel}
                 </Text>
               </Pressable>
@@ -432,12 +433,12 @@ export function MeetingChatPanel({
                 borderRadius: 12,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                backgroundColor: palette.bgStrong,
                 borderWidth: 1,
-                borderColor: 'rgba(255, 255, 255, 0.18)',
+                borderColor: palette.border,
               }}
             >
-              <Icons.Plus size={20} color="#fff" />
+              <Icons.Plus size={20} color={palette.fg} />
             </Pressable>
 
             {/* Anchored Tooltip Bubble: [NEW] New chat (Image 1) */}
@@ -537,7 +538,7 @@ export function MeetingChatPanel({
                     width: 40,
                     height: 40,
                     borderRadius: 999,
-                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    backgroundColor: palette.bgStrong,
                   }}
                 >
                   <Icons.Download size={16} color={coworkUi.textSecondary} />
@@ -577,7 +578,7 @@ export function MeetingChatPanel({
               alignItems="center"
               gap="$3"
               borderRadius={coworkUi.radius.panel}
-              backgroundColor="rgba(255,255,255,0.03)"
+              backgroundColor={coworkUi.surfaceMuted}
               borderWidth={1}
               borderColor={coworkUi.borderSoft}
             >
@@ -593,7 +594,7 @@ export function MeetingChatPanel({
               alignItems="center"
               gap="$3"
               borderRadius={coworkUi.radius.panel}
-              backgroundColor="rgba(255,255,255,0.03)"
+              backgroundColor={coworkUi.surfaceMuted}
               borderWidth={1}
               borderColor={coworkUi.borderSoft}
             >

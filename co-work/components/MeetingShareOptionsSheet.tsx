@@ -30,6 +30,7 @@ type MeetingShareOptionsSheetProps = {
 type ShareListItem = {
   kind: MeetingShareContentKind
   label: string
+  hint: string
   icon: typeof Icons.ScreenShare
   tint?: string
 }
@@ -52,12 +53,17 @@ export function MeetingShareOptionsSheet({
 
   const listItems: ShareListItem[] = []
   if (supportsWhiteboard) {
-    listItems.push({ kind: 'whiteboard', label: 'Whiteboards', icon: Icons.PenTool })
+    listItems.push({ kind: 'whiteboard', label: 'Whiteboard', hint: 'Draw together', icon: Icons.PenTool })
   }
   listItems.push(
-    { kind: 'photos', label: 'Photos', icon: Icons.Image },
-    { kind: 'photos', label: 'Image from file', icon: Icons.Image },
-    { kind: 'files', label: 'Document', icon: Icons.FileText },
+    { kind: 'photos', label: 'Photos', hint: 'Up to 10, shown as slides', icon: Icons.Image },
+    { kind: 'video', label: 'Video', hint: 'Plays in sync for everyone', icon: Icons.Film },
+    {
+      kind: 'files',
+      label: 'Document or file',
+      hint: 'PDF, Word, Excel, PowerPoint, text, images',
+      icon: Icons.FileText,
+    },
   )
 
   useEffect(() => {
@@ -178,9 +184,14 @@ export function MeetingShareOptionsSheet({
                 })}
               >
                 <Icon size={22} color={ui.textSecondary} strokeWidth={1.8} />
-                <Text flex={1} color={ui.text} fontSize={16} fontWeight="600">
-                  {item.label}
-                </Text>
+                <YStack flex={1} minWidth={0} gap={2}>
+                  <Text color={ui.text} fontSize={16} fontWeight="600">
+                    {item.label}
+                  </Text>
+                  <Text color={ui.textSecondary} fontSize={12} numberOfLines={1}>
+                    {item.hint}
+                  </Text>
+                </YStack>
               </Pressable>
             )
           })}

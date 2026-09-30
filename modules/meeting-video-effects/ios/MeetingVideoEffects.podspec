@@ -11,8 +11,8 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
-  s.dependency 'livekit-react-native-webrtc'
-  s.dependency 'WebRTC-SDK'
+  s.dependency 'react-native-webrtc'
+  s.dependency 'JitsiWebRTC'
 
   s.source_files = '**/*.{h,m,mm,swift}'
   s.swift_version = '5.9'

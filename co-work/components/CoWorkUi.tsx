@@ -71,6 +71,8 @@ export function MeetingActionTile({
           style={{
             boxShadow: '0 8px 20px rgba(0, 0, 0, 0.22)',
           }}
+          role="button"
+          aria-label={label}
           accessibilityRole="button"
           accessibilityLabel={label}
         >
@@ -96,10 +98,13 @@ export function MeetingActionTile({
             justifyContent="center"
             cursor="pointer"
             hoverStyle={{ opacity: 0.9, scale: 1.1 }}
-            onPress={(e) => {
-              e.stopPropagation()
+            onPress={(e?: { stopPropagation?: () => void }) => {
+              // Native press handlers can fire without an event object.
+              e?.stopPropagation?.()
               onDropdownPress?.()
             }}
+            role="button"
+            aria-label={`${label} options`}
             accessibilityRole="button"
             accessibilityLabel={`${label} options`}
           >

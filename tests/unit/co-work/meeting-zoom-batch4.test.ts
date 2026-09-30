@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { Track } from 'livekit-client'
-import type { TrackReferenceOrPlaceholder } from '@livekit/components-core'
+import type { MeetingStageTrack } from '~/co-work/lib/meeting-stage-tracks'
 
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
 import { shouldShowSpeakingWhileMuted } from '~/co-work/lib/meeting-speaking-while-muted'
@@ -15,17 +14,17 @@ import {
 function cameraTrack(
   identity: string,
   opts?: { speaking?: boolean; cameraOn?: boolean },
-): TrackReferenceOrPlaceholder {
+): MeetingStageTrack {
   return {
     participant: {
       identity,
       isSpeaking: !!opts?.speaking,
       isCameraEnabled: opts?.cameraOn !== false,
     },
-    source: Track.Source.Camera,
+    source: 'camera',
     publication:
       opts?.cameraOn === false ? { isMuted: true } : { isMuted: false, track: {} },
-  } as TrackReferenceOrPlaceholder
+  } as MeetingStageTrack
 }
 
 describe('Zoom parity batch 4 — host actions, speaking-muted, gallery filters', () => {

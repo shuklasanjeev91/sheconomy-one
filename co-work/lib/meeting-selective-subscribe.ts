@@ -1,5 +1,10 @@
-import type { RemoteTrackPublication, Room } from 'livekit-client'
-import { Track, VideoQuality } from 'livekit-client'
+/** Simulcast layer index requested for a remote camera (spatial layer on the SFU). */
+export const MeetingVideoQuality = {
+  LOW: 0,
+  MEDIUM: 1,
+  HIGH: 2,
+} as const
+export type MeetingVideoQuality = (typeof MeetingVideoQuality)[keyof typeof MeetingVideoQuality]
 
 /**
  * Below this remote count, subscribe every camera. Kept at the smallest gallery
@@ -21,71 +26,13 @@ export function meetingCameraQualityForTile(input: {
   width: number
   height: number
   hdVideo?: boolean
-}): VideoQuality {
+}): MeetingVideoQuality {
   const side = Math.max(input.width, input.height)
-  if (!(side > 0) || side < CAMERA_LOW_QUALITY_MAX_SIDE) return VideoQuality.LOW
-  if (side < CAMERA_MEDIUM_QUALITY_MAX_SIDE || input.hdVideo === false) return VideoQuality.MEDIUM
-  return VideoQuality.HIGH
-}
-
-/**
- * Cap LiveKit camera subscriptions to identities that are actually on stage /
- * filmstrip. Screen shares always stay subscribed. Audio stays subscribed so
- * ~100-person rooms remain audible without decoding every camera.
- *
- * When remote peer count is small (≤ MEETING_SUBSCRIBE_ALL_BELOW), subscribe
- * every remote camera so 1–N joiners always see each other without paging races.
- */
-export function applyMeetingSelectiveCameraSubscribe(
-  room: Room | null | undefined,
-  visibleIdentities: ReadonlySet<string> | readonly string[],
-  options?: { subscribeAllBelow?: number },
-): void {
-  if (!room) return
-  const subscribeAllBelow = options?.subscribeAllBelow ?? MEETING_SUBSCRIBE_ALL_BELOW
-  const remoteCount = room.remoteParticipants.size
-  const visible =
-    remoteCount <= subscribeAllBelow
-      ? new Set(
-          [...room.remoteParticipants.keys()].filter(Boolean),
-        )
-      : visibleIdentities instanceof Set
-        ? visibleIdentities
-        : new Set(visibleIdentities.filter(Boolean))
-
-  for (const participant of room.remoteParticipants.values()) {
-    const identity = participant.identity
-    const wantVideo = visible.has(identity)
-    for (const publication of participant.trackPublications.values()) {
-      if (publication.kind !== 'video' && publication.source !== Track.Source.Camera) {
-        // Always keep audio + screen-share subscribed.
-        if (
-          publication.source === Track.Source.ScreenShare ||
-          publication.source === Track.Source.ScreenShareAudio ||
-          publication.kind === 'audio'
-        ) {
-          ensureSubscribed(publication as RemoteTrackPublication, true)
-        }
-        continue
-      }
-      if (publication.source === Track.Source.ScreenShare) {
-        ensureSubscribed(publication as RemoteTrackPublication, true)
-        continue
-      }
-      if (publication.source === Track.Source.Camera) {
-        ensureSubscribed(publication as RemoteTrackPublication, wantVideo)
-      }
-    }
+  if (!(side > 0) || side < CAMERA_LOW_QUALITY_MAX_SIDE) return MeetingVideoQuality.LOW
+  if (side < CAMERA_MEDIUM_QUALITY_MAX_SIDE || input.hdVideo === false) {
+    return MeetingVideoQuality.MEDIUM
   }
-}
-
-function ensureSubscribed(publication: RemoteTrackPublication, subscribed: boolean) {
-  try {
-    if (publication.isSubscribed === subscribed) return
-    publication.setSubscribed(subscribed)
-  } catch {
-    // Soft-fail — SFU may reject mid-renegotiation.
-  }
+  return MeetingVideoQuality.HIGH
 }
 
 /** Pure helper for tests — which identities should receive camera subscribe. */

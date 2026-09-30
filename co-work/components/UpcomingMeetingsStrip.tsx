@@ -77,7 +77,7 @@ export function UpcomingMeetingsStrip({
           Your upcoming meetings
         </Text>
         <AppLink href={coWorkRoutes.meetings} asChild>
-          <Text fontSize={13} fontWeight="600" color={coworkUi.brand} cursor="pointer">
+          <Text fontSize={13} fontWeight="600" color={coworkUi.brandLight} cursor="pointer">
             See all
           </Text>
         </AppLink>
@@ -85,7 +85,7 @@ export function UpcomingMeetingsStrip({
 
       {loading ? (
         <XStack paddingVertical="$3">
-          <Spinner size="small" color={coworkUi.brand} />
+          <Spinner size="small" color={coworkUi.brandLight} />
         </XStack>
       ) : meetings.length === 0 ? (
         <YStack

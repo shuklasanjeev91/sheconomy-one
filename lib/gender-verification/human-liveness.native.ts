@@ -22,6 +22,7 @@ export type HumanLivenessFrame = {
   gender: null
   box: null
   gestures: string[]
+  quality: null
 }
 
 export async function detectHumanLivenessFrame(
@@ -42,6 +43,7 @@ export async function detectHumanLivenessFrame(
     gender: null,
     box: null,
     gestures: [],
+    quality: null,
   }
 }
 

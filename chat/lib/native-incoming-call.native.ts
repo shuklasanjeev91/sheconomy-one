@@ -1,5 +1,5 @@
 import { Platform } from 'react-native'
-import RNCallKeep, { CONSTANTS as CK_CONSTANTS } from '@livekit/react-native-callkeep'
+import RNCallKeep, { CONSTANTS as CK_CONSTANTS } from 'react-native-callkeep'
 
 export type NativeIncomingCallInfo = {
   callId: string

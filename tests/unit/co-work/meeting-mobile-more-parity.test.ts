@@ -20,7 +20,6 @@ describe('meetingMobileMoreGridKeys & labels (Zoom mobile More parity)', () => {
 
     expect(hostWithAllCaps).toEqual([
       'manage_participants',
-      'share_screen',
       'captions',
       'polls',
       'disconnect_audio',

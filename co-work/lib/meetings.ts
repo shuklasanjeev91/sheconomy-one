@@ -204,7 +204,7 @@ export async function generateMeetingCode(): Promise<string> {
   return `${randomAlphaCode(3)}${randomAlphaCode(3)}${randomAlphaCode(3)}`
 }
 
-function generateLiveKitRoomId(): string {
+function generateMediaRoomId(): string {
   return randomAlphaCode(6, 'abcdefghijklmnopqrstuvwxyz0123456789')
 }
 
@@ -365,6 +365,13 @@ export function normalizeMeetingCode(code: string): string {
   return code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
 }
 
+/** Meeting code from a typed code or a pasted invite link (`…/co-work/meeting/ABC-DEF-GHI`). */
+export function meetingCodeFromInput(input: string): string {
+  const trimmed = input.trim()
+  const fromLink = trimmed.match(/\/co-?work\/meeting\/([^/?#\s]+)/i)?.[1]
+  return normalizeMeetingCode(fromLink ? decodeURIComponent(fromLink) : trimmed)
+}
+
 /**
  * Codes are persisted in two shapes — older rows use `ABC-DEF-GHI`, newer ones
  * `ABCDEFGHI` — while recent-code chips and typed input arrive stripped. Match
@@ -427,7 +434,7 @@ export async function searchMeetings(query: string, limit = 12): Promise<Meeting
 
 export async function createMeeting(hostId: string, input: CreateMeetingInput): Promise<Meeting> {
   const meetingCode = await generateMeetingCode()
-  const roomId = generateLiveKitRoomId()
+  const roomId = generateMediaRoomId()
   const now = new Date().toISOString()
   const status = input.startNow ? 'instant' : 'scheduled'
   const timeZone = coerceIanaTimeZone(input.timeZone?.trim() || resolveDeviceIanaTimeZone())
@@ -636,7 +643,7 @@ export async function updateMeetingTitle(meetingId: string, title: string): Prom
 export async function startMeeting(meetingId: string): Promise<void> {
   // Always read live status — InstantMeetingHost / lobby can pass a stale
   // cached `active` row after the meeting was ended, which skipped restart and
-  // made LiveKit reject web joins with "This meeting is not active."
+  // made the token function reject web joins with "This meeting is not active."
   const { data: row, error: statusError } = await supabase
     .from('meetings')
     .select('status')
@@ -715,6 +722,22 @@ export async function joinMeetingParticipant(
     ...(data as Record<string, unknown>),
     display_name: cleanedDisplayName,
   })
+}
+
+/** Rename this device's participant row mid-meeting (the name shown in the roster). */
+export async function updateMeetingParticipantDisplayName(
+  meetingId: string,
+  sessionId: string,
+  displayName: string,
+): Promise<void> {
+  const cleanedDisplayName = normalizeMeetingDisplayName(displayName)
+  if (!cleanedDisplayName) return
+  const { error } = await supabase.rpc('set_meeting_participant_display_name', {
+    meeting_id_input: meetingId,
+    session_id_input: sessionId,
+    display_name_input: cleanedDisplayName,
+  })
+  if (error) throw new Error(error.message)
 }
 
 export async function admitParticipant(participantId: string): Promise<void> {

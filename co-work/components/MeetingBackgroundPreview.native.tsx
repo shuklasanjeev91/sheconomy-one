@@ -1,11 +1,12 @@
+// Keep first: react-native-webrtc extends DOMException while it evaluates.
 import '~/lib/polyfills/install-dom-exception'
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { createLocalVideoTrack, type LocalVideoTrack } from 'livekit-client'
 import { NativeModules, Platform } from 'react-native'
-import { MediaStream, RTCView } from '@livekit/react-native-webrtc'
+import { MediaStream, mediaDevices, RTCView } from 'react-native-webrtc'
 
 import MeetingVideoEffectsNative from '~/modules/meeting-video-effects'
+import { selfViewMirrorAllowed } from '~/co-work/lib/meeting-video-mirror'
 import {
   EFFECT_CAPTURE,
   nativeProcessorCanDecodeImageUri,
@@ -31,12 +32,12 @@ import {
   saveVirtualBackgroundPreference,
   type VirtualBackgroundSelection,
 } from '~/co-work/lib/virtual-backgrounds'
-import { ensureLiveKitGlobals } from '~/lib/livekit/ensure-globals'
+import { ensureWebRTCGlobals } from '~/lib/webrtc/ensure-globals'
 import { Icons, useAppToast, YStack } from '~/components/ui'
 import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { getPresetThumbnailSource } from '~/co-work/lib/virtual-background-presets'
 
-ensureLiveKitGlobals()
+ensureWebRTCGlobals()
 
 type NativeEffectTrack = MediaStreamTrack & {
   _setVideoEffects(names: string[]): void
@@ -47,7 +48,7 @@ type NativeEffectTrack = MediaStreamTrack & {
 type MeetingBackgroundPreviewProps = {
   userId?: string | null
   /**
-   * When false, stop the local camera / effects so Join can open LiveKit without
+   * When false, stop the local camera / effects so Join can open the SFU without
    * racing the lobby RTCView (Android EglThread refcount crash).
    */
   active?: boolean
@@ -63,7 +64,8 @@ export function MeetingBackgroundPreview({
   joinChrome = false,
 }: MeetingBackgroundPreviewProps = {}) {
   const toast = useAppToast()
-  const trackRef = useRef<LocalVideoTrack | null>(null)
+  const trackRef = useRef<(NativeEffectTrack & { id?: string }) | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const effectsSupportedRef = useRef(false)
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
   const [selection, setSelection] = useState<VirtualBackgroundSelection>(OFF_BACKGROUND)
@@ -94,17 +96,19 @@ export function MeetingBackgroundPreview({
 
   const stopPreviewTrack = useCallback(() => {
     const track = trackRef.current
+    const stream = streamRef.current
     trackRef.current = null
+    streamRef.current = null
     setStreamUrl(null)
     processorOnRef.current = false
     try {
-      const media = track?.mediaStreamTrack as (NativeEffectTrack & { id?: string }) | undefined
-      detachProcessor(media)
+      detachProcessor(track ?? undefined)
     } catch {
       // Track may already be closed.
     }
     try {
       track?.stop()
+      stream?.release(false)
     } catch {
       // ignore
     }
@@ -146,7 +150,7 @@ export function MeetingBackgroundPreview({
 
   const applyNativeEffect = useCallback(
     async (next: VirtualBackgroundSelection) => {
-      const track = trackRef.current?.mediaStreamTrack as (NativeEffectTrack & { id?: string }) | undefined
+      const track = trackRef.current ?? undefined
       if (!effectsSupportedRef.current) return false
 
       if (!track || typeof track._setVideoEffects !== 'function') return false
@@ -154,7 +158,7 @@ export function MeetingBackgroundPreview({
 
       if (next.mode === 'off') {
         try {
-          MeetingVideoEffectsNative?.configure?.({ mode: 'off', imagePath: null, blurRadius: 12 })
+          MeetingVideoEffectsNative?.configure?.({ mode: 'off', blurRadius: 12 })
         } catch {
           // ignore
         }
@@ -207,9 +211,8 @@ export function MeetingBackgroundPreview({
         }
       } catch (cause) {
         try {
-          const track = trackRef.current?.mediaStreamTrack as (NativeEffectTrack & { id?: string }) | undefined
-          detachProcessor(track)
-          MeetingVideoEffectsNative?.configure?.({ mode: 'off', imagePath: null, blurRadius: 12 })
+          detachProcessor(trackRef.current ?? undefined)
+          MeetingVideoEffectsNative?.configure?.({ mode: 'off', blurRadius: 12 })
         } catch {
           // Keep ordinary camera preview.
         }
@@ -290,15 +293,18 @@ export function MeetingBackgroundPreview({
     let cancelled = false
     void (async () => {
       try {
-        const track = await createLocalVideoTrack({
-          resolution: EFFECT_CAPTURE,
+        const stream = await mediaDevices.getUserMedia({
+          audio: false,
+          video: { ...EFFECT_CAPTURE, facingMode: facingRef.current },
         })
-        if (cancelled || !active) {
-          track.stop()
+        const track = stream.getVideoTracks()[0] as unknown as (NativeEffectTrack & { id?: string }) | undefined
+        if (cancelled || !active || !track) {
+          stream.getTracks().forEach((t) => t.stop())
+          stream.release(false)
           return
         }
         trackRef.current = track
-        const stream = new MediaStream([track.mediaStreamTrack as never])
+        streamRef.current = stream
         setStreamUrl(stream.toURL())
         setBusy(false)
         processorOnRef.current = false
@@ -333,7 +339,7 @@ export function MeetingBackgroundPreview({
   }, [active, apply, stopPreviewTrack])
 
   const flipCamera = useCallback(async () => {
-    const media = trackRef.current?.mediaStreamTrack as NativeEffectTrack | undefined
+    const media = trackRef.current
     if (!media || typeof media.applyConstraints !== 'function') {
       toast.show('Could not flip camera', { tone: 'danger' })
       return
@@ -431,7 +437,7 @@ export function MeetingBackgroundPreview({
           <RTCView
             streamURL={streamUrl}
             objectFit="cover"
-            mirror={facing === 'user'}
+            mirror={facing === 'user' && selfViewMirrorAllowed(true, selection.mode)}
             style={{ width: '100%', height: '100%' }}
           />
         ) : null

@@ -153,7 +153,8 @@ export const appUiDark: AppUiTokens = {
   digitalText: '#bfdbfe',
   deliveryBg: 'rgba(36, 17, 24, 0.96)',
   deliveryText: sheconomyDark.sheconomy12,
-  onBrand: '#ffffff',
+  /** Dark ink: white fails contrast on the pale dark-theme brand fill. */
+  onBrand: sheconomyDark.sheconomy1,
   success: '#6ee7a0',
   starFill: '#fcd34d',
   starEmpty: sheconomyDark.sheconomy7,

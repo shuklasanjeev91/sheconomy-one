@@ -541,7 +541,7 @@ export function ScheduleMeetingScreen() {
           <Button
             tone="ghost"
             size="$3"
-            color={coworkUi.brand}
+            color={coworkUi.brandLight}
             onPress={() => router.back()}
             disabled={saving}
           >
@@ -560,7 +560,7 @@ export function ScheduleMeetingScreen() {
           <Button
             tone="ghost"
             size="$3"
-            color={coworkUi.brand}
+            color={coworkUi.brandLight}
             fontWeight="700"
             disabled={saving || loadingEdit}
             onPress={() => void handleSchedule()}
@@ -599,7 +599,7 @@ export function ScheduleMeetingScreen() {
                 value={title}
                 onChangeText={onTitleChange}
                 placeholder={`${profile?.full_name || 'Team'} sync`}
-                backgroundColor="rgba(255,255,255,0.05)"
+                backgroundColor={coworkUi.surfaceMuted}
                 borderColor={fieldErrors.title ? coworkUi.danger : coworkUi.borderSoft}
                 color={coworkUi.text}
                 borderRadius={14}
@@ -611,7 +611,7 @@ export function ScheduleMeetingScreen() {
                 value={description}
                 onChangeText={setDescription}
                 placeholder="Agenda, goals, or notes for attendees"
-                backgroundColor="rgba(255,255,255,0.05)"
+                backgroundColor={coworkUi.surfaceMuted}
                 borderColor={coworkUi.borderSoft}
                 color={coworkUi.text}
                 borderRadius={14}
@@ -648,7 +648,7 @@ export function ScheduleMeetingScreen() {
                 value={maxParticipants}
                 onChangeText={onMaxParticipantsChange}
                 keyboardType="number-pad"
-                backgroundColor="rgba(255,255,255,0.05)"
+                backgroundColor={coworkUi.surfaceMuted}
                 borderColor={fieldErrors.maxParticipants ? coworkUi.danger : coworkUi.borderSoft}
                 color={coworkUi.text}
                 borderRadius={14}
@@ -723,7 +723,7 @@ export function ScheduleMeetingScreen() {
                 onChangeText={setPasscode}
                 secureTextEntry
                 placeholder="Guests enter this before joining"
-                backgroundColor="rgba(255,255,255,0.05)"
+                backgroundColor={coworkUi.surfaceMuted}
                 borderColor={coworkUi.borderSoft}
                 color={coworkUi.text}
                 borderRadius={14}

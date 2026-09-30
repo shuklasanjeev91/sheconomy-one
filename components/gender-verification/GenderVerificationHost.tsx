@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Href } from 'one'
 import { Platform } from 'react-native'
-import { useLocalSearchParams, usePathname } from 'one'
+import { useActiveParams, usePathname } from 'one'
 
 import { GenderDeniedModal } from '~/components/gender-verification/GenderDeniedModal'
 import { GenderVerificationModal } from '~/components/gender-verification/GenderVerificationModal'
@@ -32,7 +32,7 @@ import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { patchSessionProfile } from '~/lib/profile/profile-store'
 import { persistStorage } from '~/lib/store/storage'
-import { commerceRoutes } from '~/lib/routes'
+import { commerceRoutes, isCoWorkMeetingRoomPath } from '~/lib/routes'
 
 const {
   dismissStorageKey: STORAGE_KEY,
@@ -45,7 +45,11 @@ const {
 
 /** Routes that own their own verification UI (or shouldn't be interrupted). */
 function isSuppressedRoute(pathname: string): boolean {
-  return pathname.startsWith('/ui-kit') || pathname.startsWith('/auth/verify-gender')
+  return (
+    pathname.startsWith('/ui-kit') ||
+    pathname.startsWith('/auth/verify-gender') ||
+    isCoWorkMeetingRoomPath(pathname)
+  )
 }
 
 function readParam(
@@ -78,11 +82,16 @@ function stripQueryParams(keys: string[]) {
  *
  * Never treat an unsettled profile as limited — that falsely bounced verified
  * vendors (e.g. My Shop) to `?gender=restricted` while the row was still loading.
+ *
+ * `suspended` (a full-screen meeting is open) hides the modals without dropping
+ * a pending request, so they reappear once the member leaves the call.
  */
-export function GenderVerificationHost() {
+export function GenderVerificationHost({ suspended = false }: { suspended?: boolean }) {
   const { profile, isAuthenticated, isLoading, isProfileConfirmed } = useProfile()
   const pathname = usePathname()
-  const params = useLocalSearchParams()
+  // The host renders beside the root <Slot />, outside any route, where
+  // useParams() has no route context and never sees the query string.
+  const params = useActiveParams() as Record<string, string | string[] | undefined>
 
   const [hydrated, setHydrated] = useState(false)
   const [manualOpen, setManualOpen] = useState(() => peekVerificationFlowOpen())
@@ -104,7 +113,7 @@ export function GenderVerificationHost() {
   const needsVerification = profileReady && !hasFullAccess
   const onProtectedRoute = requiresGenderVerification(pathname)
   const onIntentRoute = isHumanVerificationIntentPath(pathname)
-  const suppressedRoute = isSuppressedRoute(pathname)
+  const suppressedRoute = suspended || isSuppressedRoute(pathname)
   const verificationFlowActive = manualOpen || verificationFlowRef.current
 
   /**

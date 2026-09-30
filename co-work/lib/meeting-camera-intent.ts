@@ -1,6 +1,6 @@
 /**
  * Last known camera intent for the live meeting.
- * Permission sheets on Android briefly background the app before LiveKit
+ * Permission sheets on Android briefly background the app before the SFU
  * reports cameraEnabled=true — lifecycle must not treat that as "user wanted off".
  */
 

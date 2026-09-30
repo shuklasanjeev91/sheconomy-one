@@ -5,13 +5,24 @@ import { Camera, useCameraPermissions } from 'expo-camera'
 
 import type { NativeFaceAnalyzerHandle } from '~/components/gender-verification/NativeFaceAnalyzer'
 import {
+  FACE_QUALITY,
   GENDER_ERROR_CODES,
   GENDER_VERIFICATION,
   type FaceTrackingStatus,
   type GenderSample,
   type VerificationDiagnostics,
   type VerificationPhase,
+  assessFaceQuality,
+  blocksGenderSample,
   computeLivenessScore,
+  createFaceQualitySmoother,
+  createFaceQualityTally,
+  faceQualityHint,
+  medianAge,
+  recordFaceQuality,
+  reportedFaceQualityIssues,
+  shouldRetryForQuality,
+  smoothFaceQuality,
   createBlinkTracker,
   createEarCalibrator,
   createGenderVerificationError,
@@ -21,11 +32,9 @@ import {
   isFaceCentered,
   isSoftRetryableGenderError,
   passesAntiSpoof,
+  stepBlinkLiveness,
   submitGenderVerificationSession,
   summarizeGenderSamples,
-  thresholdsFromBaseline,
-  updateBlinkTracker,
-  updateEarCalibrator,
 } from '~/lib/gender-verification'
 
 type UseGenderVerificationOptions = {
@@ -60,6 +69,12 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const liveSamplesRef = useRef<number[]>([])
   const realSamplesRef = useRef<number[]>([])
   const genderSamplesRef = useRef<GenderSample[]>([])
+  const qualitySmootherRef = useRef(
+    createFaceQualitySmoother(FACE_QUALITY.nativeWindow, FACE_QUALITY.nativeMinHits),
+  )
+  const qualityTallyRef = useRef(createFaceQualityTally())
+  /** Survives start() so quality retries cannot loop forever within one sheet. */
+  const qualityRetriesRef = useRef(0)
   const frameSeqRef = useRef(0)
   /** 'gender' is the follow-up round: blinks are done, we only need more reads. */
   const samplingModeRef = useRef<'blink' | 'gender'>('blink')
@@ -164,13 +179,30 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         // One last dedicated read of the submitted frame, added to the session samples.
         const analysis = await analyzer.analyze(base64, width, height, 'gender')
         if (runIdRef.current !== runId) return 'done'
-        if (analysis.gender) pushGenderSample(analysis.gender)
+        const finalIssues = analysis.quality ? assessFaceQuality(analysis.quality) : []
+        if (analysis.gender && !blocksGenderSample(finalIssues)) {
+          pushGenderSample(analysis.gender)
+        }
 
         const verdict = summarizeGenderSamples(genderSamplesRef.current, {
           minSamples: GENDER_VERIFICATION.minGenderSamples,
           threshold: GENDER_VERIFICATION.minGenderConfidence,
           borderlineBand: GENDER_VERIFICATION.genderBorderlineBand,
           minFacePixels: GENDER_VERIFICATION.minGenderFacePixels,
+        })
+        const qualityIssues = reportedFaceQualityIssues(qualityTallyRef.current)
+        const age = medianAge(genderSamplesRef.current)
+        const maxFacePixels = Math.max(
+          0,
+          ...genderSamplesRef.current.map((sample) => sample.facePixels ?? 0),
+        )
+        setDiagnostics({
+          femaleScore: verdict.femaleScore,
+          samples: verdict.samples,
+          blinks: detectedBlinks,
+          maxFacePixels,
+          age,
+          issues: qualityIssues,
         })
 
         if (verdict.status === 'insufficient' && !extraRoundUsedRef.current) {
@@ -186,17 +218,17 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
           throw createGenderVerificationError(GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY)
         }
 
+        // A weak read in bad light / with glasses gets tips and another go, not a final "no".
+        if (
+          verdict.status === 'fail' &&
+          qualityRetriesRef.current < FACE_QUALITY.maxQualityRetries &&
+          shouldRetryForQuality(verdict.femaleScore, qualityIssues)
+        ) {
+          qualityRetriesRef.current += 1
+          throw createGenderVerificationError(GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY)
+        }
+
         const submittedLivenessScore = Math.max(livenessScore, avgLive)
-        const usableFacePixels = genderSamplesRef.current
-          .map((sample) => sample.facePixels ?? 0)
-          .filter((pixels) => pixels > 0)
-        const maxFacePixels = Math.max(0, ...usableFacePixels)
-        setDiagnostics({
-          femaleScore: verdict.femaleScore,
-          samples: verdict.samples,
-          blinks: detectedBlinks,
-          maxFacePixels,
-        })
         const {
           result,
           error: submitError,
@@ -215,6 +247,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
             avgLive: Number(avgLive.toFixed(3)),
             avgReal: Number(avgReal.toFixed(3)),
             maxFacePixels,
+            age,
+            qualityIssues,
           },
         })
         sessionIdRef.current = submittedSessionId
@@ -259,7 +293,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     try {
       const picture = await camera.takePictureAsync({
         base64: true,
-        quality: 0.6,
+        quality: 0.4,
         shutterSound: false,
       })
       if (!picture.base64 || !loopActiveRef.current) return
@@ -283,25 +317,37 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       const leftEar = face?.leftEar ?? 0.3
       const rightEar = face?.rightEar ?? 0.3
       const avgEar = (leftEar + rightEar) / 2
+      const frameWidth = analysis.width || width
+      const frameHeight = analysis.height || height
+      const centered = face ? isFaceCentered(face.box, frameWidth, frameHeight) : false
 
-      updateEarCalibrator(earCalibratorRef.current, avgEar, GENDER_VERIFICATION.earCalibrationSamples)
-      const thresholds = thresholdsFromBaseline(
-        earCalibratorRef.current.baseline,
-        GENDER_VERIFICATION.earBlinkThreshold,
-        GENDER_VERIFICATION.earOpenThreshold,
-      )
-      const eyesClosed = avgEar < thresholds.blinkThreshold
+      const frameIssues = face && analysis.quality ? assessFaceQuality(analysis.quality) : []
+      if (face) recordFaceQuality(qualityTallyRef.current, frameIssues)
+      const qualityIssues = smoothFaceQuality(qualitySmootherRef.current, frameIssues)
+      const qualityHint = faceQualityHint(qualityIssues)
+      const otherFaceInView = qualityIssues.includes('multiple_faces')
+
+      const blink = centered && !otherFaceInView
+        ? stepBlinkLiveness(blinkTrackerRef.current, earCalibratorRef.current, leftEar, rightEar, {
+            calibrationSamples: GENDER_VERIFICATION.nativeEarCalibrationSamples,
+            fallbackBlink: GENDER_VERIFICATION.earBlinkThreshold,
+            fallbackOpen: GENDER_VERIFICATION.earOpenThreshold,
+            minClosedMs: GENDER_VERIFICATION.minClosedMs,
+            maxClosedMs: GENDER_VERIFICATION.nativeMaxClosedMs,
+            minBlinkGapMs: GENDER_VERIFICATION.minBlinkGapMs,
+          })
+        : null
+      const eyesClosed = blink?.eyesClosed ?? false
 
       setTracking({
         faceDetected: !!face,
-        faceCentered: face
-          ? isFaceCentered(face.box, analysis.width || width, analysis.height || height)
-          : false,
+        faceCentered: centered,
         eyesClosed,
-        calibrated: thresholds.calibrated,
+        calibrated: blink?.calibrated ?? earCalibratorRef.current.baseline != null,
         avgEar,
         liveScore: analysis.liveScore,
         realScore: analysis.realScore,
+        qualityHint,
       })
 
       if (!face) {
@@ -311,9 +357,6 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         return
       }
 
-      const frameWidth = analysis.width || width
-      const frameHeight = analysis.height || height
-      const centered = isFaceCentered(face.box, frameWidth, frameHeight)
       if (!centered) {
         stableFramesRef.current = 0
         setPhase('position')
@@ -321,7 +364,17 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         return
       }
 
-      if (analysis.gender) pushGenderSample(analysis.gender)
+      if (otherFaceInView) {
+        stableFramesRef.current = 0
+        setPhase('position')
+        setInstruction(qualityHint ?? 'Only one face should be in view')
+        return
+      }
+
+      // Closed-eye, dark, or turned frames read as noise and drag real women under the bar.
+      if (analysis.gender && !eyesClosed && !blocksGenderSample(frameIssues)) {
+        pushGenderSample(analysis.gender)
+      }
       if (analysis.liveScore > 0) {
         liveSamplesRef.current = [...liveSamplesRef.current.slice(-24), analysis.liveScore]
       }
@@ -331,22 +384,18 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       stableFramesRef.current += 1
       setPhase('blink')
 
-      const tracker = updateBlinkTracker(blinkTrackerRef.current, leftEar, rightEar, {
-        blinkThreshold: thresholds.blinkThreshold,
-        openThreshold: thresholds.openThreshold,
-        minClosedMs: GENDER_VERIFICATION.minClosedMs,
-        maxClosedMs: GENDER_VERIFICATION.maxClosedMs,
-        minBlinkGapMs: GENDER_VERIFICATION.minBlinkGapMs,
-      })
-      blinkTrackerRef.current = tracker
+      const tracker = blinkTrackerRef.current
       setBlinkCount(tracker.count)
 
       const remaining = Math.max(0, GENDER_VERIFICATION.requiredBlinks - tracker.count)
       if (remaining > 0) {
+        // The camera samples ~1–2 fps here; a quick blink falls between frames.
         setInstruction(
-          eyesClosed
-            ? 'Open your eyes'
-            : `Blink naturally — ${remaining} left`,
+          !blink?.calibrated
+            ? 'Hold still — look at the camera'
+            : eyesClosed
+              ? 'Now open your eyes'
+              : `Close your eyes for 2 seconds, then open — ${remaining} left`,
         )
         return
       }
@@ -379,7 +428,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const startCaptureLoop = useCallback(() => {
     if (loopActiveRef.current) return
     loopActiveRef.current = true
-    setInstruction('Center your face, then blink naturally')
+    setInstruction('Center your face, then blink slowly')
     intervalRef.current = setInterval(() => {
       void processFrame()
     }, GENDER_VERIFICATION.nativeFrameIntervalMs)
@@ -491,6 +540,11 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     liveSamplesRef.current = []
     realSamplesRef.current = []
     genderSamplesRef.current = []
+    qualitySmootherRef.current = createFaceQualitySmoother(
+      FACE_QUALITY.nativeWindow,
+      FACE_QUALITY.nativeMinHits,
+    )
+    qualityTallyRef.current = createFaceQualityTally()
     frameSeqRef.current = 0
     samplingModeRef.current = 'blink'
     extraRoundUsedRef.current = false
@@ -542,7 +596,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       setPhase('camera')
       if (cameraReadyRef.current) {
         // Camera stayed mounted (or finished warming during session create).
-        setInstruction('Center your face, then blink naturally')
+        setInstruction('Center your face, then blink slowly')
         scheduleCaptureLoop(
           cameraAlreadyReady
             ? GENDER_VERIFICATION.nativeCameraResettleMs
@@ -569,6 +623,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   useEffect(() => {
     if (phase !== 'error' || !error) return
     if (softRetryUsedRef.current || !isSoftRetryableGenderError(error)) return
+    // A silent restart would hide the capture tips; let the user fix the setup first.
+    if (diagnostics?.issues?.length) return
     softRetryUsedRef.current = true
     setSoftRetrying(true)
     setInstruction('Trying again with a clearer read…')
@@ -577,7 +633,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       void start()
     }, GENDER_VERIFICATION.softRetryDelayMs)
     return clearSoftRetryTimer
-  }, [clearSoftRetryTimer, error, phase, start])
+  }, [clearSoftRetryTimer, diagnostics, error, phase, start])
 
   const reset = useCallback(() => {
     clearSettleTimer()
@@ -600,6 +656,11 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     liveSamplesRef.current = []
     realSamplesRef.current = []
     genderSamplesRef.current = []
+    qualitySmootherRef.current = createFaceQualitySmoother(
+      FACE_QUALITY.nativeWindow,
+      FACE_QUALITY.nativeMinHits,
+    )
+    qualityTallyRef.current = createFaceQualityTally()
     frameSeqRef.current = 0
     samplingModeRef.current = 'blink'
     extraRoundUsedRef.current = false

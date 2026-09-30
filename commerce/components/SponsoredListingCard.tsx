@@ -80,7 +80,7 @@ export function SponsoredListingCard({
           accessibilityRole="button"
           accessibilityLabel="Hide this ad"
           onPress={(event) => {
-            event.stopPropagation()
+            event?.stopPropagation?.()
             setHidden(true)
             onHide?.(item)
           }}

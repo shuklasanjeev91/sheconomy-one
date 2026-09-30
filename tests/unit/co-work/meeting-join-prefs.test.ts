@@ -6,7 +6,7 @@ import {
 } from '../../../co-work/lib/meeting-join-prefs'
 
 describe('meeting join prefs', () => {
-  it('maps Zoom-style join checkboxes to LiveKit publish flags', () => {
+  it('maps Zoom-style join checkboxes to media publish flags', () => {
     expect(
       meetingJoinPrefsFromCheckboxes({ doNotConnectAudio: false, turnOffVideo: false }),
     ).toEqual({ audioEnabled: true, videoEnabled: true })

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { useCoWorkUi, useMeetingControlPalette } from '~/co-work/lib/theme'
 
 export type MeetingHeaderProps = {
   safeTop: number
@@ -47,6 +48,7 @@ function HeaderIconButton({
   children: ReactNode
   round?: boolean
 }) {
+  const palette = useMeetingControlPalette()
   if (!onPress) return null
   return (
     <XStack
@@ -58,7 +60,7 @@ function HeaderIconButton({
       borderRadius={round ? 999 : 10}
       alignItems="center"
       justifyContent="center"
-      pressStyle={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
+      pressStyle={{ backgroundColor: palette.bgPressed }}
       cursor="pointer"
       hitSlop={8}
     >
@@ -97,6 +99,8 @@ export function MeetingHeader({
   onEnd,
   isHost = false,
 }: MeetingHeaderProps) {
+  const coworkUi = useCoWorkUi()
+  const palette = useMeetingControlPalette()
   // Compact: phone-width (web or native)
   if (compact) {
     return (
@@ -109,13 +113,13 @@ export function MeetingHeader({
         justifyContent="space-between"
         gap="$2"
         style={{
-          backgroundColor: 'rgba(24, 13, 20, 0.92)',
+          backgroundColor: coworkUi.glass,
           backdropFilter: 'blur(16px)',
         }}
       >
         <XStack alignItems="center" gap="$1" minWidth={40}>
           <HeaderIconButton label="Minimize meeting" onPress={onMinimize || onBack} round>
-            <Icons.Minimize2 size={20} color="#fff" />
+            <Icons.Minimize2 size={20} color={palette.fg} />
           </HeaderIconButton>
         </XStack>
 
@@ -135,7 +139,7 @@ export function MeetingHeader({
           <Text
             fontSize={15}
             fontWeight="700"
-            color="#fff"
+            color={palette.fg}
             numberOfLines={1}
             letterSpacing={-0.2}
             flexShrink={1}
@@ -146,7 +150,7 @@ export function MeetingHeader({
           {recording ? (
             <YStack width={6} height={6} borderRadius={999} backgroundColor="#E02828" flexShrink={0} />
           ) : null}
-          <Icons.ChevronDown size={14} color="#fff" />
+          <Icons.ChevronDown size={14} color={palette.fg} />
         </XStack>
 
         <XStack alignItems="center" gap={3} minWidth={40} justifyContent="flex-end">
@@ -156,7 +160,7 @@ export function MeetingHeader({
               onPress={onWhiteboard || onAnnotate}
               round
             >
-              <Icons.Edit3 size={19} color="#fff" />
+              <Icons.Edit3 size={19} color={palette.fg} />
             </HeaderIconButton>
           ) : null}
 
@@ -167,16 +171,16 @@ export function MeetingHeader({
               round
             >
               {speakerOn ? (
-                <Icons.Volume2 size={20} color="#fff" />
+                <Icons.Volume2 size={20} color={palette.fg} />
               ) : (
-                <Icons.VolumeX size={20} color="rgba(255,255,255,0.7)" />
+                <Icons.VolumeX size={20} color={palette.fgMuted} />
               )}
             </HeaderIconButton>
           ) : null}
 
           {onFlipCamera ? (
             <HeaderIconButton label="Switch camera" onPress={onFlipCamera} round>
-              <Icons.RefreshCw size={19} color="#fff" />
+              <Icons.RefreshCw size={19} color={palette.fg} />
             </HeaderIconButton>
           ) : null}
         </XStack>
@@ -195,14 +199,14 @@ export function MeetingHeader({
       justifyContent="space-between"
       gap="$3"
       style={{
-        backgroundColor: 'rgba(24, 13, 20, 0.92)',
+        backgroundColor: coworkUi.glass,
         backdropFilter: 'blur(20px)',
       }}
     >
       <XStack alignItems="center" gap="$2">
         {onBack || onMinimize ? (
           <HeaderIconButton label="Minimize meeting" onPress={onMinimize || onBack}>
-            <Icons.Minimize2 size={20} color="#fff" />
+            <Icons.Minimize2 size={20} color={palette.fg} />
           </HeaderIconButton>
         ) : null}
 
@@ -215,10 +219,10 @@ export function MeetingHeader({
           paddingHorizontal={12}
           paddingVertical={6}
           borderRadius={8}
-          backgroundColor="rgba(255,255,255,0.06)"
+          backgroundColor={palette.bg}
           borderWidth={1}
-          borderColor="rgba(255,255,255,0.1)"
-          pressStyle={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
+          borderColor={palette.border}
+          pressStyle={{ backgroundColor: palette.bgHover }}
           cursor="pointer"
         >
           {locked ? (
@@ -226,10 +230,10 @@ export function MeetingHeader({
           ) : (
             <Icons.ShieldCheck size={16} color="#22C55E" />
           )}
-          <Text fontSize={14} fontWeight="700" color="#fff">
+          <Text fontSize={14} fontWeight="700" color={palette.fg}>
             {title || 'Sheconomy Meeting'}
           </Text>
-          <Icons.ChevronDown size={14} color="rgba(255,255,255,0.6)" />
+          <Icons.ChevronDown size={14} color={palette.fgMuted} />
         </XStack>
 
         {recording ? (
@@ -244,7 +248,7 @@ export function MeetingHeader({
             borderColor="rgba(224, 40, 40, 0.4)"
           >
             <YStack width={8} height={8} borderRadius={999} backgroundColor="#E02828" />
-            <Text color="#fff" fontSize={11} fontWeight="700">
+            <Text color={palette.fg} fontSize={11} fontWeight="700">
               REC
             </Text>
           </XStack>
@@ -254,13 +258,13 @@ export function MeetingHeader({
       <XStack alignItems="center" gap="$1.5">
         {onTile ? (
           <HeaderIconButton label="Picture in Picture" onPress={onTile}>
-            <Icons.Layers size={18} color="#fff" />
+            <Icons.Layers size={18} color={palette.fg} />
           </HeaderIconButton>
         ) : null}
 
         {onAnnotate || onWhiteboard ? (
           <HeaderIconButton label="Whiteboard / Annotate" onPress={onAnnotate || onWhiteboard}>
-            <Icons.Edit3 size={18} color="#fff" />
+            <Icons.Edit3 size={18} color={palette.fg} />
           </HeaderIconButton>
         ) : null}
 
@@ -270,16 +274,16 @@ export function MeetingHeader({
             onPress={onToggleSpeaker}
           >
             {speakerOn ? (
-              <Icons.Volume2 size={19} color="#fff" />
+              <Icons.Volume2 size={19} color={palette.fg} />
             ) : (
-              <Icons.VolumeX size={19} color="rgba(255,255,255,0.7)" />
+              <Icons.VolumeX size={19} color={palette.fgMuted} />
             )}
           </HeaderIconButton>
         ) : null}
 
         {onFlipCamera ? (
           <HeaderIconButton label="Flip camera" onPress={onFlipCamera}>
-            <Icons.RefreshCw size={18} color="#fff" />
+            <Icons.RefreshCw size={18} color={palette.fg} />
           </HeaderIconButton>
         ) : null}
 
@@ -289,22 +293,22 @@ export function MeetingHeader({
             onPress={onToggleFullscreen || onMaximize}
           >
             {fullscreenActive ? (
-              <Icons.Minimize2 size={18} color="#fff" />
+              <Icons.Minimize2 size={18} color={palette.fg} />
             ) : (
-              <Icons.Maximize2 size={18} color="#fff" />
+              <Icons.Maximize2 size={18} color={palette.fg} />
             )}
           </HeaderIconButton>
         ) : null}
 
         {onSecurity ? (
           <HeaderIconButton label="Security" onPress={onSecurity}>
-            <Icons.Shield size={18} color="#fff" />
+            <Icons.Shield size={18} color={palette.fg} />
           </HeaderIconButton>
         ) : null}
 
         {onSettings ? (
           <HeaderIconButton label="Settings" onPress={onSettings}>
-            <Icons.Settings size={18} color="#fff" />
+            <Icons.Settings size={18} color={palette.fg} />
           </HeaderIconButton>
         ) : null}
 

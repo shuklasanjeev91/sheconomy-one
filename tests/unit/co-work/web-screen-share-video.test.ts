@@ -11,7 +11,7 @@ describe('web screen-share video attach', () => {
     expect(screenShareVideoHasFrames({ videoWidth: 1280, videoHeight: 720 })).toBe(true)
   })
 
-  it('wraps a MediaStreamTrack when LiveKit has not attached mediaStream yet', () => {
+  it('wraps a MediaStreamTrack when no mediaStream is attached yet', () => {
     if (typeof MediaStream === 'undefined') {
       expect(screenShareStreamForTrack({ mediaStreamTrack: { id: 'screen-track' } as MediaStreamTrack })).toBeNull()
       return

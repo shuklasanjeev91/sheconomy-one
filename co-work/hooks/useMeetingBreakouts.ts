@@ -39,12 +39,12 @@ export function useMeetingBreakouts({ meetingId, enabled = true }: UseMeetingBre
   }, [refresh])
 
   const createRooms = useCallback(
-    async (input: { count: number; createdBy: string; meetingLiveKitRoomId: string }) => {
+    async (input: { count: number; createdBy: string; meetingRoomId: string }) => {
       const created = await createMeetingBreakouts({
         meetingId,
         createdBy: input.createdBy,
         count: input.count,
-        meetingLiveKitRoomId: input.meetingLiveKitRoomId,
+        meetingRoomId: input.meetingRoomId,
       })
       setRooms(created)
       await refresh()

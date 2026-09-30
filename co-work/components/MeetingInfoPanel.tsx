@@ -122,7 +122,7 @@ export function MeetingInfoPanel({
                     value={topicDraft}
                     onChangeText={setTopicDraft}
                     placeholder={meeting.title || 'Meeting topic'}
-                    backgroundColor="rgba(255,255,255,0.05)"
+                    backgroundColor={coworkUi.surfaceMuted}
                     borderColor={coworkUi.borderSoft}
                     color={coworkUi.text}
                     borderRadius={14}
@@ -214,7 +214,7 @@ export function MeetingInfoPanel({
                 gap="$3"
                 padding="$3"
                 borderRadius={14}
-                backgroundColor="rgba(255,255,255,0.04)"
+                backgroundColor={coworkUi.surfaceMuted}
                 borderWidth={1}
                 borderColor={coworkUi.borderSoft}
               >
@@ -223,7 +223,7 @@ export function MeetingInfoPanel({
                     Mirror my video
                   </Text>
                   <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
-                    Flip your self-view horizontally. Others still see you unmirrored.
+                    Flip your self-view horizontally. Others still see you unmirrored. Paused while an image background is on so it doesn’t look reversed.
                   </Text>
                 </YStack>
                 <Switch
@@ -242,7 +242,7 @@ export function MeetingInfoPanel({
                 gap="$2"
                 padding="$3"
                 borderRadius={14}
-                backgroundColor="rgba(255,255,255,0.04)"
+                backgroundColor={coworkUi.surfaceMuted}
                 borderWidth={1}
                 borderColor={coworkUi.borderSoft}
               >
@@ -324,7 +324,7 @@ export function MeetingInfoPanel({
                 gap="$2"
                 padding="$3"
                 borderRadius={14}
-                backgroundColor="rgba(255,255,255,0.04)"
+                backgroundColor={coworkUi.surfaceMuted}
                 borderWidth={1}
                 borderColor={coworkUi.borderSoft}
               >
@@ -367,7 +367,7 @@ export function MeetingInfoPanel({
                   gap="$2"
                   padding="$3"
                   borderRadius={14}
-                  backgroundColor="rgba(255,255,255,0.04)"
+                  backgroundColor={coworkUi.surfaceMuted}
                   borderWidth={1}
                   borderColor={coworkUi.borderSoft}
                 >
@@ -399,7 +399,7 @@ export function MeetingInfoPanel({
               gap="$2"
               padding="$3"
               borderRadius={14}
-              backgroundColor="rgba(255,255,255,0.04)"
+              backgroundColor={coworkUi.surfaceMuted}
               borderWidth={1}
               borderColor={coworkUi.borderSoft}
             >
@@ -481,7 +481,7 @@ function InfoRow({
         gap="$2"
         padding="$3"
         borderRadius={14}
-        backgroundColor="rgba(255,255,255,0.04)"
+        backgroundColor={coworkUi.surfaceMuted}
         borderWidth={1}
         borderColor={coworkUi.borderSoft}
       >

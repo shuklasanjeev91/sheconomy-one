@@ -10,7 +10,7 @@ import {
 } from '~/co-work/lib/meeting-media-permissions'
 import {
   loadRememberedMeetingDisplayName,
-  safeMeetingDisplayName,
+  resolveMeetingDisplayName,
 } from '~/co-work/lib/meeting-display-name'
 import { normalizeInstantMeetingCode } from '~/co-work/lib/instant-meeting-session'
 import {
@@ -66,7 +66,7 @@ type MeetingLiveScreenProps = {
 
 /**
  * Instant / live meeting entry: load → confirm identity/devices → permissions → room.
- * Kept separate from the lobby so LiveKit only loads on the live path.
+ * Kept separate from the lobby so WebRTC only loads on the live path.
  * Owns MeetingProvider so LOBBY → JOINING → room states stay centralized.
  */
 export function MeetingLiveScreen(props: MeetingLiveScreenProps) {
@@ -104,6 +104,7 @@ function MeetingLiveScreenBody({
   const [confirmedDisplayName, setConfirmedDisplayName] = useState(
     () => resumeDisplayName?.trim() || '',
   )
+  const accountDisplayName = resolveMeetingDisplayName({ profile, user })
   const [isLocked, setIsLocked] = useState(false)
   const [passcodeVerified, setPasscodeVerified] = useState(false)
   const [joinAudioEnabled, setJoinAudioEnabled] = useState(
@@ -362,7 +363,7 @@ function MeetingLiveScreenBody({
       setPhase('ready')
       if (!confirmedDisplayName.trim()) {
         setConfirmedDisplayName(
-          safeMeetingDisplayName(resumeDisplayName || profile?.full_name || profile?.username),
+          resolveMeetingDisplayName({ typed: resumeDisplayName, profile, user }) || 'Guest',
         )
       }
       return
@@ -371,13 +372,15 @@ function MeetingLiveScreenBody({
       resumedRoomRef.current = true
       if (!confirmedDisplayName.trim()) {
         setConfirmedDisplayName(
-          safeMeetingDisplayName(resumeDisplayName || profile?.full_name || profile?.username),
+          resolveMeetingDisplayName({ typed: resumeDisplayName, profile, user }) || 'Guest',
         )
       }
       return
     }
     if (!shouldSkipConfirm || autoJoinAttemptedRef.current) return
     if (!meeting || !user || !isAuthenticated) return
+    // Joining before the profile arrives is what put "Guest" on signed-in members.
+    if (isLoading) return
     if (phase !== 'joining' && phase !== 'confirm') return
     if (isLocked && !isHost) return
     if (needsPasscode) {
@@ -392,9 +395,9 @@ function MeetingLiveScreenBody({
     // stuck on "Joining meeting…" forever because autoJoinAttemptedRef stayed true.
     void (async () => {
       const remembered = await loadRememberedMeetingDisplayName()
-      const name = safeMeetingDisplayName(
-        resumeDisplayName || remembered || profile?.full_name || profile?.username,
-      )
+      const name =
+        resolveMeetingDisplayName({ typed: resumeDisplayName, remembered, profile, user }) ||
+        'Guest'
       try {
         await joinMeeting(name, undefined, { skipPermissionPrompt: true })
       } catch {
@@ -411,19 +414,26 @@ function MeetingLiveScreenBody({
     meeting,
     user,
     isAuthenticated,
+    isLoading,
     phase,
     isLocked,
     isHost,
     needsPasscode,
-    profile?.full_name,
-    profile?.username,
+    profile,
     joinMeeting,
   ])
+
+  // Resumed or auto-joined as the placeholder before the profile loaded: rename once it has.
+  useEffect(() => {
+    if (phase !== 'ready' || !accountDisplayName) return
+    if (resolveMeetingDisplayName({ typed: confirmedDisplayName })) return
+    setConfirmedDisplayName(accountDisplayName)
+  }, [accountDisplayName, confirmedDisplayName, phase])
 
   if (isLoading && !user) {
     return (
       <ScreenCenter backgroundColor={coworkUi.pageBg}>
-        <Spinner size="large" color={coworkUi.brand} />
+        <Spinner size="large" color={coworkUi.brandLight} />
         <Text color={coworkUi.textSecondary} marginTop="$3">
           Checking account…
         </Text>
@@ -434,7 +444,7 @@ function MeetingLiveScreenBody({
   if (!isAuthenticated || !user) {
     return (
       <ScreenCenter backgroundColor={coworkUi.pageBg}>
-        <Spinner size="large" color={coworkUi.brand} />
+        <Spinner size="large" color={coworkUi.brandLight} />
         <Text color={coworkUi.textSecondary} marginTop="$3">
           Connecting to meeting as guest…
         </Text>
@@ -447,7 +457,7 @@ function MeetingLiveScreenBody({
       <MeetingJoinScreen
         meetingTitle={meeting.title}
         meetingCode={formatMeetingCode(meeting.meeting_code)}
-        profileName={profile?.full_name || profile?.username || 'Guest'}
+        profileName={accountDisplayName || 'Guest'}
         email={user.email ?? null}
         avatarUrl={profile?.avatar_url}
         userId={user.id}
@@ -465,7 +475,7 @@ function MeetingLiveScreenBody({
       <MeetingRoomScreen
         meeting={meeting}
         userId={user.id}
-        displayName={confirmedDisplayName || profile?.full_name || profile?.username || 'Guest'}
+        displayName={confirmedDisplayName || accountDisplayName || 'Guest'}
         avatarUrl={profile?.avatar_url}
         isHost={meeting.host_id === user.id}
         initialAudioEnabled={joinAudioEnabled}
@@ -517,7 +527,7 @@ function MeetingLiveScreenBody({
 
   return (
     <ScreenCenter backgroundColor={coworkUi.pageBg}>
-      <Spinner size="large" color={coworkUi.brand} />
+      <Spinner size="large" color={coworkUi.brandLight} />
       <Text color={coworkUi.textSecondary} marginTop="$3">
         {phase === 'joining' ? 'Joining meeting…' : 'Opening meeting…'}
       </Text>

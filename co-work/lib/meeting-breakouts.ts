@@ -8,12 +8,13 @@ export type MeetingBreakoutRoom = {
   room_number: number
   title: string
   status: MeetingBreakoutStatus
+  /** Breakout media room name (column name predates mediasoup; store builds still read it). */
   livekit_room_name: string | null
   created_by: string
   assigneeIds: string[]
 }
 
-export function breakoutLiveKitRoomName(meetingRoomId: string, breakoutId: string): string {
+export function breakoutMediaRoomName(meetingRoomId: string, breakoutId: string): string {
   return `${meetingRoomId}__bo__${breakoutId}`
 }
 
@@ -45,7 +46,7 @@ export async function createMeetingBreakouts(input: {
   meetingId: string
   createdBy: string
   count: number
-  meetingLiveKitRoomId: string
+  meetingRoomId: string
 }): Promise<MeetingBreakoutRoom[]> {
   const count = Math.min(Math.max(Math.floor(input.count), 1), 50)
   const rows = Array.from({ length: count }, (_, index) => ({
@@ -67,7 +68,7 @@ export async function createMeetingBreakouts(input: {
 
   const withNames = await Promise.all(
     (data ?? []).map(async (room) => {
-      const livekit_room_name = breakoutLiveKitRoomName(input.meetingLiveKitRoomId, room.id)
+      const livekit_room_name = breakoutMediaRoomName(input.meetingRoomId, room.id)
       await supabase
         .from('meeting_breakout_rooms')
         .update({ livekit_room_name })

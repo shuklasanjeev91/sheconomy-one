@@ -4,14 +4,20 @@ import { useCoWorkTheme } from '~/co-work/lib/theme'
 type MeetingRemoteControlRequestModalProps = {
   open: boolean
   requesterName: string
+  title?: string
+  message?: string
+  acceptLabel?: string
   onAccept: () => void
   onDeny: () => void
 }
 
-/** Accept/deny remote control request as a bottom sheet. */
+/** Accept/deny a participant request (remote control, recording) as a bottom sheet. */
 export function MeetingRemoteControlRequestModal({
   open,
   requesterName,
+  title = 'Remote control request',
+  message,
+  acceptLabel = 'Allow',
   onAccept,
   onDeny,
 }: MeetingRemoteControlRequestModalProps) {
@@ -23,7 +29,7 @@ export function MeetingRemoteControlRequestModal({
       onOpenChange={(next) => {
         if (!next) onDeny()
       }}
-      title="Remote control request"
+      title={title}
       showHandle
       scrollable={false}
       footer={
@@ -32,14 +38,14 @@ export function MeetingRemoteControlRequestModal({
             Deny
           </Button>
           <Button tone="primary" flex={1} borderRadius={999} onPress={onAccept}>
-            Allow
+            {acceptLabel}
           </Button>
         </XStack>
       }
     >
       <Text fontSize={14} color={ui.textSecondary} lineHeight={20}>
-        {requesterName} wants to control your shared screen. You can revoke access anytime by
-        stopping share.
+        {message ??
+          `${requesterName} wants to control your shared screen. You can revoke access anytime by stopping share.`}
       </Text>
     </AppBottomSheet>
   )

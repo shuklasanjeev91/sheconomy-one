@@ -32,6 +32,8 @@ export type BlinkTracker = {
   eyesClosed: boolean
   closedAt: number | null
   lastBlinkAt: number | null
+  /** Eyes stayed shut past maxClosedMs; wait for them to open before re-arming. */
+  heldClosed?: boolean
 }
 
 export type BlinkTrackerOptions = {
@@ -43,11 +45,24 @@ export type BlinkTrackerOptions = {
   now?: number
 }
 
-/** Calibrates open-eye EAR per user/camera so absolute thresholds aren't brittle. */
+/**
+ * Learns this face's open-eye EAR. Open-eye EAR varies a lot between people
+ * (eye shape, lashes, glasses, camera angle): values of 0.15–0.35 are all
+ * normal, so any absolute band or floor leaves some faces unable to blink.
+ */
 export type EarCalibrator = {
   samples: number[]
   baseline: number | null
 }
+
+const EAR_SANE_MIN = 0.05
+const EAR_SANE_MAX = 0.6
+const EAR_WINDOW = 30
+/** Upper percentile of recent reads, so blink frames don't drag the baseline down. */
+const EAR_BASELINE_PERCENTILE = 0.7
+/** A closed-eye read sits ~45–55% of open; partial blinks land around 65–75%. */
+export const BLINK_CLOSED_RATIO = 0.78
+export const BLINK_OPEN_RATIO = 0.9
 
 export function createEarCalibrator(): EarCalibrator {
   return { samples: [], baseline: null }
@@ -56,19 +71,19 @@ export function createEarCalibrator(): EarCalibrator {
 export function updateEarCalibrator(
   calibrator: EarCalibrator,
   avgEar: number,
-  sampleTarget = 18,
+  sampleTarget = 6,
 ): EarCalibrator {
-  if (calibrator.baseline != null) return calibrator
-  // Only learn from clearly open eyes.
-  if (avgEar < 0.17 || avgEar > 0.45) return calibrator
-  calibrator.samples.push(avgEar)
+  if (!(avgEar > EAR_SANE_MIN && avgEar < EAR_SANE_MAX)) return calibrator
+  // Keep blink frames out of the window once we know what "open" looks like.
+  if (calibrator.baseline != null && avgEar < calibrator.baseline * BLINK_CLOSED_RATIO) {
+    return calibrator
+  }
+  calibrator.samples = [...calibrator.samples.slice(-(EAR_WINDOW - 1)), avgEar]
   if (calibrator.samples.length < sampleTarget) return calibrator
 
   const sorted = [...calibrator.samples].sort((a, b) => a - b)
-  const trim = Math.floor(sorted.length * 0.15)
-  const mid = sorted.slice(trim, sorted.length - trim || sorted.length)
-  const sum = mid.reduce((acc, value) => acc + value, 0)
-  calibrator.baseline = sum / Math.max(1, mid.length)
+  const index = Math.min(sorted.length - 1, Math.floor(sorted.length * EAR_BASELINE_PERCENTILE))
+  calibrator.baseline = sorted[index] ?? null
   return calibrator
 }
 
@@ -85,9 +100,8 @@ export function thresholdsFromBaseline(
     }
   }
   return {
-    // Natural blinks typically drop EAR ~25–40% below open baseline.
-    blinkThreshold: Math.max(0.12, baseline * 0.74),
-    openThreshold: Math.max(0.16, baseline * 0.9),
+    blinkThreshold: baseline * BLINK_CLOSED_RATIO,
+    openThreshold: baseline * BLINK_OPEN_RATIO,
     calibrated: true,
   }
 }
@@ -122,6 +136,11 @@ export function updateBlinkTracker(
   const now = options.now ?? Date.now()
   const avgEar = (leftEar + rightEar) / 2
 
+  if (tracker.heldClosed) {
+    if (avgEar > options.openThreshold) tracker.heldClosed = false
+    return tracker
+  }
+
   if (!tracker.eyesClosed && avgEar < options.blinkThreshold) {
     tracker.eyesClosed = true
     tracker.closedAt = now
@@ -134,6 +153,7 @@ export function updateBlinkTracker(
     if (avgEar < options.blinkThreshold && closedFor > options.maxClosedMs) {
       tracker.eyesClosed = false
       tracker.closedAt = null
+      tracker.heldClosed = true
       return tracker
     }
 
@@ -154,6 +174,57 @@ export function updateBlinkTracker(
   }
 
   return tracker
+}
+
+export type BlinkLivenessStep = {
+  eyesClosed: boolean
+  calibrated: boolean
+  count: number
+}
+
+/**
+ * One frame of blink liveness, shared by web and native. Blinks only count
+ * once this face's open-eye baseline is known — absolute fallbacks read some
+ * open eyes as "closed" forever, so the counter never moves.
+ */
+export function stepBlinkLiveness(
+  tracker: BlinkTracker,
+  calibrator: EarCalibrator,
+  leftEar: number,
+  rightEar: number,
+  options: {
+    calibrationSamples: number
+    fallbackBlink: number
+    fallbackOpen: number
+    minClosedMs: number
+    maxClosedMs: number
+    minBlinkGapMs: number
+    now?: number
+  },
+): BlinkLivenessStep {
+  const avgEar = (leftEar + rightEar) / 2
+  updateEarCalibrator(calibrator, avgEar, options.calibrationSamples)
+  const thresholds = thresholdsFromBaseline(
+    calibrator.baseline,
+    options.fallbackBlink,
+    options.fallbackOpen,
+  )
+  if (!thresholds.calibrated) {
+    return { eyesClosed: false, calibrated: false, count: tracker.count }
+  }
+  updateBlinkTracker(tracker, leftEar, rightEar, {
+    blinkThreshold: thresholds.blinkThreshold,
+    openThreshold: thresholds.openThreshold,
+    minClosedMs: options.minClosedMs,
+    maxClosedMs: options.maxClosedMs,
+    minBlinkGapMs: options.minBlinkGapMs,
+    now: options.now,
+  })
+  return {
+    eyesClosed: avgEar < thresholds.blinkThreshold,
+    calibrated: true,
+    count: tracker.count,
+  }
 }
 
 export function computeLivenessScore(input: {

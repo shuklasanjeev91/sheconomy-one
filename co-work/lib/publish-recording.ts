@@ -1,7 +1,7 @@
 import { publishClassLesson } from '~/class/lib/enrollment'
 import {
   createMeetingRecordingShare,
-} from '~/co-work/lib/livekit-recording-client'
+} from '~/co-work/lib/meeting-recording-client'
 import { supabase } from '~/lib/supabase/client'
 
 function slugify(value: string) {

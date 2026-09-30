@@ -1,12 +1,11 @@
-import type { Room } from 'livekit-client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   fetchMeetingRecordingStatus,
-  startLiveKitCloudRecording,
-  stopLiveKitCloudRecording,
+  startCloudRecording,
+  stopCloudRecording,
   type MeetingRecordingSummary,
-} from '~/co-work/lib/livekit-recording-client'
+} from '~/co-work/lib/meeting-recording-client'
 import {
   isActiveRecordingStatus,
   isTerminalRecordingStatus,
@@ -16,7 +15,8 @@ import { downloadCaptionTranscript } from '~/co-work/lib/meeting-recording'
 import { supabase } from '~/lib/supabase'
 
 type UseMeetingRecordingOptions = {
-  room: Room | null | undefined
+  /** SFU room being recorded; null until media connects. */
+  roomName: string | null | undefined
   meetingId?: string
   meetingCode: string
   enabled: boolean
@@ -30,7 +30,7 @@ type UseMeetingRecordingOptions = {
 }
 
 export function useMeetingRecording({
-  room,
+  roomName,
   meetingId,
   meetingCode,
   enabled,
@@ -115,14 +115,14 @@ export function useMeetingRecording({
   )
 
   const stopRecording = useCallback(async () => {
-    if (!meetingId || !room?.name) {
+    if (!meetingId || !roomName) {
       onErrorRef.current?.('Connect to the meeting before stopping recording')
       return false
     }
 
-    const result = await stopLiveKitCloudRecording({
+    const result = await stopCloudRecording({
       meetingId,
-      roomName: room.name,
+      roomName,
       recordingId: cloudRecordingIdRef.current ?? undefined,
     })
 
@@ -140,7 +140,7 @@ export function useMeetingRecording({
     onStoppedRef.current?.(result.status ?? 'processing')
     void refreshStatus(true)
     return true
-  }, [captionLines, meetingCode, meetingId, refreshStatus, room?.name])
+  }, [captionLines, meetingCode, meetingId, refreshStatus, roomName])
 
   const startRecording = useCallback(async () => {
     if (startingRef.current) return false
@@ -151,7 +151,7 @@ export function useMeetingRecording({
         onErrorRef.current?.('Recording is disabled for this meeting')
         return false
       }
-      if (!meetingId || !room?.name) {
+      if (!meetingId || !roomName) {
         onErrorRef.current?.('Connect to the meeting before recording')
         return false
       }
@@ -160,9 +160,9 @@ export function useMeetingRecording({
         return stopRecording()
       }
 
-      const cloud = await startLiveKitCloudRecording({
+      const cloud = await startCloudRecording({
         meetingId,
-        roomName: room.name,
+        roomName,
       })
 
       if (!cloud.ok || !cloud.recordingId) {
@@ -196,7 +196,7 @@ export function useMeetingRecording({
     } finally {
       startingRef.current = false
     }
-  }, [enabled, meetingId, recording, refreshStatus, room?.name, status, stopRecording])
+  }, [enabled, meetingId, recording, refreshStatus, roomName, status, stopRecording])
 
   const toggleRecording = useCallback(() => {
     void startRecording()
@@ -250,10 +250,10 @@ export function useMeetingRecording({
 
   useEffect(() => {
     if (!enabled || !autoStart || autoStartedRef.current) return
-    if (!room?.name || !meetingId) return
+    if (!roomName || !meetingId) return
     autoStartedRef.current = true
     void startRecording()
-  }, [autoStart, enabled, meetingId, room?.name, startRecording])
+  }, [autoStart, enabled, meetingId, roomName, startRecording])
 
   useEffect(() => {
     return () => clearPoll()

@@ -271,7 +271,7 @@ export function MeetingHostToolsPanel({
               borderRadius={16}
               borderWidth={1}
               borderColor={coworkUi.borderSoft}
-              backgroundColor="rgba(255,255,255,0.03)"
+              backgroundColor={coworkUi.surfaceMuted}
               overflow="hidden"
             >
               <HostToolsRow
@@ -474,7 +474,7 @@ export function MeetingHostToolsPanel({
                     value={topicDraft}
                     onChangeText={setTopicDraft}
                     placeholder={meeting.title || 'Meeting topic'}
-                    backgroundColor="rgba(255,255,255,0.05)"
+                    backgroundColor={coworkUi.surfaceMuted}
                     borderColor={coworkUi.borderSoft}
                     color={coworkUi.text}
                     borderRadius={14}
@@ -538,7 +538,7 @@ export function MeetingHostToolsPanel({
               borderRadius={16}
               borderWidth={1}
               borderColor={coworkUi.borderSoft}
-              backgroundColor="rgba(255,255,255,0.03)"
+              backgroundColor={coworkUi.surfaceMuted}
               overflow="hidden"
               opacity={canEditPermissions ? 1 : 0.72}
             >
@@ -639,7 +639,7 @@ export function MeetingHostToolsPanel({
                   <Text fontSize={15} fontWeight="600" color={coworkUi.text}>
                     {option.label}
                   </Text>
-                  {active ? <Icons.Check size={18} color={coworkUi.brand} /> : null}
+                  {active ? <Icons.Check size={18} color={coworkUi.brandLight} /> : null}
                 </XStack>
               )
             })}

@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
 import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Theme } from 'tamagui'
 
 import {
   Sheet,
@@ -10,9 +9,9 @@ import {
   SheetOverlay,
   YStack,
 } from '~/components/ui'
-import { MEETING_SIDE_PANEL_Z_INDEX } from '~/co-work/lib/meeting-toolbar'
+import { MEETING_PORTAL_Z_INDEX, MEETING_SIDE_PANEL_Z_INDEX } from '~/co-work/lib/meeting-toolbar'
 import type { MeetingPanelPresentation } from '~/co-work/lib/meeting-responsive'
-import { getCoWorkUi } from '~/co-work/lib/theme'
+import { useCoWorkUi } from '~/co-work/lib/theme'
 import { useComposerKeyboardInset } from '~/hooks/useKeyboardVisible'
 
 type MeetingResponsivePanelProps = {
@@ -38,9 +37,6 @@ const DEFAULT_SHEET_HEIGHT_PERCENT = 62
  * Host for Chat / Participants / Invite / etc.
  * Mobile + tablet: Zoom-mobile bottom sheet over the stage (matching Image 1 half-sheet).
  * Laptop+: Zoom-web right side dock above the toolbar (stage reflows).
- *
- * Sheets always render under Tamagui `dark` so composers/icons stay visible
- * even when the rest of the app is in light mode.
  */
 export function MeetingResponsivePanel({
   open,
@@ -54,7 +50,7 @@ export function MeetingResponsivePanel({
   sheetHeightPercent = DEFAULT_SHEET_HEIGHT_PERCENT,
   children,
 }: MeetingResponsivePanelProps) {
-  const coworkUi = getCoWorkUi('dark')
+  const coworkUi = useCoWorkUi()
   const insets = useSafeAreaInsets()
   const keyboardInset = useComposerKeyboardInset()
 
@@ -62,81 +58,77 @@ export function MeetingResponsivePanel({
 
   if (presentation === 'bottom-sheet' && Platform.OS !== 'web') {
     return (
-      <Theme name="dark">
+      <View
+        collapsable={false}
+        pointerEvents="box-none"
+        style={nativeSheetStyles.backdrop}
+      >
+        {/* Dimmed top backdrop: tapping dismisses the sheet while video stays visible on top (Image 1) */}
+        <Pressable
+          style={nativeSheetStyles.scrim}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close panel"
+        />
+        {/* Zoom mobile bottom half-sheet (Image 1) */}
         <View
-          collapsable={false}
-          pointerEvents="box-none"
-          style={nativeSheetStyles.backdrop}
+          style={[
+            nativeSheetStyles.halfSheet,
+            {
+              height: `${sheetHeightPercent}%`,
+              maxHeight: `${Math.max(sheetHeightPercent, 75)}%`,
+              backgroundColor: coworkUi.surface,
+              borderColor: coworkUi.glassBorder,
+              paddingBottom: keyboardInset > 0 ? keyboardInset : Math.max(insets.bottom, 8),
+            },
+          ]}
         >
-          {/* Dimmed top backdrop: tapping dismisses the sheet while video stays visible on top (Image 1) */}
-          <Pressable
-            style={nativeSheetStyles.scrim}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close panel"
-          />
-          {/* Zoom mobile bottom half-sheet (Image 1) */}
-          <View
-            style={[
-              nativeSheetStyles.halfSheet,
-              {
-                height: `${sheetHeightPercent}%`,
-                maxHeight: `${Math.max(sheetHeightPercent, 75)}%`,
-                backgroundColor: coworkUi.surface,
-                borderColor: coworkUi.glassBorder,
-                paddingBottom: keyboardInset > 0 ? keyboardInset : Math.max(insets.bottom, 8),
-              },
-            ]}
-          >
-            <View style={nativeSheetStyles.body} collapsable={false} pointerEvents="auto">
-              {children}
-            </View>
+          <View style={nativeSheetStyles.body} collapsable={false} pointerEvents="auto">
+            {children}
           </View>
         </View>
-      </Theme>
+      </View>
     )
   }
 
   if (presentation === 'bottom-sheet') {
     return (
-      <Theme name="dark">
-        <Sheet
-          open={open}
-          onOpenChange={(next) => {
-            if (!next) onClose()
-          }}
-          modal
-          dismissOnSnapToBottom={false}
-          dismissOnOverlayPress={false}
-          disableDrag
-          snapPoints={[sheetHeightPercent]}
-          snapPointsMode="percent"
-          zIndex={MEETING_SIDE_PANEL_Z_INDEX + 40}
-          animation="quick"
-          moveOnKeyboardChange={false}
+      <Sheet
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) onClose()
+        }}
+        modal
+        dismissOnSnapToBottom={false}
+        dismissOnOverlayPress={false}
+        disableDrag
+        snapPoints={[sheetHeightPercent]}
+        snapPointsMode="percent"
+        zIndex={MEETING_PORTAL_Z_INDEX + 40}
+        animation="quick"
+        moveOnKeyboardChange={false}
+      >
+        {/* Tamagui's default overlay z-index (99_999) sits above the frame and swallows touch/scroll on mobile web. */}
+        <SheetOverlay animation="quick" zIndex={0} />
+        <SheetFrame
+          zIndex={1}
+          padding={0}
+          margin={0}
+          backgroundColor={coworkUi.surface}
+          borderTopLeftRadius={20}
+          borderTopRightRadius={20}
+          borderBottomLeftRadius={0}
+          borderBottomRightRadius={0}
+          overflow="hidden"
+          height="100%"
+          width="100%"
+          maxWidth="100%"
         >
-          {/* Tamagui's default overlay z-index (99_999) sits above the frame and swallows touch/scroll on mobile web. */}
-          <SheetOverlay animation="quick" zIndex={0} />
-          <SheetFrame
-            zIndex={1}
-            padding={0}
-            margin={0}
-            backgroundColor={coworkUi.surface}
-            borderTopLeftRadius={20}
-            borderTopRightRadius={20}
-            borderBottomLeftRadius={0}
-            borderBottomRightRadius={0}
-            overflow="hidden"
-            height="100%"
-            width="100%"
-            maxWidth="100%"
-          >
-            <YStack flex={1} minHeight={0} width="100%" overflow="hidden">
-              {children}
-            </YStack>
-          </SheetFrame>
-        </Sheet>
-      </Theme>
+          <YStack flex={1} minHeight={0} width="100%" overflow="hidden">
+            {children}
+          </YStack>
+        </SheetFrame>
+      </Sheet>
     )
   }
 

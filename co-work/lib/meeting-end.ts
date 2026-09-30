@@ -75,7 +75,7 @@ export function pickEligibleHostSuccessor(input: {
   return pool[0] ?? null
 }
 
-export function shouldEndLiveKitRoomAfterHostLeave(input: {
+export function shouldEndMediaRoomAfterHostLeave(input: {
   previousRole: MeetingRole | null | undefined
   meetingStatus: string | null | undefined
 }): boolean {

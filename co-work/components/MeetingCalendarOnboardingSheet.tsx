@@ -60,7 +60,7 @@ export function MeetingCalendarOnboardingSheet({
             height={48}
             borderRadius={12}
             backgroundColor={ui.brandMuted}
-            color={ui.brand}
+            color={ui.brandLight}
             disabled={busy}
             onPress={onClose}
           >
@@ -81,7 +81,7 @@ export function MeetingCalendarOnboardingSheet({
             borderWidth={1}
             borderColor={ui.borderAccent}
           >
-            <Icons.CalendarDays size={32} color={ui.brand} />
+            <Icons.CalendarDays size={32} color={ui.brandLight} />
           </YStack>
           <Text color={ui.textSecondary} fontSize={14} lineHeight={20} textAlign="center">
             {copy.body}
@@ -123,7 +123,7 @@ export function MeetingCalendarOnboardingSheet({
                   justifyContent="center"
                   backgroundColor={ui.surface}
                 >
-                  <Icon size={18} color={active ? ui.brand : ui.textSecondary} />
+                  <Icon size={18} color={active ? ui.brandLight : ui.textSecondary} />
                 </YStack>
                 <Text flex={1} color={ui.text} fontSize={15} fontWeight="700">
                   {calendarOnboardingProviderLabel(provider)}

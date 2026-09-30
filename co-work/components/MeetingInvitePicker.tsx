@@ -113,7 +113,7 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
         <XStack gap="$2">
           <XStack
             flex={1}
-            backgroundColor="rgba(255,255,255,0.05)"
+            backgroundColor={coworkUi.surfaceMuted}
             borderColor={coworkUi.borderSoft}
             borderWidth={1}
             borderRadius={14}
@@ -144,7 +144,7 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
           flexWrap="wrap"
           alignItems="center"
           gap="$2"
-          backgroundColor="rgba(255,255,255,0.05)"
+          backgroundColor={coworkUi.surfaceMuted}
           borderColor={coworkUi.borderSoft}
           borderWidth={1}
           borderRadius={14}
@@ -203,7 +203,7 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
           />
         </XStack>
 
-        {loading && !panelOpen ? <Spinner size="small" color={coworkUi.brand} /> : null}
+        {loading && !panelOpen ? <Spinner size="small" color={coworkUi.brandLight} /> : null}
 
         <AdaptiveTypeaheadPanel
           open={panelOpen}
@@ -219,7 +219,7 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
             <SuggestSectionHeader label="PEOPLE" />
             {loading && candidates.length === 0 ? (
               <YStack padding="$4" alignItems="center">
-                <Spinner size="small" color={coworkUi.brand} />
+                <Spinner size="small" color={coworkUi.brandLight} />
               </YStack>
             ) : null}
             {candidates.map((candidate) => {
@@ -233,7 +233,7 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
                   borderRadius={14}
                   borderWidth={1}
                   borderColor={active ? coworkUi.borderAccent : coworkUi.borderSoft}
-                  backgroundColor={active ? coworkUi.brandMuted : 'rgba(255,255,255,0.04)'}
+                  backgroundColor={active ? coworkUi.brandMuted : coworkUi.surfaceMuted}
                   onPress={() => toggleCandidate(candidate)}
                   cursor="pointer"
                   pressStyle={{ opacity: 0.9 }}

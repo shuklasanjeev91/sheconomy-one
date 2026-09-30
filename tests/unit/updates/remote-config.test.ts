@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchRemoteUpdateConfig } from '~/lib/updates/remote-config'
+import { DEFAULT_UPDATE_CONFIG_URL, fetchRemoteUpdateConfig } from '~/lib/updates/remote-config'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -8,9 +8,12 @@ afterEach(() => {
 })
 
 describe('fetchRemoteUpdateConfig', () => {
-  it('returns null when URL is not configured', async () => {
+  it('falls back to the hosted config URL when none is configured', async () => {
     vi.stubEnv('EXPO_PUBLIC_UPDATE_CONFIG_URL', '')
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 404 }))
+    vi.stubGlobal('fetch', fetchMock)
     await expect(fetchRemoteUpdateConfig()).resolves.toBeNull()
+    expect(fetchMock).toHaveBeenCalledWith(DEFAULT_UPDATE_CONFIG_URL, expect.anything())
   })
 
   it('parses a valid remote payload', async () => {

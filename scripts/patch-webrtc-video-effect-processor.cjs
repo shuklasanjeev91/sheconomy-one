@@ -3,7 +3,7 @@
  *   java.lang.IllegalStateException: release() called on an object with refcount < 1
  *   at org.webrtc.VideoProcessor.onFrameCaptured / EglRenderer
  *
- * LiveKit's VideoEffectProcessor only overrides the 1-arg onFrameCaptured.
+ * VideoEffectProcessor only overrides the 1-arg onFrameCaptured.
  * WebRTC's default 2-arg method calls it then releases the adapted frame again,
  * double-freeing TextureBufferImpl when FrameAdaptation is a no-op (common).
  */
@@ -14,7 +14,6 @@ const target = path.join(
   __dirname,
   '..',
   'node_modules',
-  '@livekit',
   'react-native-webrtc',
   'android',
   'src',

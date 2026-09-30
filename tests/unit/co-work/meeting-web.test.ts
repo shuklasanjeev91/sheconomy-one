@@ -160,6 +160,23 @@ describe('meeting web capabilities', () => {
     )
   })
 
+  it('points embedded Electron browsers at a regular browser for screen share', () => {
+    const notSupported = new DOMException('Not supported', 'NotSupportedError')
+    const ide = { navigator: { userAgent: 'Mozilla/5.0 Chrome/148.0 Electron/42.10.0 Safari/537.36' } }
+    const desktopApp = { ...ide, sheconomyDesktop: { isDesktop: true } }
+    const chrome = { navigator: { userAgent: 'Mozilla/5.0 Chrome/148.0 Safari/537.36' } }
+
+    expect(mapWebScreenShareError(notSupported, ide as unknown as typeof globalThis)).toBe(
+      meetingWebUnsupportedMessage('embedded_screen_share'),
+    )
+    expect(mapWebScreenShareError(notSupported, desktopApp as unknown as typeof globalThis)).toBe(
+      meetingWebUnsupportedMessage('screen_share'),
+    )
+    expect(mapWebScreenShareError(notSupported, chrome as unknown as typeof globalThis)).toBe(
+      meetingWebUnsupportedMessage('screen_share'),
+    )
+  })
+
   it('describes tab/window/screen picker when getDisplayMedia exists', () => {
     expect(
       describeMeetingWebScreenShare({
@@ -211,7 +228,7 @@ describe('meeting web capabilities', () => {
     expect(start).toHaveBeenCalled()
   })
 
-  it('stops permission-probe tracks before LiveKit recaptures the mic', async () => {
+  it('stops permission-probe tracks before the meeting recaptures the mic', async () => {
     const stop = vi.fn()
     await releaseWebMediaStream({ getTracks: () => [{ stop }, { stop }] })
     expect(stop).toHaveBeenCalledTimes(2)

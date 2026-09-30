@@ -10,7 +10,7 @@ import {
   listMeetingRecordings,
   revokeMeetingRecordingShare,
   type MeetingRecordingSummary,
-} from '~/co-work/lib/livekit-recording-client'
+} from '~/co-work/lib/meeting-recording-client'
 import { recordingStatusLabel } from '~/co-work/lib/meeting-recording-status'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { openExternalUrl } from '~/lib/platform/openUrl'
@@ -146,7 +146,7 @@ export function MeetingRecordingsPanel({
           <Text color={coworkUi.textSecondary}>Only the host can manage recordings.</Text>
         ) : loading ? (
           <YStack alignItems="center" justifyContent="center" padding="$6" gap="$3">
-            <Spinner size="small" color={coworkUi.brand} />
+            <Spinner size="small" color={coworkUi.brandLight} />
             <Text color={coworkUi.textMuted}>Loading recordings…</Text>
           </YStack>
         ) : recordings.length === 0 ? (
@@ -154,7 +154,7 @@ export function MeetingRecordingsPanel({
             gap="$2"
             padding="$4"
             borderRadius={14}
-            backgroundColor="rgba(255,255,255,0.04)"
+            backgroundColor={coworkUi.surfaceMuted}
             borderWidth={1}
             borderColor={coworkUi.borderSoft}
           >
@@ -185,7 +185,7 @@ export function MeetingRecordingsPanel({
                   gap="$3"
                   padding="$3"
                   borderRadius={14}
-                  backgroundColor="rgba(255,255,255,0.04)"
+                  backgroundColor={coworkUi.surfaceMuted}
                   borderWidth={1}
                   borderColor={coworkUi.borderSoft}
                 >

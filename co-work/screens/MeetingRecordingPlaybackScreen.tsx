@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 
 import { ScreenCenter, ScreenFill } from '~/components/layout'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { resolveMeetingRecordingShare } from '~/co-work/lib/livekit-recording-client'
+import { resolveMeetingRecordingShare } from '~/co-work/lib/meeting-recording-client'
 import { publishRecordingAsClassLesson } from '~/co-work/lib/publish-recording'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { classRoutes, coWorkRoutes } from '~/lib/routes'
@@ -98,7 +98,7 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
   if (loading) {
     return (
       <ScreenCenter backgroundColor={coworkUi.pageBg}>
-        <Spinner size="large" color={coworkUi.brand} />
+        <Spinner size="large" color={coworkUi.brandLight} />
         <Text color={coworkUi.textSecondary} marginTop="$3">
           Opening recording…
         </Text>
@@ -117,7 +117,7 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
           justifyContent="center"
           backgroundColor={coworkUi.brandMuted}
         >
-          <Icons.AlertTriangle size={24} color={coworkUi.brand} />
+          <Icons.AlertTriangle size={24} color={coworkUi.brandLight} />
         </YStack>
         <Text fontSize={18} fontWeight="700" color={coworkUi.text} textAlign="center">
           Recording unavailable
@@ -140,12 +140,12 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
       : null
 
   return (
-    <ScreenFill backgroundColor="#0c080a" padding="$4" gap="$4">
+    <ScreenFill backgroundColor={coworkUi.pageBg} padding="$4" gap="$4">
       <YStack gap="$2" width="100%" maxWidth="100%" alignSelf="stretch">
-        <Text fontSize={22} fontWeight="800" color="#fff">
+        <Text fontSize={22} fontWeight="800" color={coworkUi.text}>
           Meeting recording
         </Text>
-        <Text color="rgba(255,255,255,0.65)" fontSize={13}>
+        <Text color={coworkUi.textSecondary} fontSize={13}>
           {[
             durationLabel ? `Duration ${durationLabel}` : null,
             meta.createdAt ? new Date(meta.createdAt).toLocaleString() : null,
@@ -163,9 +163,9 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
         alignSelf="stretch"
         borderRadius={18}
         overflow="hidden"
-        backgroundColor="#1a1216"
+        backgroundColor={coworkUi.surface}
         borderWidth={1}
-        borderColor="rgba(255,255,255,0.12)"
+        borderColor={coworkUi.border}
         minHeight={280}
       >
         {Platform.OS === 'web' ? (
@@ -177,7 +177,7 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
           />
         ) : (
           <YStack flex={1} alignItems="center" justifyContent="center" gap="$3" padding="$6">
-            <Text color="#fff" textAlign="center">
+            <Text color={coworkUi.text} textAlign="center">
               Tap below to play or download this recording on your device.
             </Text>
             <Button
@@ -197,9 +197,9 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
           <Button
             tone="outline"
             borderRadius={999}
-            borderColor="rgba(255,255,255,0.2)"
-            color="#fff"
-            icon={<Icons.Download size={16} color="#fff" />}
+            borderColor={coworkUi.border}
+            color={coworkUi.text}
+            icon={<Icons.Download size={16} color={coworkUi.text} />}
             onPress={() => void openExternalUrl(playbackUrl)}
           >
             Download MP4

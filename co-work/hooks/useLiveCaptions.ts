@@ -89,6 +89,8 @@ type UseLiveCaptionsOptions = {
   remoteCaptions: LiveCaptionLine[]
   /** True when any peer (including self) wants captions — keep STT publishing. */
   roomWantsCaptions?: boolean
+  /** False while this participant's mic is muted — never caption audio that is not being sent. */
+  speechEnabled?: boolean
   onFinalCaption?: (text: string, sourceLang: string) => void
   /** Final + interim publish so peers see live Zoom-style captions. */
   onPublishCaption?: (text: string, sourceLang: string, isFinal: boolean) => void
@@ -119,6 +121,7 @@ export function useLiveCaptions({
   enabled,
   remoteCaptions,
   roomWantsCaptions = false,
+  speechEnabled = true,
   onFinalCaption,
   onPublishCaption,
 }: UseLiveCaptionsOptions) {
@@ -193,7 +196,7 @@ export function useLiveCaptions({
     if (
       normalized &&
       /speech recognition|view others/i.test(normalized) &&
-      !/microphone/i.test(normalized)
+      !/microphone|browser/i.test(normalized)
     ) {
       errorBannerTimerRef.current = setTimeout(() => {
         errorBannerTimerRef.current = null
@@ -281,7 +284,10 @@ export function useLiveCaptions({
     recognition.interimResults = true
     recognition.maxAlternatives = 1
 
+    let serviceFailures = 0
+
     recognition.onresult = (event) => {
+      serviceFailures = 0
       let interim = ''
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index]
@@ -304,22 +310,46 @@ export function useLiveCaptions({
         setPublishing(false)
         return
       }
+      if (event.error === 'audio-capture') {
+        setCaptionError('No microphone is available for live captions')
+        shouldRestartRef.current = false
+        setPublishing(false)
+        return
+      }
+      // Chromium builds without Google's speech service (Brave, Electron, some
+      // Linux builds) fail every start with `network` / `service-not-allowed`.
+      if (event.error === 'network' || event.error === 'service-not-allowed') {
+        serviceFailures += 1
+        if (serviceFailures >= 3) {
+          shouldRestartRef.current = false
+          setCaptionError(
+            'This browser can’t run speech recognition for live captions. Use Chrome, Edge or Safari to caption your speech — you can still view others’ captions.',
+          )
+          return
+        }
+      }
       if (event.error !== 'aborted' && event.error !== 'no-speech') {
         setCaptionError('Live captions paused — retrying…')
       }
     }
 
     recognition.onend = () => {
-      if (shouldRestartRef.current) {
+      if (recognitionRef.current !== recognition) return
+      if (!shouldRestartRef.current) {
+        setPublishing(false)
+        return
+      }
+      const restart = () => {
+        if (!shouldRestartRef.current || recognitionRef.current !== recognition) return
         try {
           recognition.lang = speakLocaleRef.current
           recognition.start()
         } catch {
           setPublishing(false)
         }
-      } else {
-        setPublishing(false)
       }
+      if (serviceFailures > 0) setTimeout(restart, 400 * serviceFailures)
+      else restart()
     }
 
     shouldRestartRef.current = true
@@ -362,7 +392,7 @@ export function useLiveCaptions({
           }
         },
       },
-      { shareLiveKitMic: true },
+      { shareCallMic: true },
     )
     if (!session) {
       setCaptionError('Could not start speech recognition. You can still view others’ captions.')
@@ -443,8 +473,8 @@ export function useLiveCaptions({
     }
     setPreferences((current) => ({ ...current, collapsed: false }))
     setActive(true)
-    startRecognition()
-  }, [active, roomWantsCaptions, startRecognition, stopRecognition])
+    if (speechEnabled) startRecognition()
+  }, [active, roomWantsCaptions, speechEnabled, startRecognition, stopRecognition])
 
   // Room-wide publish: when any peer wants captions, every device STTs its mic
   // so speech from A appears for B (and vice versa) in each viewer’s language.
@@ -454,12 +484,12 @@ export function useLiveCaptions({
       if (activeRef.current) setActive(false)
       return
     }
-    if (active || roomWantsCaptions) {
+    if ((active || roomWantsCaptions) && speechEnabled) {
       startRecognition()
       return
     }
     if (publishingRef.current) stopRecognition()
-  }, [active, enabled, roomWantsCaptions, startRecognition, stopRecognition])
+  }, [active, enabled, roomWantsCaptions, speechEnabled, startRecognition, stopRecognition])
 
   useEffect(() => {
     return () => stopRecognition()

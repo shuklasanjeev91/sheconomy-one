@@ -43,16 +43,22 @@ export function SpaRedirect({ href }: SpaRedirectProps) {
   const pathname = usePathname()
   const rawTarget = String(href)
   const didRun = useRef(false)
+  const consumedTarget = useRef<{ raw: string; target: string } | null>(null)
 
   useEffect(() => {
     if (didRun.current) return
-    didRun.current = true
 
-    // Open Human verification before any same-path early return.
-    const verifyNav = consumeHumanVerificationHref(rawTarget)
-    const target = verifyNav?.cleanedHref ?? rawTarget
+    // Open Human verification before any same-path early return (once per href).
+    if (consumedTarget.current?.raw !== rawTarget) {
+      const verifyNav = consumeHumanVerificationHref(rawTarget)
+      consumedTarget.current = { raw: rawTarget, target: verifyNav?.cleanedHref ?? rawTarget }
+    }
+    const { target } = consumedTarget.current
 
-    if (isAlreadyAtHref(pathname, target)) return
+    if (isAlreadyAtHref(pathname, target)) {
+      didRun.current = true
+      return
+    }
 
     let cancelled = false
     let attempts = 0
@@ -64,6 +70,8 @@ export function SpaRedirect({ href }: SpaRedirectProps) {
       try {
         // Pass cleaned target so navigateApp does not re-fire verify open.
         navigateApp(target)
+        // Only now — a cleanup before this point must let the next run retry.
+        didRun.current = true
       } catch (error) {
         attempts += 1
         if (attempts >= maxAttempts || !isNavigatorNotReadyError(error)) {

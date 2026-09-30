@@ -151,7 +151,7 @@ describe('chromeless shell gating', () => {
 })
 
 describe('session PiP capabilities', () => {
-  it('disables OS PiP overlay on Android (no FGS)', () => {
+  it('falls back to the mini-player on Android without Activity PiP', () => {
     const caps = detectSessionPipCapabilities('android')
     expect(caps.supported).toBe(false)
     expect(caps.mode).toBe('none')

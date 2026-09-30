@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { Platform } from 'react-native'
 import { Theme, useThemeName } from 'tamagui'
 
+import { useForcedScheme } from '~/lib/theme/scheme-override'
+
 /**
  * Paint overlays on the real viewport.
  *
@@ -17,7 +19,9 @@ import { Theme, useThemeName } from 'tamagui'
  * `@tamagui/core` across async meeting chunks.
  */
 export function ViewportOverlay({ children }: { children: ReactNode }) {
-  const themeName = useThemeName()
+  const forcedScheme = useForcedScheme()
+  const inheritedName = useThemeName()
+  const themeName = forcedScheme ?? inheritedName
   if (Platform.OS === 'web' && typeof document !== 'undefined') {
     return createPortal(<Theme name={themeName}>{children}</Theme>, document.body)
   }

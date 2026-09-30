@@ -101,7 +101,7 @@ function PollCard({
                 borderRadius={12}
                 borderWidth={1}
                 borderColor={selected ? coworkUi.borderAccent : coworkUi.borderSoft}
-                backgroundColor={selected ? coworkUi.brandMuted : 'rgba(255,255,255,0.03)'}
+                backgroundColor={selected ? coworkUi.brandMuted : coworkUi.surfaceMuted}
                 opacity={canVote || selected ? 1 : 0.85}
                 cursor={canVote ? 'pointer' : undefined}
                 pressStyle={canVote ? { opacity: 0.85 } : undefined}
@@ -132,7 +132,7 @@ function PollCard({
                 <YStack
                   height={4}
                   borderRadius={999}
-                  backgroundColor="rgba(255,255,255,0.06)"
+                  backgroundColor={coworkUi.borderSoft}
                   overflow="hidden"
                   marginHorizontal="$1"
                 >
@@ -273,7 +273,7 @@ export function MeetingPollsPanel({
               borderRadius={14}
               borderWidth={1}
               borderColor={coworkUi.borderSoft}
-              backgroundColor="rgba(255,255,255,0.03)"
+              backgroundColor={coworkUi.surfaceMuted}
             >
               <CoWorkSectionLabel>Create poll</CoWorkSectionLabel>
               <Field label="Question">
@@ -281,7 +281,7 @@ export function MeetingPollsPanel({
                   value={question}
                   onChangeText={setQuestion}
                   placeholder="What should we decide?"
-                  backgroundColor="rgba(255,255,255,0.05)"
+                  backgroundColor={coworkUi.surface}
                   borderColor={coworkUi.borderSoft}
                   color={coworkUi.text}
                   borderRadius={14}
@@ -304,7 +304,7 @@ export function MeetingPollsPanel({
                         })
                       }}
                       placeholder={`Option ${index + 1}`}
-                      backgroundColor="rgba(255,255,255,0.05)"
+                      backgroundColor={coworkUi.surface}
                       borderColor={coworkUi.borderSoft}
                       color={coworkUi.text}
                       borderRadius={12}

@@ -180,7 +180,7 @@ export function MeetingQaPanel({
             borderRadius={14}
             borderWidth={1}
             borderColor={coworkUi.borderSoft}
-            backgroundColor="rgba(255,255,255,0.03)"
+            backgroundColor={coworkUi.surfaceMuted}
           >
             <CoWorkSectionLabel>Ask a question</CoWorkSectionLabel>
             <Field label="Your question">
@@ -188,7 +188,7 @@ export function MeetingQaPanel({
                 value={draft}
                 onChangeText={setDraft}
                 placeholder="Type your question for the host…"
-                backgroundColor="rgba(255,255,255,0.05)"
+                backgroundColor={coworkUi.surface}
                 borderColor={coworkUi.borderSoft}
                 color={coworkUi.text}
                 borderRadius={14}

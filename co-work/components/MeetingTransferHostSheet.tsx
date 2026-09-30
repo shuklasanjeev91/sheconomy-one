@@ -90,7 +90,7 @@ export function MeetingTransferHostSheet({
             gap="$2"
             padding="$4"
             borderRadius={16}
-            backgroundColor="rgba(255,255,255,0.04)"
+            backgroundColor={coworkUi.surfaceMuted}
             borderWidth={1}
             borderColor={coworkUi.borderSoft}
             alignItems="center"
@@ -118,7 +118,7 @@ export function MeetingTransferHostSheet({
                   gap="$3"
                   padding="$3"
                   borderRadius={14}
-                  backgroundColor="rgba(255,255,255,0.04)"
+                  backgroundColor={coworkUi.surfaceMuted}
                   borderWidth={1}
                   borderColor={coworkUi.borderSoft}
                 >

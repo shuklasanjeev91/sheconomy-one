@@ -12,6 +12,7 @@ vi.mock('~/lib/supabase', () => ({
 
 import {
   captionLooksLikeTargetLang,
+  detectLatinCaptionLang,
   localizeCaptionLine,
   resolveLiveCaptionDisplay,
   translateCaptionText,
@@ -31,6 +32,24 @@ describe('captionLooksLikeTargetLang', () => {
     expect(captionLooksLikeTargetLang('నమస్కారం', 'te')).toBe(true)
     expect(captionLooksLikeTargetLang('স্বাগতম', 'bn')).toBe(true)
     expect(captionLooksLikeTargetLang('Hello', 'ta')).toBe(false)
+  })
+
+  it('does not treat English speech as already Spanish/French/German for Latin viewers', () => {
+    expect(captionLooksLikeTargetLang('please share your updates one by one', 'es')).toBe(false)
+    expect(captionLooksLikeTargetLang('today we will review the product launch', 'fr')).toBe(false)
+    expect(captionLooksLikeTargetLang('hello everyone welcome to the meeting', 'de')).toBe(false)
+    expect(captionLooksLikeTargetLang('Por favor, compartan sus actualizaciones una por una', 'es')).toBe(true)
+    expect(captionLooksLikeTargetLang('Por favor, compartan sus actualizaciones una por una', 'en')).toBe(false)
+    expect(captionLooksLikeTargetLang('Bonjour, merci pour votre présence', 'fr')).toBe(true)
+    expect(captionLooksLikeTargetLang('Sprint', 'es')).toBe(true)
+  })
+})
+
+describe('detectLatinCaptionLang', () => {
+  it('guesses the language from common words and stays null when unclear', () => {
+    expect(detectLatinCaptionLang('we will review the launch')).toBe('en')
+    expect(detectLatinCaptionLang('hola, gracias por venir')).toBe('es')
+    expect(detectLatinCaptionLang('Sprint')).toBeNull()
   })
 })
 

@@ -14,7 +14,7 @@ import {
 } from '~/co-work/lib/meeting-toolbar'
 
 describe('Zoom mobile UI branding helpers', () => {
-  it('keeps Mute · Video · Chat · More · End on phone dock only', () => {
+  it('keeps Mute · Video · Share · Chat · More · End on phone dock only', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -22,7 +22,7 @@ describe('Zoom mobile UI branding helpers', () => {
         supportsScreenShare: true,
         compact: true,
       }),
-    ).toEqual(['mic', 'camera', 'chat', 'more', 'leave', 'end_meeting'])
+    ).toEqual(['mic', 'camera', 'share_screen', 'chat', 'more', 'leave', 'end_meeting'])
   })
 
   it('uses tablet/desktop primary dock when not compact', () => {
@@ -74,6 +74,25 @@ describe('Zoom mobile UI branding helpers', () => {
     ])
   })
 
+  it('offers Record in the tablet/desktop More for participants too', () => {
+    expect(
+      meetingToolbarWideMoreKeys({
+        viewerRole: 'participant',
+        hasHostTools: false,
+        supportsRecording: true,
+      }),
+    ).toContain('record')
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'host',
+        supportsVideo: true,
+        supportsRecording: true,
+        recording: true,
+        compact: false,
+      }),
+    ).toContain('stop_record')
+  })
+
   it('builds Zoom-mobile More grid with Sheconomy-safe labels', () => {
     const keys = meetingMobileMoreGridKeys({
       viewerRole: 'host',
@@ -86,7 +105,6 @@ describe('Zoom mobile UI branding helpers', () => {
     })
     expect(keys).toEqual([
       'manage_participants',
-      'share_screen',
       'captions',
       'polls',
       'disconnect_audio',

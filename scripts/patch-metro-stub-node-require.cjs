@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Stub Rolldown `__require` for Node built-ins before Metro writes main.jsbundle.
- * LiveKit → debug/util hits Hermes with no Node require.
+ * WebRTC → debug/util hits Hermes with no Node require.
  */
 const fs = require('node:fs')
 const path = require('node:path')

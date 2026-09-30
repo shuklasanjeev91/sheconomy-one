@@ -40,6 +40,61 @@ export function buildAndroidAutoIntentUrl(path = getWebPathForApp()): string {
   return `intent://${normalized}#Intent;scheme=${APP_SCHEME};end`
 }
 
+const APP_INSTALLED_KEY = 'sheconomy.openInApp.installed'
+
+/**
+ * Browsers cannot ask whether the app is installed (iOS Safari especially), so we
+ * remember the last hand-off outcome: '1' after the page was hidden by the app
+ * opening, '0' after an automatic attempt that went nowhere.
+ */
+export function readAppInstalledHint(): boolean | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const value = window.localStorage.getItem(APP_INSTALLED_KEY)
+    return value === '1' ? true : value === '0' ? false : null
+  } catch {
+    return null
+  }
+}
+
+function writeAppInstalledHint(installed: boolean) {
+  try {
+    window.localStorage.setItem(APP_INSTALLED_KEY, installed ? '1' : '0')
+  } catch {
+    // ignore storage failures
+  }
+}
+
+/**
+ * Navigate to an app URL and learn whether the app took over. Safari's
+ * "Open in app?" prompt can take a few seconds to answer, hence the long window.
+ * Only automatic attempts record a miss so a cancelled tap never forgets the app.
+ */
+export function launchNativeApp(
+  target: string,
+  options: { automatic?: boolean; onResult?: (opened: boolean) => void } = {},
+): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  let settled = false
+  const finish = (opened: boolean) => {
+    if (settled) return
+    settled = true
+    document.removeEventListener('visibilitychange', onVisibility)
+    window.removeEventListener('pagehide', onHidden)
+    window.clearTimeout(timer)
+    if (opened || options.automatic) writeAppInstalledHint(opened)
+    options.onResult?.(opened)
+  }
+  const onHidden = () => finish(true)
+  const onVisibility = () => {
+    if (document.visibilityState === 'hidden') finish(true)
+  }
+  document.addEventListener('visibilitychange', onVisibility)
+  window.addEventListener('pagehide', onHidden)
+  const timer = window.setTimeout(() => finish(false), 6000)
+  window.location.href = target
+}
+
 export function buildSmartAppBannerContent(path = getWebPathForApp()): string {
   const argument = path.startsWith('/') ? path : `/${path}`
   return `app-id=${IOS_APP_STORE_ID}, app-argument=${argument}`

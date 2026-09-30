@@ -7,7 +7,7 @@ export const NORMAL_CAPTURE = { width: 1280, height: 720, frameRate: 24 } as con
 export type NativeVideoEffectsModuleLike = {
   registerProcessor?: () => boolean
   isSupported?: () => boolean
-  configure?: (options: Record<string, unknown>) => void
+  configure?(options: Record<string, unknown>): void
 } | null
 
 export type NativeVideoEffectsProbe = 'missing' | 'retry' | 'ready'

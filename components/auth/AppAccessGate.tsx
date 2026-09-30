@@ -105,7 +105,16 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
       }
       return isProfileUnavailable ? <ProfileUnavailable /> : <Loading />
     }
-    return <SpaRedirect href={getDeniedRedirect(pathname)} />
+    // `children` holds the root <Slot />; the router refuses to navigate while
+    // it is unmounted, so keep it mounted (hidden) or the redirect never runs.
+    return (
+      <>
+        <YStack display="none" aria-hidden>
+          {children}
+        </YStack>
+        <SpaRedirect href={getDeniedRedirect(pathname)} />
+      </>
+    )
   }
 
   return <Shell documentScroll={useDocumentScroll}>{children}</Shell>

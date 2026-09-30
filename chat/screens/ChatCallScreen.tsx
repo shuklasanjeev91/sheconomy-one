@@ -14,7 +14,8 @@ import { CallOverlay } from '~/chat/components/CallOverlay'
 import { Avatar, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
-import { LiveKitMeetingRoom, type LiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom'
+import { MeetingMediaRoom } from '~/co-work/components/MeetingMediaRoom'
+import type { MeetingMediaControls } from '~/co-work/lib/meeting-media-controls'
 import {
   createMeetingSessionId,
   endMeeting,
@@ -26,7 +27,7 @@ import type { Meeting } from '~/co-work/lib/types'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { chatRoutes } from '~/lib/routes'
-import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
+import { supportsMeetingVideo } from '~/lib/platform/capabilities'
 import { meetingViewportStyle } from '~/lib/platform/viewport'
 import { brandColors } from '~/config/brand-colors'
 import { supabase } from '~/lib/supabase/client'
@@ -311,7 +312,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
     )
   }
 
-  if (!supportsLiveKitVideo()) {
+  if (!supportsMeetingVideo()) {
     return (
       <ScreenCenter backgroundColor={SURFACE} padding="$6" gap="$3">
         <Text color="#fff" textAlign="center">
@@ -338,7 +339,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
       position="relative"
       style={meetingViewportStyle()}
     >
-      <LiveKitMeetingRoom
+      <MeetingMediaRoom
         meetingId={meeting.id}
         roomId={meeting.room_id}
         displayName={profile?.full_name || profile?.username || 'You'}
@@ -349,7 +350,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
         onDisconnected={() => {
           void hangUp()
         }}
-        overlay={(liveKit) => (
+        overlay={(callMedia) => (
           <ChatCallConnected
             code={code}
             meeting={meeting}
@@ -359,7 +360,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
             elapsed={elapsed}
             safeTop={safeTop}
             safeBottom={safeBottom}
-            liveKit={liveKit}
+            callMedia={callMedia}
             onHangUp={() => void hangUp()}
           />
         )}
@@ -377,7 +378,7 @@ function ChatCallConnected({
   elapsed,
   safeTop,
   safeBottom,
-  liveKit,
+  callMedia,
   onHangUp,
 }: {
   code: string
@@ -388,7 +389,7 @@ function ChatCallConnected({
   elapsed: number
   safeTop: number
   safeBottom: number
-  liveKit: LiveKitMediaControls | null
+  callMedia: MeetingMediaControls | null
   onHangUp: () => void
 }) {
   const toast = useAppToast()
@@ -420,25 +421,26 @@ function ChatCallConnected({
     })()
   }, [toast])
 
-  useSessionPipOnHide(!!liveKit)
+  useSessionPipOnHide(!!callMedia)
 
   useRegisterGlobalSession({
-    active: !!liveKit,
+    active: !!callMedia,
     kind: 'call',
     code,
     title: peerName,
     subtitle: callType === 'video' ? 'Video call' : 'Voice call',
     maximizeHref: String(chatRoutes.call(code, { type: callType })),
     media: {
-      audioEnabled: liveKit?.audioEnabled ?? true,
-      videoEnabled: liveKit?.videoEnabled ?? callType === 'video',
-      speakerOn: liveKit?.speakerOn ?? true,
+      audioEnabled: callMedia?.audioEnabled ?? true,
+      videoEnabled: callMedia?.videoEnabled ?? callType === 'video',
+      speakerOn: callMedia?.speakerOn ?? true,
     },
+    activeTrackRef: callMedia?.featuredVideo ?? null,
     handlers: {
-      toggleMic: () => liveKit?.toggleAudio(),
-      toggleCamera: () => liveKit?.toggleVideo(),
+      toggleMic: () => callMedia?.toggleAudio(),
+      toggleCamera: () => callMedia?.toggleVideo(),
       toggleSpeaker: () => {
-        void liveKit?.toggleSpeaker()
+        void callMedia?.toggleSpeaker()
       },
       end: () => onHangUp(),
       enterPip: async () => {
@@ -455,7 +457,7 @@ function ChatCallConnected({
       elapsed={elapsed}
       safeTop={safeTop}
       safeBottom={safeBottom}
-      liveKit={liveKit}
+      callMedia={callMedia}
       onHangUp={onHangUp}
       onMinimize={minimizeCall}
       onPictureInPicture={enterCallPip}
@@ -470,7 +472,7 @@ function ChatCallOverlay({
   elapsed,
   safeTop,
   safeBottom,
-  liveKit,
+  callMedia,
   onHangUp,
   onMinimize,
   onPictureInPicture,
@@ -481,13 +483,13 @@ function ChatCallOverlay({
   elapsed: number
   safeTop: number
   safeBottom: number
-  liveKit: LiveKitMediaControls | null
+  callMedia: MeetingMediaControls | null
   onHangUp: () => void
   onMinimize?: () => void
   onPictureInPicture?: () => void
 }) {
-  const muted = liveKit ? !liveKit.audioEnabled : false
-  const cameraOff = liveKit ? !liveKit.videoEnabled : callType === 'audio'
+  const muted = callMedia ? !callMedia.audioEnabled : false
+  const cameraOff = callMedia ? !callMedia.videoEnabled : callType === 'audio'
   const showVideoChrome = callType === 'video'
 
   return (
@@ -512,7 +514,7 @@ function ChatCallOverlay({
           {peerName}
         </Text>
         <Text fontSize={14} color="#c9b6c1">
-          {liveKit ? formatDuration(elapsed) : 'Connecting…'}
+          {callMedia ? formatDuration(elapsed) : 'Connecting…'}
         </Text>
       </YStack>
 
@@ -536,7 +538,7 @@ function ChatCallOverlay({
         <CallControlButton
           label={muted ? 'Unmute' : 'Mute'}
           color={muted ? DECLINE : MUTED}
-          onPress={() => liveKit?.toggleAudio()}
+          onPress={() => callMedia?.toggleAudio()}
         >
           {muted ? <Icons.MicOff size={24} color="#fff" /> : <Icons.Mic size={24} color="#fff" />}
         </CallControlButton>
@@ -545,18 +547,18 @@ function ChatCallOverlay({
           label={
             Platform.OS === 'web'
               ? 'Speaker'
-              : liveKit?.speakerOn
+              : callMedia?.speakerOn
                 ? 'Speaker'
                 : 'Phone'
           }
-          color={liveKit?.speakerOn || Platform.OS === 'web' ? ACCEPT : MUTED}
+          color={callMedia?.speakerOn || Platform.OS === 'web' ? ACCEPT : MUTED}
           onPress={() => {
             // Web has no earpiece route — output is OS/browser managed.
             if (Platform.OS === 'web') return
-            void liveKit?.toggleSpeaker()
+            void callMedia?.toggleSpeaker()
           }}
         >
-          {liveKit?.speakerOn || Platform.OS === 'web' ? (
+          {callMedia?.speakerOn || Platform.OS === 'web' ? (
             <Icons.Volume2 size={24} color="#fff" />
           ) : (
             <Icons.Phone size={24} color="#fff" />
@@ -567,7 +569,7 @@ function ChatCallOverlay({
           <CallControlButton
             label={cameraOff ? 'Camera on' : 'Camera off'}
             color={cameraOff ? MUTED : '#2a1c24'}
-            onPress={() => liveKit?.toggleVideo()}
+            onPress={() => callMedia?.toggleVideo()}
           >
             {cameraOff ? (
               <Icons.VideoOff size={24} color="#fff" />

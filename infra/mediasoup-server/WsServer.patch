@@ -1,0 +1,47 @@
+--- a/lib/WsServer.js	2026-09-29 17:43:53
++++ b/lib/WsServer.js	2026-09-29 17:43:58
+@@ -39,6 +39,7 @@
+ const Logger_1 = require("./Logger");
+ const enhancedEvents_1 = require("./enhancedEvents");
+ const utils = __importStar(require("./utils"));
++const sheconomyAuth = require("./sheconomy-auth.cjs");
+ const logger = new Logger_1.Logger('WsServer');
+ class WsServer extends enhancedEvents_1.EnhancedEventEmitter {
+     #protooServer;
+@@ -64,11 +65,6 @@
+     handleProtooServer() {
+         // eslint-disable-next-line @typescript-eslint/no-misused-promises
+         this.#protooServer.on('connectionrequest', async (info, accept, reject) => {
+-            // Validate HTTP Origin header.
+-            if (!utils.areSameHttpOrigins(info.request.headers.origin, this.#httpOriginHeader)) {
+-                reject(403, 'GO TO HELL 🖕🏼');
+-                return;
+-            }
+             if (!info.request.url || !info.request.headers.host) {
+                 reject(400, `Missing URL or Host header in the request`);
+                 return;
+@@ -84,6 +80,24 @@
+                 reject(400, 'Missing roomId and/or peerId');
+                 return;
+             }
++            // SHEconomy app rooms authenticate with a meeting token instead of the Origin header.
++            const auth = sheconomyAuth.authorizeConnection({
++                roomId,
++                peerId,
++                token: params.get('token'),
++                secret: process.env.MEDIASOUP_JWT_SECRET,
++            });
++            if (auth.decision === 'reject') {
++                logger.warn('rejected app room connection [roomId:%o, peerId:%o, reason:%s]', roomId, peerId, auth.reason);
++                reject(auth.status, 'Unauthorized');
++                return;
++            }
++            // Validate HTTP Origin header.
++            if (auth.decision === 'origin' &&
++                !utils.areSameHttpOrigins(info.request.headers.origin, this.#httpOriginHeader)) {
++                reject(403, 'GO TO HELL 🖕🏼');
++                return;
++            }
+             logger.info('protoo WebSocket connection request [roomId:%o, peerId:%o, address:%o, origin:%o]', roomId, peerId, info.socket.remoteAddress, info.origin);
+             try {
+                 // eslint-disable-next-line no-shadow

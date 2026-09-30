@@ -4,7 +4,7 @@
 
 export type SessionPipCapabilities = {
   supported: boolean
-  mode: 'document' | 'video' | 'native_avkit' | 'none'
+  mode: 'document' | 'video' | 'native_avkit' | 'native_activity' | 'none'
   unsupportedMessage: string | null
 }
 

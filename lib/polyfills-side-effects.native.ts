@@ -1,11 +1,10 @@
-// Hermes has no DOMException. `livekit-client` subclasses it at module scope, so a
+// Hermes has no DOMException. WebRTC code subclasses it at module scope, so a
 // cold start straight into /co-work/meeting/:code/live (universal link) evaluated it
 // before any meeting-side guard could run. Keep this the first import in the bundle.
 import '~/lib/polyfills/install-dom-exception'
 import { installWebCryptoPolyfill } from '~/lib/polyfills/web-crypto'
-// TextDecoder/TextEncoder must exist before Supabase, LiveKit, or other deps load on Hermes.
-// Deep LiveKit package subpaths are blocked by "exports"; load via absolute path helper.
-import '~/lib/livekit-encoder-polyfill.cjs'
+// TextDecoder/TextEncoder must exist before Supabase or other deps load on Hermes.
+import '~/lib/polyfills/text-encoding'
 import '@azure/core-asynciterator-polyfill'
 // Hermes URL exposes `protocol` as a getter-only property. SupabaseClient does
 // `realtimeUrl.protocol = ...` on construct and crashes → white screen after splash.
@@ -17,7 +16,7 @@ import 'whatwg-fetch'
 
 import { LogBox } from 'react-native'
 
-// LiveKit WebRTC pulls `debug`, whose Node entry does require('tty'). Hermes has no
+// react-native-webrtc pulls `debug`, whose Node entry does require('tty'). Hermes has no
 // Node require — Rolldown then throws. Mark this as a browser-like process so
 // `debug` selects its browser build instead.
 if (typeof process !== 'undefined') {
@@ -70,14 +69,10 @@ function installAbortSignalHelpers() {
 installAbortSignalHelpers()
 installWebCryptoPolyfill()
 
-// LiveKit screen-share on iOS/Android often logs a recoverable dimensions miss;
-// keep it out of the red LogBox overlay in meeting builds.
-const LIVEKIT_DROPPED_ERRORS = /could not determine track dimensions, using defaults/i
-// LiveKit logs a timed-out signal resume ("Abort handler called") with console.error,
-// then retries on its own while the meeting shows "reconnecting automatically".
-const LIVEKIT_RECOVERABLE_ERRORS =
-  /Abort handler called|room connection has timed out \(signal\)|could not establish signal connection/i
-LogBox.ignoreLogs([LIVEKIT_DROPPED_ERRORS, LIVEKIT_RECOVERABLE_ERRORS])
+// Meeting media retries on its own while the room shows "Reconnecting…"; keep those
+// recoverable errors out of the red LogBox overlay.
+const MEETING_RECOVERABLE_ERRORS = /\[mediasoup\]|protoo|WebSocket closed|ICE failed/i
+LogBox.ignoreLogs([MEETING_RECOVERABLE_ERRORS])
 
 // LogBox.ignoreLogs alone is not enough in some Expo/OTA builds — console.error
 // still becomes a red SyntheticError overlay that covers the live meeting.
@@ -96,11 +91,8 @@ console.error = (...args: unknown[]) => {
       }
     })
     .join(' ')
-  if (LIVEKIT_DROPPED_ERRORS.test(text)) {
-    return
-  }
-  if (LIVEKIT_RECOVERABLE_ERRORS.test(text)) {
-    console.log('[livekit]', ...args)
+  if (MEETING_RECOVERABLE_ERRORS.test(text)) {
+    console.log('[meeting]', ...args)
     return
   }
   originalConsoleError(...(args as Parameters<typeof console.error>))
@@ -136,6 +128,6 @@ globalThis.global = globalThis
 warmCriticalAppCaches()
 startNativeBootstrapPrefetch()
 
-// Do NOT call LiveKit `registerGlobals()` here. It starts WebRTC threads immediately
+// Do NOT call WebRTC `registerGlobals()` here. It starts WebRTC threads immediately
 // and can race Hermes GC on cold start (SIGSEGV on the `hades` thread). Globals are
-// registered lazily via `ensureLiveKitGlobals()` when entering a meeting room.
+// registered lazily via `ensureWebRTCGlobals()` when entering a meeting room.

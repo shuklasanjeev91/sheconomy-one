@@ -2,24 +2,31 @@ import { Platform } from 'react-native'
 import * as WebBrowser from 'expo-web-browser'
 import type { Provider } from '@supabase/supabase-js'
 
-import { normalizeAppOrigin } from '~/config/app-origin'
+import { APP_SCHEME } from '~/config/app-origin'
 import { tryNativeGoogleSignIn } from '~/features/auth/services/native-google'
+import { AUTH_RETURN_TO_PARAM, getReturnToFromLocation } from '~/lib/auth/redirect'
 import { supabase } from '~/lib/supabase/client'
 
 WebBrowser.maybeCompleteAuthSession()
 
 export type OAuthProvider = 'google' | 'apple' | 'linkedin_oidc'
 
+export const OAUTH_CALLBACK_PATH = '/auth/callback'
+
 export function resolveOAuthRedirectUrl(): string {
   // Web OAuth must return to the current host (localhost / preview allowlists).
   // Public share + notification links use resolveAppOrigin() → sheconomy.in.
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return `${window.location.origin}/auth/callback`
+    const callback = `${window.location.origin}${OAUTH_CALLBACK_PATH}`
+    const returnTo = String(getReturnToFromLocation())
+    return returnTo === '/'
+      ? callback
+      : `${callback}?${new URLSearchParams({ [AUTH_RETURN_TO_PARAM]: returnTo })}`
   }
-  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_WEB_APP_URL) {
-    return `${normalizeAppOrigin(process.env.EXPO_PUBLIC_WEB_APP_URL)}/auth/callback`
-  }
-  return 'sheconomy://auth/callback'
+  // Native must use the custom scheme: ASWebAuthenticationSession and the
+  // Android auth tab only hand an https redirect back to the app when it is a
+  // verified universal/app link, so an https callback strands users on the website.
+  return `${APP_SCHEME}://auth/callback`
 }
 
 export function isAppleSignInAvailable(): boolean {
@@ -49,19 +56,87 @@ function extractAuthCode(url: string | null | undefined): string | null {
   return null
 }
 
+function extractAuthError(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url)
+    const params = parsed.searchParams.has('error')
+      ? parsed.searchParams
+      : new URLSearchParams(parsed.hash.replace(/^#/, ''))
+    const description = params.get('error_description') ?? params.get('error')
+    return description ? description.replace(/\+/g, ' ') : null
+  } catch {
+    return null
+  }
+}
+
+// On Android the auth session result and the /auth/callback deep link both
+// carry the same single-use code; share one exchange so neither reports failure.
+const exchangesByCode = new Map<string, Promise<{ error: string | null }>>()
+
+async function exchangeCode(code: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.auth.exchangeCodeForSession(code)
+  if (!error) return { error: null }
+  // Code already used (another exchange won the race) but a session exists.
+  const { data } = await supabase.auth.getSession()
+  if (data.session) return { error: null }
+  return { error: error.message || 'Unable to complete social sign-in.' }
+}
+
 export async function exchangeOAuthUrlForSession(
   url: string | null | undefined,
 ): Promise<{ error: string | null }> {
   const code = extractAuthCode(url)
   if (!code) {
+    const providerError = extractAuthError(url)
+    if (providerError) return { error: providerError }
+    const { data } = await supabase.auth.getSession()
+    if (data.session) return { error: null }
     return { error: 'Social sign-in was cancelled or incomplete.' }
   }
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code)
-  if (error) {
-    return { error: error.message || 'Unable to complete social sign-in.' }
+  let pending = exchangesByCode.get(code)
+  if (!pending) {
+    pending = exchangeCode(code)
+    exchangesByCode.set(code, pending)
   }
-  return { error: null }
+  return pending
+}
+
+const PKCE_VERIFIER_SUFFIX = '-code-verifier'
+
+function hasPendingPkceVerifier(): boolean {
+  try {
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i)
+      if (key?.startsWith('sb-') && key.endsWith(PKCE_VERIFIER_SUFFIX)) {
+        return Boolean(window.localStorage.getItem(key))
+      }
+    }
+  } catch {
+    // Storage blocked (private mode / sandboxed iframe).
+  }
+  return false
+}
+
+/**
+ * Web: Supabase falls back to the Site URL when the requested redirect is not
+ * allowlisted, so the `?code=` can land on any page instead of /auth/callback.
+ * Finish that sign-in in place and strip the code from the address bar.
+ * Returns true when a session was established.
+ */
+export async function completeStrayOAuthRedirect(): Promise<boolean> {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false
+  const { pathname, href } = window.location
+  if (pathname === OAUTH_CALLBACK_PATH) return false
+  const code = extractAuthCode(href)
+  if (!code || !hasPendingPkceVerifier()) return false
+
+  const { error } = await exchangeOAuthUrlForSession(href)
+  const cleaned = new URL(href)
+  cleaned.searchParams.delete('code')
+  window.history.replaceState(window.history.state, '', cleaned.pathname + cleaned.search + cleaned.hash)
+  return !error
 }
 
 /**
@@ -109,7 +184,7 @@ export async function startOAuthSignIn(
       skipBrowserRedirect: Platform.OS !== 'web',
       queryParams:
         provider === 'google'
-          ? { access_type: 'offline', prompt: 'consent' }
+          ? { prompt: 'select_account' }
           : undefined,
     },
   })

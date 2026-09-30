@@ -86,7 +86,7 @@ export function openInstantMeetingSession(input: {
   const shouldExpand = input.expand === true || (!input.enteredRoom && input.expand !== false)
 
   // Same meeting already open (plain or dashed code) — update metadata without
-  // remounting LiveKit / join UI. Prefer the persisted meeting_code when present.
+  // remounting the media room / join UI. Prefer the persisted meeting_code when present.
   if (prev && instantMeetingCodesMatch(prev.code, code)) {
     const nextMeeting = input.meeting ?? prev.meeting
     const nextCode = nextMeeting?.meeting_code
