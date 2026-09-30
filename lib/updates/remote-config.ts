@@ -1,28 +1,31 @@
+import { ANDROID_PLAY_STORE_URL, IOS_APP_STORE_URL } from '~/lib/platform/open-in-app'
 import { DEFAULT_REMOTE_UPDATE_CONFIG } from '~/lib/updates/constants'
 import { logUpdate } from '~/lib/updates/logging'
 import type { RemoteUpdateConfig } from '~/lib/updates/types'
 
-function readEnv(name: string): string | null {
-  const value =
-    typeof process !== 'undefined' ? process.env[name] : undefined
+export const DEFAULT_UPDATE_CONFIG_URL = 'https://www.sheconomy.in/update-config.json'
+
+function clean(value: string | undefined): string | null {
   const trimmed = typeof value === 'string' ? value.trim() : ''
   return trimmed.length > 0 ? trimmed : null
 }
 
+// EXPO_PUBLIC_* values are only inlined into release bundles when read as
+// literal `process.env.EXPO_PUBLIC_X` member expressions.
 export function getUpdateConfigUrl(): string | null {
-  return readEnv('EXPO_PUBLIC_UPDATE_CONFIG_URL')
+  return clean(process.env.EXPO_PUBLIC_UPDATE_CONFIG_URL) ?? DEFAULT_UPDATE_CONFIG_URL
 }
 
 export function getAppEnv(): string {
-  return readEnv('EXPO_PUBLIC_APP_ENV') ?? readEnv('NODE_ENV') ?? 'development'
+  return clean(process.env.EXPO_PUBLIC_APP_ENV) ?? clean(process.env.NODE_ENV) ?? 'development'
 }
 
 export function getIosStoreUrl(): string | null {
-  return readEnv('EXPO_PUBLIC_IOS_APP_STORE_URL')
+  return clean(process.env.EXPO_PUBLIC_IOS_APP_STORE_URL) ?? IOS_APP_STORE_URL
 }
 
 export function getAndroidPlayStoreUrl(): string | null {
-  return readEnv('EXPO_PUBLIC_ANDROID_PLAY_STORE_URL')
+  return clean(process.env.EXPO_PUBLIC_ANDROID_PLAY_STORE_URL) ?? ANDROID_PLAY_STORE_URL
 }
 
 function isRemoteUpdateConfig(value: unknown): value is RemoteUpdateConfig {
