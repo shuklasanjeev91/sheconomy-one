@@ -90,13 +90,17 @@ jobs:
           echo "PUBLISH_MESSAGE<<EOF" >> "$GITHUB_ENV"
           echo "$MESSAGE" >> "$GITHUB_ENV"
           echo "EOF" >> "$GITHUB_ENV"
-          eas update --channel production --message "$MESSAGE" --non-interactive
           # Store binaries only install an exact runtime match:
-          # iOS App Store 6.0.11 and Play 177+ → 6.0.8 (app.json, published above)
+          # Play 6.1.0 (versionCode 204) on English-locale phones reports 6.0.8: Play's
+          #   config.en split overrides expo_runtime_version. Android only — iOS 6.0.8
+          #   is the old App Store 6.0.11 binary and must keep the 6.0.x branch code.
           # Some iOS clients report runtime 6.0.11 (app version) — publish that too.
           # Last Play-approved FGS-stripped Android → 6.0.7.
+          EAS_UPDATE_RUNTIME_VERSION=6.0.8 eas update --channel production --platform android --message "$MESSAGE (runtime 6.0.8 android)" --non-interactive
           EAS_UPDATE_RUNTIME_VERSION=6.0.11 eas update --channel production --message "$MESSAGE (runtime 6.0.11)" --non-interactive
           EAS_UPDATE_RUNTIME_VERSION=6.0.7 eas update --channel production --message "$MESSAGE (runtime 6.0.7)" --non-interactive
+          # app.json runtime last so the verify step sees it as the newest group.
+          eas update --channel production --message "$MESSAGE" --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_PUBLIC_WEB_APP_URL: https://sheconomy.in
@@ -107,10 +111,12 @@ jobs:
         run: |
           set -euo pipefail
           SHORT_SHA="${GITHUB_SHA::7}"
+          RUNTIME=$(node -p "require('./app.json').expo.runtimeVersion")
+          RUNTIME_RE=$(printf '%s' "$RUNTIME" | sed 's/\./\\./g')
           OUTPUT=$(eas update:list --branch production --limit 1 --non-interactive 2>&1)
           echo "$OUTPUT"
-          echo "$OUTPUT" | grep -Eqi 'Runtime Version[[:space:]]*6\.0(\.8)?' \
-            || { echo "Expected runtimeVersion 6.0.8 (or 6.0) on latest production update."; exit 1; }
+          echo "$OUTPUT" | grep -Eqi "Runtime Version[[:space:]]*${RUNTIME_RE}" \
+            || { echo "Expected runtimeVersion $RUNTIME on latest production update."; exit 1; }
           echo "$OUTPUT" | grep -Eqi 'Platforms[[:space:]]*.*android' \
             || { echo "Expected android platform on latest update."; exit 1; }
           echo "$OUTPUT" | grep -Eqi 'Platforms[[:space:]]*.*ios' \
@@ -121,6 +127,6 @@ jobs:
             echo "Publish message was: $PUBLISH_MESSAGE"
             exit 1
           fi
-          echo "Verified latest production OTA (runtime 6.0.8, android+ios). 6.0.7 is published in the same job."
+          echo "Verified latest production OTA (runtime $RUNTIME, android+ios). 6.0.8 android, 6.0.11 and 6.0.7 are published in the same job."
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

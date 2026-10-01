@@ -28,15 +28,24 @@ store submission instead, so call it out rather than pushing an OTA:
 
 - `app.json` native config: plugins, permissions, `scheme`, icons, splash
 - Added/removed/upgraded native modules in `package.json`
-- Any change to `runtimeVersion` (currently `6.0.8` in app.json). Store
+- Any change to `runtimeVersion` (currently `6.1.0` in app.json). Store
   binaries only install OTAs whose runtime matches **exactly**:
-  - iOS App Store 6.0.11 → runtime `6.0.8` (and publish `6.0.11` as well)
+  - Play 6.1.0 (versionCode 204) on English-locale phones → runtime `6.0.8`.
+    Play's `config.en` split overrides `expo_runtime_version`, so these
+    installs ask for 6.0.8. Publish main to 6.0.8 **Android only**.
+  - iOS App Store 6.0.11 → runtime `6.0.8` (iOS) and `6.0.11`
   - Play Android last approved FGS-stripped binaries → runtime `6.0.7`
-  - Newer Play/iOS binaries (build 177+) → runtime `6.0.8`
 
-Until those older binaries are gone, publish every runtime after the default:
+Until those older binaries are gone, publish every runtime after the default
+(`.github/workflows/eas-update-production.yml` does the same on every main push):
 
 ```bash
+EAS_UPDATE_RUNTIME_VERSION=6.0.8 NODE_OPTIONS="--max-old-space-size=8192" yarn eas update \
+  --channel production \
+  --platform android \
+  --message "<short summary> (runtime 6.0.8 android)" \
+  --non-interactive
+
 EAS_UPDATE_RUNTIME_VERSION=6.0.11 NODE_OPTIONS="--max-old-space-size=8192" yarn eas update \
   --channel production \
   --message "<short summary> (runtime 6.0.11)" \
