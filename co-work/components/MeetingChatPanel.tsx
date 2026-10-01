@@ -759,46 +759,48 @@ export function MeetingChatPanel({
       >
         {chatEnabled && audiences.length > 1 ? (
           <YStack gap="$2">
-            <XStack alignItems="center" gap="$2">
-              <Text fontSize={12} fontWeight="700" color={coworkUi.meetingIconMuted}>
-                To:
-              </Text>
-              {Platform.OS === 'web' ? (
-                <Button
-                  tone="outline"
-                  size="$2"
-                  borderRadius={12}
-                  flex={1}
-                  justifyContent="space-between"
-                  borderColor={coworkUi.glassBorder}
-                  backgroundColor={coworkUi.meetingControl}
-                  iconAfter={<Icons.ChevronDown size={14} color={coworkUi.textMuted} />}
-                  onPress={() => setToMenuOpen((open) => !open)}
-                >
-                  {toLabel}
-                </Button>
-              ) : (
-                <MeetingSheetButton
-                  accessibilityLabel={`Chat audience, ${toLabel}`}
-                  onPress={() => setToMenuOpen((open) => !open)}
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    paddingHorizontal: 12,
-                    borderRadius: 12,
-                    backgroundColor: coworkUi.meetingControl,
-                    borderWidth: 1,
-                    borderColor: coworkUi.glassBorder,
-                  }}
-                >
-                  <Text fontSize={13} fontWeight="700" color={coworkUi.text}>
+            {fullWidth ? null : (
+              <XStack alignItems="center" gap="$2">
+                <Text fontSize={12} fontWeight="700" color={coworkUi.meetingIconMuted}>
+                  To:
+                </Text>
+                {Platform.OS === 'web' ? (
+                  <Button
+                    tone="outline"
+                    size="$2"
+                    borderRadius={12}
+                    flex={1}
+                    justifyContent="space-between"
+                    borderColor={coworkUi.glassBorder}
+                    backgroundColor={coworkUi.meetingControl}
+                    iconAfter={<Icons.ChevronDown size={14} color={coworkUi.textMuted} />}
+                    onPress={() => setToMenuOpen((open) => !open)}
+                  >
                     {toLabel}
-                  </Text>
-                  <Icons.ChevronDown size={14} color={coworkUi.textMuted} />
-                </MeetingSheetButton>
-              )}
-            </XStack>
+                  </Button>
+                ) : (
+                  <MeetingSheetButton
+                    accessibilityLabel={`Chat audience, ${toLabel}`}
+                    onPress={() => setToMenuOpen((open) => !open)}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      backgroundColor: coworkUi.meetingControl,
+                      borderWidth: 1,
+                      borderColor: coworkUi.glassBorder,
+                    }}
+                  >
+                    <Text fontSize={13} fontWeight="700" color={coworkUi.text}>
+                      {toLabel}
+                    </Text>
+                    <Icons.ChevronDown size={14} color={coworkUi.textMuted} />
+                  </MeetingSheetButton>
+                )}
+              </XStack>
+            )}
             {toMenuOpen ? (
               <YStack
                 gap={2}

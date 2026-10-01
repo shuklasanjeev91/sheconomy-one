@@ -2295,6 +2295,11 @@ function MeetingRoomOverlay({
           recording={recording}
           isHost={isAuthoritativeHost}
           onLeave={() => void handleLeave()}
+          leadingInset={
+            layout.compactControls && (controlsVisible || sheetPanelOpen)
+              ? Math.max(safeLeft, 14) + 30 - 4
+              : 0
+          }
         />
         <MeetingSpeakingWhileMutedBanner
           visible={shouldShowSpeakingWhileMuted({
@@ -2407,14 +2412,6 @@ function MeetingRoomOverlay({
                 message="Live updates paused — chat and participants refresh every few seconds."
                 actionLabel="Reconnect"
                 onAction={() => presence.retryRealtime()}
-              />
-            )
-          }
-          if (!isAuthoritativeHost && recordingIndicator.isRecording) {
-            return (
-              <CoWorkAlertBanner
-                tone="danger"
-                message="This meeting is being recorded by the host."
               />
             )
           }

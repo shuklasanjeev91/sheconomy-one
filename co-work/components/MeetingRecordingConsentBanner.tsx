@@ -9,6 +9,8 @@ type MeetingRecordingConsentBannerProps = {
   isHost: boolean
   /** Leave the meeting if the participant declines consent. */
   onLeave?: () => void
+  /** Extra left offset so the card clears overlay controls (e.g. the security shield). */
+  leadingInset?: number
 }
 
 /**
@@ -19,6 +21,7 @@ export function MeetingRecordingConsentBanner({
   recording,
   isHost,
   onLeave,
+  leadingInset = 0,
 }: MeetingRecordingConsentBannerProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const [dismissed, setDismissed] = useState(false)
@@ -37,27 +40,28 @@ export function MeetingRecordingConsentBanner({
     <XStack
       alignItems="center"
       justifyContent="space-between"
+      marginTop="$2"
+      marginRight="$3"
+      marginLeft={12 + leadingInset}
       paddingHorizontal="$3"
       paddingVertical="$2.5"
-      backgroundColor="rgba(224, 40, 40, 0.12)"
-      borderBottomWidth={1}
-      borderBottomColor="rgba(224, 40, 40, 0.28)"
+      borderRadius={12}
+      backgroundColor={coworkUi.surface}
+      borderWidth={1}
+      borderColor={coworkUi.border}
+      borderLeftWidth={3}
+      borderLeftColor={coworkUi.danger}
       gap="$2"
+      shadowColor="#000"
+      shadowOpacity={0.25}
+      shadowRadius={8}
+      shadowOffset={{ width: 0, height: 2 }}
+      elevation={4}
     >
-      <XStack alignItems="center" gap="$2" flex={1} minWidth={0}>
-        <XStack
-          width={28}
-          height={28}
-          borderRadius={999}
-          backgroundColor="rgba(224, 40, 40, 0.2)"
-          alignItems="center"
-          justifyContent="center"
-          flexShrink={0}
-        >
-          <YStack width={8} height={8} borderRadius={4} backgroundColor={coworkUi.danger} />
-        </XStack>
-        <YStack flex={1} minWidth={0} gap={1}>
-          <Text fontSize={13} fontWeight="700" color={coworkUi.danger}>
+      <XStack alignItems="center" gap="$2.5" flex={1} minWidth={0}>
+        <YStack width={8} height={8} borderRadius={4} backgroundColor={coworkUi.danger} flexShrink={0} />
+        <YStack flex={1} minWidth={0} gap={2}>
+          <Text fontSize={13} fontWeight="700" color={coworkUi.text} numberOfLines={1}>
             This meeting is being recorded
           </Text>
           <Text fontSize={11} color={coworkUi.textSecondary} numberOfLines={2}>
@@ -72,7 +76,7 @@ export function MeetingRecordingConsentBanner({
             tone="outline"
             size="$2"
             borderRadius={999}
-            borderColor="rgba(224, 40, 40, 0.45)"
+            borderColor={coworkUi.danger}
             color={coworkUi.danger}
             onPress={onLeave}
           >
@@ -83,7 +87,8 @@ export function MeetingRecordingConsentBanner({
           tone="outline"
           size="$2"
           borderRadius={999}
-          icon={<Icons.X size={14} color={coworkUi.textMuted} />}
+          borderColor={coworkUi.border}
+          icon={<Icons.X size={14} color={coworkUi.textSecondary} />}
           onPress={() => setDismissed(true)}
           accessibilityLabel="Dismiss recording notice"
         />
