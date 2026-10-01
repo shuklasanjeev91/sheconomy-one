@@ -199,7 +199,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 205,
+      "versionCode": 206,
       "softwareKeyboardLayoutMode": "resize",
       "largeHeap": true,
       "adaptiveIcon": {
