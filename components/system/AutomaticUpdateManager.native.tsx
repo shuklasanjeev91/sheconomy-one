@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppState, InteractionManager, type AppStateStatus } from 'react-native'
+import { AppState, InteractionManager, Modal, type AppStateStatus } from 'react-native'
 import * as Updates from 'expo-updates'
 
 import { MaintenanceScreen } from '~/components/system/MaintenanceScreen'
@@ -11,7 +11,10 @@ import {
   dismissOptionalUpdate,
   getNativeAppVersion,
   markUpdateApplied,
+  readCachedRemoteConfig,
   readUpdateMetadata,
+  refreshRemoteConfig,
+  requiredStoreVersion,
   runUpdateCheck,
   shouldPromptForDownloadedUpdate,
   type UpdateStatus,
@@ -88,6 +91,37 @@ export function AutomaticUpdateManager() {
     }
   }, [])
 
+  // Store-version gate runs independently of OTA (no startup delay, works with
+  // updates disabled) and falls back to the last cached policy when offline.
+  useEffect(() => {
+    if (depsRef.current.isDev) return
+    const installed = getNativeAppVersion()
+    let cancelled = false
+    let fetchedFresh = false
+
+    void readCachedRemoteConfig().then((cached) => {
+      if (cancelled || fetchedFresh) return
+      const required = requiredStoreVersion(cached, installed)
+      if (required) setStoreMinimum(required)
+    })
+
+    const refresh = async () => {
+      const fresh = await refreshRemoteConfig()
+      if (cancelled || !fresh) return
+      fetchedFresh = true
+      setStoreMinimum(requiredStoreVersion(fresh, installed))
+    }
+    void refresh()
+
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') void refresh()
+    })
+    return () => {
+      cancelled = true
+      subscription.remove()
+    }
+  }, [])
+
   useEffect(() => {
     const deps = depsRef.current
     if (deps.isDev || !Updates.isEnabled) return
@@ -149,11 +183,15 @@ export function AutomaticUpdateManager() {
   }
 
   if (storeMinimum) {
+    // A native Modal sits above every screen, sheet and nested modal; the no-op
+    // onRequestClose swallows the Android back button.
     return (
-      <MandatoryStoreUpdateScreen
-        minimumSupportedVersion={storeMinimum}
-        currentVersion={getNativeAppVersion()}
-      />
+      <Modal visible animationType="none" statusBarTranslucent onRequestClose={() => {}}>
+        <MandatoryStoreUpdateScreen
+          minimumSupportedVersion={storeMinimum}
+          currentVersion={getNativeAppVersion()}
+        />
+      </Modal>
     )
   }
 

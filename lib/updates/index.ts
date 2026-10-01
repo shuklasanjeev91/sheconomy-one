@@ -45,3 +45,9 @@ export {
   shouldPromptForDownloadedUpdate,
 } from '~/lib/updates/update-service'
 export { compareVersions, isVersionLessThan, parseVersion } from '~/lib/updates/version'
+export {
+  cacheRemoteConfig,
+  readCachedRemoteConfig,
+  refreshRemoteConfig,
+  requiredStoreVersion,
+} from '~/lib/updates/store-gate'
