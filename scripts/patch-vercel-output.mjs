@@ -124,6 +124,35 @@ function patchWellKnownHeaders() {
   console.log('[patch-vercel-output] well-known Content-Type headers applied')
 }
 
+/**
+ * One's `vc-config-base` pins serverless functions to `nodejs20.x`, which
+ * Vercel no longer deploys. Match `engines.node` (22.x) instead.
+ */
+function patchFunctionRuntimes() {
+  const functionsDir = resolve(process.cwd(), '.vercel/output/functions')
+  if (!existsSync(functionsDir)) return
+
+  let patched = 0
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (entry.name !== '.vc-config.json') continue
+      const config = JSON.parse(readFileSync(full, 'utf8'))
+      if (typeof config.runtime !== 'string' || !/^nodejs(1\d|20)\.x$/.test(config.runtime)) continue
+      config.runtime = 'nodejs22.x'
+      writeFileSync(full, `${JSON.stringify(config, null, 2)}\n`)
+      patched += 1
+    }
+  }
+  walk(functionsDir)
+  console.log(`[patch-vercel-output] function runtime set to nodejs22.x (${patched} functions)`)
+}
+
 patchVercelOutputConfig()
 patchWellKnownHeaders()
 patchInstantNavInRouterBundles()
+patchFunctionRuntimes()
