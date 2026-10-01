@@ -18,6 +18,15 @@ export interface RemoteUpdateConfig {
   maintenanceMessage?: string
 }
 
+/** Per-store overrides, e.g. force Android while the iOS build is still in review. */
+export type RemoteUpdatePlatformOverrides = Partial<
+  Record<'android' | 'ios', Partial<RemoteUpdateConfig>>
+>
+
+export type RemoteUpdateConfigPayload = RemoteUpdateConfig & {
+  platforms?: RemoteUpdatePlatformOverrides
+}
+
 export type UpdateMetadata = {
   lastAppliedUpdateId: string | null
   lastCheckAt: number | null

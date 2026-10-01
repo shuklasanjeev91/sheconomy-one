@@ -39,6 +39,37 @@ describe('fetchRemoteUpdateConfig', () => {
     })
   })
 
+  it('applies the running platform override and ignores the other store', async () => {
+    vi.stubEnv('EXPO_PUBLIC_UPDATE_CONFIG_URL', 'https://example.com/update-config.json')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          minimumSupportedVersion: '5.0.0',
+          latestVersion: '6.1.0',
+          critical: false,
+          maintenanceMode: false,
+          platforms: {
+            android: { minimumSupportedVersion: '6.1.0' },
+            ios: { minimumSupportedVersion: 42 },
+          },
+        }),
+      })),
+    )
+
+    await expect(fetchRemoteUpdateConfig(undefined, 'android')).resolves.toMatchObject({
+      minimumSupportedVersion: '6.1.0',
+      latestVersion: '6.1.0',
+    })
+    await expect(fetchRemoteUpdateConfig(undefined, 'ios')).resolves.toMatchObject({
+      minimumSupportedVersion: '5.0.0',
+    })
+    await expect(fetchRemoteUpdateConfig(undefined, 'web')).resolves.toMatchObject({
+      minimumSupportedVersion: '5.0.0',
+    })
+  })
+
   it('returns null on network failure', async () => {
     vi.stubEnv('EXPO_PUBLIC_UPDATE_CONFIG_URL', 'https://example.com/update-config.json')
     vi.stubGlobal(
