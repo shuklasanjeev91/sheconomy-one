@@ -1,3 +1,5 @@
+import { Platform } from 'react-native'
+
 import { ANDROID_PLAY_STORE_URL, IOS_APP_STORE_URL } from '~/lib/platform/open-in-app'
 import { DEFAULT_REMOTE_UPDATE_CONFIG } from '~/lib/updates/constants'
 import { logUpdate } from '~/lib/updates/logging'
@@ -39,12 +41,34 @@ function isRemoteUpdateConfig(value: unknown): value is RemoteUpdateConfig {
   )
 }
 
+function readPlatformOverride(json: unknown, platform: string): Partial<RemoteUpdateConfig> {
+  if (platform !== 'android' && platform !== 'ios') return {}
+  const platforms = (json as { platforms?: unknown }).platforms
+  if (!platforms || typeof platforms !== 'object') return {}
+  const row = (platforms as Record<string, unknown>)[platform]
+  if (!row || typeof row !== 'object') return {}
+  const raw = row as Record<string, unknown>
+  const override: Partial<RemoteUpdateConfig> = {}
+  if (typeof raw.minimumSupportedVersion === 'string') {
+    override.minimumSupportedVersion = raw.minimumSupportedVersion
+  }
+  if (typeof raw.latestVersion === 'string') override.latestVersion = raw.latestVersion
+  if (typeof raw.critical === 'boolean') override.critical = raw.critical
+  if (typeof raw.maintenanceMode === 'boolean') override.maintenanceMode = raw.maintenanceMode
+  if (typeof raw.maintenanceMessage === 'string') {
+    override.maintenanceMessage = raw.maintenanceMessage
+  }
+  return override
+}
+
 /**
- * Fetch remote update / maintenance policy.
+ * Fetch remote update / maintenance policy, with `platforms.android` /
+ * `platforms.ios` overrides applied for the running platform.
  * Never throws — returns null when URL is unset or request fails.
  */
 export async function fetchRemoteUpdateConfig(
   signal?: AbortSignal,
+  platform: string = Platform.OS,
 ): Promise<RemoteUpdateConfig | null> {
   const url = getUpdateConfigUrl()
   if (!url) return null
@@ -64,11 +88,16 @@ export async function fetchRemoteUpdateConfig(
       logUpdate('warn', 'Remote update config shape invalid')
       return null
     }
+    const override = readPlatformOverride(json, platform)
     return {
       ...DEFAULT_REMOTE_UPDATE_CONFIG,
-      ...json,
+      minimumSupportedVersion: override.minimumSupportedVersion ?? json.minimumSupportedVersion,
+      latestVersion: override.latestVersion ?? json.latestVersion,
+      critical: override.critical ?? json.critical,
+      maintenanceMode: override.maintenanceMode ?? json.maintenanceMode,
       maintenanceMessage:
-        typeof json.maintenanceMessage === 'string' ? json.maintenanceMessage : undefined,
+        override.maintenanceMessage ??
+        (typeof json.maintenanceMessage === 'string' ? json.maintenanceMessage : undefined),
     }
   } catch (error) {
     logUpdate('warn', 'Remote update config fetch failed', error)

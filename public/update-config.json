@@ -3,5 +3,10 @@
   "latestVersion": "6.1.0",
   "critical": false,
   "maintenanceMode": false,
-  "maintenanceMessage": "We are performing scheduled maintenance. Please try again shortly."
+  "maintenanceMessage": "We are performing scheduled maintenance. Please try again shortly.",
+  "platforms": {
+    "android": {
+      "minimumSupportedVersion": "6.1.0"
+    }
+  }
 }
