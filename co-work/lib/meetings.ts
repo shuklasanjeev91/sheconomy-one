@@ -3,11 +3,18 @@ import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { assertUtcIso, coerceIanaTimeZone, resolveDeviceIanaTimeZone } from '~/lib/calendar/timezone'
 
 import { parseMeetingInvitees } from '~/co-work/lib/invites'
+import {
+  MEETING_CHAT_ATTACHMENT_BUCKET,
+  meetingChatAttachmentMetadata,
+  parseMeetingChatAttachmentMetadata,
+} from '~/co-work/lib/meeting-chat-attachments'
+import { MEETING_CONTENT_SIGNED_URL_TTL_SEC } from '~/co-work/lib/meeting-content-share'
 import { normalizeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import { mapMeetingSecurityJoinError } from '~/co-work/lib/meeting-security'
 import type {
   CreateMeetingInput,
   Meeting,
+  MeetingChatAttachment,
   MeetingChatMessage,
   MeetingControlEvent,
   MeetingModerationSettings,
@@ -1052,12 +1059,62 @@ export async function fetchMeetingControlEvents(
   return (data ?? []) as MeetingControlEvent[]
 }
 
+const MEETING_CHAT_COLUMNS =
+  'id, meeting_id, sender_id, message_text, message_type, created_at, audience, recipient_id, system_event_type, metadata'
+
+/** Reuse a signed URL while it has this long left, so chat images don't reload on every poll. */
+const SIGNED_URL_REUSE_MIN_MS = 60 * 60 * 1000
+const signedAttachmentUrls = new Map<string, { url: string; expiresAt: number }>()
+
+export function rememberMeetingChatAttachmentUrl(path: string, url: string): void {
+  signedAttachmentUrls.set(path, {
+    url,
+    expiresAt: Date.now() + MEETING_CONTENT_SIGNED_URL_TTL_SEC * 1000,
+  })
+}
+
+async function signMeetingChatAttachmentPaths(paths: string[]): Promise<Map<string, string>> {
+  const now = Date.now()
+  const out = new Map<string, string>()
+  const missing: string[] = []
+  for (const path of new Set(paths)) {
+    const cached = signedAttachmentUrls.get(path)
+    if (cached && cached.expiresAt - now > SIGNED_URL_REUSE_MIN_MS) out.set(path, cached.url)
+    else missing.push(path)
+  }
+  if (missing.length === 0) return out
+  const { data } = await supabase.storage
+    .from(MEETING_CHAT_ATTACHMENT_BUCKET)
+    .createSignedUrls(missing, MEETING_CONTENT_SIGNED_URL_TTL_SEC)
+  for (const row of data ?? []) {
+    if (!row.path || !row.signedUrl || row.error) continue
+    rememberMeetingChatAttachmentUrl(row.path, row.signedUrl)
+    out.set(row.path, row.signedUrl)
+  }
+  return out
+}
+
+type MeetingChatRow = Omit<MeetingChatMessage, 'attachment' | 'sender'> & { metadata?: unknown }
+
+async function withMeetingChatAttachments(rows: MeetingChatRow[]): Promise<Array<Omit<MeetingChatMessage, 'sender'>>> {
+  const stored = rows.map((row) =>
+    parseMeetingChatAttachmentMetadata(row.metadata, row.meeting_id, row.sender_id),
+  )
+  const paths = stored.flatMap((attachment) => (attachment ? [attachment.path] : []))
+  const urls = paths.length > 0 ? await signMeetingChatAttachmentPaths(paths).catch(() => new Map()) : new Map()
+  return rows.map(({ metadata: _metadata, ...row }, index) => {
+    const attachment = stored[index]
+    return {
+      ...row,
+      attachment: attachment ? { ...attachment, url: urls.get(attachment.path) ?? null } : null,
+    }
+  })
+}
+
 export async function fetchMeetingChat(meetingId: string): Promise<MeetingChatMessage[]> {
   const { data, error } = await supabase
     .from('meeting_chat_messages')
-    .select(
-      'id, meeting_id, sender_id, message_text, message_type, created_at, audience, recipient_id, system_event_type',
-    )
+    .select(MEETING_CHAT_COLUMNS)
     .eq('meeting_id', meetingId)
     .eq('is_deleted', false)
     .order('created_at', { ascending: true })
@@ -1065,7 +1122,7 @@ export async function fetchMeetingChat(meetingId: string): Promise<MeetingChatMe
 
   if (error) throw new Error(error.message)
 
-  const rows = data ?? []
+  const rows = await withMeetingChatAttachments((data ?? []) as MeetingChatRow[])
   const senderIds = [...new Set(rows.map((r) => r.sender_id))]
   let profiles: Record<string, { full_name: string | null; username: string | null; avatar_url: string | null }> = {}
 
@@ -1090,26 +1147,28 @@ export async function sendMeetingChatMessage(
   options?: {
     audience?: 'everyone' | 'hosts' | 'private'
     recipientId?: string | null
+    /** Already uploaded with `uploadMeetingFile`. */
+    attachment?: MeetingChatAttachment
   },
 ): Promise<MeetingChatMessage> {
   const audience = options?.audience ?? 'everyone'
   if (audience === 'private' && !options?.recipientId) {
     throw new Error('Choose a participant for private chat.')
   }
+  const attachment = options?.attachment ?? null
 
   const { data, error } = await supabase
     .from('meeting_chat_messages')
     .insert({
       meeting_id: meetingId,
       sender_id: senderId,
-      message_text: message.trim(),
+      message_text: message.trim() || attachment?.fileName || '',
       message_type: 'text',
       audience,
       recipient_id: audience === 'private' ? options?.recipientId ?? null : null,
+      ...(attachment ? { metadata: meetingChatAttachmentMetadata(attachment) } : {}),
     })
-    .select(
-      'id, meeting_id, sender_id, message_text, message_type, created_at, audience, recipient_id, system_event_type',
-    )
+    .select(MEETING_CHAT_COLUMNS)
     .single()
 
   if (error) throw new Error(error.message)
@@ -1120,8 +1179,11 @@ export async function sendMeetingChatMessage(
     .eq('id', senderId)
     .maybeSingle()
 
+  const { metadata: _metadata, ...row } = data as MeetingChatRow
+  if (attachment?.url) rememberMeetingChatAttachmentUrl(attachment.path, attachment.url)
   return {
-    ...(data as MeetingChatMessage),
+    ...row,
+    attachment,
     sender: profile ?? null,
   }
 }

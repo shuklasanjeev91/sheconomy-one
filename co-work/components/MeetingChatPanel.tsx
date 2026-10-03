@@ -4,6 +4,7 @@ import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { AppTextField } from '~/components/forms/AppTextField'
 import { Avatar, Button, Icons, Input, ScrollView, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { MeetingChatAttachmentView } from '~/co-work/components/MeetingChatAttachmentView'
 import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { CoWorkPanelShell } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
@@ -23,6 +24,12 @@ import {
   meetingChatComposerAudiences,
   meetingChatMessageInSelectedChannel,
 } from '~/co-work/lib/meeting-chat'
+import {
+  MEETING_CHAT_MAX_PHOTOS,
+  meetingChatAttachmentCaption,
+  type MeetingChatAttachmentPick,
+} from '~/co-work/lib/meeting-chat-attachments'
+import type { MeetingContentSource } from '~/co-work/lib/meeting-content-upload'
 import {
   buildMeetingChatArchive,
   chatArchiveToPlainText,
@@ -49,9 +56,23 @@ type MeetingChatPanelProps = {
   participantDisplayNames?: Record<string, string>
   /** Used for Zoom-style Save chat export filename. */
   meetingId?: string
-  /** Opens Zoom-style share content / attachment picker. */
-  onAttach?: () => void
+  /** Uploads a picked file and posts it to the chosen chat audience. */
+  onSendAttachment?: (
+    source: MeetingContentSource,
+    audience: MeetingChatAudience,
+    recipientId: string | null,
+  ) => Promise<void>
 }
+
+const ATTACH_OPTIONS: Array<{
+  kind: MeetingChatAttachmentPick
+  label: string
+  icon: typeof Icons.Image
+}> = [
+  { kind: 'photo', label: 'Photo', icon: Icons.Image },
+  { kind: 'video', label: 'Video', icon: Icons.Film },
+  { kind: 'file', label: 'Document or file', icon: Icons.FileText },
+]
 
 export function MeetingChatPanel({
   messages,
@@ -67,7 +88,7 @@ export function MeetingChatPanel({
   participantChatWith = 'everyone',
   participantDisplayNames = {},
   meetingId,
-  onAttach,
+  onSendAttachment,
 }: MeetingChatPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const palette = useMeetingControlPalette()
@@ -78,6 +99,8 @@ export function MeetingChatPanel({
   const [recipientId, setRecipientId] = useState<string | null>(null)
   const [recipientQuery, setRecipientQuery] = useState('')
   const [toMenuOpen, setToMenuOpen] = useState(false)
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const [uploadingLabel, setUploadingLabel] = useState<string | null>(null)
   const lastPrivateRecipientRef = useRef<string | null>(null)
   const listRef = useRef<{ scrollToEnd?: (opts?: { animated?: boolean }) => void } | null>(null)
 
@@ -196,6 +219,59 @@ export function MeetingChatPanel({
     }
     onSend(draft.trim(), audience, audience === 'private' ? recipientId : null)
     setDraft('')
+  }
+
+  async function pickAndSendAttachment(kind: MeetingChatAttachmentPick) {
+    setAttachMenuOpen(false)
+    if (!onSendAttachment || !chatEnabled || uploadingLabel) return
+    if (audience === 'private' && !recipientId) {
+      toast.show('Choose a participant first', { tone: 'info' })
+      return
+    }
+    const target = audience === 'private' ? recipientId : null
+
+    let sources: MeetingContentSource[] = []
+    try {
+      const picker = await import('~/lib/media/pick-image')
+      if (kind === 'photo') {
+        sources = await picker.pickImages({ multiple: true, maxCount: MEETING_CHAT_MAX_PHOTOS })
+      } else if (kind === 'video') {
+        sources = await picker.pickVideos({ multiple: false })
+      } else {
+        const doc = await picker.pickDocument()
+        sources = doc ? [doc] : []
+      }
+    } catch (cause) {
+      toast.show('Could not open files', {
+        tone: 'danger',
+        message: cause instanceof Error ? cause.message : 'Try again.',
+      })
+      return
+    }
+    if (sources.length === 0) return
+
+    let failed = 0
+    let lastError: unknown = null
+    for (const [index, source] of sources.entries()) {
+      setUploadingLabel(
+        sources.length > 1
+          ? `Sending ${index + 1} of ${sources.length}…`
+          : `Sending ${source.fileName || 'file'}…`,
+      )
+      try {
+        await onSendAttachment(source, audience, target)
+      } catch (cause) {
+        failed += 1
+        lastError = cause
+      }
+    }
+    setUploadingLabel(null)
+    if (failed > 0) {
+      toast.show(failed === sources.length ? 'Could not send file' : `${failed} file(s) failed to send`, {
+        tone: 'danger',
+        message: lastError instanceof Error ? lastError.message : 'Upload failed. Try again.',
+      })
+    }
   }
 
   const [newChatTooltipDismissed, setNewChatTooltipDismissed] = useState(false)
@@ -646,6 +722,7 @@ export function MeetingChatPanel({
                 message: msg,
                 currentUserId,
               })
+            const caption = meetingChatAttachmentCaption(msg)
 
             return (
               <XStack
@@ -704,9 +781,12 @@ export function MeetingChatPanel({
                       {isSelf ? `Private to ${privatePeerName}` : 'Private message'}
                     </Text>
                   ) : null}
-                  <Text fontSize={14} color={coworkUi.text} lineHeight={20}>
-                    {msg.message_text}
-                  </Text>
+                  {msg.attachment ? <MeetingChatAttachmentView attachment={msg.attachment} /> : null}
+                  {caption ? (
+                    <Text fontSize={14} color={coworkUi.text} lineHeight={20}>
+                      {caption}
+                    </Text>
+                  ) : null}
                 </YStack>
               </XStack>
             )
@@ -986,6 +1066,60 @@ export function MeetingChatPanel({
             ) : null}
           </YStack>
         ) : null}
+        {attachMenuOpen && !uploadingLabel ? (
+          <YStack
+            gap={2}
+            padding="$2"
+            borderRadius={12}
+            borderWidth={1}
+            borderColor={coworkUi.glassBorder}
+            backgroundColor={coworkUi.meetingBarElevated}
+          >
+            {ATTACH_OPTIONS.map(({ kind, label, icon: OptionIcon }) =>
+              Platform.OS === 'web' ? (
+                <Button
+                  key={kind}
+                  tone="ghost"
+                  size="$2"
+                  borderRadius={10}
+                  justifyContent="flex-start"
+                  icon={<OptionIcon size={16} color={coworkUi.text} />}
+                  onPress={() => void pickAndSendAttachment(kind)}
+                >
+                  {label}
+                </Button>
+              ) : (
+                <MeetingSheetButton
+                  key={kind}
+                  accessibilityLabel={`Send ${label.toLowerCase()}`}
+                  onPress={() => void pickAndSendAttachment(kind)}
+                  style={{
+                    minHeight: 40,
+                    borderRadius: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                    gap: 10,
+                    paddingHorizontal: 12,
+                  }}
+                >
+                  <OptionIcon size={16} color={coworkUi.text} />
+                  <Text fontSize={13} fontWeight="700" color={coworkUi.text}>
+                    {label}
+                  </Text>
+                </MeetingSheetButton>
+              ),
+            )}
+          </YStack>
+        ) : null}
+        {uploadingLabel ? (
+          <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
+            <Icons.Paperclip size={14} color={coworkUi.textMuted} />
+            <Text fontSize={12} fontWeight="600" color={coworkUi.textMuted} numberOfLines={1} flex={1}>
+              {uploadingLabel}
+            </Text>
+          </XStack>
+        ) : null}
         {/* Zoom composer: attachment · input · emoji · send — always contrast-safe. */}
         <View
           collapsable={false}
@@ -999,34 +1133,31 @@ export function MeetingChatPanel({
             elevation: 12,
           }}
         >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Chat attachments"
-            disabled={!chatEnabled}
-            onPress={() => {
-              if (onAttach) {
-                onAttach()
-                return
-              }
-              toast.show('Attachments', {
-                tone: 'info',
-                message: 'Share files from the meeting Share menu for now.',
-              })
-            }}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 999,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: coworkUi.meetingControl,
-              borderWidth: 1,
-              borderColor: coworkUi.glassBorder,
-              opacity: chatEnabled ? 1 : 0.45,
-            }}
-          >
-            <Icons.Plus size={20} color={coworkUi.text} />
-          </Pressable>
+          {onSendAttachment ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send a photo, video or file"
+              accessibilityState={{ expanded: attachMenuOpen, busy: !!uploadingLabel }}
+              disabled={!chatEnabled || !!uploadingLabel}
+              onPress={() => {
+                setToMenuOpen(false)
+                setAttachMenuOpen((value) => !value)
+              }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 999,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: attachMenuOpen ? coworkUi.brand : coworkUi.meetingControl,
+                borderWidth: 1,
+                borderColor: coworkUi.glassBorder,
+                opacity: chatEnabled && !uploadingLabel ? 1 : 0.45,
+              }}
+            >
+              <Icons.Plus size={20} color={attachMenuOpen ? '#fff' : coworkUi.text} />
+            </Pressable>
+          ) : null}
           {Platform.OS === 'web' ? (
             <Input
               flex={1}

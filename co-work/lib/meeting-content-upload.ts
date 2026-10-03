@@ -32,7 +32,12 @@ function tooLargeMessage(maxBytes: number): string {
   return `Files up to ${Math.round(maxBytes / (1024 * 1024))} MB can be shared.`
 }
 
-async function uploadFromWeb(path: string, source: MeetingContentSource, mimeType: string, maxBytes: number) {
+async function uploadFromWeb(
+  path: string,
+  source: MeetingContentSource,
+  mimeType: string,
+  maxBytes: number,
+): Promise<number> {
   const body = source.file ?? (await (await fetch(source.uri)).blob())
   if (body.size <= 0) throw new Error('The selected file is empty.')
   if (body.size > maxBytes) throw new Error(tooLargeMessage(maxBytes))
@@ -40,10 +45,16 @@ async function uploadFromWeb(path: string, source: MeetingContentSource, mimeTyp
     .from(MEETING_CONTENT_BUCKET)
     .upload(path, body, { contentType: mimeType, upsert: false })
   if (error) throw new Error(error.message || 'Upload failed.')
+  return body.size
 }
 
 /** Streams the file from disk — reading a large video into JS memory crashes phones. */
-async function uploadFromDevice(path: string, source: MeetingContentSource, mimeType: string, maxBytes: number) {
+async function uploadFromDevice(
+  path: string,
+  source: MeetingContentSource,
+  mimeType: string,
+  maxBytes: number,
+): Promise<number> {
   const FileSystem = await import('expo-file-system/legacy')
   const info = await FileSystem.getInfoAsync(source.uri)
   const size = info.exists && 'size' in info && typeof info.size === 'number' ? info.size : source.fileSize ?? 0
@@ -79,14 +90,20 @@ async function uploadFromDevice(path: string, source: MeetingContentSource, mime
     }
     throw new Error(message)
   }
+  return size > 0 ? size : source.fileSize ?? 0
 }
 
-/** Upload a picked file and return the item every participant can open. */
-export async function uploadMeetingContent(
+export type UploadedMeetingFile = MeetingContentItem & {
+  path: string
+  size: number
+}
+
+/** Upload a picked file into the meeting's storage folder and sign it for viewing. */
+export async function uploadMeetingFile(
   meetingId: string,
   userId: string,
   source: MeetingContentSource,
-): Promise<MeetingContentItem> {
+): Promise<UploadedMeetingFile> {
   const fileName =
     source.fileName?.trim() || (source.file as File | undefined)?.name || fileNameFromUri(source.uri)
   const mimeType = meetingContentMimeType(source.mimeType || source.file?.type, fileName)
@@ -97,12 +114,24 @@ export async function uploadMeetingContent(
   }
 
   const path = meetingContentStoragePath(meetingId, userId, fileName)
-  if (Platform.OS === 'web') await uploadFromWeb(path, source, mimeType, maxBytes)
-  else await uploadFromDevice(path, source, mimeType, maxBytes)
+  const size =
+    Platform.OS === 'web'
+      ? await uploadFromWeb(path, source, mimeType, maxBytes)
+      : await uploadFromDevice(path, source, mimeType, maxBytes)
 
   const { data, error } = await supabase.storage
     .from(MEETING_CONTENT_BUCKET)
     .createSignedUrl(path, MEETING_CONTENT_SIGNED_URL_TTL_SEC)
   if (error || !data?.signedUrl) throw new Error(error?.message || 'Could not prepare the file for sharing.')
-  return { url: data.signedUrl, fileName, mimeType, kind }
+  return { url: data.signedUrl, fileName, mimeType, kind, path, size }
+}
+
+/** Upload a picked file and return the item every participant can open. */
+export async function uploadMeetingContent(
+  meetingId: string,
+  userId: string,
+  source: MeetingContentSource,
+): Promise<MeetingContentItem> {
+  const { url, fileName, mimeType, kind } = await uploadMeetingFile(meetingId, userId, source)
+  return { url, fileName, mimeType, kind }
 }

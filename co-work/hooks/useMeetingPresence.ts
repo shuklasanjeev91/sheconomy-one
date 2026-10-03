@@ -53,6 +53,8 @@ import {
   type MeetingNonverbalStatusId,
 } from '~/co-work/lib/meeting-nonverbal'
 import { canViewerSeeMeetingChatMessage } from '~/co-work/lib/meeting-chat'
+import { sanitizeRemoteMeetingChatMessage } from '~/co-work/lib/meeting-chat-attachments'
+import { uploadMeetingFile, type MeetingContentSource } from '~/co-work/lib/meeting-content-upload'
 import { canManageMeeting } from '~/co-work/lib/meeting-role-permissions'
 import type { MeetingChatAudience } from '~/co-work/lib/meeting-role-permissions'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
@@ -303,8 +305,9 @@ export function useMeetingPresence({
   }, [meeting.id])
 
   const ingestRemoteChatMessage = useCallback(
-    (message: MeetingChatMessage) => {
-      if (!message?.id) return
+    (incoming: MeetingChatMessage) => {
+      if (!incoming?.id) return
+      const message = sanitizeRemoteMeetingChatMessage(incoming, supabaseConfig.url)
       if (
         !canViewerSeeMeetingChatMessage({
           message,
@@ -946,11 +949,14 @@ export function useMeetingPresence({
       text: string,
       audience: MeetingChatAudience = 'everyone',
       recipientId?: string | null,
+      source?: MeetingContentSource,
     ) => {
+      const uploaded = source ? await uploadMeetingFile(meeting.id, userId, source) : null
       const message = await sendMeetingChatMessage(meeting.id, userId, text, {
         audience:
           audience === 'hosts' ? 'hosts' : audience === 'private' ? 'private' : 'everyone',
         recipientId: audience === 'private' ? recipientId ?? null : null,
+        attachment: uploaded ? { ...uploaded, size: uploaded.size || null } : undefined,
       })
       setChatMessages((prev) => {
         if (prev.some((row) => row.id === message.id)) return prev
@@ -959,6 +965,12 @@ export function useMeetingPresence({
       sendSignal({ type: 'chat', from: userId, message })
     },
     [meeting.id, sendSignal, userId],
+  )
+
+  const sendChatAttachment = useCallback(
+    (source: MeetingContentSource, audience?: MeetingChatAudience, recipientId?: string | null) =>
+      sendChat('', audience, recipientId, source),
+    [sendChat],
   )
 
   const deleteChat = useCallback(
@@ -1775,6 +1787,7 @@ export function useMeetingPresence({
     setPanel: setPanelSafe,
     togglePanel,
     sendChat,
+    sendChatAttachment,
     deleteChat,
     admit,
     reject,

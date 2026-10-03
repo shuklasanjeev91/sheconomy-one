@@ -2508,10 +2508,9 @@ function MeetingRoomOverlay({
           }
           onDelete={canModerate || chatEnabled ? (id) => void presence.deleteChat(id) : undefined}
           onClose={() => presence.setPanel('none')}
-          onAttach={() => {
-            setShareOptionsInitialContent('files')
-            setShareOptionsOpen(true)
-          }}
+          onSendAttachment={(source, audience, recipientId) =>
+            presence.sendChatAttachment(source, audience, recipientId)
+          }
           fullWidth={panelFullWidth}
         />
       </MeetingResponsivePanel>

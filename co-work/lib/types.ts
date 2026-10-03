@@ -1,4 +1,4 @@
-import type { MeetingContentShare } from '~/co-work/lib/meeting-content-share'
+import type { MeetingContentKind, MeetingContentShare } from '~/co-work/lib/meeting-content-share'
 import type { WhiteboardStroke } from '~/co-work/lib/meeting-whiteboard'
 
 export type MeetingStatus = 'scheduled' | 'instant' | 'active' | 'ended' | 'cancelled'
@@ -150,6 +150,17 @@ export type MeetingControlEvent = {
   created_at: string
 }
 
+export type MeetingChatAttachment = {
+  /** Object path in the `chat-files` bucket, under `meetings/<meeting>/<sender>/`. */
+  path: string
+  fileName: string
+  mimeType: string
+  kind: MeetingContentKind
+  size: number | null
+  /** Short-lived signed URL; null when it could not be signed. */
+  url: string | null
+}
+
 export type MeetingChatMessage = {
   id: string
   meeting_id: string
@@ -160,6 +171,7 @@ export type MeetingChatMessage = {
   audience?: 'everyone' | 'hosts' | 'private' | 'system'
   recipient_id?: string | null
   system_event_type?: string | null
+  attachment?: MeetingChatAttachment | null
   sender?: {
     full_name: string | null
     username: string | null
