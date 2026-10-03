@@ -19,6 +19,8 @@ export type AppTextFieldProps = {
   onFocus?: RNTextInputProps['onFocus']
   onEndEditing?: RNTextInputProps['onEndEditing']
   onSubmitEditing?: RNTextInputProps['onSubmitEditing']
+  /** `submit` keeps the keyboard up after Return (chat composers). */
+  submitBehavior?: RNTextInputProps['submitBehavior']
   placeholder?: string
   placeholderTextColor?: string
   editable?: boolean
@@ -62,6 +64,7 @@ export const AppTextField = forwardRef<RNTextInputType, AppTextFieldProps>(
       onFocus,
       onEndEditing,
       onSubmitEditing,
+      submitBehavior,
       placeholder,
       placeholderTextColor,
       editable,
@@ -188,6 +191,7 @@ export const AppTextField = forwardRef<RNTextInputType, AppTextFieldProps>(
           maxLength={maxLength}
           multiline={multiline}
           numberOfLines={numberOfLines}
+          submitBehavior={submitBehavior}
           autoFocus={autoFocus}
           showSoftInputOnFocus={showSoftInputOnFocus}
           importantForAutofill={

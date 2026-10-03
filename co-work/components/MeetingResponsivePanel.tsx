@@ -4,6 +4,7 @@ import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
+  KeyboardAvoidedByParentContext,
   Sheet,
   SheetFrame,
   SheetOverlay,
@@ -84,7 +85,7 @@ export function MeetingResponsivePanel({
           ]}
         >
           <View style={nativeSheetStyles.body} collapsable={false} pointerEvents="auto">
-            {children}
+            <KeyboardAvoidedByParentContext.Provider value>{children}</KeyboardAvoidedByParentContext.Provider>
           </View>
         </View>
       </View>

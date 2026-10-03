@@ -1,16 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Platform, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Keyboard, Platform, View } from 'react-native'
 import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { AppTextField } from '~/components/forms/AppTextField'
-import { Avatar, Button, Icons, Input, ScrollView, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { MeetingChatAttachmentView } from '~/co-work/components/MeetingChatAttachmentView'
+import {
+  Avatar,
+  Button,
+  Icons,
+  Input,
+  KeyboardAvoidedByParentContext,
+  ScrollView,
+  Text,
+  XStack,
+  YStack,
+  useAppToast,
+} from '~/components/ui'
+import {
+  MeetingChatAttachmentView,
+  MeetingChatAttachmentViewer,
+} from '~/co-work/components/MeetingChatAttachmentView'
+import { MEETING_CHAT_EMOJI_CATEGORIES, meetingChatEmojiOnlyCount } from '~/co-work/lib/meeting-chat-emoji'
 import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { CoWorkPanelShell } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { useCoWorkTheme, useMeetingControlPalette } from '~/co-work/lib/theme'
 import { useComposerKeyboardInset } from '~/hooks/useKeyboardVisible'
 import type {
+  MeetingChatAttachment,
   MeetingChatMessage,
   MeetingParticipant,
   MeetingParticipantChatWith,
@@ -39,6 +55,8 @@ import {
 
 /** Within this many px of the end still counts as reading the latest message. */
 const CHAT_BOTTOM_SLOP = 80
+/** Return key, send button and IME submit can all fire for one send. */
+const DUPLICATE_SEND_WINDOW_MS = 1000
 
 type MeetingChatPanelProps = {
   messages: MeetingChatMessage[]
@@ -101,6 +119,11 @@ export function MeetingChatPanel({
   const [toMenuOpen, setToMenuOpen] = useState(false)
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [uploadingLabel, setUploadingLabel] = useState<string | null>(null)
+  const [emojiOpen, setEmojiOpen] = useState(false)
+  const [emojiCategory, setEmojiCategory] = useState(MEETING_CHAT_EMOJI_CATEGORIES[0]!.id)
+  const [previewAttachment, setPreviewAttachment] = useState<MeetingChatAttachment | null>(null)
+  const closePreview = useCallback(() => setPreviewAttachment(null), [])
+  const lastSendRef = useRef<{ text: string; at: number } | null>(null)
   const lastPrivateRecipientRef = useRef<string | null>(null)
   const listRef = useRef<{ scrollToEnd?: (opts?: { animated?: boolean }) => void } | null>(null)
 
@@ -211,15 +234,33 @@ export function MeetingChatPanel({
     }
   }, [visibleMessages.length])
 
-  function send() {
-    if (!chatEnabled || !draft.trim()) return
+  /** `submitted` is the keyboard's final text (iOS autocorrect can land after the last change event). */
+  function send(submitted?: string) {
+    const text = (submitted ?? draft).trim()
+    if (!chatEnabled || !text) return
     if (audience === 'private' && !recipientId) return
+    const now = Date.now()
+    const last = lastSendRef.current
+    if (last && last.text === text && now - last.at < DUPLICATE_SEND_WINDOW_MS) return
+    lastSendRef.current = { text, at: now }
     if (audience === 'private' && recipientId) {
       lastPrivateRecipientRef.current = recipientId
     }
-    onSend(draft.trim(), audience, audience === 'private' ? recipientId : null)
+    onSend(text, audience, audience === 'private' ? recipientId : null)
     setDraft('')
   }
+
+  function toggleEmojiPicker() {
+    if (!chatEnabled) return
+    setAttachMenuOpen(false)
+    setToMenuOpen(false)
+    if (!emojiOpen) Keyboard.dismiss()
+    setEmojiOpen(!emojiOpen)
+  }
+
+  const emojiTab =
+    MEETING_CHAT_EMOJI_CATEGORIES.find((category) => category.id === emojiCategory) ??
+    MEETING_CHAT_EMOJI_CATEGORIES[0]!
 
   async function pickAndSendAttachment(kind: MeetingChatAttachmentPick) {
     setAttachMenuOpen(false)
@@ -319,6 +360,7 @@ export function MeetingChatPanel({
   }
 
   return (
+    <KeyboardAvoidedByParentContext.Provider value>
     <CoWorkPanelShell fullWidth={fullWidth}>
       {/* Zoom Mobile Header & Channel Selector (Image 1) */}
       {fullWidth ? (
@@ -723,6 +765,8 @@ export function MeetingChatPanel({
                 currentUserId,
               })
             const caption = meetingChatAttachmentCaption(msg)
+            const bigEmoji = msg.attachment ? 0 : meetingChatEmojiOnlyCount(caption)
+            const plain = bigEmoji > 0 && !hostsOnly && !isPrivate
 
             return (
               <XStack
@@ -740,13 +784,15 @@ export function MeetingChatPanel({
                 ) : null}
                 <YStack
                   maxWidth="82%"
-                  paddingHorizontal="$3"
-                  paddingVertical="$2"
+                  paddingHorizontal={plain ? '$1' : '$3'}
+                  paddingVertical={plain ? 0 : '$2'}
                   borderRadius={18}
                   borderBottomRightRadius={isSelf ? 6 : 18}
                   borderBottomLeftRadius={isSelf ? 18 : 6}
-                  backgroundColor={isSelf ? coworkUi.chatBubbleSelf : coworkUi.chatBubbleOther}
-                  borderWidth={1}
+                  backgroundColor={
+                    plain ? 'transparent' : isSelf ? coworkUi.chatBubbleSelf : coworkUi.chatBubbleOther
+                  }
+                  borderWidth={plain ? 0 : 1}
                   borderColor={isSelf ? coworkUi.borderAccent : coworkUi.borderSoft}
                   gap={4}
                 >
@@ -781,9 +827,16 @@ export function MeetingChatPanel({
                       {isSelf ? `Private to ${privatePeerName}` : 'Private message'}
                     </Text>
                   ) : null}
-                  {msg.attachment ? <MeetingChatAttachmentView attachment={msg.attachment} /> : null}
+                  {msg.attachment ? (
+                    <MeetingChatAttachmentView attachment={msg.attachment} onPreview={setPreviewAttachment} />
+                  ) : null}
                   {caption ? (
-                    <Text fontSize={14} color={coworkUi.text} lineHeight={20}>
+                    <Text
+                      fontSize={bigEmoji === 1 ? 44 : bigEmoji > 1 ? 34 : 14}
+                      color={coworkUi.text}
+                      lineHeight={bigEmoji === 1 ? 52 : bigEmoji > 1 ? 42 : 20}
+                      textAlign={plain && isSelf ? 'right' : 'left'}
+                    >
                       {caption}
                     </Text>
                   ) : null}
@@ -1120,6 +1173,79 @@ export function MeetingChatPanel({
             </Text>
           </XStack>
         ) : null}
+        {emojiOpen && chatEnabled ? (
+          <YStack
+            height={236}
+            borderRadius={12}
+            borderWidth={1}
+            borderColor={coworkUi.glassBorder}
+            backgroundColor={coworkUi.meetingBarElevated}
+            overflow="hidden"
+          >
+            <XStack
+              paddingHorizontal={4}
+              paddingVertical={4}
+              gap={2}
+              borderBottomWidth={1}
+              borderBottomColor={coworkUi.borderSoft}
+              justifyContent="space-between"
+            >
+              {MEETING_CHAT_EMOJI_CATEGORIES.map((category) => {
+                const selected = category.id === emojiTab.id
+                return (
+                  <Pressable
+                    key={category.id}
+                    accessibilityRole="tab"
+                    accessibilityLabel={category.label}
+                    accessibilityState={{ selected }}
+                    onPress={() => setEmojiCategory(category.id)}
+                    style={{
+                      flex: 1,
+                      height: 34,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: selected ? coworkUi.brandMuted : 'transparent',
+                    }}
+                  >
+                    <Text fontSize={18}>{category.icon}</Text>
+                  </Pressable>
+                )
+              })}
+            </XStack>
+            <ScrollView flex={1} keyboardShouldPersistTaps="always" showsVerticalScrollIndicator>
+              <Text
+                fontSize={11}
+                fontWeight="700"
+                color={coworkUi.textMuted}
+                paddingHorizontal="$2.5"
+                paddingTop="$2"
+              >
+                {emojiTab.label}
+              </Text>
+              <XStack flexWrap="wrap" paddingHorizontal={4} paddingBottom={6}>
+                {emojiTab.emojis.map((emoji) => (
+                  <Pressable
+                    key={emoji}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Insert ${emoji}`}
+                    onPress={() => setDraft((value) => `${value}${emoji}`)}
+                    style={({ pressed }) => ({
+                      width: '12.5%',
+                      height: 42,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: pressed ? coworkUi.brandMuted : 'transparent',
+                    })}
+                  >
+                    <Text fontSize={26}>{emoji}</Text>
+                  </Pressable>
+                ))}
+              </XStack>
+            </ScrollView>
+          </YStack>
+        ) : null}
         {/* Zoom composer: attachment · input · emoji · send — always contrast-safe. */}
         <View
           collapsable={false}
@@ -1141,6 +1267,7 @@ export function MeetingChatPanel({
               disabled={!chatEnabled || !!uploadingLabel}
               onPress={() => {
                 setToMenuOpen(false)
+                setEmojiOpen(false)
                 setAttachMenuOpen((value) => !value)
               }}
               style={{
@@ -1171,7 +1298,8 @@ export function MeetingChatPanel({
               placeholderTextColor={coworkUi.textMuted}
               borderRadius={22}
               height={42}
-              onSubmitEditing={send}
+              onFocus={() => setEmojiOpen(false)}
+              onSubmitEditing={() => send()}
             />
           ) : (
             <AppTextField
@@ -1187,7 +1315,9 @@ export function MeetingChatPanel({
               autoCorrect
               autoCapitalize="sentences"
               accessibilityLabel="Meeting chat message"
-              onSubmitEditing={send}
+              submitBehavior="submit"
+              onFocus={() => setEmojiOpen(false)}
+              onSubmitEditing={(event) => send(event.nativeEvent.text)}
               containerStyle={{
                 flex: 1,
                 minWidth: 0,
@@ -1203,31 +1333,29 @@ export function MeetingChatPanel({
           )}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Insert emoji"
+            accessibilityLabel={emojiOpen ? 'Close emoji picker' : 'Open emoji picker'}
+            accessibilityState={{ expanded: emojiOpen }}
             disabled={!chatEnabled}
-            onPress={() => {
-              if (!chatEnabled) return
-              setDraft((value) => `${value}👍`)
-            }}
+            onPress={toggleEmojiPicker}
             style={{
               width: 40,
               height: 40,
               borderRadius: 999,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: coworkUi.meetingControl,
+              backgroundColor: emojiOpen ? coworkUi.brand : coworkUi.meetingControl,
               borderWidth: 1,
-              borderColor: coworkUi.glassBorder,
+              borderColor: emojiOpen ? coworkUi.brand : coworkUi.glassBorder,
               opacity: chatEnabled ? 1 : 0.45,
             }}
           >
-            <Icons.Smile size={20} color={coworkUi.text} />
+            <Icons.Smile size={20} color={emojiOpen ? '#fff' : coworkUi.text} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send chat message"
             disabled={sendDisabled || !draft.trim()}
-            onPress={send}
+            onPress={() => send()}
             style={{
               width: 40,
               height: 40,
@@ -1249,6 +1377,10 @@ export function MeetingChatPanel({
           </Pressable>
         </View>
       </YStack>
+      {previewAttachment ? (
+        <MeetingChatAttachmentViewer attachment={previewAttachment} onClose={closePreview} />
+      ) : null}
     </CoWorkPanelShell>
+    </KeyboardAvoidedByParentContext.Provider>
   )
 }

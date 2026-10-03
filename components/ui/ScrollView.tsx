@@ -1,10 +1,18 @@
-import { forwardRef } from 'react'
+import { createContext, forwardRef, useContext } from 'react'
 import type { ComponentProps, ElementRef } from 'react'
 import { Platform, StyleSheet } from 'react-native'
 import { ScrollView as TamaguiScrollView } from 'tamagui'
 import { useKeyboardBottomInset } from '~/hooks/useKeyboardVisible'
 
 type ScrollViewProps = ComponentProps<typeof TamaguiScrollView>
+
+/**
+ * True inside a container that already lifts itself above the keyboard (bottom
+ * sheets padded by the keyboard height). iOS measures the keyboard overlap
+ * before that container moves and never re-measures, so its automatic inset
+ * would leave a keyboard-tall blank band and `scrollToEnd` would land in it.
+ */
+export const KeyboardAvoidedByParentContext = createContext(false)
 
 /**
  * Cross-platform ScrollView with automatic software-keyboard avoidance.
@@ -17,8 +25,9 @@ type ScrollViewProps = ComponentProps<typeof TamaguiScrollView>
 export const ScrollView = forwardRef<ElementRef<typeof TamaguiScrollView>, ScrollViewProps>(
   function ScrollView(props, ref) {
     const keyboardHeight = useKeyboardBottomInset()
+    const parentAvoidsKeyboard = useContext(KeyboardAvoidedByParentContext)
     const isVertical = !props.horizontal
-    const avoidsKeyboard = Platform.OS !== 'web' && isVertical
+    const avoidsKeyboard = Platform.OS !== 'web' && isVertical && !parentAvoidsKeyboard
 
     const flattenedContentStyle = StyleSheet.flatten(props.contentContainerStyle) || {}
     const existingPaddingBottom =

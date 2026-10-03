@@ -35,7 +35,7 @@ type MeetingContentShareStageProps = {
   onToggleControls?: () => void
 }
 
-function contentPlatform(): MeetingContentPlatform {
+export function contentPlatform(): MeetingContentPlatform {
   if (Platform.OS === 'ios') return 'ios'
   if (Platform.OS === 'android') return 'android'
   return detectMobileDevice().isMobile ? 'web-mobile' : 'web'
@@ -295,7 +295,7 @@ function HeaderIcon({
   )
 }
 
-function ContentFrame({ url, title }: { url: string; title: string }) {
+export function ContentFrame({ url, title }: { url: string; title: string }) {
   const [WebView, setWebView] = useState<ComponentType<Record<string, unknown>> | null>(null)
 
   useEffect(() => {
