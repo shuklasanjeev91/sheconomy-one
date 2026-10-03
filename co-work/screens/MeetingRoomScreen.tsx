@@ -1993,7 +1993,7 @@ function MeetingRoomOverlay({
     },
   })
 
-  useSessionPipOnHide(!exiting)
+  useSessionPipOnHide(!exiting && !callMedia?.screenSharing)
 
   const handleEnd = useCallback(() => {
     if (!isAuthoritativeHost || exitingRef.current) return

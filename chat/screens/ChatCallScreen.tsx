@@ -421,7 +421,7 @@ function ChatCallConnected({
     })()
   }, [toast])
 
-  useSessionPipOnHide(!!callMedia)
+  useSessionPipOnHide(!!callMedia && !callMedia.screenSharing)
 
   useRegisterGlobalSession({
     active: !!callMedia,

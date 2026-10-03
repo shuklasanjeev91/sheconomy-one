@@ -197,8 +197,9 @@ function NativeMediasoupVideoTile({
   }, [needsScreenFrame, onScreenAttached, participant.identity, rtcViewKey])
 
   // Camera only for PiP — screen-share PiP blanks the in-meeting stage on iPad.
-  const isPipCandidate =
-    Platform.OS === 'ios' && shouldRenderVideo && !isScreen && (activeSpeaker || participant.isLocal)
+  // No PiP while presenting: ReplayKit would record the floating window into the share.
+  const pipAllowed = Platform.OS === 'ios' && !isScreen && !localScreenShareActive
+  const isPipCandidate = pipAllowed && shouldRenderVideo && (activeSpeaker || participant.isLocal)
   useEffect(() => {
     if (!isPipCandidate) return
     registerIosPipVideoRef(videoRef)
@@ -251,7 +252,7 @@ function NativeMediasoupVideoTile({
             zOrder={isScreen || floating ? 1 : 0}
             iosPIP={
               Platform.OS === 'ios' && !isScreen
-                ? { enabled: true, startAutomatically: true, preferredSize: { width: 9, height: 16 } }
+                ? { enabled: pipAllowed, startAutomatically: pipAllowed, preferredSize: { width: 9, height: 16 } }
                 : undefined
             }
           />
