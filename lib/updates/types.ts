@@ -38,6 +38,11 @@ export type UpdateMetadata = {
   reloadGuardCount: number
 }
 
+export type StoreUpdateDismissal = {
+  version: string
+  dismissedAt: number
+}
+
 /** Which JS bundle is actually running — the store binary's or an OTA. */
 export type BundleInfo = {
   source: 'embedded' | 'ota' | 'unknown'

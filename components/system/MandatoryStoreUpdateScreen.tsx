@@ -1,7 +1,8 @@
-import { Linking, Platform } from 'react-native'
+import { Platform } from 'react-native'
 import { Text, YStack } from 'tamagui'
 
 import { Button } from '~/components/ui/Button'
+import { openAppStore } from '~/lib/updates/open-store'
 import {
   getAndroidPlayStoreUrl,
   getIosStoreUrl,
@@ -19,17 +20,6 @@ export function MandatoryStoreUpdateScreen({
   currentVersion,
 }: MandatoryStoreUpdateScreenProps) {
   const ui = useAppUi()
-
-  async function openStore() {
-    const url =
-      Platform.OS === 'ios' ? getIosStoreUrl() : getAndroidPlayStoreUrl()
-    if (!url) return
-    try {
-      await Linking.openURL(url)
-    } catch {
-      // ignore — screen remains visible
-    }
-  }
 
   const storeReady =
     (Platform.OS === 'ios' && Boolean(getIosStoreUrl())) ||
@@ -63,7 +53,7 @@ export function MandatoryStoreUpdateScreen({
         {minimumSupportedVersion} or newer from the store to continue.
       </Text>
       {storeReady ? (
-        <Button tone="primary" onPress={() => void openStore()}>
+        <Button tone="primary" onPress={() => void openAppStore()}>
           {Platform.OS === 'ios' ? 'Open App Store' : 'Open Play Store'}
         </Button>
       ) : (

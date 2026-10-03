@@ -1,15 +1,7 @@
 {
-  "minimumSupportedVersion": "5.0.0",
+  "minimumSupportedVersion": "6.1.2",
   "latestVersion": "6.1.2",
   "critical": false,
   "maintenanceMode": false,
-  "maintenanceMessage": "We are performing scheduled maintenance. Please try again shortly.",
-  "platforms": {
-    "android": {
-      "minimumSupportedVersion": "6.1.2"
-    },
-    "ios": {
-      "minimumSupportedVersion": "6.0.26"
-    }
-  }
+  "maintenanceMessage": "We are performing scheduled maintenance. Please try again shortly."
 }

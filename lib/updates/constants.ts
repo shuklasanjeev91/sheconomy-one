@@ -3,6 +3,12 @@ export const UPDATE_METADATA_STORAGE_KEY = '@sheconomy/ota-update-metadata/v1'
 /** Last good remote update policy, so the store gate also applies offline. */
 export const REMOTE_CONFIG_CACHE_KEY = '@sheconomy/remote-update-config/v1'
 
+/** Store version the user last tapped "Later" on, and when. */
+export const STORE_UPDATE_DISMISSAL_KEY = '@sheconomy/store-update-dismissal/v1'
+
+/** Re-show the optional "new version available" prompt after this long. */
+export const STORE_UPDATE_REMIND_AFTER_MS = 24 * 60 * 60 * 1000
+
 /** Minimum time between automatic update checks (startup / resume). */
 export const UPDATE_CHECK_COOLDOWN_MS = 60_000
 

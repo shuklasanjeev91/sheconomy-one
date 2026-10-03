@@ -119,6 +119,15 @@ Example remote JSON (`public/update-config.example.json`):
 
 Host this file on Supabase Storage, an edge function, Vercel, or any CDN. Do not hardcode production URLs in source.
 
+The live policy is `public/update-config.json`, served at `https://www.sheconomy.in/update-config.json` by the web deploy:
+
+| Field | Effect on installs below it |
+| --- | --- |
+| `minimumSupportedVersion` | Force update: full-screen blocker with only an "Open App Store / Play Store" button; Android back is swallowed |
+| `latestVersion` | Optional update: dismissible "New version available" dialog; "Later" snoozes it for 24 hours per version |
+
+Typical store release: once the new build is live, set `latestVersion` to nudge users, then raise `minimumSupportedVersion` when you want to force it. `platforms.android` / `platforms.ios` can override either field while one store is still in review.
+
 ## Development workflow
 
 ```bash

@@ -4,19 +4,26 @@ import * as Updates from 'expo-updates'
 
 import { MaintenanceScreen } from '~/components/system/MaintenanceScreen'
 import { MandatoryStoreUpdateScreen } from '~/components/system/MandatoryStoreUpdateScreen'
+import { StoreUpdateAvailableDialog } from '~/components/system/StoreUpdateAvailableDialog'
 import { UpdatePromptDialog } from '~/components/system/UpdatePromptDialog'
 import { createNativeUpdateServiceDeps } from '~/lib/updates/create-native-deps'
 import {
   applyDownloadedUpdate,
+  availableStoreVersion,
   dismissOptionalUpdate,
+  dismissStoreUpdate,
   getNativeAppVersion,
   markUpdateApplied,
+  openAppStore,
   readCachedRemoteConfig,
+  readStoreUpdateDismissal,
   readUpdateMetadata,
   refreshRemoteConfig,
   requiredStoreVersion,
   runUpdateCheck,
   shouldPromptForDownloadedUpdate,
+  shouldPromptStoreUpdate,
+  type RemoteUpdateConfig,
   type UpdateStatus,
 } from '~/lib/updates'
 import { UPDATE_CHECK_STARTUP_DELAY_MS } from '~/lib/updates/constants'
@@ -34,6 +41,7 @@ export function AutomaticUpdateManager() {
   const [pendingUpdateId, setPendingUpdateId] = useState<string | null>(null)
   const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null)
   const [storeMinimum, setStoreMinimum] = useState<string | null>(null)
+  const [storeLatest, setStoreLatest] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const check = useCallback(async (force = false) => {
@@ -99,17 +107,25 @@ export function AutomaticUpdateManager() {
     let cancelled = false
     let fetchedFresh = false
 
-    void readCachedRemoteConfig().then((cached) => {
-      if (cancelled || fetchedFresh) return
-      const required = requiredStoreVersion(cached, installed)
-      if (required) setStoreMinimum(required)
-    })
+    const applyPolicy = async (config: RemoteUpdateConfig | null, fromCache: boolean) => {
+      const stale = () => cancelled || (fromCache && fetchedFresh)
+      if (stale()) return
+      setStoreMinimum(requiredStoreVersion(config, installed))
+      const latest = availableStoreVersion(config, installed)
+      const dismissal = latest ? await readStoreUpdateDismissal() : null
+      if (stale()) return
+      setStoreLatest(
+        latest && shouldPromptStoreUpdate(latest, dismissal, Date.now()) ? latest : null,
+      )
+    }
+
+    void readCachedRemoteConfig().then((cached) => applyPolicy(cached, true))
 
     const refresh = async () => {
       const fresh = await refreshRemoteConfig()
       if (cancelled || !fresh) return
       fetchedFresh = true
-      setStoreMinimum(requiredStoreVersion(fresh, installed))
+      await applyPolicy(fresh, false)
     }
     void refresh()
 
@@ -207,14 +223,30 @@ export function AutomaticUpdateManager() {
     )
   }
 
+  async function handleStoreLater() {
+    if (storeLatest) await dismissStoreUpdate(storeLatest, Date.now())
+    setStoreLatest(null)
+  }
+
   return (
-    <UpdatePromptDialog
-      open={promptOpen}
-      critical={critical}
-      busy={busy || status === 'restarting'}
-      onRestart={() => void handleRestart()}
-      onLater={critical ? undefined : () => void handleLater()}
-    />
+    <>
+      <UpdatePromptDialog
+        open={promptOpen}
+        critical={critical}
+        busy={busy || status === 'restarting'}
+        onRestart={() => void handleRestart()}
+        onLater={critical ? undefined : () => void handleLater()}
+      />
+      {storeLatest ? (
+        <StoreUpdateAvailableDialog
+          open={!promptOpen}
+          latestVersion={storeLatest}
+          currentVersion={getNativeAppVersion()}
+          onUpdate={() => void openAppStore()}
+          onLater={() => void handleStoreLater()}
+        />
+      ) : null}
+    </>
   )
 }
 

@@ -29,6 +29,7 @@ export type {
   BundleInfo,
   ExpoUpdatesLike,
   RemoteUpdateConfig,
+  StoreUpdateDismissal,
   UpdateCheckResult,
   UpdateMetadata,
   UpdatePromptKind,
@@ -46,8 +47,13 @@ export {
 } from '~/lib/updates/update-service'
 export { compareVersions, isVersionLessThan, parseVersion } from '~/lib/updates/version'
 export {
+  availableStoreVersion,
   cacheRemoteConfig,
+  dismissStoreUpdate,
   readCachedRemoteConfig,
+  readStoreUpdateDismissal,
   refreshRemoteConfig,
   requiredStoreVersion,
+  shouldPromptStoreUpdate,
 } from '~/lib/updates/store-gate'
+export { openAppStore } from '~/lib/updates/open-store'

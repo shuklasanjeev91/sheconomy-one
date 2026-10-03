@@ -1,8 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-import { REMOTE_CONFIG_CACHE_KEY } from '~/lib/updates/constants'
+import {
+  REMOTE_CONFIG_CACHE_KEY,
+  STORE_UPDATE_DISMISSAL_KEY,
+  STORE_UPDATE_REMIND_AFTER_MS,
+} from '~/lib/updates/constants'
 import { fetchRemoteUpdateConfig } from '~/lib/updates/remote-config'
-import type { RemoteUpdateConfig } from '~/lib/updates/types'
+import type { RemoteUpdateConfig, StoreUpdateDismissal } from '~/lib/updates/types'
 import { isVersionLessThan } from '~/lib/updates/version'
 
 /**
@@ -17,6 +21,49 @@ export function requiredStoreVersion(
   return isVersionLessThan(installedVersion, config.minimumSupportedVersion)
     ? config.minimumSupportedVersion
     : null
+}
+
+/**
+ * Newer store version the user may optionally install, or null when the
+ * install is current or already blocked by the mandatory gate.
+ */
+export function availableStoreVersion(
+  config: Pick<RemoteUpdateConfig, 'minimumSupportedVersion' | 'latestVersion'> | null,
+  installedVersion: string,
+): string | null {
+  if (!config?.latestVersion) return null
+  if (requiredStoreVersion(config, installedVersion)) return null
+  return isVersionLessThan(installedVersion, config.latestVersion) ? config.latestVersion : null
+}
+
+export function shouldPromptStoreUpdate(
+  latestVersion: string,
+  dismissal: StoreUpdateDismissal | null,
+  now: number,
+): boolean {
+  if (!dismissal || dismissal.version !== latestVersion) return true
+  return now - dismissal.dismissedAt >= STORE_UPDATE_REMIND_AFTER_MS
+}
+
+export async function readStoreUpdateDismissal(): Promise<StoreUpdateDismissal | null> {
+  try {
+    const raw = await AsyncStorage.getItem(STORE_UPDATE_DISMISSAL_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<StoreUpdateDismissal>
+    if (typeof parsed.version !== 'string' || typeof parsed.dismissedAt !== 'number') return null
+    return { version: parsed.version, dismissedAt: parsed.dismissedAt }
+  } catch {
+    return null
+  }
+}
+
+export async function dismissStoreUpdate(version: string, now: number): Promise<void> {
+  try {
+    const value: StoreUpdateDismissal = { version, dismissedAt: now }
+    await AsyncStorage.setItem(STORE_UPDATE_DISMISSAL_KEY, JSON.stringify(value))
+  } catch {
+    // Worst case the prompt shows again on next resume.
+  }
 }
 
 export async function readCachedRemoteConfig(): Promise<RemoteUpdateConfig | null> {
