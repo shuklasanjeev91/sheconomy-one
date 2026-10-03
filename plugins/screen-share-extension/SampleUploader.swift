@@ -32,17 +32,21 @@ class SampleUploader {
         setupConnection()
     }
   
-    @discardableResult func send(sample buffer: CMSampleBuffer) -> Bool {
+    /// Call from a single queue; returns false while the previous frame is still in flight.
+    @discardableResult func send(imageBuffer: CVPixelBuffer, orientation: UInt) -> Bool {
         guard isReady else {
             return false
         }
         
+        guard let data = prepare(imageBuffer: imageBuffer, orientation: orientation) else {
+            return false
+        }
+
         isReady = false
 
-        dataToSend = prepare(sample: buffer)
-        byteIndex = 0
-
         serialQueue.async { [weak self] in
+            self?.dataToSend = data
+            self?.byteIndex = 0
             self?.sendDataChunk()
         }
         
@@ -96,18 +100,12 @@ private extension SampleUploader {
         return true
     }
     
-    func prepare(sample buffer: CMSampleBuffer) -> Data? {
-        guard let imageBuffer = CMSampleBufferGetImageBuffer(buffer) else {
-            print("image buffer not available")
-            return nil
-        }
-        
+    func prepare(imageBuffer: CVPixelBuffer, orientation: UInt) -> Data? {
         CVPixelBufferLockBaseAddress(imageBuffer, .readOnly)
         
         let scaleFactor = 2.0
         let width = CVPixelBufferGetWidth(imageBuffer)/Int(scaleFactor)
         let height = CVPixelBufferGetHeight(imageBuffer)/Int(scaleFactor)
-        let orientation = CMGetAttachment(buffer, key: RPVideoSampleOrientationKey as CFString, attachmentModeOut: nil)?.uintValue ?? 0
                                     
         let scaleTransform = CGAffineTransform(scaleX: CGFloat(1.0/scaleFactor), y: CGFloat(1.0/scaleFactor))
         let bufferData = self.jpegData(from: imageBuffer, scale: scaleTransform)
@@ -134,12 +132,10 @@ private extension SampleUploader {
     
     func jpegData(from buffer: CVPixelBuffer, scale scaleTransform: CGAffineTransform) -> Data? {
         let image = CIImage(cvPixelBuffer: buffer).transformed(by: scaleTransform)
-        
-        guard let colorSpace = image.colorSpace else {
-            return nil
-        }
+        // ReplayKit's YUV buffers often carry no colour space attachment.
+        let colorSpace = image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!
       
-        let options: [CIImageRepresentationOption: Float] = [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 1.0]
+        let options: [CIImageRepresentationOption: Float] = [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.85]
 
         return SampleUploader.imageContext.jpegRepresentation(of: image, colorSpace: colorSpace, options: options)
     }

@@ -141,6 +141,9 @@ private extension SocketConnection {
 
         guard status == noErr else {
             print("failure: \(status)")
+            // A socket whose connect() failed is in an unspecified state; retry on a fresh one.
+            Darwin.close(socketHandle)
+            socketHandle = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
             return false
         }
         

@@ -106,6 +106,7 @@ declare module 'one' {
         | `/co-work/`
         | `/co-work/chat`
         | `/co-work/dev/auto-share`
+        | `/co-work/dev/stage-scroll`
         | `/co-work/join`
         | `/co-work/meeting`
         | `/co-work/meetings`
