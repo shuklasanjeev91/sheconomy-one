@@ -43,6 +43,7 @@ export function NativeVideoTileChrome({
   isScreen,
   micMuted,
   stopRemoteCamera,
+  connecting = false,
   screenPlaceholder,
   width,
   height,
@@ -58,6 +59,8 @@ export function NativeVideoTileChrome({
   isScreen: boolean
   micMuted: boolean
   stopRemoteCamera: boolean
+  /** In the meeting but not on the media server yet. */
+  connecting?: boolean
   /** Text shown instead of the avatar (screen share / local surface hidden). */
   screenPlaceholder: string | null
   width: number
@@ -164,7 +167,7 @@ export function NativeVideoTileChrome({
               {/* Short tiles have no room between the avatar and the name pill. */}
               {!compact && height >= 180 ? (
                 <Text fontSize={12} color={coworkUi.textMuted} fontWeight="600">
-                  {stopRemoteCamera ? 'Video paused' : 'Camera off'}
+                  {connecting ? 'Connecting…' : stopRemoteCamera ? 'Video paused' : 'Camera off'}
                 </Text>
               ) : null}
             </>

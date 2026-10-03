@@ -11,6 +11,8 @@ export type MediasoupTileParticipant = {
   isSpeaking: boolean
   isCameraEnabled: boolean
   isMicrophoneEnabled: boolean
+  /** In the meeting (realtime presence) but not on the media server yet. */
+  isConnecting?: boolean
 }
 
 export type MediasoupTileSource = 'camera' | 'screen_share'
@@ -99,6 +101,40 @@ export function mediasoupStageTrackRefs(
   }
 
   return refs
+}
+
+/**
+ * Append a camera-off "Connecting…" tile for each roster participant with no
+ * media tile, so the stage matches the participant count.
+ */
+export function withMediasoupRosterPlaceholders(
+  trackRefs: MediasoupTrackRef[],
+  roster: readonly { identity: string; name: string; avatarUrl: string | null }[],
+): MediasoupTrackRef[] {
+  if (roster.length === 0) return trackRefs
+  const present = new Set(trackRefs.map((track) => track.participant.identity))
+  const missing = roster.filter((person) => !present.has(person.identity))
+  if (missing.length === 0) return trackRefs
+  return [
+    ...trackRefs,
+    ...missing.map(
+      (person): MediasoupTrackRef => ({
+        source: 'camera',
+        consumerId: null,
+        participant: {
+          identity: person.identity,
+          peerId: `pending:${person.identity}`,
+          name: person.name,
+          avatarUrl: person.avatarUrl,
+          isLocal: false,
+          isSpeaking: false,
+          isCameraEnabled: false,
+          isMicrophoneEnabled: false,
+          isConnecting: true,
+        },
+      }),
+    ),
+  ]
 }
 
 /**

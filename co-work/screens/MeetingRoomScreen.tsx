@@ -49,6 +49,11 @@ import { MeetingInfoPanel } from '~/co-work/components/MeetingInfoPanel'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
 import { MeetingLiveCaptions } from '~/co-work/components/MeetingLiveCaptions'
 import { MeetingLiveSignalsProvider, useMeetingLiveSignals } from '~/co-work/components/MeetingLiveSignalsContext'
+import {
+  meetingLiveAdmittedCount,
+  meetingLiveParticipants,
+  meetingOnlineRemoteParticipants,
+} from '~/co-work/lib/meeting-live-roster'
 import { MeetingParticipantsPanel } from '~/co-work/components/MeetingParticipantsPanel'
 import { MeetingPollsPanel } from '~/co-work/components/MeetingPollsPanel'
 import { MeetingQaPanel } from '~/co-work/components/MeetingQaPanel'
@@ -202,6 +207,14 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
   })
 
   const title = useMemo(() => props.meeting.title, [props.meeting.title])
+  const onlineRemoteParticipants = useMemo(
+    () =>
+      meetingOnlineRemoteParticipants(presence.participants, {
+        localUserId: props.userId,
+        onlineUserIds: presence.onlineUserIds,
+      }),
+    [presence.onlineUserIds, presence.participants, props.userId],
+  )
   const caps = useMemo(() => getMediaCapabilities(), [])
   const hasMediaRoom = supportsMeetingVideo() && !!props.meeting.room_id
   const { width: roomWidth, height: roomHeight } = useWindowDimensions()
@@ -435,6 +448,7 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
       nonverbalByUserId={presence.nonverbalByUserId}
       blockVideoSurfaces={blockVideoSurfaces}
       spotlightUserId={presence.spotlightUserId}
+      onlineRemoteParticipants={onlineRemoteParticipants}
       tileHostActions={{
         canModerate: presence.canModerate || props.isHost,
         setSpotlight: (id) => presence.setSpotlight(id),
@@ -699,6 +713,17 @@ function MeetingRoomOverlay({
 
   const activeVideoTrack = callMedia?.featuredVideo ?? null
 
+  // Who is really here: drops `admitted` rows left behind by closed tabs / killed apps.
+  const liveParticipants = useMemo(
+    () =>
+      meetingLiveParticipants(presence.participants, {
+        localUserId: userId,
+        onlineUserIds: presence.onlineUserIds,
+        mediaUserIds: callMedia?.remoteUserIds,
+      }),
+    [callMedia?.remoteUserIds, presence.onlineUserIds, presence.participants, userId],
+  )
+
   const peoplePanelOpen = presence.panel === 'people'
   const [speakingUserIds, setSpeakingUserIds] = useState<string[]>([])
   useEffect(() => {
@@ -765,7 +790,7 @@ function MeetingRoomOverlay({
 
   // Zoom join/leave chime when admitted participant count changes.
   useEffect(() => {
-    const admitted = presence.participants.filter((p) => p.status === 'admitted').length
+    const admitted = meetingLiveAdmittedCount(liveParticipants)
     const previous = presenceCountRef.current
     presenceCountRef.current = admitted
     if (previous == null) return
@@ -780,7 +805,7 @@ function MeetingRoomOverlay({
         else if (kind === 'leave') playMeetingLeaveChime()
       },
     )
-  }, [enterExitSound, presence.participants])
+  }, [enterExitSound, liveParticipants])
 
   // Persist "already in room" on the InstantMeetingHost session so Maximize
   // restores MeetingRoomScreen instead of the Join confirm lobby.
@@ -878,7 +903,7 @@ function MeetingRoomOverlay({
   const allowSelfUnmute = meetingState.security_settings?.allowSelfUnmute !== false
   const allowSelfStartVideo = meetingState.security_settings?.allowSelfStartVideo !== false
   const autoRecord = !!meetingState.meeting_options?.autoRecord && isAuthoritativeHost && allowRecording
-  const admittedCount = presence.participants.filter((p) => p.status === 'admitted').length
+  const admittedCount = meetingLiveAdmittedCount(liveParticipants)
   const inviteNudgeShownRef = useRef(false)
 
   // Zoom-like: nudge the host to share the join code when they are alone in the room.
@@ -2494,7 +2519,7 @@ function MeetingRoomOverlay({
       >
         <MeetingChatPanel
           messages={presence.chatMessages}
-          participants={presence.participants}
+          participants={liveParticipants}
           currentUserId={userId}
           viewerRole={presence.selfRole}
           participantDisplayNames={participantDisplayNames}
@@ -2526,7 +2551,7 @@ function MeetingRoomOverlay({
         overlayPosition={overlayPosition}
       >
         <MeetingParticipantsPanel
-          participants={presence.participants}
+          participants={liveParticipants}
           speakingUserIds={speakingUserIds}
           isHost={isAuthoritativeHost}
           viewerRole={isAuthoritativeHost ? 'host' : presence.selfRole}
@@ -2890,7 +2915,7 @@ function MeetingRoomOverlay({
           meetingId={meeting.id}
           userId={userId}
           meetingRoomId={meeting.room_id ?? meeting.id}
-          participants={presence.participants
+          participants={liveParticipants
             .filter((row) => row.status === 'admitted')
             .map((row) => ({
               user_id: row.user_id,
@@ -3426,7 +3451,7 @@ function MeetingRoomOverlay({
                 (sharerIdentity
                   ? presence.participants.find((row) => row.user_id === sharerIdentity)
                   : null) ||
-                presence.participants.find(
+                liveParticipants.find(
                   (row) => row.user_id !== userId && row.status === 'admitted',
                 )
               if (!sharer || sharer.user_id === userId) {
@@ -3749,7 +3774,7 @@ function MeetingRoomOverlay({
       <MeetingTransferHostSheet
         open={transferHostOpen}
         onOpenChange={setTransferHostOpen}
-        participants={presence.participants}
+        participants={liveParticipants}
         currentUserId={userId}
         onTransfer={async (id) => {
           const target = presence.participants.find((row) => row.user_id === id)

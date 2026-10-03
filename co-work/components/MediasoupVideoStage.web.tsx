@@ -24,6 +24,7 @@ export function MediasoupVideoStage({ meeting }: { meeting: MediasoupMeeting }) 
     trackRefs: meeting.trackRefs,
     localUserId: meeting.localUserId,
     activeSpeakerIdentity: meeting.activeSpeakerIdentity,
+    mediaConnected: meeting.snapshot.connection === 'connected',
   })
   const remotePeerCount = meeting.snapshot.peers.length
 

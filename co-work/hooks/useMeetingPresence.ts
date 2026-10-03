@@ -53,6 +53,7 @@ import {
   type MeetingNonverbalStatusId,
 } from '~/co-work/lib/meeting-nonverbal'
 import { canViewerSeeMeetingChatMessage } from '~/co-work/lib/meeting-chat'
+import { sameUserIdSet } from '~/co-work/lib/meeting-live-roster'
 import { sanitizeRemoteMeetingChatMessage } from '~/co-work/lib/meeting-chat-attachments'
 import { uploadMeetingFile, type MeetingContentSource } from '~/co-work/lib/meeting-content-upload'
 import { canManageMeeting } from '~/co-work/lib/meeting-role-permissions'
@@ -156,7 +157,8 @@ export function useMeetingPresence({
   const [captionWantedByUser, setCaptionWantedByUser] = useState<Record<string, boolean>>({})
   const [realtimeDegraded, setRealtimeDegraded] = useState(false)
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false)
-  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([])
+  /** Realtime presence; null until a sync that includes us, and while our own realtime is down. */
+  const [onlineUserIds, setOnlineUserIds] = useState<string[] | null>(null)
   const [unreadChatCount, setUnreadChatCount] = useState(0)
   const [latestChatNotice, setLatestChatNotice] = useState<{
     id: string
@@ -239,7 +241,7 @@ export function useMeetingPresence({
   const hostParticipant = participants.find((p) => p.is_host || p.user_id === meeting.host_id)
   const isHostPresent =
     isHost ||
-    onlineUserIds.includes(meeting.host_id) ||
+    !!onlineUserIds?.includes(meeting.host_id) ||
     (!isRealtimeConnected && hostParticipant?.status === 'admitted')
 
   const refreshParticipants = useCallback(async () => {
@@ -402,6 +404,16 @@ export function useMeetingPresence({
     return true
   }, [])
 
+  // A sync without our own key means our presence is not registered yet, so it
+  // cannot tell who is offline; keep the last trustworthy view.
+  const handlePresenceSync = useCallback(
+    (ids: string[]) => {
+      if (!ids.includes(userId)) return
+      setOnlineUserIds((prev) => (sameUserIdSet(prev, ids) ? prev : ids))
+    },
+    [userId],
+  )
+
   const handleConnectionState = useCallback(
     (connected: boolean) => {
       if (intentionalDisconnectRef.current) return
@@ -411,6 +423,7 @@ export function useMeetingPresence({
       realtimeActiveRef.current = connected
       setIsRealtimeConnected(connected)
       if (!connected) {
+        setOnlineUserIds(null)
         setRealtimeDegraded(true)
         startPolling('degraded')
       } else {
@@ -811,7 +824,7 @@ export function useMeetingPresence({
         const channel = await joinMeetingChannel(meeting.id, userId, {
           onSignal: handleSignal,
           onParticipantChange: () => void refreshParticipants(),
-          onPresenceSync: setOnlineUserIds,
+          onPresenceSync: handlePresenceSync,
           onConnectionState: handleConnectionState,
           onChatMessage: (row) => {
             if (row?.id && !row.is_deleted) {
@@ -897,7 +910,7 @@ export function useMeetingPresence({
     realtimeActiveRef.current = false
     setIsRealtimeConnected(false)
     setWhiteboard(emptyWhiteboardSession())
-    setOnlineUserIds([])
+    setOnlineUserIds(null)
     const channel = channelRef.current
     const ownShare = contentStateRef.current.share
     if (channel && ownShare?.from === userId) {
@@ -1337,8 +1350,9 @@ export function useMeetingPresence({
   wantsCaptionsSelfRef.current = wantsCaptionsSelf
   useEffect(() => {
     const seen = seenOnlineUserIdsRef.current
-    const newcomers = onlineUserIds.filter((id) => id !== userId && !seen.has(id))
-    seenOnlineUserIdsRef.current = new Set(onlineUserIds)
+    const online = onlineUserIds ?? []
+    const newcomers = online.filter((id) => id !== userId && !seen.has(id))
+    seenOnlineUserIdsRef.current = new Set(online)
     if (!wantsCaptionsSelf || newcomers.length === 0 || captionAnnounceTimerRef.current) return
     captionAnnounceTimerRef.current = setTimeout(() => {
       captionAnnounceTimerRef.current = null
@@ -1356,7 +1370,7 @@ export function useMeetingPresence({
   const roomWantsCaptions = Object.entries(captionWantedByUser).some(
     ([id, wanted]) =>
       wanted &&
-      (id === userId || !isRealtimeConnected || onlineUserIds.length === 0 || onlineUserIds.includes(id)),
+      (id === userId || !isRealtimeConnected || onlineUserIds === null || onlineUserIds.includes(id)),
   )
 
   const syncMediaState = useCallback(
@@ -1767,6 +1781,7 @@ export function useMeetingPresence({
     setCaptionWanted,
     realtimeDegraded,
     isRealtimeConnected,
+    onlineUserIds,
     isHostPresent,
     unreadChatCount,
     latestChatNotice,

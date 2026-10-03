@@ -118,7 +118,12 @@ function FakeStage({
     () => [...fakeTrackRefs(count), ...(sharing ? [fakeLocalScreen()] : [])],
     [count, sharing],
   )
-  const gallery = useMediasoupGalleryTracks({ trackRefs, localUserId: 'user-1', activeSpeakerIdentity: null })
+  const gallery = useMediasoupGalleryTracks({
+    trackRefs,
+    localUserId: 'user-1',
+    activeSpeakerIdentity: null,
+    mediaConnected: true,
+  })
   const renderTiles = useCallback(
     (tracks: MediasoupTrackRef[], cameraQuality: MeetingVideoQuality) =>
       tracks.map((track) => (

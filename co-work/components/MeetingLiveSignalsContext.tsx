@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 
+import type { MeetingRosterPlaceholder } from '~/co-work/lib/meeting-live-roster'
 import type { MeetingNonverbalStatusId } from '~/co-work/lib/meeting-nonverbal'
 import {
   MEETING_MAX_PINNED,
@@ -64,6 +65,11 @@ export type MeetingLiveSignalsValue = {
   safeDrivingAvailable: boolean
   setSafeDrivingHandler: (handler: (() => void) | null) => void
   openSafeDriving: () => void
+  /**
+   * Remote admitted participants seen in realtime presence. The stage shows a
+   * "Connecting…" tile for anyone here without a media tile yet.
+   */
+  onlineRemoteParticipants: MeetingRosterPlaceholder[]
 }
 
 const MeetingLiveSignalsContext = createContext<MeetingLiveSignalsValue>({
@@ -90,7 +96,10 @@ const MeetingLiveSignalsContext = createContext<MeetingLiveSignalsValue>({
   safeDrivingAvailable: false,
   setSafeDrivingHandler: () => {},
   openSafeDriving: () => {},
+  onlineRemoteParticipants: [],
 })
+
+const NO_ONLINE_REMOTE_PARTICIPANTS: MeetingRosterPlaceholder[] = []
 
 export function MeetingLiveSignalsProvider({
   localUserId,
@@ -101,6 +110,7 @@ export function MeetingLiveSignalsProvider({
   blockVideoSurfaces = false,
   spotlightUserId = null,
   tileHostActions = null,
+  onlineRemoteParticipants = NO_ONLINE_REMOTE_PARTICIPANTS,
   children,
 }: {
   localUserId: string
@@ -111,6 +121,7 @@ export function MeetingLiveSignalsProvider({
   blockVideoSurfaces?: boolean
   spotlightUserId?: string | null
   tileHostActions?: MeetingTileHostActions | null
+  onlineRemoteParticipants?: MeetingRosterPlaceholder[]
   children: ReactNode
 }) {
   const [extraSurfaceBlock, setExtraSurfaceBlock] = useState(false)
@@ -171,6 +182,7 @@ export function MeetingLiveSignalsProvider({
       safeDrivingAvailable,
       setSafeDrivingHandler,
       openSafeDriving,
+      onlineRemoteParticipants,
     }),
     [
       blockVideoSurfaces,
@@ -179,6 +191,7 @@ export function MeetingLiveSignalsProvider({
       handRaised,
       localUserId,
       nonverbalByUserId,
+      onlineRemoteParticipants,
       openSafeDriving,
       pinnedUserIds,
       raisedHands,

@@ -31,6 +31,8 @@ export type MeetingMediaControls = {
   speakingIdentities: string[]
   /** Loudest current speaker, if any. */
   activeSpeakerIdentity: string | null
+  /** User ids of remote participants connected to the media server. */
+  remoteUserIds: string[]
   toggleAudio: () => void
   toggleVideo: () => void
   /** Resolves false when nothing changed (picker cancelled, busy, not connected). */

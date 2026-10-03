@@ -215,6 +215,7 @@ function NativeMediasoupVideoTile({
       isScreen={isScreen}
       micMuted={!isScreen && !participant.isMicrophoneEnabled}
       stopRemoteCamera={stopRemoteCamera}
+      connecting={!!participant.isConnecting}
       screenPlaceholder={
         isScreen || hideLocalSurface
           ? localScreenShare || hideLocalSurface
@@ -266,6 +267,7 @@ function NativeMediasoupVideoStage({ meeting }: { meeting: MediasoupMeeting }) {
     trackRefs: meeting.trackRefs,
     localUserId: meeting.localUserId,
     activeSpeakerIdentity: meeting.activeSpeakerIdentity,
+    mediaConnected: meeting.snapshot.connection === 'connected',
   })
   const remotePeerCount = meeting.snapshot.peers.length
   const onVisibleIdentities = useCallback(

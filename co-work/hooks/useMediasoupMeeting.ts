@@ -534,6 +534,9 @@ export function useMediasoupMeeting(input: {
 
   const screenShareIdentity = mediasoupScreenShareIdentity(snapshot)
 
+  const remoteUserIdsKey = snapshot.peers.map((peer) => peer.userId).sort().join(',')
+  const remoteUserIds = useMemo(() => (remoteUserIdsKey ? remoteUserIdsKey.split(',') : []), [remoteUserIdsKey])
+
   const media = useMemo<MeetingMediaControls | null>(() => {
     if (!room) return null
     return {
@@ -549,6 +552,7 @@ export function useMediasoupMeeting(input: {
       cameraFacing: snapshot.local.cameraFacing,
       speakingIdentities,
       activeSpeakerIdentity,
+      remoteUserIds,
       toggleAudio,
       toggleVideo,
       toggleScreenShare,
@@ -564,6 +568,7 @@ export function useMediasoupMeeting(input: {
     disconnect,
     featuredVideo,
     flipCamera,
+    remoteUserIds,
     restartMicrophone,
     room,
     screenShareIdentity,

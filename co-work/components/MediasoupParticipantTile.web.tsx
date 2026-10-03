@@ -140,7 +140,13 @@ export function MediasoupParticipantTile({
           <div className="sheconomy-participant-avatar-wrap">
             <Avatar name={name} src={participant.avatarUrl ?? undefined} size="$8" />
             <span className="sheconomy-participant-avatar-label">
-              {stopRemoteCamera ? 'Video paused' : cameraOff ? 'Camera off' : name}
+              {participant.isConnecting
+                ? 'Connecting…'
+                : stopRemoteCamera
+                  ? 'Video paused'
+                  : cameraOff
+                    ? 'Camera off'
+                    : name}
             </span>
           </div>
         </div>
