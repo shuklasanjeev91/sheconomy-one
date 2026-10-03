@@ -1385,7 +1385,7 @@ export function MeetingControls({
       paddingBottom={bottomPad}
       alignItems="center"
       zIndex={MEETING_TOOLBAR_Z_INDEX}
-      pointerEvents="auto"
+      pointerEvents="box-none"
     >
       <YStack
         width={roomy ? 'auto' : '100%'}

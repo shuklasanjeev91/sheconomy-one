@@ -2164,8 +2164,17 @@ function MeetingRoomOverlay({
   const keyboardHeight = useKeyboardBottomInset()
   const panelTop = layout.panelTop
   // Meeting routes are chromeless (no app tab bar). Clear home indicator via layout.
+  const [toolbarHeight, setToolbarHeight] = useState(0)
   const controlsBottom = Math.max(safeBottom, 0)
-  const panelBottom = Math.max(layout.panelBottom, keyboardHeight)
+  // Side panels sit under the toolbar's z-index, so they must clear its real height
+  // (the invite card makes it taller than layout.panelBottom) or the composer is untappable.
+  const panelBottom = Math.max(
+    layout.panelBottom,
+    keyboardHeight,
+    layout.panelPresentation === 'side' && toolbarHeight > 0
+      ? controlsBottom + toolbarHeight + 8
+      : 0,
+  )
   const overlayPosition = Platform.OS === 'web' ? ('fixed' as const) : ('absolute' as const)
 
   return (
@@ -3166,7 +3175,17 @@ function MeetingRoomOverlay({
         paddingLeft={Math.max(safeLeft, 0)}
         paddingRight={Math.max(safeRight, 0)}
         zIndex={MEETING_TOOLBAR_Z_INDEX}
-        pointerEvents={(controlsVisible || roomModalOpen) && !sheetPanelOpen ? 'auto' : 'none'}
+        onLayout={(event) => {
+          const height = Math.round(event.nativeEvent.layout.height)
+          if (height > 0 && height !== toolbarHeight) setToolbarHeight(height)
+        }}
+        pointerEvents={
+          (controlsVisible || roomModalOpen) && !sheetPanelOpen
+            ? layout.compactControls
+              ? 'auto'
+              : 'box-none'
+            : 'none'
+        }
         opacity={(controlsVisible || roomModalOpen) && !sheetPanelOpen ? 1 : 0}
         style={{
           transform: [{ translateY: (controlsVisible || roomModalOpen) && !sheetPanelOpen ? 0 : 40 }],
@@ -3185,7 +3204,7 @@ function MeetingRoomOverlay({
         }}
       >
         {(controlsVisible || roomModalOpen) && !sheetPanelOpen ? (
-          <YStack gap="$2" width="100%">
+          <YStack gap="$2" width="100%" pointerEvents="box-none">
             <MeetingInviteOthersCard
               visible={
                 !inviteCardDismissed &&
