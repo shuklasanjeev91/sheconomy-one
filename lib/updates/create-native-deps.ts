@@ -6,7 +6,6 @@ import {
 } from '~/lib/updates/constants'
 import { logUpdate } from '~/lib/updates/logging'
 import { readUpdateMetadata, writeUpdateMetadata } from '~/lib/updates/metadata'
-import { getNativeAppVersion } from '~/lib/updates/native-app-version'
 import { refreshRemoteConfig } from '~/lib/updates/store-gate'
 import type { ExpoUpdatesLike, UpdateServiceDeps } from '~/lib/updates/types'
 
@@ -29,7 +28,6 @@ export function createNativeUpdateServiceDeps(): UpdateServiceDeps {
   return {
     updates: createExpoUpdatesAdapter(),
     isDev,
-    getNativeAppVersion,
     fetchRemoteConfig: () => refreshRemoteConfig(),
     readMetadata: readUpdateMetadata,
     writeMetadata: writeUpdateMetadata,

@@ -57,3 +57,5 @@ package-lock.json
 /build/
 /.vscode/
 /modules/meeting-video-effects/android/.gradle/
+/modules/play-in-app-update/android/build/
+/modules/play-in-app-update/android/.gradle/

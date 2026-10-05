@@ -33,6 +33,7 @@ import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider
 import { PushForegroundNotificationHost } from '~/components/notifications/PushForegroundNotificationHost'
 import { PushSubscribePromptHost } from '~/components/notifications/PushSubscribePromptHost'
 import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManager'
+import { ForceUpdateGate } from '~/components/system/ForceUpdateGate'
 import { UniversalLinksHost } from '~/components/system/UniversalLinksHost'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
@@ -60,15 +61,17 @@ function AppProviders({ children }: { children: ReactNode }) {
                               <ScreenZoomRoot>
                                 <ConnectivityProvider>
                                   <AutomaticUpdateManager />
-                                  <UniversalLinksHost />
-                                  <PushSubscribePromptHost />
-                                  <PushForegroundNotificationHost />
-                                  <AppBootstrapPrefetch />
-                                  <AppErrorBoundary scope="AppShell">
-                                    <NativeAppOnboardingGate>
-                                      <AppShell>{children}</AppShell>
-                                    </NativeAppOnboardingGate>
-                                  </AppErrorBoundary>
+                                  <ForceUpdateGate>
+                                    <UniversalLinksHost />
+                                    <PushSubscribePromptHost />
+                                    <PushForegroundNotificationHost />
+                                    <AppBootstrapPrefetch />
+                                    <AppErrorBoundary scope="AppShell">
+                                      <NativeAppOnboardingGate>
+                                        <AppShell>{children}</AppShell>
+                                      </NativeAppOnboardingGate>
+                                    </AppErrorBoundary>
+                                  </ForceUpdateGate>
                                 </ConnectivityProvider>
                               </ScreenZoomRoot>
                             </ScreenZoomProvider>

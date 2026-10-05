@@ -1,29 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppState, InteractionManager, Modal, type AppStateStatus } from 'react-native'
+import { AppState, InteractionManager, type AppStateStatus } from 'react-native'
 import * as Updates from 'expo-updates'
 
 import { MaintenanceScreen } from '~/components/system/MaintenanceScreen'
-import { MandatoryStoreUpdateScreen } from '~/components/system/MandatoryStoreUpdateScreen'
-import { StoreUpdateAvailableDialog } from '~/components/system/StoreUpdateAvailableDialog'
 import { UpdatePromptDialog } from '~/components/system/UpdatePromptDialog'
 import { createNativeUpdateServiceDeps } from '~/lib/updates/create-native-deps'
 import {
   applyDownloadedUpdate,
-  availableStoreVersion,
   dismissOptionalUpdate,
-  dismissStoreUpdate,
-  getNativeAppVersion,
   markUpdateApplied,
-  openAppStore,
-  readCachedRemoteConfig,
-  readStoreUpdateDismissal,
   readUpdateMetadata,
-  refreshRemoteConfig,
-  requiredStoreVersion,
   runUpdateCheck,
   shouldPromptForDownloadedUpdate,
-  shouldPromptStoreUpdate,
-  type RemoteUpdateConfig,
   type UpdateStatus,
 } from '~/lib/updates'
 import { UPDATE_CHECK_STARTUP_DELAY_MS } from '~/lib/updates/constants'
@@ -31,7 +19,8 @@ import { UPDATE_CHECK_STARTUP_DELAY_MS } from '~/lib/updates/constants'
 /**
  * Native (iOS / Android) OTA manager — checks on launch and resume,
  * downloads silently, then reloads immediately so production pushes go live
- * without a manual "Restart" tap.
+ * without a manual "Restart" tap. Keeps running while ForceUpdateGate blocks
+ * the app, so fixes still reach installs below the minimum store version.
  */
 export function AutomaticUpdateManager() {
   const depsRef = useRef(createNativeUpdateServiceDeps())
@@ -40,8 +29,6 @@ export function AutomaticUpdateManager() {
   const [critical, setCritical] = useState(false)
   const [pendingUpdateId, setPendingUpdateId] = useState<string | null>(null)
   const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null)
-  const [storeMinimum, setStoreMinimum] = useState<string | null>(null)
-  const [storeLatest, setStoreLatest] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const check = useCallback(async (force = false) => {
@@ -64,10 +51,6 @@ export function AutomaticUpdateManager() {
       case 'maintenance':
         setStatus('idle')
         setMaintenanceMessage(result.message)
-        break
-      case 'storeRequired':
-        setStatus('idle')
-        setStoreMinimum(result.minimumSupportedVersion)
         break
       case 'failed':
         setStatus('failed')
@@ -96,45 +79,6 @@ export function AutomaticUpdateManager() {
         break
       default:
         setStatus('idle')
-    }
-  }, [])
-
-  // Store-version gate runs independently of OTA (no startup delay, works with
-  // updates disabled) and falls back to the last cached policy when offline.
-  useEffect(() => {
-    if (depsRef.current.isDev) return
-    const installed = getNativeAppVersion()
-    let cancelled = false
-    let fetchedFresh = false
-
-    const applyPolicy = async (config: RemoteUpdateConfig | null, fromCache: boolean) => {
-      const stale = () => cancelled || (fromCache && fetchedFresh)
-      if (stale()) return
-      setStoreMinimum(requiredStoreVersion(config, installed))
-      const latest = availableStoreVersion(config, installed)
-      const dismissal = latest ? await readStoreUpdateDismissal() : null
-      if (stale()) return
-      setStoreLatest(
-        latest && shouldPromptStoreUpdate(latest, dismissal, Date.now()) ? latest : null,
-      )
-    }
-
-    void readCachedRemoteConfig().then((cached) => applyPolicy(cached, true))
-
-    const refresh = async () => {
-      const fresh = await refreshRemoteConfig()
-      if (cancelled || !fresh) return
-      fetchedFresh = true
-      await applyPolicy(fresh, false)
-    }
-    void refresh()
-
-    const subscription = AppState.addEventListener('change', (next) => {
-      if (next === 'active') void refresh()
-    })
-    return () => {
-      cancelled = true
-      subscription.remove()
     }
   }, [])
 
@@ -198,19 +142,6 @@ export function AutomaticUpdateManager() {
     setStatus('downloaded')
   }
 
-  if (storeMinimum) {
-    // A native Modal sits above every screen, sheet and nested modal; the no-op
-    // onRequestClose swallows the Android back button.
-    return (
-      <Modal visible animationType="none" statusBarTranslucent onRequestClose={() => {}}>
-        <MandatoryStoreUpdateScreen
-          minimumSupportedVersion={storeMinimum}
-          currentVersion={getNativeAppVersion()}
-        />
-      </Modal>
-    )
-  }
-
   if (maintenanceMessage) {
     return (
       <MaintenanceScreen
@@ -223,30 +154,14 @@ export function AutomaticUpdateManager() {
     )
   }
 
-  async function handleStoreLater() {
-    if (storeLatest) await dismissStoreUpdate(storeLatest, Date.now())
-    setStoreLatest(null)
-  }
-
   return (
-    <>
-      <UpdatePromptDialog
-        open={promptOpen}
-        critical={critical}
-        busy={busy || status === 'restarting'}
-        onRestart={() => void handleRestart()}
-        onLater={critical ? undefined : () => void handleLater()}
-      />
-      {storeLatest ? (
-        <StoreUpdateAvailableDialog
-          open={!promptOpen}
-          latestVersion={storeLatest}
-          currentVersion={getNativeAppVersion()}
-          onUpdate={() => void openAppStore()}
-          onLater={() => void handleStoreLater()}
-        />
-      ) : null}
-    </>
+    <UpdatePromptDialog
+      open={promptOpen}
+      critical={critical}
+      busy={busy || status === 'restarting'}
+      onRestart={() => void handleRestart()}
+      onLater={critical ? undefined : () => void handleLater()}
+    />
   )
 }
 

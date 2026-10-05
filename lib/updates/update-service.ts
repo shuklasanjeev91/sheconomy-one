@@ -9,7 +9,6 @@ import type {
   UpdateServiceDeps,
   RemoteUpdateConfig,
 } from '~/lib/updates/types'
-import { isVersionLessThan } from '~/lib/updates/version'
 
 let inFlightCheck: Promise<UpdateCheckResult> | null = null
 
@@ -18,7 +17,6 @@ export function createUpdateServiceDeps(partial: Partial<UpdateServiceDeps> & {
 }): UpdateServiceDeps {
   return {
     isDev: false,
-    getNativeAppVersion: () => '0.0.0',
     fetchRemoteConfig: async () => null,
     readMetadata: async () => ({
       lastAppliedUpdateId: null,
@@ -109,14 +107,8 @@ async function performUpdateCheck(
     }
   }
 
-  const nativeVersion = deps.getNativeAppVersion()
-  if (remote && isVersionLessThan(nativeVersion, remote.minimumSupportedVersion)) {
-    return {
-      kind: 'storeRequired',
-      minimumSupportedVersion: remote.minimumSupportedVersion,
-    }
-  }
-
+  // The store-version gate lives in ForceUpdateGate. Blocked installs still
+  // download OTAs here so fixes keep reaching them.
   if (!deps.updates.isEnabled) {
     return { kind: 'skipped', reason: 'updates-disabled' }
   }

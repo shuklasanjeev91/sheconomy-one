@@ -91,7 +91,6 @@ describe('runUpdateCheck', () => {
         critical: false,
         maintenanceMode: false,
       }),
-      getNativeAppVersion: () => '1.2.0',
     })
 
     await expect(runUpdateCheck(deps)).resolves.toEqual({
@@ -121,7 +120,6 @@ describe('runUpdateCheck', () => {
         critical: true,
         maintenanceMode: false,
       }),
-      getNativeAppVersion: () => '1.2.0',
     })
 
     await expect(runUpdateCheck(deps)).resolves.toMatchObject({
@@ -234,20 +232,30 @@ describe('runUpdateCheck', () => {
     })
   })
 
-  it('requires store update when native version is too old', async () => {
+  it('still downloads OTAs when the store build is below the minimum version', async () => {
+    const updates = mockUpdates({
+      checkForUpdateAsync: vi.fn(async () => ({
+        isAvailable: true,
+        manifest: { id: 'fix-1' },
+      })),
+      fetchUpdateAsync: vi.fn(async () => ({
+        isNew: true,
+        manifest: { id: 'fix-1' },
+      })),
+    })
     const deps = createUpdateServiceDeps({
-      updates: mockUpdates(),
-      getNativeAppVersion: () => '1.10.0',
+      updates,
       fetchRemoteConfig: async () => ({
-        "minimumSupportedVersion": "5.0.14",
-        "latestVersion": "6.0",
+        minimumSupportedVersion: '99.0.0',
+        latestVersion: '99.0.0',
         critical: false,
         maintenanceMode: false,
       }),
     })
     await expect(runUpdateCheck(deps)).resolves.toEqual({
-      kind: 'storeRequired',
-      minimumSupportedVersion: '5.0.14',
+      kind: 'downloaded',
+      updateId: 'fix-1',
+      critical: false,
     })
   })
 })

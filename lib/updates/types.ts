@@ -59,7 +59,6 @@ export type UpdateCheckResult =
   | { kind: 'downloaded'; updateId: string | null; critical: boolean }
   | { kind: 'failed'; message: string }
   | { kind: 'maintenance'; message: string }
-  | { kind: 'storeRequired'; minimumSupportedVersion: string }
 
 export type ExpoUpdatesLike = {
   isEnabled: boolean
@@ -73,7 +72,6 @@ export type ExpoUpdatesLike = {
 export type UpdateServiceDeps = {
   updates: ExpoUpdatesLike
   isDev: boolean
-  getNativeAppVersion: () => string
   fetchRemoteConfig: () => Promise<RemoteUpdateConfig | null>
   readMetadata: () => Promise<UpdateMetadata>
   writeMetadata: (patch: Partial<UpdateMetadata>) => Promise<UpdateMetadata>

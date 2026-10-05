@@ -1,12 +1,8 @@
-import { Platform } from 'react-native'
-import { Text, YStack } from 'tamagui'
+import { useState } from 'react'
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 
-import { Button } from '~/components/ui/Button'
-import { openAppStore } from '~/lib/updates/open-store'
-import {
-  getAndroidPlayStoreUrl,
-  getIosStoreUrl,
-} from '~/lib/updates/remote-config'
+import { getBundleInfo } from '~/lib/updates/bundle-info'
+import { openAppStore, storeUrlCandidates } from '~/lib/updates/open-store'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type MandatoryStoreUpdateScreenProps = {
@@ -14,53 +10,115 @@ type MandatoryStoreUpdateScreenProps = {
   currentVersion: string
 }
 
-/** Blocker when the installed native binary is below the remote minimum. */
+/**
+ * Full-screen blocker when the installed native binary is below the remote
+ * minimum. Rendered in place of the app (not in a Modal) and built from core
+ * react-native views so the store button never depends on gesture-handler.
+ */
 export function MandatoryStoreUpdateScreen({
   minimumSupportedVersion,
   currentVersion,
 }: MandatoryStoreUpdateScreenProps) {
   const ui = useAppUi()
+  const [opening, setOpening] = useState(false)
+  const [openFailed, setOpenFailed] = useState(false)
 
-  const storeReady =
-    (Platform.OS === 'ios' && Boolean(getIosStoreUrl())) ||
-    (Platform.OS === 'android' && Boolean(getAndroidPlayStoreUrl()))
+  const storeName = Platform.OS === 'ios' ? 'App Store' : 'Play Store'
+  const candidates = storeUrlCandidates()
+  const listingUrl = candidates[candidates.length - 1] ?? null
+  const bundle = getBundleInfo()
+  const buildLabel = [currentVersion, bundle.runtimeVersion, bundle.updateId?.slice(0, 8)]
+    .filter(Boolean)
+    .join(' · ')
+
+  async function handleUpdate() {
+    if (opening) return
+    setOpening(true)
+    const opened = await openAppStore()
+    setOpenFailed(!opened)
+    setOpening(false)
+  }
 
   return (
-    <YStack
-      position="absolute"
-      top={0}
-      left={0}
-      right={0}
-      bottom={0}
-      zIndex={10000}
-      backgroundColor={ui.surface as never}
-      alignItems="center"
-      justifyContent="center"
-      padding="$6"
-      gap="$4"
-    >
-      <Text fontSize={22} fontWeight="700" color={ui.text as never} textAlign="center">
-        Update required
+    <View style={[styles.root, { backgroundColor: ui.surface }]}>
+      <Text style={[styles.title, { color: ui.text }]}>Update required</Text>
+      <Text style={[styles.body, { color: ui.textMuted }]}>
+        This version of SHEconomy ({currentVersion}) is no longer supported. Please update to
+        version {minimumSupportedVersion} or newer to continue.
       </Text>
-      <Text
-        fontSize={15}
-        color={ui.textMuted as never}
-        textAlign="center"
-        maxWidth={420}
-        lineHeight={22}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Update on the ${storeName}`}
+        onPress={() => void handleUpdate()}
+        hitSlop={12}
+        style={({ pressed }) => [
+          styles.button,
+          { backgroundColor: ui.brand, opacity: pressed || opening ? 0.8 : 1 },
+        ]}
       >
-        This version of SHEconomy ({currentVersion}) is no longer supported. Please install version{' '}
-        {minimumSupportedVersion} or newer from the store to continue.
-      </Text>
-      {storeReady ? (
-        <Button tone="primary" onPress={() => void openAppStore()}>
-          {Platform.OS === 'ios' ? 'Open App Store' : 'Open Play Store'}
-        </Button>
-      ) : (
-        <Text fontSize={13} color={ui.textMuted as never} textAlign="center">
-          Open the App Store or Play Store and update SHEconomy manually.
+        {opening ? (
+          <ActivityIndicator color="#ffffff" />
+        ) : (
+          <Text style={styles.buttonLabel}>Update now</Text>
+        )}
+      </Pressable>
+
+      {openFailed && listingUrl ? (
+        <Text selectable style={[styles.hint, { color: ui.textMuted }]}>
+          Couldn't open the {storeName}. Open it and search for SHEconomy, or visit {listingUrl}
         </Text>
-      )}
-    </YStack>
+      ) : null}
+
+      <Text style={[styles.build, { color: ui.textMuted }]}>{buildLabel}</Text>
+    </View>
   )
 }
+
+const styles = StyleSheet.create({
+  root: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10000,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 16,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  body: {
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    maxWidth: 420,
+  },
+  button: {
+    minWidth: 220,
+    minHeight: 48,
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  buttonLabel: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  hint: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    maxWidth: 420,
+  },
+  build: {
+    position: 'absolute',
+    bottom: 32,
+    fontSize: 11,
+    opacity: 0.7,
+  },
+})

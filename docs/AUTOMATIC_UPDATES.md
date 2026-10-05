@@ -7,24 +7,35 @@ Production-ready OTA updates for SHEconomy One (OneFramework + Expo) on **Androi
 ```text
 App launch / resume (native)
         │
-        ▼
-AutomaticUpdateManager.native
+        ├─► ForceUpdateGate.native (wraps the whole app)
+        │       RemoteUpdateConfig (cached, then refreshed)
+        │       • minimumSupportedVersion → app replaced by MandatoryStoreUpdateScreen
+        │           Android: Google Play immediate in-app update (auto-starts once per launch)
+        │           "Update now": Play in-app update → market:// → Play web listing
+        │                         iOS: itms-apps:// → App Store web listing
+        │       • latestVersion → dismissible StoreUpdateAvailableDialog
         │
-        ├─► RemoteUpdateConfig (EXPO_PUBLIC_UPDATE_CONFIG_URL)
-        │       • maintenanceMode → MaintenanceScreen
-        │       • minimumSupportedVersion → MandatoryStoreUpdateScreen
-        │       • critical flag for downloaded bundles
-        │
-        └─► expo-updates
-                checkForUpdateAsync → fetchUpdateAsync → prompt → reloadAsync
+        └─► AutomaticUpdateManager.native (keeps running while blocked)
+                • maintenanceMode → MaintenanceScreen
+                • expo-updates: checkForUpdateAsync → fetchUpdateAsync → reloadAsync
 ```
 
 | Layer | Role |
 | --- | --- |
 | `lib/updates/*` | Version compare, remote config, AsyncStorage metadata, check/download/apply orchestration |
-| `components/system/AutomaticUpdateManager.native.tsx` | AppState + UX prompts on iOS/Android |
+| `components/system/ForceUpdateGate.native.tsx` | Store-version gate: blocks below the minimum, nudges below the latest |
+| `components/system/AutomaticUpdateManager.native.tsx` | OTA + maintenance on iOS/Android |
 | `components/system/AutomaticUpdateManager.web.tsx` | Maintenance gate only (no expo-updates) |
+| `modules/play-in-app-update` | Android-only native module for Google Play's IMMEDIATE in-app update |
 | EAS Update channels | `development`, `preview`, `production` |
+
+The update screen is rendered **in place of** the app, not in a `Modal`, and its
+button is a core `Pressable`: inside a native `Modal`, gesture-handler-based
+buttons (Tamagui) don't receive taps on Android.
+
+Google Play in-app update only works for installs from Google Play, and only on
+binaries that include `modules/play-in-app-update` (6.1.4+). Older binaries and
+sideloaded installs fall back to the Play Store listing.
 
 **Runtime policy:** `runtimeVersion.policy = appVersion` — OTA bundles only apply to native binaries with the same app `version` in `app.json`.
 
@@ -123,7 +134,7 @@ The live policy is `public/update-config.json`, served at `https://www.sheconomy
 
 | Field | Effect on installs below it |
 | --- | --- |
-| `minimumSupportedVersion` | Force update: full-screen blocker with only an "Open App Store / Play Store" button; Android back is swallowed |
+| `minimumSupportedVersion` | Force update: the app is replaced by a full-screen "Update required" screen with a single "Update now" button. On Android, Google Play's in-app update starts automatically |
 | `latestVersion` | Optional update: dismissible "New version available" dialog; "Later" snoozes it for 24 hours per version |
 
 Typical store release: once the new build is live, set `latestVersion` to nudge users, then raise `minimumSupportedVersion` when you want to force it. `platforms.android` / `platforms.ios` can override either field while one store is still in review.

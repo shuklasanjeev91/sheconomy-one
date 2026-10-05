@@ -1,17 +1,31 @@
 import { Linking, Platform } from 'react-native'
 
 import { ANDROID_PACKAGE_ID } from '~/lib/platform/open-in-app'
+import { startPlayImmediateUpdate } from '~/lib/updates/play-in-app-update'
 import { getAndroidPlayStoreUrl, getIosStoreUrl } from '~/lib/updates/remote-config'
 
-/** Open this app's store listing; resolves false when nothing could be opened. */
-export async function openAppStore(): Promise<boolean> {
-  const candidates =
-    Platform.OS === 'ios'
-      ? [getIosStoreUrl()]
-      : [`market://details?id=${ANDROID_PACKAGE_ID}`, getAndroidPlayStoreUrl()]
+/** Store links to try in order: the store app first, then the web listing. */
+export function storeUrlCandidates(platform: string = Platform.OS): string[] {
+  if (platform === 'ios') {
+    const web = getIosStoreUrl()
+    return web ? [web.replace(/^https?:/, 'itms-apps:'), web] : []
+  }
+  const web = getAndroidPlayStoreUrl()
+  return [`market://details?id=${ANDROID_PACKAGE_ID}`, ...(web ? [web] : [])]
+}
 
-  for (const url of candidates) {
-    if (!url) continue
+/**
+ * Send the user to install the latest store build. On Android, Google Play's
+ * in-app update runs first; the store listing is the fallback. Resolves false
+ * when nothing could be opened.
+ */
+export async function openAppStore(): Promise<boolean> {
+  if (Platform.OS === 'android') {
+    const result = await startPlayImmediateUpdate()
+    if (result === 'accepted' || result === 'cancelled') return true
+  }
+
+  for (const url of storeUrlCandidates()) {
     try {
       await Linking.openURL(url)
       return true
