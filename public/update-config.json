@@ -1,6 +1,6 @@
 {
-  "minimumSupportedVersion": "6.1.2",
-  "latestVersion": "6.1.2",
+  "minimumSupportedVersion": "6.1.3",
+  "latestVersion": "6.1.3",
   "critical": false,
   "maintenanceMode": false,
   "maintenanceMessage": "We are performing scheduled maintenance. Please try again shortly."
