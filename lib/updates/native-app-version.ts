@@ -1,10 +1,47 @@
+import { requireOptionalNativeModule } from 'expo'
 import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 
-/** Installed native binary version (store build), not the OTA bundle id. */
+import PlayInAppUpdate from '~/modules/play-in-app-update'
+
+type EmbeddedAppConfig = {
+  version?: string
+  ios?: { buildNumber?: string }
+  android?: { versionCode?: number }
+}
+
+/**
+ * The app config baked into the binary at build time (iOS passes an object,
+ * Android a JSON string). Unlike Constants.expoConfig, an OTA can't replace it.
+ */
+function readEmbeddedAppConfig(): EmbeddedAppConfig | null {
+  const raw = requireOptionalNativeModule<{ manifest?: unknown }>('ExponentConstants')?.manifest
+  if (raw && typeof raw === 'object') return raw as EmbeddedAppConfig
+  if (typeof raw !== 'string') return null
+  try {
+    return JSON.parse(raw) as EmbeddedAppConfig
+  } catch {
+    return null
+  }
+}
+
+function readInstalledAndroidVersion() {
+  try {
+    return PlayInAppUpdate?.getInstalledVersion() ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Installed native binary version (store build), not the OTA bundle id.
+ * Constants.expoConfig is the running OTA's manifest, so it reports the app.json
+ * version at publish time and must only be a last resort.
+ */
 export function getNativeAppVersion(): string {
   const fromNative =
-    Constants.nativeAppVersion ??
+    readInstalledAndroidVersion()?.versionName ??
+    readEmbeddedAppConfig()?.version ??
     Constants.expoConfig?.version ??
     (typeof process !== 'undefined' ? process.env.npm_package_version : undefined)
 
@@ -14,13 +51,15 @@ export function getNativeAppVersion(): string {
 
 /** Native build number (iOS CFBundleVersion / Android versionCode). */
 export function getNativeBuildNumber(): string {
+  const embedded = readEmbeddedAppConfig()
   const fromNative =
-    Constants.nativeBuildVersion ??
-    (Platform.OS === 'ios'
-      ? Constants.expoConfig?.ios?.buildNumber
-      : Constants.expoConfig?.android?.versionCode != null
-        ? String(Constants.expoConfig.android.versionCode)
-        : undefined)
+    Platform.OS === 'ios'
+      ? (Constants.platform?.ios?.buildNumber ??
+        embedded?.ios?.buildNumber ??
+        Constants.expoConfig?.ios?.buildNumber)
+      : (readInstalledAndroidVersion()?.versionCode ??
+        embedded?.android?.versionCode ??
+        Constants.expoConfig?.android?.versionCode)
 
   const trimmed = typeof fromNative === 'string' ? fromNative.trim() : ''
   if (trimmed.length > 0) return trimmed

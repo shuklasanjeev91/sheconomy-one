@@ -1,6 +1,7 @@
 package com.sheconomy.playinappupdate
 
 import android.app.Activity
+import android.os.Build
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.appupdate.AppUpdateOptions
@@ -26,6 +27,21 @@ class PlayInAppUpdateModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("PlayInAppUpdate")
+
+    // The installed APK's versionName/versionCode. JS has no other reliable source:
+    // Constants.expoConfig reflects the running OTA's manifest, not the binary.
+    Function("getInstalledVersion") {
+      val context = appContext.reactContext?.applicationContext ?: return@Function null
+      val info = context.packageManager.getPackageInfo(context.packageName, 0)
+      val versionCode =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+          info.longVersionCode
+        } else {
+          @Suppress("DEPRECATION")
+          info.versionCode.toLong()
+        }
+      mapOf("versionName" to info.versionName, "versionCode" to versionCode.toString())
+    }
 
     // Resolves "accepted" | "cancelled" | "failed" | "unavailable"; never rejects.
     AsyncFunction("startImmediateUpdate") { promise: Promise ->
