@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, InteractionManager, Modal, type AppStateStatus } from 'react-native'
-import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import * as Updates from 'expo-updates'
 
 import { MaintenanceScreen } from '~/components/system/MaintenanceScreen'
@@ -201,17 +200,13 @@ export function AutomaticUpdateManager() {
 
   if (storeMinimum) {
     // A native Modal sits above every screen, sheet and nested modal; the no-op
-    // onRequestClose swallows the Android back button. Modal content renders
-    // outside the app's gesture root, and Tamagui presses go through
-    // gesture-handler, so the store button needs its own root to be tappable.
+    // onRequestClose swallows the Android back button.
     return (
       <Modal visible animationType="none" statusBarTranslucent onRequestClose={() => {}}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <MandatoryStoreUpdateScreen
-            minimumSupportedVersion={storeMinimum}
-            currentVersion={getNativeAppVersion()}
-          />
-        </GestureHandlerRootView>
+        <MandatoryStoreUpdateScreen
+          minimumSupportedVersion={storeMinimum}
+          currentVersion={getNativeAppVersion()}
+        />
       </Modal>
     )
   }

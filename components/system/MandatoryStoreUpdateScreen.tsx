@@ -1,7 +1,9 @@
-import { Platform } from 'react-native'
+import { useState } from 'react'
+import { Platform, Pressable, Text as RNText } from 'react-native'
 import { Text, YStack } from 'tamagui'
 
-import { Button } from '~/components/ui/Button'
+import { brandColors } from '~/config/brand-colors'
+import { getBundleInfo } from '~/lib/updates/bundle-info'
 import { openAppStore } from '~/lib/updates/open-store'
 import {
   getAndroidPlayStoreUrl,
@@ -20,10 +22,15 @@ export function MandatoryStoreUpdateScreen({
   currentVersion,
 }: MandatoryStoreUpdateScreenProps) {
   const ui = useAppUi()
+  const [openFailed, setOpenFailed] = useState(false)
 
-  const storeReady =
-    (Platform.OS === 'ios' && Boolean(getIosStoreUrl())) ||
-    (Platform.OS === 'android' && Boolean(getAndroidPlayStoreUrl()))
+  const storeUrl = Platform.OS === 'ios' ? getIosStoreUrl() : getAndroidPlayStoreUrl()
+  const bundle = getBundleInfo()
+  const bundleLabel = bundle.updateId ? bundle.updateId.slice(0, 8) : bundle.source
+
+  async function handleOpenStore() {
+    setOpenFailed(!(await openAppStore()))
+  }
 
   return (
     <YStack
@@ -52,15 +59,36 @@ export function MandatoryStoreUpdateScreen({
         This version of SHEconomy ({currentVersion}) is no longer supported. Please install version{' '}
         {minimumSupportedVersion} or newer from the store to continue.
       </Text>
-      {storeReady ? (
-        <Button tone="primary" onPress={() => void openAppStore()}>
-          {Platform.OS === 'ios' ? 'Open App Store' : 'Open Play Store'}
-        </Button>
-      ) : (
-        <Text fontSize={13} color={ui.textMuted as never} textAlign="center">
-          Open the App Store or Play Store and update SHEconomy manually.
+      {storeUrl ? (
+        // Core Pressable, not the Tamagui Button: this renders inside a native
+        // Modal, where Tamagui's gesture-handler presses never fire on Android.
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void handleOpenStore()}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            minWidth: 220,
+            paddingHorizontal: 24,
+            paddingVertical: 14,
+            borderRadius: 12,
+            alignItems: 'center',
+            backgroundColor: pressed ? brandColors.primaryDark : brandColors.primary,
+          })}
+        >
+          <RNText style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+            {Platform.OS === 'ios' ? 'Open App Store' : 'Open Play Store'}
+          </RNText>
+        </Pressable>
+      ) : null}
+      {!storeUrl || openFailed ? (
+        <Text fontSize={13} color={ui.textMuted as never} textAlign="center" selectable>
+          Open the {Platform.OS === 'ios' ? 'App Store' : 'Play Store'} and update SHEconomy manually.
+          {storeUrl ? `\n${storeUrl}` : ''}
         </Text>
-      )}
+      ) : null}
+      <Text fontSize={11} color={ui.textMuted as never} opacity={0.6}>
+        {bundle.runtimeVersion ?? '?'} · {bundleLabel}
+      </Text>
     </YStack>
   )
 }
