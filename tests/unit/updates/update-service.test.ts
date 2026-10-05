@@ -250,6 +250,27 @@ describe('runUpdateCheck', () => {
       minimumSupportedVersion: '5.0.14',
     })
   })
+
+  it('still downloads an OTA for installs blocked by the store gate', async () => {
+    const deps = createUpdateServiceDeps({
+      updates: mockUpdates({
+        checkForUpdateAsync: vi.fn(async () => ({ isAvailable: true, manifest: { id: 'fix' } })),
+        fetchUpdateAsync: vi.fn(async () => ({ isNew: true, manifest: { id: 'fix' } })),
+      }),
+      getNativeAppVersion: () => '6.1.2',
+      fetchRemoteConfig: async () => ({
+        minimumSupportedVersion: '6.1.3',
+        latestVersion: '6.1.3',
+        critical: false,
+        maintenanceMode: false,
+      }),
+    })
+    await expect(runUpdateCheck(deps)).resolves.toEqual({
+      kind: 'downloaded',
+      updateId: 'fix',
+      critical: false,
+    })
+  })
 })
 
 describe('applyDownloadedUpdate', () => {

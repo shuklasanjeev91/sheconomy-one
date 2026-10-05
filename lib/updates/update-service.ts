@@ -110,15 +110,15 @@ async function performUpdateCheck(
   }
 
   const nativeVersion = deps.getNativeAppVersion()
-  if (remote && isVersionLessThan(nativeVersion, remote.minimumSupportedVersion)) {
-    return {
-      kind: 'storeRequired',
-      minimumSupportedVersion: remote.minimumSupportedVersion,
-    }
-  }
+  // Blocked installs still take OTAs so fixes to the blocker itself can reach
+  // them; the store gate stays up either way.
+  const storeRequired: UpdateCheckResult | null =
+    remote && isVersionLessThan(nativeVersion, remote.minimumSupportedVersion)
+      ? { kind: 'storeRequired', minimumSupportedVersion: remote.minimumSupportedVersion }
+      : null
 
   if (!deps.updates.isEnabled) {
-    return { kind: 'skipped', reason: 'updates-disabled' }
+    return storeRequired ?? { kind: 'skipped', reason: 'updates-disabled' }
   }
 
   try {
@@ -128,7 +128,7 @@ async function performUpdateCheck(
         lastFailureAt: null,
         lastFailureMessage: null,
       })
-      return { kind: 'upToDate' }
+      return storeRequired ?? { kind: 'upToDate' }
     }
 
     const availableId = check.manifest?.id ?? null
@@ -149,10 +149,12 @@ async function performUpdateCheck(
         lastFailureAt: now,
         lastFailureMessage: 'Reload guard: too many restart attempts for this update',
       })
-      return {
-        kind: 'failed',
-        message: 'Update could not be applied safely. Using the previous version.',
-      }
+      return (
+        storeRequired ?? {
+          kind: 'failed',
+          message: 'Update could not be applied safely. Using the previous version.',
+        }
+      )
     }
 
     await deps.writeMetadata({
@@ -172,7 +174,7 @@ async function performUpdateCheck(
       lastFailureAt: now,
       lastFailureMessage: message,
     })
-    return { kind: 'failed', message }
+    return storeRequired ?? { kind: 'failed', message }
   }
 }
 
