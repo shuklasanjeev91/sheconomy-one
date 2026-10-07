@@ -305,13 +305,17 @@ export function useLiveCaptions({
 
     recognition.onerror = (event) => {
       if (event.error === 'not-allowed') {
-        setCaptionError('Microphone access is required for live captions')
+        setCaptionError(
+          'Microphone access is only needed to caption your speech. You can still view others’ captions.',
+        )
         shouldRestartRef.current = false
         setPublishing(false)
         return
       }
       if (event.error === 'audio-capture') {
-        setCaptionError('No microphone is available for live captions')
+        setCaptionError(
+          'No microphone is available to caption your speech. You can still view others’ captions.',
+        )
         shouldRestartRef.current = false
         setPublishing(false)
         return
@@ -411,7 +415,9 @@ export function useLiveCaptions({
 
   const startRecognition = useCallback(() => {
     if (!canPublish) {
-      setCaptionError('Could not start speech recognition. You can still view others’ captions.')
+      setCaptionError(
+        'Speech recognition is unavailable for your speech. You can still view others’ captions.',
+      )
       setPublishing(false)
       return
     }
@@ -725,11 +731,10 @@ export function useLiveCaptions({
 
   const currentCaption = (liveCaptionText.trim() || fallbackFinal).trim()
 
-  // Once remote (or local) captions are flowing, drop soft STT warnings so the
-  // orange banner does not stick over a working CC overlay.
+  // Once remote (or local) captions are flowing, drop STT warnings so the orange
+  // banner does not imply viewing captions needs this listener's microphone.
   useEffect(() => {
     if (!error) return
-    if (/microphone/i.test(error)) return
     if (currentCaption || visibleLines.length > 0 || interimText.trim()) {
       errorRef.current = null
       if (errorBannerTimerRef.current) {

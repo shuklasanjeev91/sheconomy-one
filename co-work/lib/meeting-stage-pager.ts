@@ -67,7 +67,9 @@ export function meetingStagePageIndex(
 export function meetingStageShouldReturnToSpeaker(input: {
   previousTiles: number
   participantTiles: number
+  viewMode?: MeetingViewMode
 }): boolean {
+  if (input.viewMode === 'gallery') return false
   return input.previousTiles > 0 && input.participantTiles > input.previousTiles
 }
 

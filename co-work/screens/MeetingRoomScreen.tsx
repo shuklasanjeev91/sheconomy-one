@@ -1330,9 +1330,10 @@ function MeetingRoomOverlay({
       const canPublish = captions.canPublish !== false
       toast.show(`Live captions on · ${captions.targetLangName}`, {
         tone: 'success',
-        message: canPublish
-          ? `Speech is captioned live and shown in ${captions.targetLangName}.`
-          : 'You can view others’ captions. Speech recognition is unavailable for publishing on this browser.',
+        message:
+          callMedia?.audioEnabled && canPublish
+            ? `Your speech is captioned live and shown in ${captions.targetLangName}.`
+            : `You can view and translate others’ captions in ${captions.targetLangName} while muted.`,
       })
       return
     }
@@ -2163,9 +2164,10 @@ function MeetingRoomOverlay({
 
   const keyboardHeight = useKeyboardBottomInset()
   const panelTop = layout.panelTop
-  // Meeting routes are chromeless (no app tab bar). Clear home indicator via layout.
+  // Meeting routes are chromeless (no app tab bar). MeetingControls owns the
+  // home-indicator inset, so keep the dock anchored to the viewport bottom.
   const [toolbarHeight, setToolbarHeight] = useState(0)
-  const controlsBottom = Math.max(safeBottom, 0)
+  const controlsBottom = 0
   // Side panels sit under the toolbar's z-index, so they must clear its real height
   // (the invite card makes it taller than layout.panelBottom) or the composer is untappable.
   const panelBottom = Math.max(

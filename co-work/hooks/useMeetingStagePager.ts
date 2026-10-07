@@ -52,10 +52,16 @@ export function useMeetingStagePager(input: { cameraTiles: number; hasScreenShar
   useEffect(() => {
     const previousTiles = previousTilesRef.current
     previousTilesRef.current = cameraTiles
-    if (meetingStageShouldReturnToSpeaker({ previousTiles, participantTiles: cameraTiles })) {
+    if (
+      meetingStageShouldReturnToSpeaker({
+        previousTiles,
+        participantTiles: cameraTiles,
+        viewMode: state.viewMode,
+      })
+    ) {
       goTo(meetingStageMainPage(hasScreenShare))
     }
-  }, [cameraTiles, goTo, hasScreenShare])
+  }, [cameraTiles, goTo, hasScreenShare, state.viewMode])
 
   const swipe = useCallback(
     (direction: MeetingStageSwipeDirection) => {

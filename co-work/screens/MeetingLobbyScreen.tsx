@@ -53,6 +53,7 @@ import {
 import { loadMeetingJoinPrefs } from '~/co-work/lib/meeting-join-prefs'
 import {
   loadRememberedMeetingDisplayName,
+  normalizeMeetingDisplayName,
   resolveMeetingDisplayName,
   saveRememberedMeetingDisplayName,
 } from '~/co-work/lib/meeting-display-name'
@@ -148,6 +149,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   const [doNotConnectAudio, setDoNotConnectAudio] = useState(false)
   const [turnOffVideo, setTurnOffVideo] = useState(false)
   const [joinDisplayName, setJoinDisplayName] = useState<string | undefined>(undefined)
+  const [nameError, setNameError] = useState<string | null>(null)
   const nameEditedRef = useRef(false)
   const joiningRef = useRef(false)
 
@@ -166,8 +168,10 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   const isHost = !!meeting && !!user && meeting.host_id === user.id
   const hostDisplayName =
     meeting?.host?.full_name || meeting?.host?.username || (isHost ? 'You' : BRAND_MEMBER_LABEL)
-  const viewerName =
-    joinDisplayName?.trim() || resolveMeetingDisplayName({ profile, user }) || 'You'
+  const resolvedJoinName =
+    normalizeMeetingDisplayName(joinDisplayName) || resolveMeetingDisplayName({ profile, user })
+  const viewerName = resolvedJoinName || 'Guest'
+  const needsNameBeforeJoin = !resolvedJoinName
   const normalizedCode = code.replace(/\s/g, '').trim()
 
   useSyncMeetingLifecycle({
@@ -232,6 +236,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
     if (!prefs) return
     setDoNotConnectAudio(!prefs.audioEnabled)
     setTurnOffVideo(!prefs.videoEnabled)
+    if (prefs.displayName) setJoinDisplayName(prefs.displayName)
   }, [])
 
   // Pre-fill the editable name from the Join form, the remembered name or the account.
@@ -299,15 +304,24 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
     }
     joiningRef.current = true
     setPreviewActive(false)
-    const typedName = joinDisplayName?.trim() || ''
-    if (nameEditedRef.current && typedName) void saveRememberedMeetingDisplayName(typedName)
+    const confirmedName =
+      normalizeMeetingDisplayName(joinDisplayName) || resolveMeetingDisplayName({ profile, user })
+    if (!confirmedName) {
+      joiningRef.current = false
+      setPreviewActive(true)
+      setNameError('Enter your name to join this meeting.')
+      toast.show('Enter your name to join', { tone: 'info' })
+      return
+    }
+    setNameError(null)
+    if (nameEditedRef.current) void saveRememberedMeetingDisplayName(confirmedName)
     const preferredAudio = opts?.audioEnabled ?? !doNotConnectAudio
     const preferredVideo = opts?.videoEnabled ?? !turnOffVideo
     unlockWebAudioPlayback()
     void (async () => {
       if (!user) {
         try {
-          await ensureGuestUserSession(joinDisplayName)
+          await ensureGuestUserSession(confirmedName)
         } catch (guestErr) {
           joiningRef.current = false
           setPreviewActive(true)
@@ -339,7 +353,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
         autoJoin: true,
         audioEnabled: media.audioEnabled,
         videoEnabled: media.videoEnabled,
-        displayName: joinDisplayName,
+        displayName: confirmedName,
       })
     })()
   }
@@ -775,7 +789,8 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                 </YStack>
 
                 <YStack width="100%" maxWidth={wide ? 560 : undefined} alignSelf="center" gap="$3">
-                  <YStack gap="$1.5" width="100%">
+                  {needsNameBeforeJoin ? (
+                    <YStack gap="$1.5" width="100%">
                       <Text fontSize={12} fontWeight="700" color={coworkUi.textSecondary}>
                         Your Name (Display Name)
                       </Text>
@@ -783,6 +798,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                         value={joinDisplayName ?? ''}
                         onChangeText={(value) => {
                           nameEditedRef.current = true
+                          if (nameError) setNameError(null)
                           setJoinDisplayName(value)
                         }}
                         maxLength={80}
@@ -796,7 +812,33 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                         fontSize={15}
                         height={46}
                       />
+                      {nameError ? (
+                        <Text fontSize={12} color={coworkUi.danger}>
+                          {nameError}
+                        </Text>
+                      ) : null}
                     </YStack>
+                  ) : (
+                    <XStack
+                      alignItems="center"
+                      justifyContent="center"
+                      gap="$2"
+                      paddingVertical="$2"
+                      paddingHorizontal="$3"
+                      borderRadius={10}
+                      backgroundColor={coworkUi.surfaceMuted}
+                      borderWidth={1}
+                      borderColor={coworkUi.borderSoft}
+                    >
+                      <Icons.User size={15} color={coworkUi.textMuted} />
+                      <Text fontSize={13} color={coworkUi.textSecondary}>
+                        Joining as
+                      </Text>
+                      <Text fontSize={13} fontWeight="800" color={coworkUi.text} numberOfLines={1} flexShrink={1}>
+                        {viewerName}
+                      </Text>
+                    </XStack>
+                  )}
 
                   {/* Zoom Start / Join CTA button */}
                   <Button

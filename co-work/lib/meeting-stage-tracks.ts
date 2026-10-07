@@ -2,12 +2,8 @@ import {
   normalizePinnedIdentities,
   resolveMeetingFocusIdentity,
 } from '~/co-work/lib/meeting-stage-focus'
+import { compareMeetingNames } from '~/co-work/lib/meeting-participant-order'
 import type { MeetingViewMode } from '~/co-work/lib/meeting-state-machine'
-import { participantDisplayName } from '~/co-work/lib/participant-avatar'
-import {
-  compareMeetingActivity,
-  type MeetingActivitySignals,
-} from '~/co-work/lib/meeting-participant-order'
 
 /**
  * What stage ordering reads from a tile; a missing `publication` means camera
@@ -67,37 +63,22 @@ export function meetingCameraVideoPriority(track: MeetingStageTrack): number {
   return publication.track ? 1 : 0
 }
 
-function galleryActivitySignals(
-  track: MeetingStageTrack,
-  activeSpeakerIdentity: string | null | undefined,
-  localIdentity: string,
-): MeetingActivitySignals {
-  const participant = track.participant
-  return {
-    id: participant.identity,
-    self: participant.identity === localIdentity,
-    name: participantDisplayName(participant),
-    activeSpeaker: !!activeSpeakerIdentity && participant.identity === activeSpeakerIdentity,
-    speaking: !!participant.isSpeaking,
-    micOn: participant.isMicrophoneEnabled === true,
-    videoOn: meetingCameraVideoPriority(track) > 0,
-  }
-}
-
 function compareGalleryCameras(
   left: MeetingStageTrack,
   right: MeetingStageTrack,
-  activeSpeakerIdentity: string | null | undefined,
   pinnedSet: Set<string>,
-  localIdentity: string,
 ): number {
   const leftPinned = pinnedSet.has(left.participant.identity) ? 1 : 0
   const rightPinned = pinnedSet.has(right.participant.identity) ? 1 : 0
   if (rightPinned !== leftPinned) return rightPinned - leftPinned
-  return compareMeetingActivity(
-    galleryActivitySignals(left, activeSpeakerIdentity, localIdentity),
-    galleryActivitySignals(right, activeSpeakerIdentity, localIdentity),
-  )
+  const leftVideo = meetingCameraVideoPriority(left)
+  const rightVideo = meetingCameraVideoPriority(right)
+  if (rightVideo !== leftVideo) return rightVideo - leftVideo
+  const leftName = left.participant.name?.trim() || left.participant.identity
+  const rightName = right.participant.name?.trim() || right.participant.identity
+  const byName = compareMeetingNames(leftName, rightName)
+  if (byName !== 0) return byName
+  return compareMeetingNames(left.participant.identity, right.participant.identity)
 }
 
 /**
@@ -184,9 +165,16 @@ export function composeMeetingStageTracks<T extends MeetingStageTrack>(
     cameras.find((track) => track.participant.identity === localIdentity) ?? null
   const remoteCameras = cameras.filter((track) => track.participant.identity !== localIdentity)
   const includeLocal = !hideSelfView && !!localCamera
-  const orderedCameras = [...remoteCameras, ...(includeLocal && localCamera ? [localCamera] : [])].sort(
-    (left, right) => compareGalleryCameras(left, right, focusIdentity, pinnedSet, localIdentity),
+  // Gallery tiles must not reshuffle while people talk. Zoom-style active
+  // speaker feedback is a border/highlight on the existing tile; only explicit
+  // user pins are promoted.
+  const orderedRemoteCameras = [...remoteCameras].sort((left, right) =>
+    compareGalleryCameras(left, right, pinnedSet),
   )
+  const orderedCameras = [
+    ...orderedRemoteCameras,
+    ...(includeLocal && localCamera ? [localCamera] : []),
+  ]
 
   const hasScreenShare = !!focusedScreen || isLocalScreenSharing
   const spotlightTrack = spotlightIdentity

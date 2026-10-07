@@ -16,6 +16,7 @@ import {
 } from '~/co-work/lib/meeting-media-permissions'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { meetingJoinPrefsFromCheckboxes, saveMeetingJoinPrefs } from '~/co-work/lib/meeting-join-prefs'
+import { normalizeMeetingDisplayName, resolveMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import { formatPersonalMeetingDisplayCode } from '~/co-work/lib/meeting-pmi'
 import { unlockWebAudioPlayback } from '~/co-work/lib/meeting-web'
 import {
@@ -64,6 +65,7 @@ export function CoWorkScreen() {
   const [joining, setJoining] = useState(false)
   const [doNotConnectAudio, setDoNotConnectAudio] = useState(false)
   const [turnOffVideo, setTurnOffVideo] = useState(false)
+  const [joinNameError, setJoinNameError] = useState<string | null>(null)
 
   // Share screen quick prompt
   const [showShareModal, setShowShareModal] = useState(false)
@@ -199,13 +201,21 @@ export function CoWorkScreen() {
   async function handleJoin(targetCode: string, directShare = false) {
     const normalized = meetingCodeFromInput(targetCode)
     if (!normalized || joining) return
+    const confirmedName =
+      normalizeMeetingDisplayName(joinDisplayName) || resolveMeetingDisplayName({ profile, user })
+    if (!confirmedName) {
+      setJoinNameError('Enter your name to join this meeting.')
+      toast.show('Enter your name to join', { tone: 'info' })
+      return
+    }
+    setJoinNameError(null)
     recordMeetingCode(normalized)
     if (!directShare) {
       // Same preview as an invite link: edit the name, pick a background, then join.
       unlockWebAudioPlayback()
       saveMeetingJoinPrefs({
         ...meetingJoinPrefsFromCheckboxes({ doNotConnectAudio, turnOffVideo }),
-        displayName: joinDisplayName.trim() || undefined,
+        displayName: confirmedName,
       })
       setShowJoinModal(false)
       router.push(coWorkRoutes.meeting(normalized))
@@ -252,11 +262,7 @@ export function CoWorkScreen() {
         autoJoin: true,
         audioEnabled: media.audioEnabled,
         videoEnabled: media.videoEnabled,
-        displayName:
-          joinDisplayName.trim() ||
-          profile?.full_name?.trim() ||
-          profile?.username?.trim() ||
-          undefined,
+        displayName: confirmedName,
       })
       if (!media.audioEnabled) {
         toast.show('Joining without microphone', {
@@ -464,7 +470,10 @@ export function CoWorkScreen() {
                     </Text>
                     <Input
                       value={joinDisplayName}
-                      onChangeText={setJoinDisplayName}
+                      onChangeText={(value) => {
+                        setJoinDisplayName(value)
+                        if (joinNameError) setJoinNameError(null)
+                      }}
                       placeholder="Enter your name"
                       backgroundColor={ui.surfaceElevated}
                       borderColor={ui.borderSoft}
@@ -473,6 +482,11 @@ export function CoWorkScreen() {
                       borderRadius={10}
                       fontSize={15}
                     />
+                    {joinNameError ? (
+                      <Text fontSize={12} color={ui.danger}>
+                        {joinNameError}
+                      </Text>
+                    ) : null}
                   </YStack>
 
                   <YStack gap="$2" paddingTop="$1">

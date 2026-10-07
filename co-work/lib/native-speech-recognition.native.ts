@@ -29,8 +29,9 @@ async function ensureMicrophonePermission(): Promise<boolean> {
     const granted = await PermissionsAndroid.request(
       PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
       {
-        title: 'Microphone for captions',
-        message: 'SHEconomy needs the microphone to show live captions in meetings.',
+        title: 'Microphone for your captions',
+        message:
+          'Allow this only when you want SHEconomy to caption your own speech. You can still view others’ captions while muted.',
         buttonPositive: 'Allow',
         buttonNegative: 'Deny',
       },
@@ -182,7 +183,9 @@ function createAndroidCaptionSession(
         const code = event.code ?? -1
         if (code === ANDROID_PERMISSION_ERROR) {
           shouldRun = false
-          handlers.onError?.('Microphone access is required for live captions')
+          handlers.onError?.(
+            'Microphone access is only needed to caption your speech. You can still view others’ captions.',
+          )
           return
         }
         if (ANDROID_LANGUAGE_ERRORS.has(code)) {
@@ -261,7 +264,9 @@ export async function createNativeSpeechSession(
 
   const micOk = await ensureMicrophonePermission()
   if (!micOk) {
-    handlers.onError?.('Microphone access is required for live captions')
+    handlers.onError?.(
+      'Microphone access is only needed to caption your speech. You can still view others’ captions.',
+    )
     return null
   }
 
@@ -462,7 +467,9 @@ export async function createNativeSpeechSession(
     if (/permission|not.?authorized|denied/i.test(message) && !/insufficient/i.test(message)) {
       shouldRestart = false
       clearFinalizeTimer()
-      handlers.onError?.('Microphone access is required for live captions')
+      handlers.onError?.(
+        'Microphone access is only needed to caption your speech. You can still view others’ captions.',
+      )
       return
     }
     // 5 client / 8 busy / 9 insufficient (mic held by WebRTC) — free focus and retry.

@@ -1,0 +1,9 @@
+{
+  "name": "sheconomy-legacy-native",
+  "private": true,
+  "description": "JS for native modules compiled into the iOS 6.0.x App Store binary (runtime 6.0.8). Only used by the iOS 6.0.8 OTA bundle.",
+  "dependencies": {
+    "@livekit/react-native-callkeep": "4.3.16",
+    "@livekit/react-native-webrtc": "144.1.1"
+  }
+}

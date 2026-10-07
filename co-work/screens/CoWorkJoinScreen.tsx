@@ -10,6 +10,7 @@ import {
 } from '~/co-work/lib/recent-meeting-codes'
 import {
   loadRememberedMeetingDisplayName,
+  normalizeMeetingDisplayName,
   saveRememberedMeetingDisplayName,
 } from '~/co-work/lib/meeting-display-name'
 import { meetingCodeFromInput } from '~/co-work/lib/meetings'
@@ -37,6 +38,7 @@ export function CoWorkJoinScreen() {
   const [rememberName, setRememberName] = useState(true)
   const [doNotConnectAudio, setDoNotConnectAudio] = useState(false)
   const [turnOffVideo, setTurnOffVideo] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -58,15 +60,22 @@ export function CoWorkJoinScreen() {
       toast.show('Please enter a Meeting ID', { tone: 'info' })
       return
     }
+    const confirmedName = normalizeMeetingDisplayName(displayName)
+    if (!confirmedName) {
+      setNameError('Enter your name to join this meeting.')
+      toast.show('Enter your name to join', { tone: 'info' })
+      return
+    }
 
-    if (rememberName && displayName.trim()) {
-      await saveRememberedMeetingDisplayName(displayName.trim())
+    setNameError(null)
+    if (rememberName) {
+      await saveRememberedMeetingDisplayName(confirmedName)
     }
 
     const media = meetingJoinPrefsFromCheckboxes({ doNotConnectAudio, turnOffVideo })
     saveMeetingJoinPrefs({
       ...media,
-      displayName: displayName.trim() || undefined,
+      displayName: confirmedName,
     })
     unlockWebAudioPlayback()
 
@@ -154,7 +163,10 @@ export function CoWorkJoinScreen() {
               </Text>
               <Input
                 value={displayName}
-                onChangeText={setDisplayName}
+                onChangeText={(value) => {
+                  setDisplayName(value)
+                  if (nameError) setNameError(null)
+                }}
                 placeholder="Enter your name"
                 backgroundColor={coworkUi.surfaceMuted}
                 borderColor={coworkUi.borderSoft}
@@ -164,6 +176,11 @@ export function CoWorkJoinScreen() {
                 fontSize={16}
                 height={48}
               />
+              {nameError ? (
+                <Text fontSize={12} color={coworkUi.danger}>
+                  {nameError}
+                </Text>
+              ) : null}
             </YStack>
 
             {/* Checkboxes (Zoom-style) */}

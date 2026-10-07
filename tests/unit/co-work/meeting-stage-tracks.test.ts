@@ -113,13 +113,13 @@ describe('meeting stage tracks', () => {
     expect(result.stageTracks).toHaveLength(3)
     expect(result.filmstripTracks).toEqual([])
     expect(result.stageTracks.map((item) => item.participant.identity)).toEqual([
+      'remote-1',
       'remote-2',
       'local',
-      'remote-1',
     ])
   })
 
-  it('orders gallery like Zoom: talking, unmuted, video on, then alphabetical', () => {
+  it('orders gallery remotes by video first, then alphabetically, while people speak', () => {
     const person = (
       identity: string,
       name: string,
@@ -144,16 +144,33 @@ describe('meeting stage tracks', () => {
       'gallery',
       'u-eve',
     )
+    const nextActive = composeMeetingStageTracks(
+      [
+        person('local', 'Zara'),
+        person('u-mia', 'mia'),
+        person('u-ben', 'Ben', { isCameraEnabled: true }),
+        person('u-cara', 'Cara', { isMicrophoneEnabled: true }),
+        person('u-dev', 'Dev', { isSpeaking: true }),
+        person('u-amy', 'Amy'),
+        person('u-eve', 'Eve'),
+      ],
+      'local',
+      'gallery',
+      'u-dev',
+    )
 
     expect(result.stageTracks.map((item) => item.participant.name)).toEqual([
-      'Eve',
-      'Dev',
-      'Cara',
       'Ben',
-      'Zara',
       'Amy',
+      'Cara',
+      'Dev',
+      'Eve',
       'mia',
+      'Zara',
     ])
+    expect(nextActive.stageTracks.map((item) => item.participant.name)).toEqual(
+      result.stageTracks.map((item) => item.participant.name),
+    )
   })
 
   it('keeps pinned participants ahead of the active speaker', () => {
@@ -178,7 +195,7 @@ describe('meeting stage tracks', () => {
     ])
   })
 
-  it('floats active and video-on participants ahead of camera-off in gallery order', () => {
+  it('promotes video-on remote tiles ahead of camera-off active speakers in gallery order', () => {
     const localCamera = track('local', 'camera')
     const cameraOff = {
       ...track('remote-off', 'camera'),
@@ -201,10 +218,10 @@ describe('meeting stage tracks', () => {
     )
 
     expect(result.stageTracks.map((item) => item.participant.identity)).toEqual([
-      'remote-speaking',
       'remote-on',
-      'local',
       'remote-off',
+      'remote-speaking',
+      'local',
     ])
   })
 

@@ -59,6 +59,13 @@ describe('Zoom-style stage pager', () => {
   it('returns to the active speaker page when someone joins', () => {
     expect(meetingStageShouldReturnToSpeaker({ previousTiles: 1, participantTiles: 2 })).toBe(true)
     expect(meetingStageShouldReturnToSpeaker({ previousTiles: 8, participantTiles: 9 })).toBe(true)
+    expect(
+      meetingStageShouldReturnToSpeaker({
+        previousTiles: 8,
+        participantTiles: 9,
+        viewMode: 'gallery',
+      }),
+    ).toBe(false)
     // Someone left, or the first roster load after joining.
     expect(meetingStageShouldReturnToSpeaker({ previousTiles: 9, participantTiles: 8 })).toBe(false)
     expect(meetingStageShouldReturnToSpeaker({ previousTiles: 0, participantTiles: 5 })).toBe(false)

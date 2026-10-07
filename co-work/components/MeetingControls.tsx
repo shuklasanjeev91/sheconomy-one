@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Platform, useWindowDimensions } from 'react-native'
 import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -603,22 +603,30 @@ export function MeetingControls({
   const [flyout, setFlyout] = useState<FlyoutKind>('none')
   const [endDialogOpen, setEndDialogOpen] = useState(false)
   const { setExtraSurfaceBlock } = useMeetingLiveSignals()
-  useEffect(() => {
-    // More / Security use RN Modal (separate window) — keep camera tiles live.
-    // Audio / video device menus are in-tree overlays; on Android, WebRTC
-    // SurfaceViews steal taps unless we briefly hide them.
-    const needsSurfaceBlock =
-      Platform.OS !== 'web' && (flyout === 'audio_device' || flyout === 'video_device')
-    setExtraSurfaceBlock(needsSurfaceBlock)
-    return () => setExtraSurfaceBlock(false)
-  }, [flyout, setExtraSurfaceBlock])
+  const overlayOpen = flyout !== 'none' || reactionTrayOpen || endDialogOpen
+  const previousOverlayOpenRef = useRef<boolean | null>(null)
 
   useEffect(() => {
-    const open =
-      flyout !== 'none' || reactionTrayOpen || endDialogOpen
-    onOverlayOpenChange?.(open)
-    return () => onOverlayOpenChange?.(false)
-  }, [endDialogOpen, flyout, onOverlayOpenChange, reactionTrayOpen])
+    // Meeting sheets and trays can be in-tree on native. Android WebRTC
+    // SurfaceViews steal taps unless we hide them while controls overlays are up.
+    const needsSurfaceBlock =
+      Platform.OS !== 'web' && overlayOpen
+    setExtraSurfaceBlock(needsSurfaceBlock)
+    return () => setExtraSurfaceBlock(false)
+  }, [overlayOpen, setExtraSurfaceBlock])
+
+  useEffect(() => {
+    if (previousOverlayOpenRef.current === overlayOpen) return
+    previousOverlayOpenRef.current = overlayOpen
+    onOverlayOpenChange?.(overlayOpen)
+  }, [onOverlayOpenChange, overlayOpen])
+
+  useEffect(() => {
+    return () => {
+      previousOverlayOpenRef.current = null
+      onOverlayOpenChange?.(false)
+    }
+  }, [onOverlayOpenChange])
   // Keep More tall enough for Browse + Record + Host on phone / landscape.
   const flyoutMaxHeight = Math.max(
     240,

@@ -93,7 +93,7 @@
         "expo-camera",
         {
           "cameraPermission": "Allow SHEconomy to use your camera for video meetings and face liveness verification.",
-          "microphonePermission": "Allow SHEconomy to use your microphone for video meetings and live captions.",
+          "microphonePermission": "Allow SHEconomy to use your microphone when you speak in video meetings or publish captions for your speech.",
           "recordAudioAndroid": true
         }
       ],
@@ -118,8 +118,8 @@
       [
         "@react-native-voice/voice",
         {
-          "microphonePermission": "Allow SHEconomy to use the microphone for video meetings and live captions.",
-          "speechRecognitionPermission": "Allow SHEconomy to convert speech to live captions in meetings."
+          "microphonePermission": "Allow SHEconomy to use the microphone when you publish captions for your speech.",
+          "speechRecognitionPermission": "Allow SHEconomy to convert your speech to live captions in meetings."
         }
       ],
       "./plugins/withSpeechRecognitionQueries.cjs",
