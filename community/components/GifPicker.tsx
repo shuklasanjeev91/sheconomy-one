@@ -14,6 +14,17 @@ type GifPickerProps = {
   onSelect: (gifUrl: string) => void
 }
 
+const EMPOWERMENT_GIF_SEARCHES = [
+  'Together we can',
+  'Women supporting women',
+  'You got this',
+  'Girl power',
+  'Proud of you',
+  "Let's go",
+  'Congratulations',
+  'Thank you',
+]
+
 export function GifPicker({ open, onOpenChange, onSelect }: GifPickerProps) {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
@@ -26,7 +37,8 @@ export function GifPicker({ open, onOpenChange, onSelect }: GifPickerProps) {
 
     let active = true
     setIsLoading(true)
-    void searchGifs(debouncedQuery).then((results) => {
+    const searchTerm = debouncedQuery.trim() || 'women supporting women together we can'
+    void searchGifs(searchTerm).then((results) => {
       if (!active) return
       setGifs(results)
       setIsLoading(false)
@@ -50,6 +62,31 @@ export function GifPicker({ open, onOpenChange, onSelect }: GifPickerProps) {
           onChangeText={setQuery}
           placeholder="Search GIFs"
         />
+
+        <XStack flexWrap="wrap" gap="$1.5">
+          {EMPOWERMENT_GIF_SEARCHES.map((term) => (
+            <XStack
+              key={term}
+              paddingHorizontal="$2.5"
+              paddingVertical="$1.5"
+              borderRadius={999}
+              borderWidth={1}
+              borderColor={communityUi.borderLight}
+              backgroundColor={query.trim() === term ? communityUi.accentMuted : communityUi.cardBg}
+              cursor="pointer"
+              hoverStyle={{ borderColor: communityUi.brand }}
+              onPress={() => setQuery(term)}
+            >
+              <Text
+                fontSize={12}
+                fontWeight="700"
+                color={query.trim() === term ? communityUi.brand : communityUi.textMuted}
+              >
+                {term}
+              </Text>
+            </XStack>
+          ))}
+        </XStack>
 
         {isLoading ? (
           <YStack alignItems="center" paddingVertical="$6">

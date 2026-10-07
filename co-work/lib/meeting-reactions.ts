@@ -3,10 +3,16 @@
 export const MEETING_REACTIONS = [
   { emoji: '👍', label: 'Thumbs up', toneable: true },
   { emoji: '👏', label: 'Clap', toneable: true },
+  { emoji: '🙌', label: 'Cheer', toneable: true },
+  { emoji: '🫶', label: 'Support', toneable: true },
   { emoji: '❤️', label: 'Heart', toneable: false },
+  { emoji: '💪', label: 'Strong', toneable: true },
+  { emoji: '👭', label: 'Together', toneable: false },
   { emoji: '😂', label: 'Laugh', toneable: false },
   { emoji: '😮', label: 'Surprised', toneable: false },
   { emoji: '🎉', label: 'Celebrate', toneable: false },
+  { emoji: '✨', label: 'Inspired', toneable: false },
+  { emoji: '🌟', label: 'Proud', toneable: false },
   { emoji: '🙏', label: 'Thanks', toneable: true },
   { emoji: '😢', label: 'Sad', toneable: false },
 ] as const

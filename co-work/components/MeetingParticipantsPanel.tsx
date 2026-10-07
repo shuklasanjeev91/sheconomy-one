@@ -18,7 +18,6 @@ import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { MeetingRoleBadge } from '~/co-work/components/MeetingRoleBadge'
 import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
-import { ProfileFollowButton } from '~/community/components/ProfileFollowButton'
 import { useCoWorkTheme, useMeetingControlPalette } from '~/co-work/lib/theme'
 import type { MeetingParticipant, MeetingRole } from '~/co-work/lib/types'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
@@ -860,10 +859,5 @@ function ParticipantRow({
 }
 
 function ParticipantSocialActions({ targetUserId }: { targetUserId: string }) {
-  return (
-    <>
-      <ProfileFollowButton targetUserId={targetUserId} size="sm" />
-      <ProfileConnectButton targetUserId={targetUserId} size="sm" />
-    </>
-  )
+  return <ProfileConnectButton targetUserId={targetUserId} size="sm" />
 }
