@@ -464,7 +464,7 @@ export function GroupScreen() {
               </CommunityCard>
             ) : null}
             <CommunityCard padding={12}>
-              <UserList items={members} showConnect showFollow searchable />
+              <UserList items={members} showConnect showFollow={false} searchable />
             </CommunityCard>
           </YStack>
         ) : null}

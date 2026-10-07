@@ -87,7 +87,7 @@ describe('meeting toolbar layout', () => {
     ).not.toContain('record')
   })
 
-  it('uses Zoom mobile primary dock: Mute · Video · Share · Chat · More · End', () => {
+  it('shows Reactions on the Zoom mobile primary dock', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -101,6 +101,7 @@ describe('meeting toolbar layout', () => {
       'camera',
       'share_screen',
       'chat',
+      'reactions',
       'more',
       'leave',
       'end_meeting',
@@ -114,6 +115,20 @@ describe('meeting toolbar layout', () => {
         mode: 'mobile',
       }),
     ).toContain('chat')
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'participant',
+        supportsVideo: true,
+        mode: 'mobile',
+      }),
+    ).toContain('reactions')
+    expect(
+      meetingToolbarMoreKeys({
+        viewerRole: 'participant',
+        mode: 'mobile',
+        reactionsOnPrimary: true,
+      }),
+    ).not.toContain('reactions')
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'participant',
@@ -140,6 +155,7 @@ describe('meeting toolbar layout', () => {
       'camera',
       'share_screen',
       'chat',
+      'reactions',
       'stop_record',
       'more',
       'leave',

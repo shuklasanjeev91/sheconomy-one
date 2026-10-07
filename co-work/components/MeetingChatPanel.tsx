@@ -1306,6 +1306,45 @@ export function MeetingChatPanel({
                 </MeetingSheetButton>
               ),
             )}
+            {currentUserId ? (
+              Platform.OS === 'web' ? (
+                <Button
+                  tone="ghost"
+                  size="$2"
+                  borderRadius={10}
+                  justifyContent="flex-start"
+                  icon={<Icons.Share2 size={16} color={coworkUi.text} />}
+                  onPress={() => {
+                    setAttachMenuOpen(false)
+                    setShareMenuOpen(true)
+                  }}
+                >
+                  Share in meeting
+                </Button>
+              ) : (
+                <MeetingSheetButton
+                  accessibilityLabel="Share a shop, product or participant"
+                  onPress={() => {
+                    setAttachMenuOpen(false)
+                    setShareMenuOpen(true)
+                  }}
+                  style={{
+                    minHeight: 40,
+                    borderRadius: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                    gap: 10,
+                    paddingHorizontal: 12,
+                  }}
+                >
+                  <Icons.Share2 size={16} color={coworkUi.text} />
+                  <Text fontSize={13} fontWeight="700" color={coworkUi.text}>
+                    Share in meeting
+                  </Text>
+                </MeetingSheetButton>
+              )
+            ) : null}
           </YStack>
         ) : null}
         {uploadingLabel ? (
@@ -1429,31 +1468,6 @@ export function MeetingChatPanel({
               <Icons.Plus size={20} color={attachMenuOpen ? '#fff' : coworkUi.text} />
             </Pressable>
           ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Share a shop, product or participant"
-            accessibilityState={{ expanded: shareMenuOpen }}
-            disabled={!chatEnabled}
-            onPress={() => {
-              setToMenuOpen(false)
-              setAttachMenuOpen(false)
-              setEmojiOpen(false)
-              setShareMenuOpen((value) => !value)
-            }}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 999,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: shareMenuOpen ? coworkUi.brand : coworkUi.meetingControl,
-              borderWidth: 1,
-              borderColor: shareMenuOpen ? coworkUi.brand : coworkUi.glassBorder,
-              opacity: chatEnabled ? 1 : 0.45,
-            }}
-          >
-            <Icons.Share2 size={19} color={shareMenuOpen ? '#fff' : coworkUi.text} />
-          </Pressable>
           {Platform.OS === 'web' ? (
             <Input
               flex={1}

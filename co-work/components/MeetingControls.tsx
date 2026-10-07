@@ -1619,6 +1619,15 @@ export function MeetingControls({
                 compact={compact}
                 badgeCount={unreadChatCount}
               />
+              {primaryKeys.includes('reactions') && onToggleReactions ? (
+                <ControlButton
+                  label={primaryLabel('reactions')}
+                  icon={Icons.Smile}
+                  variant={reactionTrayOpen ? 'brand' : 'neutral'}
+                  onPress={openReactions}
+                  compact={compact}
+                />
+              ) : null}
               <YStack position="relative" alignItems="center" justifyContent="center" zIndex={3}>
                 <MeetingMoreSheet
                   open={flyout === 'more'}

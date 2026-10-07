@@ -101,7 +101,7 @@ export function meetingToolbarMode(input: {
  * Zoom primary dock:
  *
  * Mobile (Zoom phone — Sheconomy branded):
- *   Mute · Video · Share · Chat · More · End
+ *   Mute · Video · Share · Chat · Reactions · More · End
  *
  * iPad / large (Zoom tablet & desktop):
  *   Mute · Stop Video · Participants · Chat · Reactions · Start Share ·
@@ -135,6 +135,7 @@ export function meetingToolbarPrimaryKeys(input: {
   if (mode === 'mobile') {
     if (input.supportsScreenShare) keys.push('share_screen')
     keys.push('chat')
+    if (input.hasReactions !== false) keys.push('reactions')
     if (input.supportsRecording && input.recording) keys.push('stop_record')
     keys.push('more', 'leave')
     if (canEndMeetingForEveryone(input.viewerRole)) keys.push('end_meeting')
