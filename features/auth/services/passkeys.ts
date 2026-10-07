@@ -7,11 +7,24 @@ export type PasskeyInfo = {
   last_used_at?: string | null
 }
 
+const PASSKEY_NOT_ENABLED_MESSAGE =
+  'Passkey login is not enabled yet. Use email or phone to continue.'
+
+export function isPasskeyLoginEnabled(): boolean {
+  return process.env.EXPO_PUBLIC_ENABLE_PASSKEY_LOGIN === 'true'
+}
+
+export function isPasskeyDisabledError(message: string | null | undefined): boolean {
+  if (!message) return false
+  return /passkeys?\s+(are\s+)?disabled/i.test(message) || /passkeys?.*not enabled/i.test(message)
+}
+
 /**
  * Feature-detect WebAuthn / platform authenticators.
  * Only enable when the runtime actually exposes PublicKeyCredential.
  */
 export function isPasskeySignInSupported(): boolean {
+  if (!isPasskeyLoginEnabled()) return false
   if (typeof globalThis === 'undefined') return false
   const win = (globalThis as { window?: Window }).window
   const nav = (globalThis as { navigator?: Navigator }).navigator
@@ -25,21 +38,31 @@ export function isPasskeySignInSupported(): boolean {
   )
 }
 
-export async function signInWithPasskey(): Promise<{ error: string | null }> {
+export async function signInWithPasskey(): Promise<{ error: string | null; disabled?: boolean }> {
+  if (!isPasskeyLoginEnabled()) {
+    return { error: PASSKEY_NOT_ENABLED_MESSAGE, disabled: true }
+  }
   if (!isPasskeySignInSupported()) {
     return { error: 'Passkeys are not available on this device yet.' }
   }
 
   try {
     const { error } = await supabase.auth.signInWithPasskey()
-    if (error) return { error: error.message }
+    if (error) {
+      if (isPasskeyDisabledError(error.message)) {
+        return { error: PASSKEY_NOT_ENABLED_MESSAGE, disabled: true }
+      }
+      return { error: error.message }
+    }
     return { error: null }
   } catch (error) {
+    const message = error instanceof Error ? error.message : null
+    if (isPasskeyDisabledError(message)) {
+      return { error: PASSKEY_NOT_ENABLED_MESSAGE, disabled: true }
+    }
     return {
       error:
-        error instanceof Error
-          ? error.message
-          : 'Passkey sign-in failed. Enable Passkeys in Supabase Auth if needed.',
+        message ?? 'Passkey sign-in failed. Enable Passkeys in Supabase Auth if needed.',
     }
   }
 }

@@ -32,6 +32,7 @@ Also set `EXPO_PUBLIC_WEB_APP_URL` for release builds so QR URLs use the product
 | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Google One Tap (web) + native Google `webClientId` |
 | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | Native Google on iOS (optional) |
 | `EXPO_PUBLIC_ANDROID_SMS_HASH` | App hash fragment for SMS Retriever templates |
+| `EXPO_PUBLIC_ENABLE_PASSKEY_LOGIN` | Set to `true` only after Supabase Passkeys are enabled |
 
 ## Social providers
 
@@ -61,7 +62,8 @@ Also set `EXPO_PUBLIC_WEB_APP_URL` for release builds so QR URLs use the product
 
 1. Supabase Dashboard → Authentication → **Passkeys** → enable.
 2. Client: `auth.experimental.passkey: true` in `lib/supabase/client.ts`.
-3. Sign-in CTA when platform supports WebAuthn; manage under **Settings → Security**.
+3. Set `EXPO_PUBLIC_ENABLE_PASSKEY_LOGIN=true` for the deployment.
+4. Sign-in CTA when platform supports WebAuthn; manage under **Settings → Security**.
 
 ## Android phone + SMS
 

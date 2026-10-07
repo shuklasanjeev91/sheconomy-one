@@ -27,6 +27,7 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
   const { completeSignIn } = useAuth()
   const [mode, setMode] = useState<AuthMethod>('email')
   const [passkeyBusy, setPasskeyBusy] = useState(false)
+  const [passkeyUnavailable, setPasskeyUnavailable] = useState(false)
   const [showQrLogin, setShowQrLogin] = useState(false)
   // Delay One Tap so its iframe cannot steal focus from email/phone fields.
   const [oneTapReady, setOneTapReady] = useState(false)
@@ -46,6 +47,7 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
     const result = await signInWithPasskey()
     setPasskeyBusy(false)
     if (result.error) {
+      if (result.disabled) setPasskeyUnavailable(true)
       toast.show(result.error, { tone: 'danger' })
       return
     }
@@ -103,7 +105,7 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
           </Button>
         ) : null}
 
-        {passkeysAvailable ? (
+        {passkeysAvailable && !passkeyUnavailable ? (
           <Button
             tone="primary"
             size="$4"

@@ -22,6 +22,8 @@ vi.mock('~/lib/supabase/client', () => ({
 }))
 
 import {
+  isPasskeyDisabledError,
+  isPasskeyLoginEnabled,
   isPasskeySignInSupported,
   listPasskeys,
   registerPasskey,
@@ -41,10 +43,20 @@ function stubWebAuthn() {
 describe('passkey auth service', () => {
   beforeEach(() => {
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.stubEnv('EXPO_PUBLIC_ENABLE_PASSKEY_LOGIN', 'true')
     signInWithPasskeyMock.mockReset()
     registerPasskeyMock.mockReset()
     passkeyListMock.mockReset()
     passkeyUpdateMock.mockReset()
+  })
+
+  it('requires the deployment passkey flag before reporting support', () => {
+    stubWebAuthn()
+    vi.stubEnv('EXPO_PUBLIC_ENABLE_PASSKEY_LOGIN', 'false')
+
+    expect(isPasskeyLoginEnabled()).toBe(false)
+    expect(isPasskeySignInSupported()).toBe(false)
   })
 
   it('only reports support when WebAuthn credential APIs are present', () => {
@@ -71,6 +83,22 @@ describe('passkey auth service', () => {
       error: 'Passkeys are not available on this device yet.',
     })
     expect(signInWithPasskeyMock).not.toHaveBeenCalled()
+  })
+
+  it('maps disabled server passkeys to a fallback message', async () => {
+    stubWebAuthn()
+    signInWithPasskeyMock.mockResolvedValue({ error: { message: 'Passkeys are disabled' } })
+
+    await expect(signInWithPasskey()).resolves.toEqual({
+      error: 'Passkey login is not enabled yet. Use email or phone to continue.',
+      disabled: true,
+    })
+  })
+
+  it('detects disabled passkey errors', () => {
+    expect(isPasskeyDisabledError('Passkeys are disabled')).toBe(true)
+    expect(isPasskeyDisabledError('Passkey provider not enabled')).toBe(true)
+    expect(isPasskeyDisabledError('User cancelled')).toBe(false)
   })
 
   it('registers and renames a passkey', async () => {
