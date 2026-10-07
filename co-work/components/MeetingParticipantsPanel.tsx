@@ -17,6 +17,8 @@ import { CoWorkPanelShell, CoWorkSectionLabel } from '~/co-work/components/CoWor
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { MeetingRoleBadge } from '~/co-work/components/MeetingRoleBadge'
+import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
+import { ProfileFollowButton } from '~/community/components/ProfileFollowButton'
 import { useCoWorkTheme, useMeetingControlPalette } from '~/co-work/lib/theme'
 import type { MeetingParticipant, MeetingRole } from '~/co-work/lib/types'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
@@ -522,6 +524,11 @@ export function MeetingParticipantsPanel({
                     isSelf={isSelf}
                     handRaised={!!raisedHands[p.user_id]}
                     isSpotlighted={spotlightedUserId === p.user_id}
+                    socialActions={
+                      !isSelf ? (
+                        <ParticipantSocialActions targetUserId={p.user_id} />
+                      ) : null
+                    }
                     action={menuItems.length > 0 ? <MoreActionsMenu items={menuItems} /> : null}
                   />
                 )
@@ -747,12 +754,14 @@ function MoreActionsMenu({
 function ParticipantRow({
   participant,
   action,
+  socialActions,
   handRaised,
   isSelf,
   isSpotlighted,
 }: {
   participant: MeetingParticipant
   action?: ReactNode
+  socialActions?: ReactNode
   handRaised?: boolean
   isSelf?: boolean
   isSpotlighted?: boolean
@@ -833,6 +842,11 @@ function ParticipantRow({
               {micOn ? 'Mic on' : 'Muted'}
             </Text>
           )}
+          {socialActions ? (
+            <XStack alignItems="center" gap="$1.5" flexWrap="wrap" paddingTop={2}>
+              {socialActions}
+            </XStack>
+          ) : null}
         </YStack>
       </XStack>
 
@@ -842,5 +856,14 @@ function ParticipantRow({
         {action}
       </XStack>
     </XStack>
+  )
+}
+
+function ParticipantSocialActions({ targetUserId }: { targetUserId: string }) {
+  return (
+    <>
+      <ProfileFollowButton targetUserId={targetUserId} size="sm" />
+      <ProfileConnectButton targetUserId={targetUserId} size="sm" />
+    </>
   )
 }
