@@ -16,6 +16,7 @@ export type MeetingChatInsertRow = {
   audience?: string | null
   recipient_id?: string | null
   system_event_type?: string | null
+  metadata?: unknown
 }
 
 export type SignalingHandlers = {

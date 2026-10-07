@@ -8,6 +8,11 @@ import {
   meetingChatAttachmentMetadata,
   parseMeetingChatAttachmentMetadata,
 } from '~/co-work/lib/meeting-chat-attachments'
+import {
+  meetingChatShareMetadata,
+  parseMeetingChatShareMetadata,
+  type MeetingChatShare,
+} from '~/co-work/lib/meeting-chat-share'
 import { MEETING_CONTENT_SIGNED_URL_TTL_SEC } from '~/co-work/lib/meeting-content-share'
 import { normalizeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import { mapMeetingSecurityJoinError } from '~/co-work/lib/meeting-security'
@@ -1094,12 +1099,13 @@ async function signMeetingChatAttachmentPaths(paths: string[]): Promise<Map<stri
   return out
 }
 
-type MeetingChatRow = Omit<MeetingChatMessage, 'attachment' | 'sender'> & { metadata?: unknown }
+type MeetingChatRow = Omit<MeetingChatMessage, 'attachment' | 'share' | 'sender'> & { metadata?: unknown }
 
 async function withMeetingChatAttachments(rows: MeetingChatRow[]): Promise<Array<Omit<MeetingChatMessage, 'sender'>>> {
   const stored = rows.map((row) =>
     parseMeetingChatAttachmentMetadata(row.metadata, row.meeting_id, row.sender_id),
   )
+  const shares = rows.map((row) => parseMeetingChatShareMetadata(row.metadata))
   const paths = stored.flatMap((attachment) => (attachment ? [attachment.path] : []))
   const urls = paths.length > 0 ? await signMeetingChatAttachmentPaths(paths).catch(() => new Map()) : new Map()
   return rows.map(({ metadata: _metadata, ...row }, index) => {
@@ -1107,8 +1113,20 @@ async function withMeetingChatAttachments(rows: MeetingChatRow[]): Promise<Array
     return {
       ...row,
       attachment: attachment ? { ...attachment, url: urls.get(attachment.path) ?? null } : null,
+      share: shares[index],
     }
   })
+}
+
+function meetingChatMetadata(input: {
+  attachment?: MeetingChatAttachment | null
+  share?: MeetingChatShare | null
+}): Record<string, unknown> | undefined {
+  const metadata = {
+    ...(input.attachment ? meetingChatAttachmentMetadata(input.attachment) : {}),
+    ...(input.share ? meetingChatShareMetadata(input.share) : {}),
+  }
+  return Object.keys(metadata).length ? metadata : undefined
 }
 
 export async function fetchMeetingChat(meetingId: string): Promise<MeetingChatMessage[]> {
@@ -1149,6 +1167,7 @@ export async function sendMeetingChatMessage(
     recipientId?: string | null
     /** Already uploaded with `uploadMeetingFile`. */
     attachment?: MeetingChatAttachment
+    share?: MeetingChatShare
   },
 ): Promise<MeetingChatMessage> {
   const audience = options?.audience ?? 'everyone'
@@ -1156,6 +1175,8 @@ export async function sendMeetingChatMessage(
     throw new Error('Choose a participant for private chat.')
   }
   const attachment = options?.attachment ?? null
+  const share = options?.share ?? null
+  const metadata = meetingChatMetadata({ attachment, share })
 
   const { data, error } = await supabase
     .from('meeting_chat_messages')
@@ -1166,7 +1187,7 @@ export async function sendMeetingChatMessage(
       message_type: 'text',
       audience,
       recipient_id: audience === 'private' ? options?.recipientId ?? null : null,
-      ...(attachment ? { metadata: meetingChatAttachmentMetadata(attachment) } : {}),
+      ...(metadata ? { metadata } : {}),
     })
     .select(MEETING_CHAT_COLUMNS)
     .single()
@@ -1184,6 +1205,7 @@ export async function sendMeetingChatMessage(
   return {
     ...row,
     attachment,
+    share,
     sender: profile ?? null,
   }
 }

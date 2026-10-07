@@ -51,7 +51,14 @@ describe('passkey auth service', () => {
     passkeyUpdateMock.mockReset()
   })
 
-  it('requires the deployment passkey flag before reporting support', () => {
+  it('allows passkeys by default when WebAuthn is available', () => {
+    stubWebAuthn()
+
+    expect(isPasskeyLoginEnabled()).toBe(true)
+    expect(isPasskeySignInSupported()).toBe(true)
+  })
+
+  it('honors the deployment passkey kill switch before reporting support', () => {
     stubWebAuthn()
     vi.stubEnv('EXPO_PUBLIC_ENABLE_PASSKEY_LOGIN', 'false')
 

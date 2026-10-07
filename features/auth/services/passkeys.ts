@@ -11,7 +11,7 @@ const PASSKEY_NOT_ENABLED_MESSAGE =
   'Passkey login is not enabled yet. Use email or phone to continue.'
 
 export function isPasskeyLoginEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_ENABLE_PASSKEY_LOGIN === 'true'
+  return process.env.EXPO_PUBLIC_ENABLE_PASSKEY_LOGIN !== 'false'
 }
 
 export function isPasskeyDisabledError(message: string | null | undefined): boolean {

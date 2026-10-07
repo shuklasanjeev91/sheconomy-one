@@ -2539,8 +2539,8 @@ function MeetingRoomOverlay({
           privateChatEnabled={privateChatEnabled}
           participantChatWith={meetingState.security_settings?.participantChatWith}
           canManageChat={canModerate}
-          onSend={(text, audience, recipientId) =>
-            void presence.sendChat(text, audience, recipientId).catch((cause: unknown) => {
+          onSend={(text, audience, recipientId, options) =>
+            void presence.sendChat(text, audience, recipientId, undefined, options?.share).catch((cause: unknown) => {
               toast.show('Message not sent', {
                 tone: 'danger',
                 message: cause instanceof Error ? cause.message : 'Check your connection and try again.',

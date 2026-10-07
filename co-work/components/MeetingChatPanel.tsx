@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Keyboard, Platform, View } from 'react-native'
+import { Keyboard, Linking, Platform, View } from 'react-native'
 import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { AppTextField } from '~/components/forms/AppTextField'
@@ -19,6 +19,7 @@ import {
   MeetingChatAttachmentView,
   MeetingChatAttachmentViewer,
 } from '~/co-work/components/MeetingChatAttachmentView'
+import { MeetingChatShareCard } from '~/co-work/components/MeetingChatShareCard'
 import { MEETING_CHAT_EMOJI_CATEGORIES, meetingChatEmojiOnlyCount } from '~/co-work/lib/meeting-chat-emoji'
 import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { CoWorkPanelShell } from '~/co-work/components/CoWorkUi'
@@ -45,6 +46,12 @@ import {
   meetingChatAttachmentCaption,
   type MeetingChatAttachmentPick,
 } from '~/co-work/lib/meeting-chat-attachments'
+import {
+  buildMeetingChatProfileShares,
+  fetchMeetingChatProductShares,
+  fetchMeetingChatShopShares,
+  type MeetingChatShare,
+} from '~/co-work/lib/meeting-chat-share'
 import type { MeetingContentSource } from '~/co-work/lib/meeting-content-upload'
 import {
   buildMeetingChatArchive,
@@ -52,16 +59,26 @@ import {
   copyMeetingChatText,
   downloadMeetingChatText,
 } from '~/co-work/lib/meeting-chat-archive'
+import { parseMeetingChatTextLinks } from '~/co-work/lib/meeting-chat-links'
 
 /** Within this many px of the end still counts as reading the latest message. */
 const CHAT_BOTTOM_SLOP = 80
 /** Return key, send button and IME submit can all fire for one send. */
 const DUPLICATE_SEND_WINDOW_MS = 1000
 
+function openMeetingChatLink(url: string) {
+  void Linking.openURL(url).catch(() => {})
+}
+
 type MeetingChatPanelProps = {
   messages: MeetingChatMessage[]
   participants?: MeetingParticipant[]
-  onSend: (text: string, audience?: MeetingChatAudience, recipientId?: string | null) => void
+  onSend: (
+    text: string,
+    audience?: MeetingChatAudience,
+    recipientId?: string | null,
+    options?: { share?: MeetingChatShare },
+  ) => void
   onDelete?: (messageId: string) => void
   onClose: () => void
   fullWidth?: boolean
@@ -122,6 +139,10 @@ export function MeetingChatPanel({
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [emojiCategory, setEmojiCategory] = useState(MEETING_CHAT_EMOJI_CATEGORIES[0]!.id)
   const [previewAttachment, setPreviewAttachment] = useState<MeetingChatAttachment | null>(null)
+  const [shareMenuOpen, setShareMenuOpen] = useState(false)
+  const [shareLoading, setShareLoading] = useState(false)
+  const [shopShares, setShopShares] = useState<MeetingChatShare[]>([])
+  const [productShares, setProductShares] = useState<MeetingChatShare[]>([])
   const closePreview = useCallback(() => setPreviewAttachment(null), [])
   const lastSendRef = useRef<{ text: string; at: number } | null>(null)
   const lastPrivateRecipientRef = useRef<string | null>(null)
@@ -166,6 +187,41 @@ export function MeetingChatPanel({
       return name.includes(q)
     })
   }, [participantDisplayNames, privateTargets, recipientQuery])
+
+  const profileShares = useMemo(
+    () => buildMeetingChatProfileShares(participants, currentUserId),
+    [currentUserId, participants],
+  )
+
+  useEffect(() => {
+    if (!shareMenuOpen || !currentUserId) return
+    let cancelled = false
+    setShareLoading(true)
+    Promise.all([
+      fetchMeetingChatShopShares(currentUserId),
+      fetchMeetingChatProductShares(currentUserId),
+    ])
+      .then(([shops, products]) => {
+        if (cancelled) return
+        setShopShares(shops)
+        setProductShares(products)
+      })
+      .catch((cause) => {
+        if (cancelled) return
+        toast.show('Could not load share options', {
+          tone: 'danger',
+          message: cause instanceof Error ? cause.message : 'Try again in a moment.',
+        })
+      })
+      .finally(() => {
+        if (!cancelled) setShareLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // `toast` is an object from UI context; re-fetch only when the menu/user changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId, shareMenuOpen])
 
   const toLabel = useMemo(() => {
     if (audience === 'everyone') return 'Everyone'
@@ -250,9 +306,23 @@ export function MeetingChatPanel({
     setDraft('')
   }
 
+  function sendShare(share: MeetingChatShare) {
+    if (!chatEnabled) return
+    if (audience === 'private' && !recipientId) {
+      toast.show('Choose a participant first', { tone: 'info' })
+      return
+    }
+    if (audience === 'private' && recipientId) {
+      lastPrivateRecipientRef.current = recipientId
+    }
+    onSend(share.title, audience, audience === 'private' ? recipientId : null, { share })
+    setShareMenuOpen(false)
+  }
+
   function toggleEmojiPicker() {
     if (!chatEnabled) return
     setAttachMenuOpen(false)
+    setShareMenuOpen(false)
     setToMenuOpen(false)
     if (!emojiOpen) Keyboard.dismiss()
     setEmojiOpen(!emojiOpen)
@@ -264,6 +334,7 @@ export function MeetingChatPanel({
 
   async function pickAndSendAttachment(kind: MeetingChatAttachmentPick) {
     setAttachMenuOpen(false)
+    setShareMenuOpen(false)
     if (!onSendAttachment || !chatEnabled || uploadingLabel) return
     if (audience === 'private' && !recipientId) {
       toast.show('Choose a participant first', { tone: 'info' })
@@ -764,7 +835,7 @@ export function MeetingChatPanel({
                 message: msg,
                 currentUserId,
               })
-            const caption = meetingChatAttachmentCaption(msg)
+            const caption = msg.share ? null : meetingChatAttachmentCaption(msg)
             const bigEmoji = msg.attachment ? 0 : meetingChatEmojiOnlyCount(caption)
             const plain = bigEmoji > 0 && !hostsOnly && !isPrivate
 
@@ -830,15 +901,43 @@ export function MeetingChatPanel({
                   {msg.attachment ? (
                     <MeetingChatAttachmentView attachment={msg.attachment} onPreview={setPreviewAttachment} />
                   ) : null}
+                  {msg.share ? (
+                    <MeetingChatShareCard share={msg.share} currentUserId={currentUserId} />
+                  ) : null}
                   {caption ? (
-                    <Text
-                      fontSize={bigEmoji === 1 ? 44 : bigEmoji > 1 ? 34 : 14}
-                      color={coworkUi.text}
-                      lineHeight={bigEmoji === 1 ? 52 : bigEmoji > 1 ? 42 : 20}
-                      textAlign={plain && isSelf ? 'right' : 'left'}
-                    >
-                      {caption}
-                    </Text>
+                    bigEmoji > 0 ? (
+                      <Text
+                        fontSize={bigEmoji === 1 ? 44 : 34}
+                        color={coworkUi.text}
+                        lineHeight={bigEmoji === 1 ? 52 : 42}
+                        textAlign={plain && isSelf ? 'right' : 'left'}
+                      >
+                        {caption}
+                      </Text>
+                    ) : (
+                      <Text
+                        fontSize={14}
+                        color={coworkUi.text}
+                        lineHeight={20}
+                        textAlign={plain && isSelf ? 'right' : 'left'}
+                      >
+                        {parseMeetingChatTextLinks(caption).map((part, index) =>
+                          part.type === 'link' ? (
+                            <Text
+                              key={`${part.url}-${index}`}
+                              color={coworkUi.brandLight}
+                              fontWeight="700"
+                              textDecorationLine="underline"
+                              onPress={() => openMeetingChatLink(part.url)}
+                            >
+                              {part.text}
+                            </Text>
+                          ) : (
+                            <Text key={`text-${index}`}>{part.text}</Text>
+                          ),
+                        )}
+                      </Text>
+                    )
                   ) : null}
                 </YStack>
               </XStack>
@@ -1119,6 +1218,50 @@ export function MeetingChatPanel({
             ) : null}
           </YStack>
         ) : null}
+        {shareMenuOpen && chatEnabled ? (
+          <YStack
+            gap="$2"
+            padding="$2"
+            borderRadius={12}
+            borderWidth={1}
+            borderColor={coworkUi.glassBorder}
+            backgroundColor={coworkUi.meetingBarElevated}
+            maxHeight={320}
+          >
+            <XStack alignItems="center" justifyContent="space-between" paddingHorizontal="$1">
+              <Text fontSize={12} fontWeight="800" color={coworkUi.text}>
+                Share in meeting
+              </Text>
+              {shareLoading ? (
+                <Text fontSize={11} fontWeight="700" color={coworkUi.textMuted}>
+                  Loading…
+                </Text>
+              ) : null}
+            </XStack>
+            <ScrollView maxHeight={270} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+              <YStack gap="$2">
+                <ShareSection
+                  title="My shops"
+                  emptyText="No active shops to share."
+                  shares={shopShares}
+                  onPick={sendShare}
+                />
+                <ShareSection
+                  title="My products"
+                  emptyText="No active products to share."
+                  shares={productShares}
+                  onPick={sendShare}
+                />
+                <ShareSection
+                  title="Participants"
+                  emptyText="No other participants to share."
+                  shares={profileShares}
+                  onPick={sendShare}
+                />
+              </YStack>
+            </ScrollView>
+          </YStack>
+        ) : null}
         {attachMenuOpen && !uploadingLabel ? (
           <YStack
             gap={2}
@@ -1268,6 +1411,7 @@ export function MeetingChatPanel({
               onPress={() => {
                 setToMenuOpen(false)
                 setEmojiOpen(false)
+                setShareMenuOpen(false)
                 setAttachMenuOpen((value) => !value)
               }}
               style={{
@@ -1285,6 +1429,31 @@ export function MeetingChatPanel({
               <Icons.Plus size={20} color={attachMenuOpen ? '#fff' : coworkUi.text} />
             </Pressable>
           ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share a shop, product or participant"
+            accessibilityState={{ expanded: shareMenuOpen }}
+            disabled={!chatEnabled}
+            onPress={() => {
+              setToMenuOpen(false)
+              setAttachMenuOpen(false)
+              setEmojiOpen(false)
+              setShareMenuOpen((value) => !value)
+            }}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 999,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: shareMenuOpen ? coworkUi.brand : coworkUi.meetingControl,
+              borderWidth: 1,
+              borderColor: shareMenuOpen ? coworkUi.brand : coworkUi.glassBorder,
+              opacity: chatEnabled ? 1 : 0.45,
+            }}
+          >
+            <Icons.Share2 size={19} color={shareMenuOpen ? '#fff' : coworkUi.text} />
+          </Pressable>
           {Platform.OS === 'web' ? (
             <Input
               flex={1}
@@ -1298,7 +1467,10 @@ export function MeetingChatPanel({
               placeholderTextColor={coworkUi.textMuted}
               borderRadius={22}
               height={42}
-              onFocus={() => setEmojiOpen(false)}
+              onFocus={() => {
+                setEmojiOpen(false)
+                setShareMenuOpen(false)
+              }}
               onSubmitEditing={() => send()}
             />
           ) : (
@@ -1316,7 +1488,10 @@ export function MeetingChatPanel({
               autoCapitalize="sentences"
               accessibilityLabel="Meeting chat message"
               submitBehavior="submit"
-              onFocus={() => setEmojiOpen(false)}
+              onFocus={() => {
+                setEmojiOpen(false)
+                setShareMenuOpen(false)
+              }}
               onSubmitEditing={(event) => send(event.nativeEvent.text)}
               containerStyle={{
                 flex: 1,
@@ -1382,5 +1557,89 @@ export function MeetingChatPanel({
       ) : null}
     </CoWorkPanelShell>
     </KeyboardAvoidedByParentContext.Provider>
+  )
+}
+
+function ShareSection({
+  title,
+  emptyText,
+  shares,
+  onPick,
+}: {
+  title: string
+  emptyText: string
+  shares: MeetingChatShare[]
+  onPick: (share: MeetingChatShare) => void
+}) {
+  const { ui } = useCoWorkTheme()
+
+  return (
+    <YStack gap={2}>
+      <Text fontSize={11} fontWeight="800" color={ui.textMuted} paddingHorizontal="$1">
+        {title}
+      </Text>
+      {shares.length === 0 ? (
+        <Text fontSize={12} color={ui.textMuted} paddingHorizontal="$1" paddingVertical="$1">
+          {emptyText}
+        </Text>
+      ) : (
+        shares.map((share) => {
+          const Icon =
+            share.kind === 'shop'
+              ? Icons.Store
+              : share.kind === 'listing'
+                ? Icons.ShoppingBag
+                : Icons.UserPlus
+          const detail =
+            share.kind === 'listing' && typeof share.price === 'number'
+              ? `${new Intl.NumberFormat(undefined, {
+                  style: 'currency',
+                  currency: share.currency || 'INR',
+                  maximumFractionDigits: 0,
+                }).format(share.price)} · ${share.subtitle ?? 'Product'}`
+              : share.subtitle
+
+          return (
+            <Pressable
+              key={`${share.kind}-${share.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Share ${share.title}`}
+              onPress={() => onPick(share)}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                paddingHorizontal: 10,
+                paddingVertical: 9,
+                borderRadius: 10,
+                backgroundColor: pressed ? ui.brandMuted : 'transparent',
+              })}
+            >
+              <YStack
+                width={34}
+                height={34}
+                borderRadius={10}
+                alignItems="center"
+                justifyContent="center"
+                backgroundColor={ui.meetingControl}
+              >
+                <Icon size={16} color={ui.brandLight} />
+              </YStack>
+              <YStack flex={1} minWidth={0}>
+                <Text fontSize={13} fontWeight="800" color={ui.text} numberOfLines={1}>
+                  {share.title}
+                </Text>
+                {detail ? (
+                  <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
+                    {detail}
+                  </Text>
+                ) : null}
+              </YStack>
+              <Icons.Send size={14} color={ui.textMuted} />
+            </Pressable>
+          )
+        })
+      )}
+    </YStack>
   )
 }

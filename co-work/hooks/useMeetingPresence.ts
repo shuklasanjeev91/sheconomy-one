@@ -55,6 +55,10 @@ import {
 import { canViewerSeeMeetingChatMessage } from '~/co-work/lib/meeting-chat'
 import { sameUserIdSet } from '~/co-work/lib/meeting-live-roster'
 import { sanitizeRemoteMeetingChatMessage } from '~/co-work/lib/meeting-chat-attachments'
+import {
+  parseMeetingChatShareMetadata,
+  type MeetingChatShare,
+} from '~/co-work/lib/meeting-chat-share'
 import { uploadMeetingFile, type MeetingContentSource } from '~/co-work/lib/meeting-content-upload'
 import { canManageMeeting } from '~/co-work/lib/meeting-role-permissions'
 import type { MeetingChatAudience } from '~/co-work/lib/meeting-role-permissions'
@@ -838,6 +842,7 @@ export function useMeetingPresence({
                 audience: (row.audience as MeetingChatMessage['audience']) ?? 'everyone',
                 recipient_id: row.recipient_id ?? null,
                 system_event_type: row.system_event_type ?? null,
+                share: parseMeetingChatShareMetadata(row.metadata),
                 sender: null,
               })
               return
@@ -963,6 +968,7 @@ export function useMeetingPresence({
       audience: MeetingChatAudience = 'everyone',
       recipientId?: string | null,
       source?: MeetingContentSource,
+      share?: MeetingChatShare,
     ) => {
       const uploaded = source ? await uploadMeetingFile(meeting.id, userId, source) : null
       const message = await sendMeetingChatMessage(meeting.id, userId, text, {
@@ -970,6 +976,7 @@ export function useMeetingPresence({
           audience === 'hosts' ? 'hosts' : audience === 'private' ? 'private' : 'everyone',
         recipientId: audience === 'private' ? recipientId ?? null : null,
         attachment: uploaded ? { ...uploaded, size: uploaded.size || null } : undefined,
+        share,
       })
       setChatMessages((prev) => {
         if (prev.some((row) => row.id === message.id)) return prev

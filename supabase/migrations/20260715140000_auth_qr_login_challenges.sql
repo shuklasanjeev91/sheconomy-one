@@ -1,5 +1,7 @@
 -- Cross-device QR login: web creates a challenge; signed-in mobile approves; web redeems session.
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
 CREATE TABLE IF NOT EXISTS public.auth_qr_login_challenges (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   device_code text NOT NULL UNIQUE,
@@ -30,7 +32,7 @@ CREATE OR REPLACE FUNCTION public.create_qr_login_challenge()
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_code text;
@@ -42,7 +44,7 @@ BEGIN
   SET status = 'expired'
   WHERE status = 'pending' AND expires_at < now();
 
-  v_code := encode(gen_random_bytes(16), 'hex');
+  v_code := encode(extensions.gen_random_bytes(16), 'hex');
   INSERT INTO public.auth_qr_login_challenges (device_code, expires_at)
   VALUES (v_code, v_expires)
   RETURNING id INTO v_id;

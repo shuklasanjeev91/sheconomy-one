@@ -1,4 +1,5 @@
 import type { MeetingContentKind, MeetingContentShare } from '~/co-work/lib/meeting-content-share'
+import type { MeetingChatShare } from '~/co-work/lib/meeting-chat-share'
 import type { WhiteboardStroke } from '~/co-work/lib/meeting-whiteboard'
 
 export type MeetingStatus = 'scheduled' | 'instant' | 'active' | 'ended' | 'cancelled'
@@ -172,6 +173,7 @@ export type MeetingChatMessage = {
   recipient_id?: string | null
   system_event_type?: string | null
   attachment?: MeetingChatAttachment | null
+  share?: MeetingChatShare | null
   sender?: {
     full_name: string | null
     username: string | null

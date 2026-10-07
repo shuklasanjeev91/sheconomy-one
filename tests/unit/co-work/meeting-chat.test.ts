@@ -10,6 +10,11 @@ import {
   meetingChatMessageInSelectedChannel,
   meetingChatToolbarLabel,
 } from '../../../co-work/lib/meeting-chat'
+import { parseMeetingChatTextLinks } from '../../../co-work/lib/meeting-chat-links'
+import {
+  meetingChatShareMetadata,
+  parseMeetingChatShareMetadata,
+} from '../../../co-work/lib/meeting-chat-share'
 import type { Meeting } from '../../../co-work/lib/types'
 
 function meeting(partial?: Partial<Meeting['security_settings']> & { enableMeetingChat?: boolean }): Meeting {
@@ -50,6 +55,40 @@ describe('meeting chat', () => {
     expect(meetingChatToolbarLabel(0)).toBe('Chat')
     expect(meetingChatToolbarLabel(3)).toBe('Chat (3)')
     expect(meetingChatToolbarLabel(100)).toBe('Chat (99+)')
+  })
+
+  it('parses clickable links inside chat text', () => {
+    expect(parseMeetingChatTextLinks('Join https://example.com/demo now')).toEqual([
+      { type: 'text', text: 'Join ' },
+      { type: 'link', text: 'https://example.com/demo', url: 'https://example.com/demo' },
+      { type: 'text', text: ' now' },
+    ])
+    expect(parseMeetingChatTextLinks('Open www.example.com/test.')).toEqual([
+      { type: 'text', text: 'Open ' },
+      { type: 'link', text: 'www.example.com/test', url: 'https://www.example.com/test' },
+      { type: 'text', text: '.' },
+    ])
+  })
+
+  it('stores and validates meeting chat share metadata', () => {
+    const share = {
+      kind: 'listing' as const,
+      id: 'listing-1',
+      title: 'Handmade tote',
+      subtitle: 'SHE shop',
+      imageUrl: null,
+      href: '/listing/handmade-tote',
+      ownerUserId: 'seller-1',
+      price: 1299,
+      currency: 'INR',
+    }
+
+    expect(parseMeetingChatShareMetadata(meetingChatShareMetadata(share))).toEqual(share)
+    expect(
+      parseMeetingChatShareMetadata({
+        share: { ...share, href: 'https://example.com/listing/handmade-tote' },
+      }),
+    ).toBeNull()
   })
 
   it('detects system messages', () => {
