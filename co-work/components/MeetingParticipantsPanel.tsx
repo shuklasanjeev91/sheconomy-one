@@ -18,7 +18,9 @@ import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { MeetingSheetButton } from '~/co-work/components/MeetingSheetButton'
 import { MeetingRoleBadge } from '~/co-work/components/MeetingRoleBadge'
 import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
+import { ProfileFollowButton } from '~/community/components/ProfileFollowButton'
 import { useCoWorkTheme, useMeetingControlPalette } from '~/co-work/lib/theme'
+import { useAuth } from '~/hooks/useAuth'
 import type { MeetingParticipant, MeetingRole } from '~/co-work/lib/types'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import {
@@ -137,6 +139,7 @@ export function MeetingParticipantsPanel({
   speakingUserIds = [],
 }: MeetingParticipantsPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const { isAuthenticated } = useAuth()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | 'muted' | 'hand' | 'waiting'>('all')
   // Rename: track which user is being renamed
@@ -524,7 +527,7 @@ export function MeetingParticipantsPanel({
                     handRaised={!!raisedHands[p.user_id]}
                     isSpotlighted={spotlightedUserId === p.user_id}
                     socialActions={
-                      !isSelf ? (
+                      isAuthenticated && !isSelf ? (
                         <ParticipantSocialActions targetUserId={p.user_id} />
                       ) : null
                     }
@@ -859,5 +862,10 @@ function ParticipantRow({
 }
 
 function ParticipantSocialActions({ targetUserId }: { targetUserId: string }) {
-  return <ProfileConnectButton targetUserId={targetUserId} size="sm" />
+  return (
+    <>
+      <ProfileConnectButton targetUserId={targetUserId} size="sm" />
+      <ProfileFollowButton targetUserId={targetUserId} size="sm" />
+    </>
+  )
 }
