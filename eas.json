@@ -67,8 +67,8 @@
       },
       "android": {
         "track": "production",
-        "releaseStatus": "draft",
-        "changesNotSentForReview": true
+        "releaseStatus": "completed",
+        "changesNotSentForReview": false
       }
     },
     "android-fgs-declare": {
