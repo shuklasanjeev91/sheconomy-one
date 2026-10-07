@@ -13,7 +13,16 @@ export type PasskeyInfo = {
  */
 export function isPasskeySignInSupported(): boolean {
   if (typeof globalThis === 'undefined') return false
-  return typeof (globalThis as { PublicKeyCredential?: unknown }).PublicKeyCredential !== 'undefined'
+  const win = (globalThis as { window?: Window }).window
+  const nav = (globalThis as { navigator?: Navigator }).navigator
+  if (!win || !nav) return false
+  return Boolean(
+    'PublicKeyCredential' in win &&
+      win.PublicKeyCredential &&
+      'credentials' in nav &&
+      typeof nav.credentials?.create === 'function' &&
+      typeof nav.credentials?.get === 'function',
+  )
 }
 
 export async function signInWithPasskey(): Promise<{ error: string | null }> {

@@ -91,6 +91,18 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
           }}
         />
 
+        {mode !== 'phone' ? (
+          <Button
+            tone="outline"
+            size="$4"
+            borderRadius={999}
+            onPress={() => setMode('phone')}
+            icon={<Icons.Smartphone size={18} />}
+          >
+            Log in with phone
+          </Button>
+        ) : null}
+
         {passkeysAvailable ? (
           <Button
             tone="primary"
@@ -118,7 +130,7 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
               />
             ) : (
               <Button tone="ghost" size="$3" onPress={() => setShowQrLogin(true)}>
-                Log in with phone (QR code)
+                Approve browser login with QR code
               </Button>
             )}
           </>
