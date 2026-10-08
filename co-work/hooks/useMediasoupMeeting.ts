@@ -56,6 +56,8 @@ export type MediasoupMeetingPlatform = {
   errorMessage: (kind: MediasoupMediaErrorKind, cause: unknown) => string
   /** Resolve to an error message when the microphone may not be used. */
   beforeMicEnable?: () => Promise<string | null>
+  /** Resolve to an error message when the camera may not be used. */
+  beforeCameraEnable?: () => Promise<string | null>
   /** Throw to cancel (unsupported build, picker dismissed). */
   beforeScreenShare?: () => Promise<void>
   screenShareConstraints?: (options?: ScreenShareStartOptions | null) => DisplayMediaStreamOptions
@@ -420,15 +422,27 @@ export function useMediasoupMeeting(input: {
     cameraBusyRef.current = true
     setMeetingCameraIntent(next)
     clearError()
-    void room
-      .setCameraEnabled(next, {
-        facingMode: local.cameraFacing,
-        ...(next && activeVideoDeviceId ? { deviceId: activeVideoDeviceId } : {}),
-      })
-      .catch((cause) => reportError(platformRef.current.errorMessage('camera', cause)))
-      .finally(() => {
+    void (async () => {
+      try {
+        if (next) {
+          const denied = await platformRef.current.beforeCameraEnable?.()
+          if (denied) {
+            setMeetingCameraIntent(false)
+            reportError(denied)
+            return
+          }
+        }
+        await room.setCameraEnabled(next, {
+          facingMode: local.cameraFacing,
+          ...(next && activeVideoDeviceId ? { deviceId: activeVideoDeviceId } : {}),
+        })
+      } catch (cause) {
+        if (next) setMeetingCameraIntent(false)
+        reportError(platformRef.current.errorMessage('camera', cause))
+      } finally {
         cameraBusyRef.current = false
-      })
+      }
+    })()
   }, [activeVideoDeviceId, clearError, reportError, room])
 
   const flipCamera = useCallback(async (): Promise<CameraFacing> => {

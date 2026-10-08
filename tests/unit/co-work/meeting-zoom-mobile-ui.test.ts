@@ -14,7 +14,7 @@ import {
 } from '~/co-work/lib/meeting-toolbar'
 
 describe('Zoom mobile UI branding helpers', () => {
-  it('keeps Mute · Video · Share · Chat · More · End on phone dock only', () => {
+  it('keeps Mute · Video · Share · Chat · Reactions · More · End on phone dock only', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -22,7 +22,7 @@ describe('Zoom mobile UI branding helpers', () => {
         supportsScreenShare: true,
         compact: true,
       }),
-    ).toEqual(['mic', 'camera', 'share_screen', 'chat', 'more', 'leave', 'end_meeting'])
+    ).toEqual(['mic', 'camera', 'share_screen', 'chat', 'reactions', 'more', 'leave', 'end_meeting'])
   })
 
   it('uses tablet/desktop primary dock when not compact', () => {

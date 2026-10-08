@@ -61,6 +61,12 @@ const WEB_PLATFORM: MediasoupMeetingPlatform = {
     unlockWebAudioPlayback()
     return null
   },
+  beforeCameraEnable: async () => {
+    const caps = detectMeetingWebCapabilities()
+    if (!caps.secureContext) return meetingWebUnsupportedMessage('secure_context')
+    if (!caps.getUserMedia) return meetingWebUnsupportedMessage('camera')
+    return null
+  },
   beforeScreenShare: async () => {
     const caps = detectMeetingWebCapabilities()
     if (!caps.secureContext) throw new Error(meetingWebUnsupportedMessage('secure_context'))

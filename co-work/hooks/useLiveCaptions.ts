@@ -193,11 +193,9 @@ export function useLiveCaptions({
       clearTimeout(errorBannerTimerRef.current)
       errorBannerTimerRef.current = null
     }
-    if (
-      normalized &&
-      /speech recognition|view others/i.test(normalized) &&
-      !/microphone|browser/i.test(normalized)
-    ) {
+    // Notices about captioning *your* speech must not linger: viewing and translating
+    // others' captions never needs this device's microphone.
+    if (normalized && /speech recognition|view others/i.test(normalized)) {
       errorBannerTimerRef.current = setTimeout(() => {
         errorBannerTimerRef.current = null
         if (errorRef.current === normalized) {

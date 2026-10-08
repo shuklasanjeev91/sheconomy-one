@@ -168,6 +168,10 @@ function stopTrack(track: MediaStreamTrack | null | undefined) {
   }
 }
 
+function trackIsLive(track: MediaStreamTrack | null | undefined): boolean {
+  return !!track && track.readyState !== 'ended'
+}
+
 export class MediasoupRoom {
   private readonly options: MediasoupRoomOptions
   private readonly listeners = new Set<() => void>()
@@ -197,6 +201,9 @@ export class MediasoupRoom {
   private cameraProcessor: CameraTrackProcessor | null = null
   /** Captured camera before processing; `cameraProducer.track` is what is sent. */
   private rawCameraTrack: MediaStreamTrack | null = null
+  private micTrackReplacementInProgress = false
+  private cameraTrackReplacementInProgress = false
+  private cameraTrackReplacement: Promise<void> | null = null
 
   constructor(options: MediasoupRoomOptions) {
     this.options = { ...options }
@@ -292,6 +299,13 @@ export class MediasoupRoom {
       return
     }
     if (producer) {
+      if (!trackIsLive(producer.track)) {
+        await this.replaceMicTrack(producer, this.micConstraints)
+      }
+      if (!this.wantMic || this.micProducer !== producer) return
+      if (!trackIsLive(producer.track)) {
+        throw new Error('The microphone stopped. Check microphone access, then try unmuting again.')
+      }
       if (producer.paused) {
         producer.resume()
         this.signal('resumeProducer', { producerId: producer.id })
@@ -307,13 +321,7 @@ export class MediasoupRoom {
     this.micConstraints = constraints
     const producer = this.micProducer
     if (!producer || producer.paused) return
-    const stream = await this.options.mediaDevices().getUserMedia({ audio: constraints })
-    const track = stream.getAudioTracks()[0]
-    if (!track) return
-    const previous = producer.track
-    await producer.replaceTrack({ track })
-    stopTrack(previous)
-    this.updateLocal()
+    await this.replaceMicTrack(producer, constraints)
   }
 
   async setCameraEnabled(enabled: boolean, options?: { facingMode?: CameraFacing; deviceId?: string }) {
@@ -323,7 +331,11 @@ export class MediasoupRoom {
       return
     }
     if (options?.facingMode) this.update({ local: { ...this.snapshot.local, cameraFacing: options.facingMode } })
-    if (this.cameraProducer && !options?.deviceId) return
+    if (this.cameraProducer && !options?.deviceId) {
+      if (trackIsLive(this.cameraProducer.track) && trackIsLive(this.rawCameraTrack)) return
+      await this.replaceCameraTrack({ facingMode: options?.facingMode ?? this.snapshot.local.cameraFacing })
+      return
+    }
     if (this.cameraProducer && options?.deviceId) {
       await this.replaceCameraTrack({ deviceId: { exact: options.deviceId } })
       return
@@ -671,7 +683,7 @@ export class MediasoupRoom {
     const stream = await this.options.mediaDevices().getUserMedia({ audio: this.micConstraints })
     const track = stream.getAudioTracks()[0]
     if (!track) throw new Error('No microphone found.')
-    if (this.micProducer || this.closed) {
+    if (this.micProducer || this.closed || !this.wantMic) {
       stopTrack(track)
       return
     }
@@ -680,7 +692,48 @@ export class MediasoupRoom {
       codecOptions: { opusStereo: false, opusDtx: true, opusFec: true },
       appData: { source: 'audio' },
     })
+    const producer = this.micProducer
+    producer.on('trackended', () => {
+      if (this.closed || this.micProducer !== producer) return
+      this.updateLocal()
+      if (
+        this.wantMic &&
+        !producer.paused &&
+        this.snapshot.connection === 'connected' &&
+        !trackIsLive(producer.track)
+      ) {
+        void this.replaceMicTrack(producer, this.micConstraints).catch((error) => this.reportError(error))
+      }
+    })
     this.updateLocal()
+  }
+
+  private async replaceMicTrack(producer: Producer, constraints: MediaTrackConstraints | boolean) {
+    if (this.micTrackReplacementInProgress) return
+    this.micTrackReplacementInProgress = true
+    let track: MediaStreamTrack | undefined
+    try {
+      const stream = await this.options.mediaDevices().getUserMedia({ audio: constraints })
+      track = stream.getAudioTracks()[0]
+      if (!track) throw new Error('No microphone found.')
+      if (this.micProducer !== producer || this.closed || !this.wantMic) {
+        stopTrack(track)
+        return
+      }
+      const previous = producer.track
+      await producer.replaceTrack({ track })
+      if (this.micProducer !== producer || this.closed) {
+        stopTrack(track)
+        return
+      }
+      stopTrack(previous)
+      this.updateLocal()
+    } catch (error) {
+      stopTrack(track)
+      throw error
+    } finally {
+      this.micTrackReplacementInProgress = false
+    }
   }
 
   private cameraConstraints(extra?: MediaTrackConstraints): MediaTrackConstraints {
@@ -714,6 +767,21 @@ export class MediasoupRoom {
       codecOptions: { videoGoogleStartBitrate: 1000 },
       appData: { source: 'video' },
     })
+    const cameraProducer = this.cameraProducer
+    cameraProducer.on('trackended', () => {
+      if (this.closed || this.cameraProducer !== cameraProducer) return
+      this.updateLocal()
+      if (
+        !this.cameraTrackReplacementInProgress &&
+        this.wantCamera &&
+        this.snapshot.connection === 'connected' &&
+        !trackIsLive(cameraProducer.track)
+      ) {
+        void this.replaceCameraTrack({ facingMode: this.snapshot.local.cameraFacing }).catch((error) =>
+          this.reportError(error),
+        )
+      }
+    })
     this.updateLocal()
   }
 
@@ -736,20 +804,58 @@ export class MediasoupRoom {
   }
 
   private async replaceCameraTrack(extra: MediaTrackConstraints) {
+    if (this.cameraTrackReplacement) return this.cameraTrackReplacement
+    const replacement = this.performCameraTrackReplacement(extra)
+    this.cameraTrackReplacement = replacement
+    try {
+      await replacement
+    } finally {
+      if (this.cameraTrackReplacement === replacement) this.cameraTrackReplacement = null
+    }
+  }
+
+  private async performCameraTrackReplacement(extra: MediaTrackConstraints) {
     const producer = this.cameraProducer
     if (!producer) return
+    this.cameraTrackReplacementInProgress = true
     const previous = producer.track
-    // Some phones cannot open two cameras at once.
-    this.releaseRawCamera()
-    stopTrack(previous)
-    const stream = await this.options.mediaDevices().getUserMedia({
-      video: this.cameraConstraints(extra),
-    })
-    const track = stream.getVideoTracks()[0]
-    if (!track) throw new Error('No camera found.')
-    this.rawCameraTrack = track
-    await producer.replaceTrack({ track: await this.processCamera(track) })
-    this.updateLocal()
+    let track: MediaStreamTrack | undefined
+    try {
+      // Some phones cannot open two cameras at once.
+      this.releaseRawCamera()
+      stopTrack(previous)
+      const stream = await this.options.mediaDevices().getUserMedia({
+        video: this.cameraConstraints(extra),
+      })
+      track = stream.getVideoTracks()[0]
+      if (!track) throw new Error('No camera found.')
+      if (this.cameraProducer !== producer || this.closed || !this.wantCamera) {
+        stopTrack(track)
+        return
+      }
+      this.rawCameraTrack = track
+      const processedTrack = await this.processCamera(track)
+      if (this.cameraProducer !== producer || this.closed || !this.wantCamera) {
+        if (processedTrack !== track) stopTrack(processedTrack)
+        stopTrack(track)
+        if (this.rawCameraTrack === track) this.rawCameraTrack = null
+        return
+      }
+      await producer.replaceTrack({ track: processedTrack })
+      if (this.cameraProducer !== producer || this.closed) {
+        stopTrack(processedTrack)
+        stopTrack(track)
+        return
+      }
+      this.updateLocal()
+    } catch (error) {
+      stopTrack(track)
+      if (this.rawCameraTrack === track) this.rawCameraTrack = null
+      this.updateLocal()
+      throw error
+    } finally {
+      this.cameraTrackReplacementInProgress = false
+    }
   }
 
   /**
@@ -977,7 +1083,7 @@ export class MediasoupRoom {
 
   // ── snapshot ────────────────────────────────────────────────────────────
 
-  private reportError(error: unknown) {
+  reportError(error: unknown) {
     this.update({ error: error instanceof Error ? error.message : String(error) })
   }
 
@@ -992,9 +1098,9 @@ export class MediasoupRoom {
     this.update({
       local: {
         ...this.snapshot.local,
-        micEnabled: !!mic && !mic.paused,
+        micEnabled: !!mic && !mic.paused && trackIsLive(mic.track),
         micTrack: mic?.track ?? null,
-        cameraEnabled: !!camera,
+        cameraEnabled: !!camera && trackIsLive(camera.track) && trackIsLive(this.rawCameraTrack),
         cameraTrack: camera?.track ?? null,
         cameraRawTrack: camera ? this.rawCameraTrack : null,
         screenSharing: !!screen,

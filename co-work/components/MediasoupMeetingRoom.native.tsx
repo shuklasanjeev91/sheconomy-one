@@ -37,7 +37,10 @@ import {
   toggleCallSpeaker,
 } from '~/co-work/lib/call-audio'
 import type { MeetingMediaMode, MeetingRoomProps } from '~/co-work/lib/meeting-media-controls'
-import { ensureNativeMicrophonePermission } from '~/co-work/lib/meeting-media-permissions'
+import {
+  ensureNativeCameraPermission,
+  ensureNativeMicrophonePermission,
+} from '~/co-work/lib/meeting-media-permissions'
 import { softMediaToggleFailure } from '~/co-work/lib/meeting-mobile'
 import {
   MEETING_SUBSCRIBE_ALL_BELOW,
@@ -89,6 +92,18 @@ function nativePlatform(mediaMode: MeetingMediaMode): MediasoupMeetingPlatform {
       }
       // Re-assert the call audio session before first publish after a muted join.
       await configureCallAudio(getActiveCallMediaMode()).catch(() => {})
+      return null
+    },
+    beforeCameraEnable: async () => {
+      const permission = await ensureNativeCameraPermission()
+      if (!permission.granted) {
+        return (
+          permission.message ??
+          softMediaToggleFailure('camera', undefined, {
+            blockedInSettings: permission.blockedInSettings,
+          })
+        )
+      }
       return null
     },
     beforeScreenShare: async () => {

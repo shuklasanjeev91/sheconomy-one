@@ -72,6 +72,47 @@ export async function ensureNativeMicrophonePermission(): Promise<{
   }
 }
 
+/**
+ * Ensure camera permission before Start Video on native.
+ * Joins may skip camera, so the live toggle must be able to prompt later.
+ */
+export async function ensureNativeCameraPermission(): Promise<{
+  granted: boolean
+  blockedInSettings: boolean
+  message?: string
+}> {
+  if (Platform.OS === 'web') {
+    return { granted: true, blockedInSettings: false }
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Camera } = require('expo-camera') as typeof import('expo-camera')
+    const current = await Camera.getCameraPermissionsAsync()
+    if (current.granted) {
+      return { granted: true, blockedInSettings: false }
+    }
+    const requested = await Camera.requestCameraPermissionsAsync()
+    if (requested.granted) {
+      return { granted: true, blockedInSettings: false }
+    }
+    const blockedInSettings = requested.canAskAgain === false
+    return {
+      granted: false,
+      blockedInSettings,
+      message: meetingPermissionDenialMessage('camera', { blockedInSettings }),
+    }
+  } catch (cause) {
+    return {
+      granted: false,
+      blockedInSettings: false,
+      message:
+        cause instanceof Error
+          ? cause.message
+          : meetingPermissionDenialMessage('camera'),
+    }
+  }
+}
+
 export async function ensureMeetingMediaPermissions(): Promise<MeetingMediaPermissionResult> {
   return ensureMeetingMobilePermissions({ requestNotifications: false })
 }

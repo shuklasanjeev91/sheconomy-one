@@ -95,6 +95,16 @@ describe('meeting web capabilities', () => {
     expect(mapWebMediaPermissionError('microphone', new Error('NotReadableError'))).toMatch(/in use/)
   })
 
+  it('keeps connection failures instead of blaming the browser', () => {
+    expect(
+      mapWebMediaPermissionError('camera', new Error('Could not reach the meeting media server.')),
+    ).toBe('Could not reach the meeting media server.')
+    expect(
+      mapWebMediaPermissionError('camera', new TypeError('navigator.mediaDevices.getUserMedia is not a function')),
+    ).toBe(meetingWebUnsupportedMessage('camera'))
+    expect(mapWebMediaPermissionError('camera')).toBe(meetingWebUnsupportedMessage('camera'))
+  })
+
   it('queries the Permissions API without throwing when it is missing', async () => {
     expect(await queryWebMediaPermission('microphone', { navigator: {} } as typeof globalThis)).toBe(
       'unknown',

@@ -294,6 +294,8 @@ function ControlButton({
   moreLabel,
   compact,
   badgeCount,
+  minWidth,
+  maxWidth,
 }: {
   label: string
   icon: typeof Icons.Mic
@@ -304,6 +306,8 @@ function ControlButton({
   moreLabel?: string
   compact?: boolean
   badgeCount?: number
+  minWidth?: number
+  maxWidth?: number
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
   const palette = useMeetingControlPalette()
@@ -338,10 +342,10 @@ function ControlButton({
     <YStack
       alignItems="center"
       gap={4}
-      minWidth={compact ? 48 : 48}
-      maxWidth={compact ? 68 : 70}
-      flexShrink={1}
-      flexGrow={compact ? 1 : 0}
+      minWidth={minWidth ?? (compact ? 48 : 48)}
+      maxWidth={maxWidth ?? (compact ? 68 : 70)}
+      flexShrink={0}
+      flexGrow={0}
     >
       <XStack position="relative" alignItems="center">
         <Pressable
@@ -429,6 +433,8 @@ function ControlButton({
         color={labelColor}
         textAlign="center"
         numberOfLines={1}
+        width="100%"
+        lineHeight={compact ? 12 : 14}
         style={palette.labelShadow ? { textShadow: palette.labelShadow } : undefined}
       >
         {label}
@@ -594,7 +600,7 @@ export function MeetingControls({
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const { isMobile, isTablet, isDesktop } = useAppLayout()
   const insets = useSafeAreaInsets()
-  const { height: windowHeight } = useWindowDimensions()
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions()
   const compact = forceCompact || (isMobile && !isTablet && !isDesktop)
   const roomy = !forceCompact && (isTablet || isDesktop)
   const bottomPad = (forceCompact ? 6 : 8) + insets.bottom
@@ -1386,6 +1392,15 @@ export function MeetingControls({
   const centerKeys = roomy
     ? mediaKeys
     : mediaKeys.filter((key) => key !== 'mic' && key !== 'camera')
+  const phoneActionCount =
+    4 +
+    (caps.supportsVideo !== false ? 1 : 0) +
+    (primaryKeys.includes('share_screen') ? 1 : 0) +
+    (primaryKeys.includes('reactions') && onToggleReactions ? 1 : 0)
+  const phoneControlWidth = windowWidth < 360 ? 52 : windowWidth < 390 ? 56 : 60
+  const phoneControlGap = windowWidth < 360 ? 3 : 5
+  const phoneDockNeedsScroll =
+    !roomy && phoneActionCount * phoneControlWidth + (phoneActionCount - 1) * phoneControlGap > windowWidth - 42
 
   return (
     <YStack
@@ -1585,92 +1600,130 @@ export function MeetingControls({
               </XStack>
             </>
           ) : (
-            <XStack width="100%" alignItems="flex-end" justifyContent="space-between" gap={2}>
-              <ControlButton
-                label={primaryLabel('mic')}
-                icon={audioEnabled ? Icons.Mic : Icons.MicOff}
-                variant={audioEnabled ? 'neutral' : 'off'}
-                onPress={onToggleAudio}
-                compact={compact}
-              />
-              {caps.supportsVideo !== false ? (
+            <XStack width="100%" alignItems="flex-end" gap={phoneControlGap}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                bounces={false}
+                style={{ flex: 1 }}
+                contentContainerStyle={{
+                  alignItems: 'flex-end',
+                  justifyContent: phoneDockNeedsScroll ? 'flex-start' : 'space-between',
+                  gap: phoneControlGap,
+                  minWidth: phoneDockNeedsScroll ? undefined : '100%',
+                  paddingHorizontal: phoneDockNeedsScroll ? 2 : 0,
+                }}
+              >
                 <ControlButton
-                  label={primaryLabel('camera')}
-                  icon={videoEnabled ? Icons.Video : Icons.VideoOff}
-                  variant={videoEnabled ? 'neutral' : 'off'}
-                  onPress={onToggleVideo}
+                  label={primaryLabel('mic')}
+                  icon={audioEnabled ? Icons.Mic : Icons.MicOff}
+                  variant={audioEnabled ? 'neutral' : 'off'}
+                  onPress={onToggleAudio}
                   compact={compact}
+                  minWidth={phoneControlWidth}
+                  maxWidth={phoneControlWidth}
                 />
-              ) : null}
-              {primaryKeys.includes('share_screen') ? (
+                {caps.supportsVideo !== false ? (
+                  <ControlButton
+                    label={primaryLabel('camera')}
+                    icon={videoEnabled ? Icons.Video : Icons.VideoOff}
+                    variant={videoEnabled ? 'neutral' : 'off'}
+                    onPress={onToggleVideo}
+                    compact={compact}
+                    minWidth={phoneControlWidth}
+                    maxWidth={phoneControlWidth}
+                  />
+                ) : null}
+                {primaryKeys.includes('share_screen') ? (
+                  <ControlButton
+                    label={primaryLabel('share_screen')}
+                    icon={Icons.ScreenShare}
+                    variant={screenSharing ? 'danger' : 'neutral'}
+                    onPress={onToggleScreen}
+                    onMore={onOpenShareOptions}
+                    moreLabel="Share options"
+                    compact={compact}
+                    minWidth={phoneControlWidth}
+                    maxWidth={phoneControlWidth}
+                  />
+                ) : null}
                 <ControlButton
-                  label={primaryLabel('share_screen')}
-                  icon={Icons.ScreenShare}
-                  variant={screenSharing ? 'danger' : 'neutral'}
-                  onPress={onToggleScreen}
-                  onMore={onOpenShareOptions}
-                  moreLabel="Share options"
+                  label={primaryLabel('chat')}
+                  icon={Icons.MessageSquare}
+                  variant={panel === 'chat' ? 'brand' : 'neutral'}
+                  onPress={onToggleChat}
                   compact={compact}
+                  badgeCount={unreadChatCount}
+                  minWidth={phoneControlWidth}
+                  maxWidth={phoneControlWidth}
                 />
-              ) : null}
-              <ControlButton
-                label={primaryLabel('chat')}
-                icon={Icons.MessageSquare}
-                variant={panel === 'chat' ? 'brand' : 'neutral'}
-                onPress={onToggleChat}
-                compact={compact}
-                badgeCount={unreadChatCount}
-              />
-              {primaryKeys.includes('reactions') && onToggleReactions ? (
-                <ControlButton
-                  label={primaryLabel('reactions')}
-                  icon={Icons.Smile}
-                  variant={reactionTrayOpen ? 'brand' : 'neutral'}
-                  onPress={openReactions}
-                  compact={compact}
-                />
-              ) : null}
-              <YStack position="relative" alignItems="center" justifyContent="center" zIndex={3}>
-                <MeetingMoreSheet
-                  open={flyout === 'more'}
-                  onClose={closeFlyout}
-                  viewerRole={role}
-                  handRaised={handRaised}
-                  participantCount={participantCount}
-                  supportsScreenShare={caps.supportsScreenShare}
-                  supportsLiveCaptions={caps.supportsLiveCaptions}
-                  hasWhiteboard={!!onOpenWhiteboard}
-                  hasHostTools={!!onToggleHostTools || role === 'host' || role === 'cohost'}
-                  supportsRecording={caps.supportsRecording}
-                  recording={recording}
-                  screenSharing={screenSharing}
-                  captionsActive={captionsActive}
-                  hasBackground={caps.supportsVideo && !!onToggleBackgrounds}
-                  backgroundActive={backgroundActive}
-                  onToggleHand={onToggleHand}
-                  onOpenReactions={() => {
-                    onToggleReactions?.()
-                  }}
-                  onSendQuickReaction={(emoji) => onSendReaction?.(emoji)}
-                  resolveAction={(key) => {
-                    const item = overflowLabel(key)
-                    return item?.onPress ?? null
-                  }}
-                />
-                <ControlButton
-                  label="More"
-                  icon={Icons.MoreHorizontal}
-                  variant={flyout === 'more' ? 'brand' : 'neutral'}
-                  onPress={() => toggleFlyout('more')}
-                  compact={compact}
-                />
-              </YStack>
+                {primaryKeys.includes('reactions') && onToggleReactions ? (
+                  <ControlButton
+                    label={primaryLabel('reactions')}
+                    icon={Icons.Smile}
+                    variant={reactionTrayOpen ? 'brand' : 'neutral'}
+                    onPress={openReactions}
+                    compact={compact}
+                    minWidth={phoneControlWidth}
+                    maxWidth={phoneControlWidth}
+                  />
+                ) : null}
+                <YStack
+                  position="relative"
+                  alignItems="center"
+                  justifyContent="center"
+                  zIndex={3}
+                  minWidth={phoneControlWidth}
+                  maxWidth={phoneControlWidth}
+                  flexShrink={0}
+                >
+                  <MeetingMoreSheet
+                    open={flyout === 'more'}
+                    onClose={closeFlyout}
+                    viewerRole={role}
+                    handRaised={handRaised}
+                    participantCount={participantCount}
+                    supportsScreenShare={caps.supportsScreenShare}
+                    supportsLiveCaptions={caps.supportsLiveCaptions}
+                    hasWhiteboard={!!onOpenWhiteboard}
+                    hasHostTools={!!onToggleHostTools || role === 'host' || role === 'co_host'}
+                    supportsRecording={caps.supportsRecording}
+                    recording={recording}
+                    screenSharing={screenSharing}
+                    captionsActive={captionsActive}
+                    hasBackground={caps.supportsVideo && !!onToggleBackgrounds}
+                    backgroundActive={backgroundActive}
+                    onToggleHand={onToggleHand}
+                    onOpenReactions={() => {
+                      onToggleReactions?.()
+                    }}
+                    onSendQuickReaction={(emoji) => onSendReaction?.(emoji)}
+                    resolveAction={(key) => {
+                      const item = overflowLabel(key)
+                      return item?.onPress ?? null
+                    }}
+                  />
+                  <ControlButton
+                    label="More"
+                    icon={Icons.MoreHorizontal}
+                    variant={flyout === 'more' ? 'brand' : 'neutral'}
+                    onPress={() => toggleFlyout('more')}
+                    compact={compact}
+                    minWidth={phoneControlWidth}
+                    maxWidth={phoneControlWidth}
+                  />
+                </YStack>
+              </ScrollView>
               <ControlButton
                 label={isHost || showEnd ? 'End' : 'Leave'}
                 icon={Icons.X}
                 variant="danger"
                 onPress={() => setEndDialogOpen(true)}
                 compact={compact}
+                minWidth={phoneControlWidth}
+                maxWidth={phoneControlWidth}
               />
             </XStack>
           )}

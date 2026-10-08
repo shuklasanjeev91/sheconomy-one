@@ -183,6 +183,12 @@ export function mapWebMediaPermissionError(
       ? 'Camera is in use by another app or tab. Close it and try again.'
       : 'Microphone is in use by another app or tab. Close it and try again.'
   }
+  // Connection and SFU failures ("Could not reach the meeting media server.") are
+  // not browser problems; blaming the browser sent people to reinstall Chrome.
+  const message = cause instanceof Error ? cause.message.trim() : typeof cause === 'string' ? cause.trim() : ''
+  if (message && !/NotSupported|getUserMedia|mediaDevices|is not a function|undefined is not/i.test(raw)) {
+    return message
+  }
   return kind === 'camera'
     ? meetingWebUnsupportedMessage('camera')
     : meetingWebUnsupportedMessage('microphone')
