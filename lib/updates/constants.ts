@@ -9,6 +9,9 @@ export const STORE_UPDATE_DISMISSAL_KEY = '@sheconomy/store-update-dismissal/v1'
 /** Re-show the optional "new version available" prompt after this long. */
 export const STORE_UPDATE_REMIND_AFTER_MS = 24 * 60 * 60 * 1000
 
+/** Retry opening the mandatory native update flow while an install stays blocked. */
+export const FORCE_UPDATE_AUTO_RETRY_MS = 5 * 60 * 1000
+
 /** Minimum time between automatic update checks (startup / resume). */
 export const UPDATE_CHECK_COOLDOWN_MS = 60_000
 

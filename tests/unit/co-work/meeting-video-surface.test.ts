@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  meetingVideoObjectFit,
   meetingVideoTrackRemountKey,
   nextMeetingVideoSurfaceSize,
 } from '~/co-work/lib/meeting-video-surface'
@@ -56,5 +57,43 @@ describe('meeting video surface remounts', () => {
       mirrored: true,
     })
     expect(key).toBe('TR_123-stream-ready-token-cam-m')
+  })
+})
+
+describe('meeting video surface fit', () => {
+  it('contains screen shares', () => {
+    expect(meetingVideoObjectFit({ isScreen: true, videoWidth: 1920, videoHeight: 1080 })).toBe(
+      'contain',
+    )
+  })
+
+  it('covers camera video when the video and tile aspects are close', () => {
+    expect(
+      meetingVideoObjectFit({
+        videoWidth: 1280,
+        videoHeight: 720,
+        tileWidth: 640,
+        tileHeight: 360,
+      }),
+    ).toBe('cover')
+  })
+
+  it('contains camera video when portrait and landscape orientation disagree', () => {
+    expect(
+      meetingVideoObjectFit({
+        videoWidth: 720,
+        videoHeight: 1280,
+        tileWidth: 640,
+        tileHeight: 360,
+      }),
+    ).toBe('contain')
+    expect(
+      meetingVideoObjectFit({
+        videoWidth: 1280,
+        videoHeight: 720,
+        tileWidth: 360,
+        tileHeight: 640,
+      }),
+    ).toBe('contain')
   })
 })

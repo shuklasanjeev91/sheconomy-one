@@ -608,12 +608,14 @@ export function MeetingControls({
 
   useEffect(() => {
     // Meeting sheets and trays can be in-tree on native. Android WebRTC
-    // SurfaceViews steal taps unless we hide them while controls overlays are up.
+    // SurfaceViews steal taps in deeply interactive overlays. Do not toggle this
+    // for the More sheet: hiding/restoring many RTC surfaces during its open
+    // animation causes visible stalls on lower-memory Android devices.
     const needsSurfaceBlock =
-      Platform.OS !== 'web' && overlayOpen
+      Platform.OS !== 'web' && (reactionTrayOpen || endDialogOpen || flyout === 'security')
     setExtraSurfaceBlock(needsSurfaceBlock)
     return () => setExtraSurfaceBlock(false)
-  }, [overlayOpen, setExtraSurfaceBlock])
+  }, [endDialogOpen, flyout, reactionTrayOpen, setExtraSurfaceBlock])
 
   useEffect(() => {
     if (previousOverlayOpenRef.current === overlayOpen) return

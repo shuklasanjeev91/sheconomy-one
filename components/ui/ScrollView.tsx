@@ -50,8 +50,8 @@ export const ScrollView = forwardRef<ElementRef<typeof TamaguiScrollView>, Scrol
     return (
       <TamaguiScrollView
         ref={ref}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
         {...(avoidsKeyboard ? { automaticallyAdjustKeyboardInsets: true } : null)}
         {...props}
         contentContainerStyle={mergedContentStyle}

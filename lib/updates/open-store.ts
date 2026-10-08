@@ -14,17 +14,7 @@ export function storeUrlCandidates(platform: string = Platform.OS): string[] {
   return [`market://details?id=${ANDROID_PACKAGE_ID}`, ...(web ? [web] : [])]
 }
 
-/**
- * Send the user to install the latest store build. On Android, Google Play's
- * in-app update runs first; the store listing is the fallback. Resolves false
- * when nothing could be opened.
- */
-export async function openAppStore(): Promise<boolean> {
-  if (Platform.OS === 'android') {
-    const result = await startPlayImmediateUpdate()
-    if (result === 'accepted' || result === 'cancelled') return true
-  }
-
+export async function openStoreListing(): Promise<boolean> {
   for (const url of storeUrlCandidates()) {
     try {
       await Linking.openURL(url)
@@ -34,4 +24,19 @@ export async function openAppStore(): Promise<boolean> {
     }
   }
   return false
+}
+
+/**
+ * Send the user to install the latest store build. On Android, Google Play's
+ * in-app update runs first; the store listing is the fallback. Resolves false
+ * when nothing could be opened.
+ */
+export async function openAppStore(options: { fallbackOnCancel?: boolean } = {}): Promise<boolean> {
+  if (Platform.OS === 'android') {
+    const result = await startPlayImmediateUpdate()
+    if (result === 'accepted') return true
+    if (result === 'cancelled' && !options.fallbackOnCancel) return true
+  }
+
+  return openStoreListing()
 }

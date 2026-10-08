@@ -35,9 +35,12 @@ private data class MaskSnapshot(val values: FloatArray, val width: Int, val heig
 
 /** Person cutout runs off the camera thread. Keep the copy small enough to stay real-time. */
 private const val MAX_PROCESS_WIDTH = 960
-private const val MASK_WIDTH = 256
+private const val MASK_WIDTH = 320
 private const val MIN_PROCESS_INTERVAL_MS = 140L
 private const val CIRCUIT_OPEN_MS = 3_000L
+private const val MATTE_LOW_CONFIDENCE = 0.12f
+private const val MATTE_HIGH_CONFIDENCE = 0.72f
+private const val TEMPORAL_MATTE_BLEND = 0.68f
 
 private class MeetingBackgroundProcessor(private val context: Context) : VideoFrameProcessor {
   private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -58,6 +61,7 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
   private var skipBudget = 12
   private var lastSeenGeneration = -1
   private var circuitOpenUntil = 0L
+  private var previousMask: MaskSnapshot? = null
 
   private val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
   @Volatile private var decodeInFlightPath: String? = null
@@ -103,6 +107,7 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
     if (MeetingBackgroundConfig.generation != lastSeenGeneration) {
       lastSeenGeneration = MeetingBackgroundConfig.generation
       skipBudget = 8
+      previousMask = null
       if (MeetingBackgroundConfig.mode == "image") {
         val path = MeetingBackgroundConfig.imagePath
         if (!path.isNullOrBlank() && path != cachedImagePath) requestDecodeAsync(path)
@@ -346,7 +351,7 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
 
   /** Person confidence, 1 = keep the camera pixel. Segmentation runs on the background executor. */
   private fun personMask(bitmap: Bitmap): MaskSnapshot {
-    if (segmentInFlight) return emptyMask(bitmap.width, bitmap.height)
+    if (segmentInFlight) return previousMask ?: emptyMask(bitmap.width, bitmap.height)
     return try {
       val image = InputImage.fromBitmap(bitmap, 0)
       val task = segmenter.process(image)
@@ -363,15 +368,51 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
       for (i in values.indices) {
         values[i] = buffer.float.coerceIn(0f, 1f)
       }
-      MaskSnapshot(values, mask.width, mask.height)
+      smoothMask(MaskSnapshot(values, mask.width, mask.height))
     } catch (t: Throwable) {
       android.util.Log.w("MeetingBgProcessor", "segmentation unavailable — full blur", t)
-      emptyMask(bitmap.width, bitmap.height)
+      previousMask ?: emptyMask(bitmap.width, bitmap.height)
     }
   }
 
   private fun emptyMask(width: Int, height: Int): MaskSnapshot {
     return MaskSnapshot(FloatArray(width * height), width.coerceAtLeast(1), height.coerceAtLeast(1))
+  }
+
+  private fun smoothMask(mask: MaskSnapshot): MaskSnapshot {
+    val width = mask.width
+    val height = mask.height
+    val shaped = FloatArray(mask.values.size)
+    for (y in 0 until height) {
+      val row = y * width
+      val above = ((y - 1).coerceAtLeast(0)) * width
+      val below = ((y + 1).coerceAtMost(height - 1)) * width
+      for (x in 0 until width) {
+        val left = (x - 1).coerceAtLeast(0)
+        val right = (x + 1).coerceAtMost(width - 1)
+        val confidence = (
+          mask.values[above + left] +
+            mask.values[above + x] * 2f +
+            mask.values[above + right] +
+            mask.values[row + left] * 2f +
+            mask.values[row + x] * 4f +
+            mask.values[row + right] * 2f +
+            mask.values[below + left] +
+            mask.values[below + x] * 2f +
+            mask.values[below + right]
+          ) / 16f
+        shaped[row + x] = personAlpha(confidence)
+      }
+    }
+
+    val previous = previousMask
+    if (previous?.width == width && previous.height == height && previous.values.size == shaped.size) {
+      for (i in shaped.indices) {
+        shaped[i] = previous.values[i] * TEMPORAL_MATTE_BLEND + shaped[i] * (1f - TEMPORAL_MATTE_BLEND)
+      }
+    }
+
+    return MaskSnapshot(shaped, width, height).also { previousMask = it }
   }
 
   private fun openBackgroundStream(path: String): InputStream? {
@@ -462,7 +503,7 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
     for (y in 0 until height) {
       val rowOffset = y * width
       for (x in 0 until width) {
-        val alpha = personAlpha(sampleMask(mask, x, y, width, height))
+        val alpha = sampleMask(mask, x, y, width, height)
         val index = rowOffset + x
         fg[index] = blend(fg[index], bg[index], alpha)
       }
@@ -488,7 +529,7 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
 
   /** Solid person, soft edge. Lower confidence keeps hair instead of chopping it off. */
   private fun personAlpha(confidence: Float): Float {
-    val x = ((confidence - 0.18f) / 0.42f).coerceIn(0f, 1f)
+    val x = ((confidence - MATTE_LOW_CONFIDENCE) / (MATTE_HIGH_CONFIDENCE - MATTE_LOW_CONFIDENCE)).coerceIn(0f, 1f)
     return x * x * (3f - 2f * x)
   }
 

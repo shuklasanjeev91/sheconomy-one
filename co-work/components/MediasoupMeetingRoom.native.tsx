@@ -44,7 +44,7 @@ import {
   meetingCameraQualityForTile,
 } from '~/co-work/lib/meeting-selective-subscribe'
 import { shouldMirrorMeetingVideo } from '~/co-work/lib/meeting-video-mirror'
-import { nextMeetingVideoSurfaceSize } from '~/co-work/lib/meeting-video-surface'
+import { meetingVideoObjectFit, nextMeetingVideoSurfaceSize } from '~/co-work/lib/meeting-video-surface'
 import type { MediasoupCredentials } from '~/co-work/lib/mediasoup/mediasoup-credentials'
 import {
   mediasoupTrackKey,
@@ -120,9 +120,11 @@ function NativeMediasoupVideoTile({
   localScreenShareActive = false,
   onPreferredLayer,
   onScreenAttached,
+  onOpenProfile,
 }: NativeStageTileProps<MediasoupTrackRef> & {
   onPreferredLayer: (userId: string, spatialLayer: number) => void
   onScreenAttached: (userId: string) => void
+  onOpenProfile?: (userId: string) => void
 }) {
   const { blockVideoSurfaces, stopIncomingVideo } = useMeetingLiveSignals()
   const [surfacesAllowed, setSurfacesAllowed] = useState(!blockVideoSurfaces)
@@ -167,6 +169,15 @@ function NativeMediasoupVideoTile({
 
   const facing = (track as (MediaStreamTrack & { getSettings?: () => { facingMode?: string } }) | null)
     ?.getSettings?.()?.facingMode
+  const settings = (track as (MediaStreamTrack & { getSettings?: () => MediaTrackSettings }) | null)
+    ?.getSettings?.()
+  const objectFit = meetingVideoObjectFit({
+    isScreen,
+    videoWidth: settings?.width,
+    videoHeight: settings?.height,
+    tileWidth: width,
+    tileHeight: height,
+  })
   const mirrored = shouldMirrorMeetingVideo({
     mirrorLocalVideo,
     isLocal: participant.isLocal,
@@ -229,6 +240,9 @@ function NativeMediasoupVideoTile({
       radius={radius}
       compact={compact}
       activeSpeaker={activeSpeaker}
+      onOpenProfile={
+        !isScreen && onOpenProfile ? () => onOpenProfile(participant.identity) : undefined
+      }
       onSurfaceLayout={(layoutW, layoutH) =>
         setSurfaceSize((prev) => nextMeetingVideoSurfaceSize(prev, { w: layoutW, h: layoutH }))
       }
@@ -246,7 +260,7 @@ function NativeMediasoupVideoTile({
               height: surfaceSize.h,
               backgroundColor: '#0c080a',
             }}
-            objectFit={isScreen ? 'contain' : 'cover'}
+            objectFit={objectFit}
             mirror={mirrored}
             // Camera tiles stay at zOrder 0 so they don't punch through the meeting chrome.
             zOrder={isScreen || floating ? 1 : 0}
@@ -262,7 +276,13 @@ function NativeMediasoupVideoTile({
   )
 }
 
-function NativeMediasoupVideoStage({ meeting }: { meeting: MediasoupMeeting }) {
+function NativeMediasoupVideoStage({
+  meeting,
+  onOpenParticipantProfile,
+}: {
+  meeting: MediasoupMeeting
+  onOpenParticipantProfile?: (userId: string) => void
+}) {
   const { room } = meeting
   const layoutState = useMediasoupGalleryTracks({
     trackRefs: meeting.trackRefs,
@@ -289,9 +309,10 @@ function NativeMediasoupVideoStage({ meeting }: { meeting: MediasoupMeeting }) {
         {...props}
         onPreferredLayer={onPreferredLayer}
         onScreenAttached={onScreenAttached}
+        onOpenProfile={onOpenParticipantProfile}
       />
     ),
-    [onPreferredLayer, onScreenAttached],
+    [onOpenParticipantProfile, onPreferredLayer, onScreenAttached],
   )
   const toggleScreenShare = meeting.media?.toggleScreenShare
   const onStopScreenShare = useCallback(() => {
@@ -318,6 +339,7 @@ function NativeMediasoupMeetingContent({
   initialVideo,
   onConnected,
   onDisconnected,
+  onOpenParticipantProfile,
   overlay,
 }: MeetingRoomProps & {
   credentials: MediasoupCredentials
@@ -361,7 +383,12 @@ function NativeMediasoupMeetingContent({
 
   return (
     <YStack flex={1} width="100%" height="100%" position="relative" backgroundColor={coworkUi.pageBg}>
-      {mediaMode === 'audio' ? null : <NativeMediasoupVideoStage meeting={meeting} />}
+      {mediaMode === 'audio' ? null : (
+        <NativeMediasoupVideoStage
+          meeting={meeting}
+          onOpenParticipantProfile={onOpenParticipantProfile}
+        />
+      )}
       <MeetingLifecycleBanner notice={lifecycleNotice} topOffset={90} />
       <NativeScreenCapturePicker />
       <YStack

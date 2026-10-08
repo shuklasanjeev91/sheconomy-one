@@ -54,6 +54,7 @@ export {
   readStoreUpdateDismissal,
   refreshRemoteConfig,
   requiredStoreVersion,
+  shouldAutoAttemptMandatoryUpdate,
   shouldPromptStoreUpdate,
 } from '~/lib/updates/store-gate'
 export { openAppStore } from '~/lib/updates/open-store'

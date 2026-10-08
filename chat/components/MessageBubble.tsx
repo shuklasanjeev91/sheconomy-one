@@ -7,6 +7,7 @@ import { mediaPreviewLabel } from '~/chat/lib/emoji'
 import { extractFirstUrl } from '~/chat/lib/link-preview'
 import type { ChatMessage, PollResult, ReactionGroup } from '~/chat/lib/types'
 import { Avatar, Icons, Image, Text, XStack, YStack } from '~/components/ui'
+import { ReactionStickerImage } from '~/components/emoji/ReactionStickerImage'
 
 import { ChatAudioMessage } from '~/chat/components/ChatAudioMessage'
 import { ChatMediaImage } from '~/chat/components/ChatMediaImage'
@@ -18,6 +19,7 @@ import { PollMessage } from '~/chat/components/PollMessage'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { communityRoutes } from '~/lib/routes'
 import { pressNavigate } from '~/components/navigation/AppLink'
+import { isReactionStickerValue } from '~/lib/emoji/reaction-stickers'
 
 type MessageBubbleProps = {
   message: ChatMessage
@@ -65,7 +67,7 @@ type MessageBubbleProps = {
   currentUserId?: string | null
 }
 
-const URL_RE = /(https?:\/\/[^\s]+)/gi
+  const URL_RE = /(https?:\/\/[^\s]+)/gi
 
 /** Text with in-line search highlighting. */
 function HighlightedText({
@@ -508,7 +510,9 @@ export const MessageBubble = memo(function MessageBubble({
               </Text>
             </XStack>
           ) : hasText ? (
-            bigEmoji ? (
+            isReactionStickerValue(message.content.trim()) ? (
+              <ReactionStickerImage value={message.content.trim()} size={132} borderRadius={16} />
+            ) : bigEmoji ? (
               <Text fontSize={40} lineHeight={48} color={textColor}>
                 {message.content}
               </Text>
@@ -580,7 +584,11 @@ export const MessageBubble = memo(function MessageBubble({
                 pressStyle={{ scale: 0.92 }}
                 animation="quick"
               >
-                <Text fontSize={13}>{r.emoji}</Text>
+                {isReactionStickerValue(r.emoji) ? (
+                  <ReactionStickerImage value={r.emoji} size={16} borderRadius={5} />
+                ) : (
+                  <Text fontSize={13}>{r.emoji}</Text>
+                )}
                 {r.count > 1 ? (
                   <Text fontSize={11} fontWeight="700" color={chat.reactionText}>
                     {r.count}

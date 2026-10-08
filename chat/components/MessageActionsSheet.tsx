@@ -4,6 +4,8 @@ import { copyToClipboard } from '~/lib/platform/clipboard'
 import { QUICK_REACTIONS } from '~/chat/lib/emoji'
 import type { ChatMessage } from '~/chat/lib/types'
 import { useChatTheme } from '~/chat/lib/chat-theme'
+import { ReactionStickerImage } from '~/components/emoji/ReactionStickerImage'
+import { REACTION_STICKERS } from '~/lib/emoji/reaction-stickers'
 
 type MessageActionsSheetProps = {
   open: boolean
@@ -83,38 +85,63 @@ export function MessageActionsSheet({
   return (
     <AppBottomSheet open={open} onOpenChange={onOpenChange} scrollable={false}>
       {!isDeleted ? (
-        <XStack
+        <YStack
           alignSelf="center"
           alignItems="center"
           justifyContent="center"
-          gap={6}
+          gap={8}
           paddingVertical={8}
           paddingHorizontal={10}
           marginBottom={6}
-          borderRadius={999}
+          borderRadius={18}
           backgroundColor={theme.listItemHover}
         >
-          {QUICK_REACTIONS.map((emoji) => (
-            <XStack
-              key={emoji}
-              onPress={() => {
-                if (message) onReact(message.id, emoji)
-                close()
-              }}
-              cursor="pointer"
-              width={44}
-              height={44}
-              borderRadius={999}
-              alignItems="center"
-              justifyContent="center"
-              hoverStyle={{ backgroundColor: theme.listItemActive, scale: 1.08 }}
-              pressStyle={{ scale: 0.9 }}
-              animation="quick"
-            >
-              <Text fontSize={26}>{emoji}</Text>
-            </XStack>
-          ))}
-        </XStack>
+          <XStack alignItems="center" justifyContent="center" gap={6}>
+            {QUICK_REACTIONS.map((emoji) => (
+              <XStack
+                key={emoji}
+                onPress={() => {
+                  if (message) onReact(message.id, emoji)
+                  close()
+                }}
+                cursor="pointer"
+                width={44}
+                height={44}
+                borderRadius={999}
+                alignItems="center"
+                justifyContent="center"
+                hoverStyle={{ backgroundColor: theme.listItemActive, scale: 1.08 }}
+                pressStyle={{ scale: 0.9 }}
+                animation="quick"
+              >
+                <Text fontSize={26}>{emoji}</Text>
+              </XStack>
+            ))}
+          </XStack>
+          <XStack alignItems="center" justifyContent="center" gap={6} flexWrap="wrap" maxWidth={330}>
+            {REACTION_STICKERS.slice(0, 12).map((sticker) => (
+              <XStack
+                key={sticker.value}
+                onPress={() => {
+                  if (message) onReact(message.id, sticker.value)
+                  close()
+                }}
+                cursor="pointer"
+                width={42}
+                height={42}
+                borderRadius={12}
+                alignItems="center"
+                justifyContent="center"
+                hoverStyle={{ backgroundColor: theme.listItemActive, scale: 1.06 }}
+                pressStyle={{ scale: 0.9 }}
+                animation="quick"
+                accessibilityLabel={sticker.label}
+              >
+                <ReactionStickerImage value={sticker.value} sticker={sticker} size={34} />
+              </XStack>
+            ))}
+          </XStack>
+        </YStack>
       ) : null}
 
       <YStack>

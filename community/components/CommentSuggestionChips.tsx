@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import {
+  commentSuggestionContextKey,
   localCommentSuggestions,
   type CommentSuggestionContext,
 } from '~/community/lib/comment-suggestions'
@@ -16,6 +17,18 @@ type CommentSuggestionChipsProps = {
   disabled?: boolean
 }
 
+const AI_SUGGESTION_TIMEOUT_MS = 4500
+const aiSuggestionCache = new Map<string, string[]>()
+
+function withSuggestionTimeout<T>(promise: Promise<T>, timeoutMs = AI_SUGGESTION_TIMEOUT_MS): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), timeoutMs)
+    }),
+  ])
+}
+
 /**
  * Professional comment starters above the composer.
  * Shows local chips immediately, then upgrades with AI when available.
@@ -27,30 +40,36 @@ export function CommentSuggestionChips({
 }: CommentSuggestionChipsProps) {
   const ui = useAppUi()
   const { user } = useSupabase()
-  const [suggestions, setSuggestions] = useState(() => localCommentSuggestions(context))
+  const contextKey = useMemo(() => commentSuggestionContextKey(context), [context])
+  const stableContext = useMemo(() => ({ ...context }), [contextKey])
+  const localSuggestions = useMemo(() => localCommentSuggestions(context), [contextKey])
+  const [suggestions, setSuggestions] = useState(localSuggestions)
   const [loadingAi, setLoadingAi] = useState(false)
 
   useEffect(() => {
-    setSuggestions(localCommentSuggestions(context))
-  }, [
-    context.postType,
-    context.content,
-    context.authorName,
-    context.eventTitle,
-    context.celebrationTitle,
-    context.productTitle,
-    context.shopName,
-    context.articleTitle,
-    context.hasMedia,
-  ])
+    setSuggestions(localSuggestions)
+  }, [contextKey, localSuggestions])
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      setLoadingAi(false)
+      return
+    }
+    const cached = aiSuggestionCache.get(contextKey)
+    if (cached?.length) {
+      setSuggestions(cached)
+      setLoadingAi(false)
+      return
+    }
+
     let cancelled = false
     setLoadingAi(true)
-    void fetchCommentSuggestions(context)
+    void withSuggestionTimeout(fetchCommentSuggestions(stableContext))
       .then((rows) => {
-        if (!cancelled && rows.length > 0) setSuggestions(rows.slice(0, 4))
+        if (cancelled || !rows?.length) return
+        const next = rows.slice(0, 4)
+        aiSuggestionCache.set(contextKey, next)
+        setSuggestions(next)
       })
       .catch(() => {
         // Keep local chips when AI is unavailable (quota, offline, etc.)
@@ -61,7 +80,7 @@ export function CommentSuggestionChips({
     return () => {
       cancelled = true
     }
-  }, [user, context.postType, context.content, context.authorName])
+  }, [contextKey, stableContext, user])
 
   if (!suggestions.length) return null
 

@@ -73,5 +73,7 @@ export type MeetingRoomProps = {
   /** Fired once the SFU room is actually connected (not on token fetch). */
   onConnected?: () => void
   onDisconnected: (reason?: MeetingDisconnectReason) => void
+  /** Opens a signed-in participant's profile from their meeting tile. */
+  onOpenParticipantProfile?: (userId: string) => void
   overlay?: (media: MeetingMediaControls | null) => React.ReactNode
 }

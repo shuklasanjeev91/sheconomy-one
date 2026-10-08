@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import {
+  FORCE_UPDATE_AUTO_RETRY_MS,
   REMOTE_CONFIG_CACHE_KEY,
   STORE_UPDATE_DISMISSAL_KEY,
   STORE_UPDATE_REMIND_AFTER_MS,
@@ -43,6 +44,14 @@ export function shouldPromptStoreUpdate(
 ): boolean {
   if (!dismissal || dismissal.version !== latestVersion) return true
   return now - dismissal.dismissedAt >= STORE_UPDATE_REMIND_AFTER_MS
+}
+
+export function shouldAutoAttemptMandatoryUpdate(
+  lastAttemptAt: number | null,
+  now: number,
+  retryMs = FORCE_UPDATE_AUTO_RETRY_MS,
+): boolean {
+  return lastAttemptAt == null || now - lastAttemptAt >= retryMs
 }
 
 export async function readStoreUpdateDismissal(): Promise<StoreUpdateDismissal | null> {

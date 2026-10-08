@@ -150,7 +150,7 @@ import { footerFadeStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { navigateApp } from '~/lib/platform/navigate'
-import { coWorkRoutes } from '~/lib/routes'
+import { coWorkRoutes, routes } from '~/lib/routes'
 
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -233,6 +233,24 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
     mediaAutoRetryRef.current = 0
     setMediaReconnectFailed(false)
   }, [])
+
+  const openParticipantProfile = useCallback(
+    (targetUserId: string) => {
+      const participant = presence.participants.find(
+        (row) => row.user_id === targetUserId && row.status === 'admitted',
+      )
+      if (!participant) return
+      const username = participant.profile?.username?.trim()
+      if (username && !/^guest[_-]/i.test(username)) {
+        navigateApp(routes.userProfile(username))
+        return
+      }
+      if (!username && participant.profile) {
+        navigateApp(routes.userProfile(targetUserId))
+      }
+    },
+    [presence.participants],
+  )
 
   const remountMediaRoom = useCallback(() => {
     ignoreMediaDisconnectRef.current = true
@@ -473,6 +491,7 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
         initialVideo={props.initialVideoEnabled !== false}
         onConnected={handleMediaConnected}
         onDisconnected={handleMediaDisconnected}
+        onOpenParticipantProfile={openParticipantProfile}
         overlay={
           hasMediaRoom
             ? (callMedia) => (
@@ -1043,9 +1062,9 @@ function MeetingRoomOverlay({
     autoStart: autoRecord,
     captionLines: captions.transcriptLines,
     onStarted: () => {
-      toast.show('Cloud recording started', {
+      toast.show('Grid recording started', {
         tone: 'success',
-        message: 'Audio and video are being saved for the whole room.',
+        message: 'Gallery view and mixed meeting audio are being saved for the whole room.',
       })
     },
     onStopped: (status) =>
@@ -1297,7 +1316,8 @@ function MeetingRoomOverlay({
     }
     confirmMeetingAction({
       title: 'Start recording?',
-      message: 'Cloud recording will start. Everyone in the meeting will see a recording notice.',
+      message:
+        'A Zoom-style grid recording will start with the room audio mixed into one MP4. Everyone in the meeting will see a recording notice.',
       confirmLabel: 'Start recording',
       destructive: true,
       onConfirm: run,

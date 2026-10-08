@@ -27,6 +27,7 @@ import { sendPickedItemAsChatAttachment } from '~/lib/media/route-chat-attachmen
 
 import { AttachmentSheet } from '~/chat/components/AttachmentSheet'
 import { EmojiPickerSheet } from '~/chat/components/EmojiPickerSheet'
+import { isReactionStickerValue } from '~/lib/emoji/reaction-stickers'
 
 type MessageComposerProps = {
   conversationId?: string | null
@@ -584,6 +585,13 @@ export function MessageComposer({
         open={emojiOpen}
         onOpenChange={setEmojiOpen}
         onPick={(emoji) => {
+          if (isReactionStickerValue(emoji) && !isEditing) {
+            onSend(emoji)
+            onTyping('')
+            if (conversationId) void clearMessageDraft(conversationId)
+            setText('')
+            return
+          }
           const next = text + emoji
           setText(next)
           if (!isEditing) onTyping(next)

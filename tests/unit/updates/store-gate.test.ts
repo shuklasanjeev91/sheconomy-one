@@ -8,6 +8,7 @@ import { STORE_UPDATE_REMIND_AFTER_MS } from '~/lib/updates/constants'
 import {
   availableStoreVersion,
   requiredStoreVersion,
+  shouldAutoAttemptMandatoryUpdate,
   shouldPromptStoreUpdate,
 } from '~/lib/updates/store-gate'
 
@@ -65,5 +66,14 @@ describe('shouldPromptStoreUpdate', () => {
     expect(
       shouldPromptStoreUpdate('6.1.3', dismissal, now + STORE_UPDATE_REMIND_AFTER_MS),
     ).toBe(true)
+  })
+})
+
+describe('shouldAutoAttemptMandatoryUpdate', () => {
+  it('attempts immediately and then waits for the retry window', () => {
+    const now = 1_000_000
+    expect(shouldAutoAttemptMandatoryUpdate(null, now, 5000)).toBe(true)
+    expect(shouldAutoAttemptMandatoryUpdate(now, now + 4999, 5000)).toBe(false)
+    expect(shouldAutoAttemptMandatoryUpdate(now, now + 5000, 5000)).toBe(true)
   })
 })

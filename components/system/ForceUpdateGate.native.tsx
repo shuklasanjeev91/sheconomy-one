@@ -1,8 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { AppState } from 'react-native'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { AppState, Linking, type AppStateStatus } from 'react-native'
 
 import { MandatoryStoreUpdateScreen } from '~/components/system/MandatoryStoreUpdateScreen'
+import { PendingMeetingJoinResume } from '~/components/system/PendingMeetingJoinResume.native'
 import { StoreUpdateAvailableDialog } from '~/components/system/StoreUpdateAvailableDialog'
+import { savePendingMeetingJoinFromUrl } from '~/co-work/lib/pending-meeting-join'
 import {
   availableStoreVersion,
   dismissStoreUpdate,
@@ -12,16 +14,13 @@ import {
   readStoreUpdateDismissal,
   refreshRemoteConfig,
   requiredStoreVersion,
+  shouldAutoAttemptMandatoryUpdate,
   shouldPromptStoreUpdate,
   type RemoteUpdateConfig,
 } from '~/lib/updates'
-import { startPlayImmediateUpdate } from '~/lib/updates/play-in-app-update'
+import { FORCE_UPDATE_AUTO_RETRY_MS } from '~/lib/updates/constants'
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__
-
-// Once per process: re-launching Play's flow on every resume would trap the
-// user in a loop after they back out of it.
-let autoStartedPlayUpdate = false
 
 /**
  * Store-version gate. Below `minimumSupportedVersion` the app is replaced by
@@ -33,6 +32,53 @@ export function ForceUpdateGate({ children }: { children: ReactNode }) {
   const installed = getNativeAppVersion()
   const [requiredVersion, setRequiredVersion] = useState<string | null>(null)
   const [latestVersion, setLatestVersion] = useState<string | null>(null)
+  const [policyChecked, setPolicyChecked] = useState(isDev)
+  const lastForcedUpdateAttemptAtRef = useRef<number | null>(null)
+  const requiredVersionRef = useRef<string | null>(null)
+  const latestLaunchUrlRef = useRef<string | null>(null)
+
+  const attemptMandatoryUpdate = useCallback(async () => {
+    if (!requiredVersion) return
+    const now = Date.now()
+    if (
+      !shouldAutoAttemptMandatoryUpdate(
+        lastForcedUpdateAttemptAtRef.current,
+        now,
+        FORCE_UPDATE_AUTO_RETRY_MS,
+      )
+    ) {
+      return
+    }
+    lastForcedUpdateAttemptAtRef.current = now
+    await openAppStore({ fallbackOnCancel: true })
+  }, [requiredVersion])
+
+  useEffect(() => {
+    requiredVersionRef.current = requiredVersion
+    if (requiredVersion && latestLaunchUrlRef.current) {
+      void savePendingMeetingJoinFromUrl(latestLaunchUrlRef.current)
+    }
+  }, [requiredVersion])
+
+  useEffect(() => {
+    if (isDev) return
+
+    let disposed = false
+
+    const captureMeetingLink = (url: string | null) => {
+      if (!url || disposed) return
+      latestLaunchUrlRef.current = url
+      if (requiredVersionRef.current) void savePendingMeetingJoinFromUrl(url)
+    }
+
+    void Linking.getInitialURL().then(captureMeetingLink)
+    const subscription = Linking.addEventListener('url', ({ url }) => captureMeetingLink(url))
+
+    return () => {
+      disposed = true
+      subscription.remove()
+    }
+  }, [])
 
   useEffect(() => {
     if (isDev) return
@@ -55,26 +101,30 @@ export function ForceUpdateGate({ children }: { children: ReactNode }) {
 
     const refresh = async () => {
       const fresh = await refreshRemoteConfig()
-      if (cancelled || !fresh) return
+      if (cancelled) return
       fetchedFresh = true
-      await applyPolicy(fresh, false)
+      if (fresh) await applyPolicy(fresh, false)
+      if (!cancelled) setPolicyChecked(true)
     }
     void refresh()
 
+    let lastState: AppStateStatus = AppState.currentState
     const subscription = AppState.addEventListener('change', (next) => {
-      if (next === 'active') void refresh()
+      if (next === 'active') {
+        void refresh()
+        if (lastState.match(/inactive|background/)) void attemptMandatoryUpdate()
+      }
+      lastState = next
     })
     return () => {
       cancelled = true
       subscription.remove()
     }
-  }, [installed])
+  }, [attemptMandatoryUpdate, installed])
 
   useEffect(() => {
-    if (!requiredVersion || autoStartedPlayUpdate) return
-    autoStartedPlayUpdate = true
-    void startPlayImmediateUpdate()
-  }, [requiredVersion])
+    void attemptMandatoryUpdate()
+  }, [attemptMandatoryUpdate])
 
   if (requiredVersion) {
     return (
@@ -92,6 +142,7 @@ export function ForceUpdateGate({ children }: { children: ReactNode }) {
 
   return (
     <>
+      {policyChecked ? <PendingMeetingJoinResume /> : null}
       {children}
       {latestVersion ? (
         <StoreUpdateAvailableDialog

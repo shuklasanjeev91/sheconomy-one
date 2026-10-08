@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Platform } from 'react-native'
 
+import { ReactionStickerImage } from '~/components/emoji/ReactionStickerImage'
 import { Text, YStack } from '~/components/ui'
 import type { FloatingMeetingReaction } from '~/co-work/lib/meeting-reactions'
 import { MEETING_REACTION_TTL_MS } from '~/co-work/lib/meeting-reactions'
+import { isReactionStickerValue } from '~/lib/emoji/reaction-stickers'
 
 type MeetingReactionsOverlayProps = {
   reactions: FloatingMeetingReaction[]
@@ -88,9 +90,13 @@ function FloatingReaction({
         transform: [{ translateY }, { scale }],
       }}
     >
-      <Text fontSize={36} lineHeight={40}>
-        {reaction.emoji}
-      </Text>
+      {isReactionStickerValue(reaction.emoji) ? (
+        <ReactionStickerImage value={reaction.emoji} size={58} borderRadius={16} />
+      ) : (
+        <Text fontSize={36} lineHeight={40}>
+          {reaction.emoji}
+        </Text>
+      )}
       {reaction.name ? (
         <Text
           fontSize={10}

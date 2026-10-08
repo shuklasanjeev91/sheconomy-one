@@ -369,12 +369,12 @@ export function PostActionSheets({
               }
             })
           }}
-          onLikeComment={(commentId) => {
+          onLikeComment={(commentId, reactionType) => {
             if (!engagement.isAuthenticated) {
               requireAuth('react')
               return
             }
-            engagement.toggleCommentLike(commentId).then((result) => {
+            engagement.toggleCommentLike(commentId, reactionType).then((result) => {
               if (result?.error) {
                 toast.show('Could not like comment', { tone: 'danger', message: result.error })
               }

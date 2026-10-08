@@ -21,6 +21,7 @@ describe('meetingChatEmojiOnlyCount', () => {
   it('is 0 for text, mixed text, empty, or more than three', () => {
     expect(meetingChatEmojiOnlyCount('Hello')).toBe(0)
     expect(meetingChatEmojiOnlyCount('Nice 👍')).toBe(0)
+    expect(meetingChatEmojiOnlyCount('sticker:she-01')).toBe(0)
     expect(meetingChatEmojiOnlyCount('')).toBe(0)
     expect(meetingChatEmojiOnlyCount(null)).toBe(0)
     expect(meetingChatEmojiOnlyCount('👍👍👍👍')).toBe(0)

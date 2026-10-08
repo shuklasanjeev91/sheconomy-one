@@ -22,6 +22,27 @@ export type MeetingRecordingSummary = {
   ready?: boolean
 }
 
+export type MeetingRecordingComposition = {
+  /** Zoom-style gallery/grid composition, independent of the viewer's current stage mode. */
+  layout: 'grid'
+  /** Server-side audio mix of every audible participant into the MP4. */
+  audio: 'mixed'
+  /** Server-side video composition rather than recording one raw camera stream. */
+  video: 'composited'
+  /** Keep shared content in the recording job while preserving gallery as the default scene. */
+  includeScreenShare: boolean
+  /** Record every camera tile in the room instead of limiting to one visible gallery page. */
+  tileMode: 'all'
+}
+
+export const ZOOM_GRID_RECORDING_COMPOSITION: MeetingRecordingComposition = {
+  layout: 'grid',
+  audio: 'mixed',
+  video: 'composited',
+  includeScreenShare: true,
+  tileMode: 'all',
+}
+
 export type RecordingControlResult = {
   ok: boolean
   recordingId?: string
@@ -120,11 +141,13 @@ async function invokeRecordingShare(body: Record<string, unknown>): Promise<Meet
 export async function startCloudRecording(input: {
   meetingId: string
   roomName: string
+  composition?: MeetingRecordingComposition
 }): Promise<RecordingControlResult> {
   return invokeRecordingControl({
     action: 'start',
     meetingId: input.meetingId,
     roomName: input.roomName,
+    composition: input.composition ?? ZOOM_GRID_RECORDING_COMPOSITION,
   })
 }
 

@@ -2578,6 +2578,7 @@ export type Database = {
           id: string
           raw_db_comment_reaction: Json | null
           raw_db_reply_reaction: Json | null
+          reaction_type: string
           user_id: string
         }
         Insert: {
@@ -2586,6 +2587,7 @@ export type Database = {
           id?: string
           raw_db_comment_reaction?: Json | null
           raw_db_reply_reaction?: Json | null
+          reaction_type?: string
           user_id: string
         }
         Update: {
@@ -2594,6 +2596,7 @@ export type Database = {
           id?: string
           raw_db_comment_reaction?: Json | null
           raw_db_reply_reaction?: Json | null
+          reaction_type?: string
           user_id?: string
         }
         Relationships: [

@@ -159,6 +159,7 @@ export function MediasoupMeetingRoom({
   initialVideo = true,
   onConnected,
   onDisconnected,
+  onOpenParticipantProfile,
   overlay,
 }: MeetingRoomProps & { credentials: MediasoupCredentials }) {
   // The web wake lock activates asynchronously; a fast remount releases it first.
@@ -209,7 +210,12 @@ export function MediasoupMeetingRoom({
           className="sheconomy-media-room"
           pointerEvents="none"
         >
-          {mediaMode === 'audio' ? null : <MediasoupVideoStage meeting={meeting} />}
+          {mediaMode === 'audio' ? null : (
+            <MediasoupVideoStage
+              meeting={meeting}
+              onOpenParticipantProfile={onOpenParticipantProfile}
+            />
+          )}
           {audioTracks.map(({ key, track }) => (
             <RemoteAudio
               key={key}

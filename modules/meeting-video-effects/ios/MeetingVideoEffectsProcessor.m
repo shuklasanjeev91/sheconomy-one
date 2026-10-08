@@ -19,6 +19,7 @@ static dispatch_queue_t gConfigQueue;
 @property(nonatomic, strong) VNGeneratePersonSegmentationRequest *segmentationRequest;
 @property(nonatomic, strong, nullable) CIImage *cachedBackground;
 @property(nonatomic, copy, nullable) NSString *cachedBackgroundPath;
+@property(nonatomic, strong, nullable) CIImage *previousMask;
 @end
 
 @implementation SHEVirtualBackgroundFrameProcessor
@@ -31,7 +32,7 @@ static dispatch_queue_t gConfigQueue;
       kCIContextCacheIntermediates : @YES,
     }];
     _segmentationRequest = [VNGeneratePersonSegmentationRequest new];
-    _segmentationRequest.qualityLevel = VNGeneratePersonSegmentationRequestQualityLevelBalanced;
+    _segmentationRequest.qualityLevel = VNGeneratePersonSegmentationRequestQualityLevelAccurate;
     _segmentationRequest.outputPixelFormat = kCVPixelFormatType_OneComponent8;
   }
   return self;
@@ -108,6 +109,42 @@ static CGImagePropertyOrientation SHEPropertyOrientation(UIImageOrientation orie
   return [turned imageByCroppingToRect:extent];
 }
 
+- (CIImage *)softPersonMaskFromObservation:(VNPixelBufferObservation *)observation
+                                    extent:(CGRect)extent {
+  CIImage *mask = [CIImage imageWithCVPixelBuffer:observation.pixelBuffer];
+  CGFloat maskScaleX = CGRectGetWidth(extent) / CGRectGetWidth(mask.extent);
+  CGFloat maskScaleY = CGRectGetHeight(extent) / CGRectGetHeight(mask.extent);
+  mask = [[mask imageByApplyingTransform:CGAffineTransformMakeScale(maskScaleX, maskScaleY)]
+      imageByCroppingToRect:extent];
+
+  CIFilter *grow = [CIFilter filterWithName:@"CIMorphologyMaximum"];
+  [grow setValue:mask forKey:kCIInputImageKey];
+  [grow setValue:@1.0 forKey:kCIInputRadiusKey];
+  mask = [[grow outputImage] imageByCroppingToRect:extent] ?: mask;
+
+  CIFilter *blur = [CIFilter filterWithName:@"CIGaussianBlur"];
+  [blur setValue:[mask imageByClampingToExtent] forKey:kCIInputImageKey];
+  [blur setValue:@3.0 forKey:kCIInputRadiusKey];
+  mask = [[blur outputImage] imageByCroppingToRect:extent];
+
+  CIFilter *tone = [CIFilter filterWithName:@"CIColorControls"];
+  [tone setValue:mask forKey:kCIInputImageKey];
+  [tone setValue:@1.08 forKey:kCIInputContrastKey];
+  [tone setValue:@0.04 forKey:kCIInputBrightnessKey];
+  CIImage *softMask = [[tone outputImage] imageByCroppingToRect:extent];
+  softMask = softMask ?: mask;
+
+  if (self.previousMask && CGRectEqualToRect(self.previousMask.extent, extent)) {
+    CIFilter *temporal = [CIFilter filterWithName:@"CIDissolveTransition"];
+    [temporal setValue:self.previousMask forKey:kCIInputImageKey];
+    [temporal setValue:softMask forKey:kCIInputTargetImageKey];
+    [temporal setValue:@0.30 forKey:kCIInputTimeKey];
+    softMask = [[temporal outputImage] imageByCroppingToRect:extent] ?: softMask;
+  }
+  self.previousMask = softMask;
+  return softMask;
+}
+
 - (RTCVideoFrame *)capturer:(RTCVideoCapturer *)capturer
        didCaptureVideoFrame:(RTCVideoFrame *)frame {
   if (@available(iOS 11.0, *)) {
@@ -125,7 +162,10 @@ static CGImagePropertyOrientation SHEPropertyOrientation(UIImageOrientation orie
     imagePath = gImagePath;
     blurRadius = gBlurRadius;
   });
-  if ([mode isEqualToString:@"off"]) return frame;
+  if ([mode isEqualToString:@"off"]) {
+    self.previousMask = nil;
+    return frame;
+  }
   if (![frame.buffer isKindOfClass:[RTCCVPixelBuffer class]]) return frame;
 
   CVPixelBufferRef source = ((RTCCVPixelBuffer *)frame.buffer).pixelBuffer;
@@ -142,11 +182,7 @@ static CGImagePropertyOrientation SHEPropertyOrientation(UIImageOrientation orie
 
   CIImage *foreground = [CIImage imageWithCVPixelBuffer:source];
   CGRect extent = foreground.extent;
-  CIImage *mask = [CIImage imageWithCVPixelBuffer:observation.pixelBuffer];
-  CGFloat maskScaleX = CGRectGetWidth(extent) / CGRectGetWidth(mask.extent);
-  CGFloat maskScaleY = CGRectGetHeight(extent) / CGRectGetHeight(mask.extent);
-  mask = [[mask imageByApplyingTransform:CGAffineTransformMakeScale(maskScaleX, maskScaleY)]
-      imageByCroppingToRect:extent];
+  CIImage *mask = [self softPersonMaskFromObservation:observation extent:extent];
 
   CIImage *background = nil;
   if ([mode isEqualToString:@"image"] && imagePath.length > 0) {

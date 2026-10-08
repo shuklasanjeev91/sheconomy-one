@@ -34,7 +34,7 @@ export function MandatoryStoreUpdateScreen({
   async function handleUpdate() {
     if (opening) return
     setOpening(true)
-    const opened = await openAppStore()
+    const opened = await openAppStore({ fallbackOnCancel: true })
     setOpenFailed(!opened)
     setOpening(false)
   }

@@ -197,27 +197,25 @@ export function usePostEngagement(
   )
 
   const toggleCommentLike = useCallback(
-    async (commentId: string) => {
+    async (commentId: string, type: ReactionType = 'like') => {
       if (!user) return { error: 'Sign in to like' }
 
       const target = comments.find((comment) => comment.id === commentId)
       if (!target) return { error: 'Comment not found' }
       const wasLiked = target.likedByMe
+      const previousType = target.myReactionType
+      const removing = wasLiked && previousType === type
 
       // Optimistic update.
       setComments((current) =>
         current.map((comment) =>
           comment.id === commentId
-            ? {
-                ...comment,
-                likedByMe: !wasLiked,
-                likeCount: Math.max(0, comment.likeCount + (wasLiked ? -1 : 1)),
-              }
+            ? applyCommentReactionChange(comment, type, removing)
             : comment,
         ),
       )
 
-      const result = await toggleCommentLikeApi(user.id, commentId, wasLiked)
+      const result = await toggleCommentLikeApi(user.id, commentId, wasLiked, type, previousType)
       if (result.error) {
         // Revert on failure.
         setComments((current) =>
@@ -226,7 +224,9 @@ export function usePostEngagement(
               ? {
                   ...comment,
                   likedByMe: wasLiked,
-                  likeCount: Math.max(0, comment.likeCount + (wasLiked ? 1 : -1)),
+                  myReactionType: previousType,
+                  reactionCounts: target.reactionCounts,
+                  likeCount: target.likeCount,
                 }
               : comment,
           ),
@@ -372,5 +372,32 @@ export function usePostEngagement(
     submitRepost,
     loadComments,
     loadReactions,
+  }
+}
+
+function applyCommentReactionChange(
+  comment: PostComment,
+  nextType: ReactionType,
+  removing: boolean,
+): PostComment {
+  const counts = { ...comment.reactionCounts }
+  const previousType = comment.myReactionType
+
+  if (previousType) {
+    const nextCount = Math.max(0, (counts[previousType] ?? 0) - 1)
+    if (nextCount > 0) counts[previousType] = nextCount
+    else delete counts[previousType]
+  }
+
+  if (!removing) {
+    counts[nextType] = (counts[nextType] ?? 0) + 1
+  }
+
+  return {
+    ...comment,
+    likedByMe: !removing,
+    myReactionType: removing ? null : nextType,
+    reactionCounts: counts,
+    likeCount: Object.values(counts).reduce((sum, count) => sum + (count ?? 0), 0),
   }
 }

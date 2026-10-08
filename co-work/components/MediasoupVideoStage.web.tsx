@@ -17,7 +17,13 @@ import {
 } from '~/co-work/lib/mediasoup/mediasoup-stage-tracks'
 
 /** Web meeting stage — layout, paging and floating self-view. */
-export function MediasoupVideoStage({ meeting }: { meeting: MediasoupMeeting }) {
+export function MediasoupVideoStage({
+  meeting,
+  onOpenParticipantProfile,
+}: {
+  meeting: MediasoupMeeting
+  onOpenParticipantProfile?: (userId: string) => void
+}) {
   const { state } = useMeetingMachine()
   const { room } = meeting
   const gallery = useMediasoupGalleryTracks({
@@ -55,9 +61,10 @@ export function MediasoupVideoStage({ meeting }: { meeting: MediasoupMeeting }) 
           cameraQuality={cameraQuality}
           onPreferredLayer={onPreferredLayer}
           onScreenAttached={onScreenAttached}
+          onOpenProfile={onOpenParticipantProfile}
         />
       )),
-    [onPreferredLayer, onScreenAttached, selfViewMirror],
+    [onOpenParticipantProfile, onPreferredLayer, onScreenAttached, selfViewMirror],
   )
 
   const toggleScreenShare = meeting.media?.toggleScreenShare

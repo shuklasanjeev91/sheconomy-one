@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Keyboard, Linking, Platform, View } from 'react-native'
+import { Linking, Platform, View } from 'react-native'
 import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { AppTextField } from '~/components/forms/AppTextField'
+import { ReactionStickerImage } from '~/components/emoji/ReactionStickerImage'
 import {
   Avatar,
   Button,
@@ -60,6 +61,7 @@ import {
   downloadMeetingChatText,
 } from '~/co-work/lib/meeting-chat-archive'
 import { parseMeetingChatTextLinks } from '~/co-work/lib/meeting-chat-links'
+import { isReactionStickerValue } from '~/lib/emoji/reaction-stickers'
 
 /** Within this many px of the end still counts as reading the latest message. */
 const CHAT_BOTTOM_SLOP = 80
@@ -324,7 +326,6 @@ export function MeetingChatPanel({
     setAttachMenuOpen(false)
     setShareMenuOpen(false)
     setToMenuOpen(false)
-    if (!emojiOpen) Keyboard.dismiss()
     setEmojiOpen(!emojiOpen)
   }
 
@@ -836,8 +837,9 @@ export function MeetingChatPanel({
                 currentUserId,
               })
             const caption = msg.share ? null : meetingChatAttachmentCaption(msg)
-            const bigEmoji = msg.attachment ? 0 : meetingChatEmojiOnlyCount(caption)
-            const plain = bigEmoji > 0 && !hostsOnly && !isPrivate
+            const stickerOnly = !msg.attachment && isReactionStickerValue(caption)
+            const bigEmoji = msg.attachment || stickerOnly ? 0 : meetingChatEmojiOnlyCount(caption)
+            const plain = (bigEmoji > 0 || stickerOnly) && !hostsOnly && !isPrivate
 
             return (
               <XStack
@@ -905,7 +907,9 @@ export function MeetingChatPanel({
                     <MeetingChatShareCard share={msg.share} currentUserId={currentUserId} />
                   ) : null}
                   {caption ? (
-                    bigEmoji > 0 ? (
+                    stickerOnly ? (
+                      <ReactionStickerImage value={caption} size={132} borderRadius={16} />
+                    ) : bigEmoji > 0 ? (
                       <Text
                         fontSize={bigEmoji === 1 ? 44 : 34}
                         color={coworkUi.text}
@@ -1406,12 +1410,20 @@ export function MeetingChatPanel({
                 {emojiTab.label}
               </Text>
               <XStack flexWrap="wrap" paddingHorizontal={4} paddingBottom={6}>
-                {emojiTab.emojis.map((emoji) => (
+                {emojiTab.emojis.map((emoji) => {
+                  const sticker = isReactionStickerValue(emoji)
+                  return (
                   <Pressable
                     key={emoji}
                     accessibilityRole="button"
-                    accessibilityLabel={`Insert ${emoji}`}
-                    onPress={() => setDraft((value) => `${value}${emoji}`)}
+                    accessibilityLabel={sticker ? 'Send sticker' : `Insert ${emoji}`}
+                    onPress={() => {
+                      if (sticker) {
+                        send(emoji)
+                        return
+                      }
+                      setDraft((value) => `${value}${emoji}`)
+                    }}
                     style={({ pressed }) => ({
                       width: '12.5%',
                       height: 42,
@@ -1421,9 +1433,14 @@ export function MeetingChatPanel({
                       backgroundColor: pressed ? coworkUi.brandMuted : 'transparent',
                     })}
                   >
-                    <Text fontSize={26}>{emoji}</Text>
+                    {sticker ? (
+                      <ReactionStickerImage value={emoji} size={34} />
+                    ) : (
+                      <Text fontSize={26}>{emoji}</Text>
+                    )}
                   </Pressable>
-                ))}
+                  )
+                })}
               </XStack>
             </ScrollView>
           </YStack>

@@ -10,6 +10,17 @@ export type MeetingChatEmojiCategory = {
 
 export const MEETING_CHAT_EMOJI_CATEGORIES: MeetingChatEmojiCategory[] = [
   {
+    id: 'stickers',
+    label: 'Stickers',
+    icon: '🎬',
+    emojis: [
+      'sticker:she-01', 'sticker:she-02', 'sticker:she-03', 'sticker:she-04', 'sticker:she-05', 'sticker:she-06',
+      'sticker:she-07', 'sticker:she-08', 'sticker:she-09', 'sticker:she-10', 'sticker:she-11', 'sticker:she-12',
+      'sticker:she-13', 'sticker:she-14', 'sticker:she-15', 'sticker:she-16', 'sticker:she-17', 'sticker:she-18',
+      'sticker:she-19', 'sticker:she-20', 'sticker:she-21', 'sticker:she-22', 'sticker:she-23', 'sticker:she-24',
+    ],
+  },
+  {
     id: 'smileys',
     label: 'Smileys',
     icon: '😀',
@@ -90,9 +101,13 @@ export const MEETING_CHAT_EMOJI_CATEGORIES: MeetingChatEmojiCategory[] = [
   },
 ]
 
-const PICKER_EMOJIS = [...new Set(MEETING_CHAT_EMOJI_CATEGORIES.flatMap((category) => category.emojis))].sort(
-  (a, b) => b.length - a.length,
-)
+const PICKER_EMOJIS = [
+  ...new Set(
+    MEETING_CHAT_EMOJI_CATEGORIES.flatMap((category) => category.emojis).filter(
+      (emoji) => !emoji.startsWith('sticker:'),
+    ),
+  ),
+].sort((a, b) => b.length - a.length)
 
 const MAX_BIG_EMOJI = 3
 

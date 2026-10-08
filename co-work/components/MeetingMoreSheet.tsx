@@ -73,6 +73,8 @@ export function MeetingMoreSheet({
   const { ui } = useCoWorkTheme()
   const { height } = useWindowDimensions()
 
+  if (!open) return null
+
   const gridKeys = meetingMobileMoreGridKeys({
     viewerRole,
     supportsScreenShare,

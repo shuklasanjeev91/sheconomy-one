@@ -1,6 +1,6 @@
 # Co-Work cloud meeting recordings
 
-Zoom-style recordings are produced on the **mediasoup server** (EC2): a recorder on the SFU host composes the room (audio + video) and encodes one MP4 with ffmpeg, so the result is identical on web, Android, and iOS. Device-local `MediaRecorder` / `expo-audio` are not used for production Co-Work recordings.
+Zoom-style recordings are produced on the **mediasoup server** (EC2): a recorder on the SFU host composes the room as a gallery/grid view with mixed room audio and encodes one MP4 with ffmpeg, so the result is identical on web, Android, and iOS. Device-local `MediaRecorder` / `expo-audio` are not used for production Co-Work recordings.
 
 Recordings are stored in **Supabase Storage** — the private `meeting-recordings` bucket in the `sheconomy_db` project. The recorder uploads the finished MP4 through a short-lived signed upload URL issued by the `mediasoup-recording` function; playback/download links are short-lived Supabase signed URLs.
 
@@ -12,8 +12,8 @@ Recordings are stored in **Supabase Storage** — the private `meeting-recording
 
 ## Flow
 
-1. Host taps **Record** → client calls `mediasoup-recording` `{ action: 'start', meetingId, roomName }`.
-2. The function inserts a `meeting_recordings` row (`starting`) and calls the server admin API `record/start` `{ room: 'sc_<roomName>', recordingId }` → row becomes `recording`.
+1. Host taps **Record** → client calls `mediasoup-recording` `{ action: 'start', meetingId, roomName, composition: { layout: 'grid', audio: 'mixed', video: 'composited', includeScreenShare: true, tileMode: 'all' } }`.
+2. The function inserts a `meeting_recordings` row (`starting`) and calls the server admin API `record/start` with `{ room: 'sc_<roomName>', recordingId, layout: 'grid', audio: 'mixed', video: 'composited', composition }` → row becomes `recording`.
 3. Host stops (or the room closes) → `record/stop` `{ recordingId }` → row becomes `processing`.
 4. When the MP4 is encoded the recorder calls back `server-event`:
    - `upload-url` → `{ uploadUrl }` (PUT the file, `Content-Type: video/mp4`)
@@ -29,7 +29,7 @@ All calls are `POST https://<mediasoup host>/admin/<path>` with `Authorization: 
 | --- | --- | --- |
 | `kick` | `{ room, user }` | Close every peer of a removed participant |
 | `close` | `{ room }` | Close the room when the host ends the meeting |
-| `record/start` | `{ room, recordingId }` | Start the composite recorder |
+| `record/start` | `{ room, recordingId, layout: 'grid', audio: 'mixed', video: 'composited', composition }` | Start the gallery/grid composite recorder with mixed room audio |
 | `record/stop` | `{ recordingId }` | Stop and finalize (encode + upload) |
 | `record/status` | `{ recordingId }` | `{ state: 'recording' \| 'processing' \| 'uploading' \| 'ready' \| 'failed', error? }` |
 

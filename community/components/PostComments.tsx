@@ -6,7 +6,9 @@ import { MentionInput } from '~/community/components/MentionInput'
 import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { PostContentText } from '~/community/components/PostContentText'
+import { ReactionPicker } from '~/community/components/ReactionPicker'
 import type { CommentSuggestionContext } from '~/community/lib/comment-suggestions'
+import { REACTION_TYPES, type ReactionType } from '~/community/lib/constants'
 import type { PostComment } from '~/community/lib/post-engagement'
 import { BRAND_BLUE } from '~/community/lib/constants'
 import {
@@ -43,7 +45,7 @@ type PostCommentsProps = {
   isCommenting: boolean
   onDraftChange: (value: string) => void
   onSubmit: (encoded?: string) => void
-  onLikeComment: (commentId: string) => void
+  onLikeComment: (commentId: string, reactionType?: ReactionType) => void
   onEditComment: (commentId: string, content: string) => Promise<{ error?: string | null } | unknown>
   onDeleteComment: (commentId: string) => Promise<{ error?: string | null } | unknown>
   onReply: (parentCommentId: string, encoded: string) => Promise<unknown> | void
@@ -69,6 +71,7 @@ export function PostComments({
 }: PostCommentsProps) {
   const ui = useAppUi()
   const encodedRef = useRef('')
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
 
   const { topLevel, repliesByParent } = useMemo(() => {
     const top: PostComment[] = []
@@ -152,6 +155,27 @@ export function PostComments({
               backgroundColor={ui.surface}
               onSubmitEditing={() => onSubmit(encodedRef.current || commentDraft)}
             />
+            <YStack position="relative">
+              <Button
+                size="$3"
+                tone="outline"
+                borderRadius={999}
+                disabled={isCommenting}
+                onPress={() => setEmojiPickerOpen((open) => !open)}
+                icon={<Icons.Smile size={16} color={ui.textMuted} />}
+              />
+              <ReactionPicker
+                visible={emojiPickerOpen}
+                onClose={() => setEmojiPickerOpen(false)}
+                onSelect={(type) => {
+                  const reaction = REACTION_TYPES.find((item) => item.type === type)
+                  if (!reaction) return
+                  const next = `${commentDraft}${reaction.emoji}`
+                  encodedRef.current = next
+                  onDraftChange(next)
+                }}
+              />
+            </YStack>
             <Button
               size="$3"
               backgroundColor={commentDraft.trim() ? BRAND_BLUE : ui.chip}
@@ -188,7 +212,7 @@ function CommentThread({
   isAuthenticated: boolean
   currentUserId: string | null
   canModerate: boolean
-  onLikeComment: (commentId: string) => void
+  onLikeComment: (commentId: string, reactionType?: ReactionType) => void
   onEditComment: (commentId: string, content: string) => Promise<{ error?: string | null } | unknown>
   onDeleteComment: (commentId: string) => Promise<{ error?: string | null } | unknown>
   onReply: (parentCommentId: string, encoded: string) => Promise<unknown> | void
@@ -230,7 +254,7 @@ function CommentThread({
         comment={comment}
         canEdit={comment.userId === currentUserId}
         canDelete={canModerate || comment.userId === currentUserId}
-        onLike={() => onLikeComment(comment.id)}
+        onLike={(reactionType) => onLikeComment(comment.id, reactionType)}
         onEdit={(content) => onEditComment(comment.id, content)}
         onDelete={() => onDeleteComment(comment.id)}
         onReply={() => openReply()}
@@ -259,7 +283,7 @@ function CommentThread({
                   isReply
                   canEdit={reply.userId === currentUserId}
                   canDelete={canModerate || reply.userId === currentUserId}
-                  onLike={() => onLikeComment(reply.id)}
+                  onLike={(reactionType) => onLikeComment(reply.id, reactionType)}
                   onEdit={(content) => onEditComment(reply.id, content)}
                   onDelete={() => onDeleteComment(reply.id)}
                   onReply={() => openReply(reply.authorName)}
@@ -326,7 +350,7 @@ function CommentRow({
   isReply?: boolean
   canEdit: boolean
   canDelete: boolean
-  onLike: () => void
+  onLike: (reactionType?: ReactionType) => void
   onEdit: (content: string) => Promise<unknown>
   onDelete: () => Promise<unknown>
   onReply: () => void
@@ -337,6 +361,9 @@ function CommentRow({
   const [isEditing, setIsEditing] = useState(false)
   const editEncodedRef = useRef(comment.content)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [reactionPickerOpen, setReactionPickerOpen] = useState(false)
+  const myReaction = REACTION_TYPES.find((reaction) => reaction.type === comment.myReactionType)
+  const reactionLabel = myReaction?.label ?? 'Like'
 
   async function submitEdit() {
     const body = (editEncodedRef.current || editDraft).trim()
@@ -454,16 +481,60 @@ function CommentRow({
           )}
         </YStack>
 
-        <XStack gap="$3" paddingLeft="$2" alignItems="center">
+        {comment.likeCount > 0 ? (
+          <XStack gap="$1.5" paddingLeft="$2" alignItems="center" flexWrap="wrap">
+            {REACTION_TYPES.filter((reaction) => (comment.reactionCounts[reaction.type] ?? 0) > 0).map(
+              (reaction) => (
+                <XStack
+                  key={reaction.type}
+                  alignItems="center"
+                  gap={3}
+                  paddingHorizontal={7}
+                  height={22}
+                  borderRadius={999}
+                  backgroundColor={ui.surface}
+                  borderWidth={1}
+                  borderColor={comment.myReactionType === reaction.type ? BRAND_BLUE : ui.borderSubtle}
+                >
+                  <Text fontSize={12}>{reaction.emoji}</Text>
+                  <Text fontSize={11} fontWeight="700" color={ui.textMuted}>
+                    {comment.reactionCounts[reaction.type]}
+                  </Text>
+                </XStack>
+              ),
+            )}
+          </XStack>
+        ) : null}
+
+        <XStack gap="$3" paddingLeft="$2" alignItems="center" flexWrap="wrap">
           <Text
             fontSize={12}
             fontWeight="700"
             color={comment.likedByMe ? BRAND_BLUE : ui.textMuted}
             cursor="pointer"
-            onPress={onLike}
+            onPress={() => onLike('like')}
           >
-            Like
+            {myReaction ? `${myReaction.emoji} ${reactionLabel}` : 'Like'}
           </Text>
+          <YStack position="relative">
+            <Text
+              fontSize={12}
+              fontWeight="600"
+              color={ui.textMuted}
+              cursor="pointer"
+              onPress={() => setReactionPickerOpen((open) => !open)}
+            >
+              More
+            </Text>
+            <ReactionPicker
+              visible={reactionPickerOpen}
+              onClose={() => setReactionPickerOpen(false)}
+              onSelect={(type) => {
+                setReactionPickerOpen(false)
+                onLike(type)
+              }}
+            />
+          </YStack>
           <Text
             fontSize={12}
             fontWeight="600"
@@ -503,14 +574,6 @@ function CommentRow({
           <Text fontSize={12} color={ui.textMuted}>
             {formatCommentTime(comment.createdAt)}
           </Text>
-          {comment.likeCount > 0 ? (
-            <XStack alignItems="center" gap={3} marginLeft="auto">
-              <Icons.ThumbsUp size={12} color={BRAND_BLUE} fill={BRAND_BLUE} />
-              <Text fontSize={12} color={ui.textMuted}>
-                {comment.likeCount}
-              </Text>
-            </XStack>
-          ) : null}
         </XStack>
       </YStack>
     </XStack>

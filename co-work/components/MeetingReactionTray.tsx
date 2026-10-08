@@ -1,12 +1,14 @@
 import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 import { AppBottomSheet, Text, XStack, YStack } from '~/components/ui'
+import { ReactionStickerImage } from '~/components/emoji/ReactionStickerImage'
 import { MEETING_REACTIONS } from '~/co-work/lib/meeting-reactions'
 import {
   MEETING_NONVERBAL_STATUSES,
   type MeetingNonverbalStatusId,
 } from '~/co-work/lib/meeting-nonverbal'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
+import { REACTION_STICKERS } from '~/lib/emoji/reaction-stickers'
 
 type MeetingReactionTrayProps = {
   open: boolean
@@ -169,6 +171,36 @@ export function MeetingReactionTray({
                 })}
               >
                 <Text fontSize={24}>{emoji}</Text>
+              </Pressable>
+            ))}
+          </XStack>
+        </YStack>
+
+        <YStack gap="$2">
+          <Text fontSize={13} fontWeight="700" color={ui.textMuted}>
+            Stickers
+          </Text>
+          <XStack alignItems="center" justifyContent="space-between" flexWrap="wrap" rowGap={8}>
+            {REACTION_STICKERS.map((sticker) => (
+              <Pressable
+                key={sticker.value}
+                accessibilityRole="button"
+                accessibilityLabel={sticker.label}
+                onPress={() => selectAndClose(sticker.value)}
+                style={({ pressed }) => ({
+                  width: '16%',
+                  minWidth: 48,
+                  height: 48,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: ui.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: ui.borderSoft,
+                  opacity: pressed ? 0.75 : 1,
+                })}
+              >
+                <ReactionStickerImage value={sticker.value} sticker={sticker} size={38} />
               </Pressable>
             ))}
           </XStack>

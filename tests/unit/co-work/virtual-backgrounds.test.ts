@@ -16,6 +16,7 @@ import {
   virtualBackgroundUnavailableMessage,
   webBackgroundResourceWarning,
 } from '~/co-work/lib/virtual-backgrounds'
+import { personMatteAlpha, refinedPersonConfidence } from '~/co-work/lib/web-background-processor'
 
 describe('virtual background preferences', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -72,5 +73,22 @@ describe('virtual background preferences', () => {
   it('keeps unsupported-device messaging non-blocking', () => {
     expect(virtualBackgroundUnavailableMessage('web')).toContain('camera stays unfiltered')
     expect(virtualBackgroundUnavailableMessage('native')).toContain('camera stays unfiltered')
+  })
+
+  it('uses a soft matte curve instead of a hard person cutout', () => {
+    expect(personMatteAlpha(0.05)).toBe(0)
+    expect(personMatteAlpha(0.42)).toBeGreaterThan(0.4)
+    expect(personMatteAlpha(0.42)).toBeLessThan(0.6)
+    expect(personMatteAlpha(0.9)).toBe(1)
+  })
+
+  it('spatially refines matte confidence before compositing', () => {
+    const values = new Float32Array([
+      0, 0, 0,
+      0, 1, 0,
+      0, 0, 0,
+    ])
+    expect(refinedPersonConfidence(values, 3, 3, 4)).toBeGreaterThan(0)
+    expect(refinedPersonConfidence(values, 3, 3, 4)).toBeLessThan(1)
   })
 })

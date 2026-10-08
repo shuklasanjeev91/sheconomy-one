@@ -26,6 +26,22 @@ type RecorderState = {
   error?: string
 }
 
+type RecordingComposition = {
+  layout: 'grid'
+  audio: 'mixed'
+  video: 'composited'
+  includeScreenShare: boolean
+  tileMode: 'all'
+}
+
+const ZOOM_GRID_RECORDING_COMPOSITION: RecordingComposition = {
+  layout: 'grid',
+  audio: 'mixed',
+  video: 'composited',
+  includeScreenShare: true,
+  tileMode: 'all',
+}
+
 function recordingEnabled() {
   return (
     !!Deno.env.get('MEDIASOUP_URL') &&
@@ -33,6 +49,18 @@ function recordingEnabled() {
     Deno.env.get('MEDIASOUP_ENABLED') !== 'false' &&
     Deno.env.get('MEDIASOUP_RECORDING_ENABLED') !== 'false'
   )
+}
+
+function normalizeRecordingComposition(raw: unknown): RecordingComposition {
+  if (!raw || typeof raw !== 'object') return ZOOM_GRID_RECORDING_COMPOSITION
+  const value = raw as Record<string, unknown>
+  return {
+    layout: 'grid',
+    audio: 'mixed',
+    video: 'composited',
+    includeScreenShare: value.includeScreenShare !== false,
+    tileMode: 'all',
+  }
 }
 
 function serviceClient() {
@@ -128,6 +156,7 @@ Deno.serve(async (req) => {
       if (meeting.status === 'ended') {
         return jsonResponse({ ok: false, error: 'Meeting has ended.' }, 400)
       }
+      const composition = normalizeRecordingComposition(body.composition)
 
       const findActive = () =>
         serviceSupabase
@@ -185,6 +214,10 @@ Deno.serve(async (req) => {
       const started = await mediasoupAdmin<{ error?: string }>('record/start', {
         room: `${MEDIASOUP_ROOM_PREFIX}${roomName}`,
         recordingId: row.id,
+        layout: composition.layout,
+        audio: composition.audio,
+        video: composition.video,
+        composition,
       }).catch((cause) => ({ status: 502, data: { error: String(cause) } }))
 
       if (started.status >= 400) {

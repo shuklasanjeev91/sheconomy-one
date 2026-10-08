@@ -30,6 +30,7 @@ export type NativeStageTileProps<T> = {
   activeSpeaker: boolean
   /** Local share is on. SurfaceViews punch a black hole into MediaProjection. */
   localScreenShareActive?: boolean
+  onOpenProfile?: () => void
 }
 
 /**
@@ -52,6 +53,7 @@ export function NativeVideoTileChrome({
   activeSpeaker,
   video,
   onSurfaceLayout,
+  onOpenProfile,
 }: {
   identity: string
   name: string
@@ -70,6 +72,7 @@ export function NativeVideoTileChrome({
   activeSpeaker: boolean
   video: ReactNode | null
   onSurfaceLayout: (width: number, height: number) => void
+  onOpenProfile?: () => void
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
   const {
@@ -129,7 +132,7 @@ export function NativeVideoTileChrome({
 
   return (
     <Pressable
-      onPress={triggerStageTap}
+      onPress={!isScreen && onOpenProfile ? onOpenProfile : triggerStageTap}
       onLongPress={openTileMenu}
       delayLongPress={420}
       style={{ width, height, maxWidth: '100%' }}

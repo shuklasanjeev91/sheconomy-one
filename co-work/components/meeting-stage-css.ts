@@ -142,13 +142,20 @@ export function getMeetingStageCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
   .sheconomy-participant-tile .lk-video-track {
     width: 100% !important;
     height: 100% !important;
-    object-fit: cover !important;
+    object-fit: cover;
     object-position: center center;
     background: #0c080a;
     display: block !important;
     position: absolute !important;
     inset: 0 !important;
     z-index: 1;
+  }
+  .sheconomy-participant-tile[data-sheconomy-video-fit='contain'] video,
+  .sheconomy-participant-tile[data-sheconomy-video-fit='contain'] .lk-video-track {
+    object-fit: contain;
+  }
+  .sheconomy-participant-tile[role='button'] {
+    cursor: pointer;
   }
   /* Self-view only. */
   .sheconomy-participant-tile video.sheconomy-video--mirrored,

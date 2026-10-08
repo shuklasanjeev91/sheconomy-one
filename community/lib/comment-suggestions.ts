@@ -15,6 +15,20 @@ export type CommentSuggestionContext = {
   hasMedia?: boolean
 }
 
+export function commentSuggestionContextKey(ctx: CommentSuggestionContext): string {
+  return JSON.stringify({
+    postType: ctx.postType ?? null,
+    content: ctx.content?.slice(0, 500) ?? null,
+    authorName: ctx.authorName ?? null,
+    eventTitle: ctx.eventTitle ?? null,
+    celebrationTitle: ctx.celebrationTitle ?? null,
+    productTitle: ctx.productTitle ?? null,
+    shopName: ctx.shopName ?? null,
+    articleTitle: ctx.articleTitle ?? null,
+    hasMedia: Boolean(ctx.hasMedia),
+  })
+}
+
 function firstName(name?: string | null) {
   const trimmed = name?.trim()
   if (!trimmed) return null

@@ -299,7 +299,8 @@ function SheetSurface({
           width="100%"
           {...(fitContent ? {} : { flex: 1 })}
           showsVerticalScrollIndicator
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
           onScroll={onScroll}
           scrollEventThrottle={16}
           // Without a footer the body itself has to clear the nav bar.

@@ -4,6 +4,7 @@ import {
   fetchMeetingRecordingStatus,
   startCloudRecording,
   stopCloudRecording,
+  ZOOM_GRID_RECORDING_COMPOSITION,
   type MeetingRecordingSummary,
 } from '~/co-work/lib/meeting-recording-client'
 import {
@@ -163,6 +164,7 @@ export function useMeetingRecording({
       const cloud = await startCloudRecording({
         meetingId,
         roomName,
+        composition: ZOOM_GRID_RECORDING_COMPOSITION,
       })
 
       if (!cloud.ok || !cloud.recordingId) {

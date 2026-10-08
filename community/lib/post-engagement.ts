@@ -1,6 +1,6 @@
 import { supabase } from '~/lib/supabase/client'
 
-import type { ReactionType } from '~/community/lib/constants'
+import { REACTION_TYPES, type ReactionType } from '~/community/lib/constants'
 import { extractMentions } from '~/community/lib/post-text'
 
 export type PostComment = {
@@ -17,6 +17,8 @@ export type PostComment = {
   replyCount: number
   likeCount: number
   likedByMe: boolean
+  myReactionType: ReactionType | null
+  reactionCounts: Partial<Record<ReactionType, number>>
 }
 
 export type PostReaction = {
@@ -136,20 +138,40 @@ export async function fetchPostComments(
     replyCount: row.reply_count ?? 0,
     likeCount: row.total_likes ?? 0,
     likedByMe: false,
+    myReactionType: null,
+    reactionCounts: {},
   }))
 
-  // Hydrate which comments the signed-in viewer has liked.
-  if (currentUserId && items.length) {
+  // Hydrate comment reactions. Older rows default to "like".
+  if (items.length) {
+    const commentIds = items.map((item) => item.id)
     const { data: likes } = await supabase
       .from('comment_likes')
-      .select('comment_id')
-      .eq('user_id', currentUserId)
-      .in(
-        'comment_id',
-        items.map((item) => item.id),
-      )
-    const likedIds = new Set((likes ?? []).map((row) => row.comment_id))
-    for (const item of items) item.likedByMe = likedIds.has(item.id)
+      .select('comment_id, user_id, reaction_type')
+      .in('comment_id', commentIds)
+    const byComment = new Map<string, Partial<Record<ReactionType, number>>>()
+
+    for (const row of likes ?? []) {
+      const type = isReactionType(row.reaction_type) ? row.reaction_type : 'like'
+      const counts = byComment.get(row.comment_id) ?? {}
+      counts[type] = (counts[type] ?? 0) + 1
+      byComment.set(row.comment_id, counts)
+    }
+
+    for (const item of items) {
+      item.reactionCounts = byComment.get(item.id) ?? {}
+      item.likeCount = Object.values(item.reactionCounts).reduce((sum, count) => sum + (count ?? 0), 0)
+    }
+
+    if (currentUserId) {
+      for (const row of likes ?? []) {
+        if (row.user_id !== currentUserId) continue
+        const item = items.find((comment) => comment.id === row.comment_id)
+        if (!item) continue
+        item.likedByMe = true
+        item.myReactionType = isReactionType(row.reaction_type) ? row.reaction_type : 'like'
+      }
+    }
   }
 
   return { items, error: null }
@@ -231,8 +253,10 @@ export async function toggleCommentLike(
   userId: string,
   commentId: string,
   liked: boolean,
+  reactionType: ReactionType = 'like',
+  currentReactionType?: string | null,
 ): Promise<{ error: string | null }> {
-  if (liked) {
+  if (liked && currentReactionType === reactionType) {
     const { error } = await supabase
       .from('comment_likes')
       .delete()
@@ -241,10 +265,23 @@ export async function toggleCommentLike(
     return { error: error?.message ?? null }
   }
 
+  if (liked) {
+    const { error } = await supabase
+      .from('comment_likes')
+      .update({ reaction_type: reactionType })
+      .eq('user_id', userId)
+      .eq('comment_id', commentId)
+    return { error: error?.message ?? null }
+  }
+
   const { error } = await supabase
     .from('comment_likes')
-    .insert({ user_id: userId, comment_id: commentId })
+    .insert({ user_id: userId, comment_id: commentId, reaction_type: reactionType })
   return { error: error?.message ?? null }
+}
+
+function isReactionType(value: unknown): value is ReactionType {
+  return typeof value === 'string' && REACTION_TYPES.some((reaction) => reaction.type === value)
 }
 
 export async function hasUserReposted(

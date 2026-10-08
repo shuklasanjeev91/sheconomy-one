@@ -7,8 +7,12 @@ const WASM_BASE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TA
 const SELFIE_MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite'
 /** Segmentation input width; the mask is upscaled with smoothing. */
-const SEGMENT_WIDTH = 320
+const SEGMENT_WIDTH = 384
 const OUTPUT_FPS = 24
+const MATTE_LOW_CONFIDENCE = 0.12
+const MATTE_HIGH_CONFIDENCE = 0.72
+const TEMPORAL_MATTE_BLEND = 0.72
+const MATTE_SPATIAL_RADIUS = 1
 
 export type WebBackgroundOptions =
   | { mode: 'disabled' }
@@ -100,6 +104,36 @@ function drawCover(
   ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight)
 }
 
+export function personMatteAlpha(confidence: number): number {
+  const x = Math.min(
+    1,
+    Math.max(0, (confidence - MATTE_LOW_CONFIDENCE) / (MATTE_HIGH_CONFIDENCE - MATTE_LOW_CONFIDENCE)),
+  )
+  return x * x * (3 - 2 * x)
+}
+
+export function refinedPersonConfidence(
+  values: ArrayLike<number>,
+  width: number,
+  height: number,
+  index: number,
+): number {
+  const x = index % width
+  const y = Math.floor(index / width)
+  let weighted = 0
+  let total = 0
+  for (let dy = -MATTE_SPATIAL_RADIUS; dy <= MATTE_SPATIAL_RADIUS; dy += 1) {
+    const yy = Math.min(height - 1, Math.max(0, y + dy))
+    for (let dx = -MATTE_SPATIAL_RADIUS; dx <= MATTE_SPATIAL_RADIUS; dx += 1) {
+      const xx = Math.min(width - 1, Math.max(0, x + dx))
+      const weight = dx === 0 && dy === 0 ? 4 : dx === 0 || dy === 0 ? 2 : 1
+      weighted += (values[yy * width + xx] ?? 0) * weight
+      total += weight
+    }
+  }
+  return total > 0 ? weighted / total : values[index] ?? 0
+}
+
 /**
  * Blur / replace the camera background: MediaPipe selfie segmentation on a
  * small copy of each frame, composited onto a canvas whose stream is sent.
@@ -118,6 +152,7 @@ export class WebBackgroundProcessor {
   private readonly maskCanvas: HTMLCanvasElement
   private readonly blurCanvas: HTMLCanvasElement
   private maskImage: ImageData | null = null
+  private previousMaskValues: Float32Array | null = null
   private hasMask = false
   private lastSegmentAt = 0
   private segmenting = false
@@ -188,6 +223,7 @@ export class WebBackgroundProcessor {
     this.video = null
     this.output = null
     this.hasMask = false
+    this.previousMaskValues = null
   }
 
   private renderFrame() {
@@ -210,12 +246,6 @@ export class WebBackgroundProcessor {
 
     ctx.save()
     ctx.globalCompositeOperation = 'copy'
-    if (this.supportsFilter) ctx.filter = 'blur(2px)'
-    ctx.drawImage(this.maskCanvas, 0, 0, width, height)
-    if (this.supportsFilter) ctx.filter = 'none'
-    ctx.globalCompositeOperation = 'source-in'
-    ctx.drawImage(video, 0, 0, width, height)
-    ctx.globalCompositeOperation = 'destination-over'
     if (this.options.mode === 'image' && this.image) {
       drawCover(ctx, this.image, width, height)
     } else if (this.options.mode === 'blur') {
@@ -227,6 +257,25 @@ export class WebBackgroundProcessor {
         const small = this.blurCanvas.getContext('2d')
         small?.drawImage(video, 0, 0, this.blurCanvas.width, this.blurCanvas.height)
         ctx.imageSmoothingEnabled = true
+        ctx.drawImage(this.blurCanvas, 0, 0, width, height)
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.drawImage(video, 0, 0, width, height)
+    ctx.globalCompositeOperation = 'destination-in'
+    ctx.imageSmoothingEnabled = true
+    if (this.supportsFilter) ctx.filter = 'blur(3px)'
+    ctx.drawImage(this.maskCanvas, 0, 0, width, height)
+    if (this.supportsFilter) ctx.filter = 'none'
+    ctx.globalCompositeOperation = 'destination-over'
+    if (this.options.mode === 'image' && this.image) {
+      drawCover(ctx, this.image, width, height)
+    } else if (this.options.mode === 'blur') {
+      if (this.supportsFilter) {
+        ctx.filter = `blur(${this.options.blurRadius}px)`
+        ctx.drawImage(video, 0, 0, width, height)
+        ctx.filter = 'none'
+      } else {
         ctx.drawImage(this.blurCanvas, 0, 0, width, height)
       }
     }
@@ -252,18 +301,31 @@ export class WebBackgroundProcessor {
           this.maskCanvas.width = mask.width
           this.maskCanvas.height = mask.height
           this.maskImage = null
+          this.previousMaskValues = null
         }
         const maskCtx = this.maskCanvas.getContext('2d')
         if (!maskCtx) return
         this.maskImage ??= maskCtx.createImageData(mask.width, mask.height)
         const data = this.maskImage.data
+        const previous = this.previousMaskValues
+        const smoothed =
+          previous && previous.length === values.length ? previous : new Float32Array(values.length)
         for (let index = 0; index < values.length; index += 1) {
           const offset = index * 4
+          const shaped = personMatteAlpha(
+            refinedPersonConfidence(values, mask.width, mask.height, index),
+          )
+          const alpha =
+            previous && previous.length === values.length
+              ? smoothed[index] * TEMPORAL_MATTE_BLEND + shaped * (1 - TEMPORAL_MATTE_BLEND)
+              : shaped
+          smoothed[index] = alpha
           data[offset] = 255
           data[offset + 1] = 255
           data[offset + 2] = 255
-          data[offset + 3] = Math.round((values[index] ?? 0) * 255)
+          data[offset + 3] = Math.round(alpha * 255)
         }
+        this.previousMaskValues = smoothed
         maskCtx.putImageData(this.maskImage, 0, 0)
         this.hasMask = true
       })
