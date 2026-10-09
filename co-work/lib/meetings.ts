@@ -63,6 +63,36 @@ export function isMeetingJoinable(meeting: Pick<Meeting, 'status'>): boolean {
   return meeting.status !== 'cancelled'
 }
 
+const DEFAULT_MEETING_LENGTH_MS = 60 * 60 * 1000
+const UPCOMING_GRACE_AFTER_END_MS = 60 * 60 * 1000
+/** Hosts often leave without ending, so `active`/`instant` rows can stay live forever. */
+const LIVE_MEETING_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+type UpcomingMeetingFields = Pick<
+  Meeting,
+  'status' | 'scheduled_at' | 'scheduled_end_at' | 'started_at' | 'created_at' | 'is_recurring' | 'repeat'
+>
+
+/** Still worth listing under "upcoming": not ended/cancelled and not in the past. */
+export function isUpcomingMeeting(meeting: UpcomingMeetingFields, now = Date.now()): boolean {
+  if (meeting.status !== 'scheduled' && meeting.status !== 'instant' && meeting.status !== 'active') {
+    return false
+  }
+  if (meeting.is_recurring || meeting.repeat) return true
+
+  const anchor = getMeetingAnchorAt(meeting)
+  if (!anchor) return true
+
+  if (meeting.status !== 'scheduled') {
+    const liveSince = meeting.started_at ? Date.parse(meeting.started_at) : anchor.getTime()
+    return now - liveSince <= LIVE_MEETING_MAX_AGE_MS
+  }
+
+  const parsedEnd = meeting.scheduled_end_at ? Date.parse(meeting.scheduled_end_at) : Number.NaN
+  const endAt = Number.isFinite(parsedEnd) ? parsedEnd : anchor.getTime() + DEFAULT_MEETING_LENGTH_MS
+  return now <= endAt + UPCOMING_GRACE_AFTER_END_MS
+}
+
 type ScheduledStartFields = Pick<Meeting, 'status' | 'scheduled_at' | 'started_at'>
 
 /**

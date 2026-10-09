@@ -546,9 +546,42 @@ describe('buildMeetingRevisitCards', () => {
       },
     ]
 
-    const cards = buildMeetingRevisitCards(meetings, 'guest', 2)
+    const cards = buildMeetingRevisitCards(meetings, 'guest', 2, Date.parse('2026-08-19T00:00:00.000Z'))
     expect(cards.map((card) => card.meetingId)).toEqual(['m1', 'm2'])
     expect(cards.every((card) => card.badge === 'Invited')).toBe(true)
+  })
+
+  it('drops meetings that are already in the past', () => {
+    const base: Meeting = {
+      id: 'old',
+      title: 'Meeting - 24/2/2026',
+      description: null,
+      meeting_code: 'L1B7T',
+      host_id: 'host',
+      status: 'instant',
+      scheduled_at: '2026-02-24T09:16:00.000Z',
+      scheduled_end_at: null,
+      started_at: null,
+      ended_at: null,
+      time_zone: 'Asia/Kolkata',
+      max_participants: null,
+      room_id: null,
+      security_settings: null,
+      meeting_options: null,
+      created_at: '2026-02-24T09:16:00.000Z',
+      is_recurring: false,
+      repeat: null,
+      invitees: [],
+      host: null,
+    }
+    const meetings: Meeting[] = [
+      base,
+      { ...base, id: 'old-scheduled', status: 'scheduled' },
+      { ...base, id: 'next', status: 'scheduled', scheduled_at: '2026-10-10T09:00:00.000Z' },
+    ]
+
+    const cards = buildMeetingRevisitCards(meetings, 'guest', 4, Date.parse('2026-10-09T07:30:00.000Z'))
+    expect(cards.map((card) => card.meetingId)).toEqual(['next'])
   })
 })
 

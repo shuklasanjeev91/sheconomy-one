@@ -5,7 +5,7 @@ import { useEffect, useMemo } from 'react'
 import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { MeetingCalendarIconButton } from '~/co-work/components/MeetingCalendarIconButton'
 import { MeetingCardOverflowMenu } from '~/co-work/components/MeetingCardOverflowMenu'
-import { fetchMyMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
+import { fetchMyMeetings, formatMeetingCode, isUpcomingMeeting } from '~/co-work/lib/meetings'
 import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting } from '~/co-work/lib/types'
@@ -42,9 +42,8 @@ export function UpcomingMeetingsStrip({
     fetcher: async () => {
       if (!user) return []
       const rows = await fetchMyMeetings(user.id)
-      return rows
-        .filter((m) => m.status === 'scheduled' || m.status === 'instant' || m.status === 'active')
-        .slice(0, 6)
+      const now = Date.now()
+      return rows.filter((m) => isUpcomingMeeting(m, now)).slice(0, 6)
     },
   })
   const meetings = useMemo(() => data ?? [], [data])

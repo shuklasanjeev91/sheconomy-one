@@ -1,3 +1,4 @@
+import { isUpcomingMeeting } from '~/co-work/lib/meetings'
 import type { Meeting } from '~/co-work/lib/types'
 import { formatMeetingInstantForViewer } from '~/lib/calendar/timezone'
 import { coWorkRoutes } from '~/lib/routes'
@@ -12,8 +13,6 @@ export type MeetingRevisitCard = {
   isLive: boolean
 }
 
-const UPCOMING_STATUSES = new Set<Meeting['status']>(['scheduled', 'instant', 'active'])
-
 export function formatMeetingWhenLabel(meeting: Pick<Meeting, 'scheduled_at' | 'started_at' | 'created_at' | 'time_zone'>) {
   const raw = meeting.scheduled_at ?? meeting.started_at ?? meeting.created_at
   if (!raw) return 'Time TBD'
@@ -25,9 +24,10 @@ export function buildMeetingRevisitCards(
   meetings: Meeting[],
   userId: string,
   limit = 4,
+  now = Date.now(),
 ): MeetingRevisitCard[] {
   return meetings
-    .filter((meeting) => UPCOMING_STATUSES.has(meeting.status))
+    .filter((meeting) => isUpcomingMeeting(meeting, now))
     .sort((a, b) => {
       const aAt = a.scheduled_at ? Date.parse(a.scheduled_at) : Number.MAX_SAFE_INTEGER
       const bAt = b.scheduled_at ? Date.parse(b.scheduled_at) : Number.MAX_SAFE_INTEGER

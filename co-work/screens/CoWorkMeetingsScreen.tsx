@@ -25,6 +25,7 @@ import {
   fetchMyMeetings,
   formatMeetingCode,
   getMeetingAnchorAt,
+  isUpcomingMeeting,
 } from '~/co-work/lib/meetings'
 import { canEditOrCancelMeetingForUser } from '~/co-work/lib/meeting-role-permissions'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
@@ -126,7 +127,9 @@ export function CoWorkMeetingsScreen() {
       setError(null)
     }
     try {
-      setMeetings(await fetchMyMeetings(user.id))
+      const rows = await fetchMyMeetings(user.id)
+      const now = Date.now()
+      setMeetings(rows.filter((meeting) => isUpcomingMeeting(meeting, now)))
     } catch (loadError) {
       if (!opts?.silent) {
         setError(loadError instanceof Error ? loadError.message : 'Failed to load meetings')
