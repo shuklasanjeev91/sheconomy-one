@@ -11,6 +11,8 @@ import type { CommentSuggestionContext } from '~/community/lib/comment-suggestio
 import { REACTION_TYPES, type ReactionType } from '~/community/lib/constants'
 import type { PostComment } from '~/community/lib/post-engagement'
 import { BRAND_BLUE } from '~/community/lib/constants'
+import { EmojiPickerSheet } from '~/components/emoji/EmojiPickerSheet'
+import { isReactionStickerValue } from '~/lib/emoji/reaction-stickers'
 import {
   Avatar,
   Button,
@@ -71,7 +73,6 @@ export function PostComments({
 }: PostCommentsProps) {
   const ui = useAppUi()
   const encodedRef = useRef('')
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
 
   const { topLevel, repliesByParent } = useMemo(() => {
     const top: PostComment[] = []
@@ -138,54 +139,25 @@ export function PostComments({
               }}
             />
           ) : null}
-          <XStack gap="$2" alignItems="center">
-            <MentionInput
-              flex={1}
-              value={commentDraft}
-              onChangeText={(text) => {
-                encodedRef.current = text
-                onDraftChange(text)
-              }}
-              onEncodedChange={(encoded) => {
-                encodedRef.current = encoded
-              }}
-              placeholder="Add a comment…"
-              suggestionsPlacement="top"
-              borderRadius={999}
-              backgroundColor={ui.surface}
-              onSubmitEditing={() => onSubmit(encodedRef.current || commentDraft)}
-            />
-            <YStack position="relative">
-              <Button
-                size="$3"
-                tone="outline"
-                borderRadius={999}
-                disabled={isCommenting}
-                onPress={() => setEmojiPickerOpen((open) => !open)}
-                icon={<Icons.Smile size={16} color={ui.textMuted} />}
-              />
-              <ReactionPicker
-                visible={emojiPickerOpen}
-                onClose={() => setEmojiPickerOpen(false)}
-                onSelect={(type) => {
-                  const reaction = REACTION_TYPES.find((item) => item.type === type)
-                  if (!reaction) return
-                  const next = `${commentDraft}${reaction.emoji}`
-                  encodedRef.current = next
-                  onDraftChange(next)
-                }}
-              />
-            </YStack>
-            <Button
-              size="$3"
-              backgroundColor={commentDraft.trim() ? BRAND_BLUE : ui.chip}
-              color={commentDraft.trim() ? 'white' : ui.textMuted}
-              borderRadius={999}
-              disabled={!commentDraft.trim() || isCommenting}
-              onPress={() => onSubmit(encodedRef.current || commentDraft)}
-              icon={isCommenting ? <Spinner size="small" color="white" /> : <Icons.Send size={16} color="white" />}
-            />
-          </XStack>
+          <CommentDraftRow
+            value={commentDraft}
+            placeholder="Add a comment…"
+            disabled={isCommenting}
+            sending={isCommenting}
+            onChangeText={(text) => {
+              encodedRef.current = text
+              onDraftChange(text)
+            }}
+            onEncodedChange={(encoded) => {
+              encodedRef.current = encoded
+            }}
+            onInsertEmoji={(emoji) => {
+              const next = `${commentDraft}${emoji}`
+              encodedRef.current = `${encodedRef.current || commentDraft}${emoji}`
+              onDraftChange(next)
+            }}
+            onSubmit={() => onSubmit(encodedRef.current || commentDraft)}
+          />
         </YStack>
       ) : (
         <Text fontSize={13} color={ui.textMuted} textAlign="center">
@@ -306,31 +278,28 @@ function CommentThread({
       ) : null}
 
       {replyOpen && isAuthenticated ? (
-        <XStack gap="$2" alignItems="center" paddingLeft={40}>
-          <MentionInput
-            flex={1}
+        <YStack paddingLeft={40}>
+          <CommentDraftRow
             value={replyDraft}
-            onChangeText={setReplyDraft}
+            placeholder={`Reply to ${comment.authorName}…`}
+            disabled={isSending}
+            sending={isSending}
+            autoFocus
+            onChangeText={(text) => {
+              replyEncodedRef.current = text
+              setReplyDraft(text)
+            }}
             onEncodedChange={(encoded) => {
               replyEncodedRef.current = encoded
             }}
-            placeholder={`Reply to ${comment.authorName}…`}
-            suggestionsPlacement="top"
-            borderRadius={999}
-            backgroundColor={ui.surface}
-            autoFocus
-            onSubmitEditing={submitReply}
+            onInsertEmoji={(emoji) => {
+              const next = `${replyDraft}${emoji}`
+              replyEncodedRef.current = `${replyEncodedRef.current || replyDraft}${emoji}`
+              setReplyDraft(next)
+            }}
+            onSubmit={submitReply}
           />
-          <Button
-            size="$3"
-            backgroundColor={replyDraft.trim() ? BRAND_BLUE : ui.chip}
-            color="white"
-            borderRadius={999}
-            disabled={!replyDraft.trim() || isSending}
-            onPress={submitReply}
-            icon={isSending ? <Spinner size="small" color="white" /> : <Icons.Send size={16} color="white" />}
-          />
-        </XStack>
+        </YStack>
       ) : null}
     </YStack>
   )
@@ -577,5 +546,99 @@ function CommentRow({
         </XStack>
       </YStack>
     </XStack>
+  )
+}
+
+function CommentDraftRow({
+  value,
+  placeholder,
+  disabled,
+  sending,
+  autoFocus,
+  onChangeText,
+  onEncodedChange,
+  onInsertEmoji,
+  onSubmit,
+}: {
+  value: string
+  placeholder: string
+  disabled: boolean
+  sending: boolean
+  autoFocus?: boolean
+  onChangeText: (text: string) => void
+  onEncodedChange: (encoded: string) => void
+  onInsertEmoji: (emoji: string) => void
+  onSubmit: () => void
+}) {
+  const ui = useAppUi()
+  const [emojiOpen, setEmojiOpen] = useState(false)
+  const canSend = value.trim().length > 0 && !disabled
+
+  return (
+    <>
+      <XStack gap="$2" alignItems="center" width="100%">
+        <XStack
+          flex={1}
+          alignItems="center"
+          minHeight={44}
+          // Native embedded fields drop their own horizontal padding.
+          paddingLeft={Platform.OS === 'web' ? 2 : 16}
+          paddingRight={2}
+          borderRadius={999}
+          backgroundColor={ui.surface}
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+        >
+          <MentionInput
+            flex={1}
+            value={value}
+            onChangeText={onChangeText}
+            onEncodedChange={onEncodedChange}
+            placeholder={placeholder}
+            suggestionsPlacement="top"
+            borderWidth={0}
+            borderRadius={999}
+            backgroundColor="transparent"
+            autoFocus={autoFocus}
+            onSubmitEditing={onSubmit}
+          />
+          <XStack
+            onPress={disabled ? undefined : () => setEmojiOpen(true)}
+            cursor={disabled ? 'default' : 'pointer'}
+            width={36}
+            height={36}
+            borderRadius={999}
+            alignItems="center"
+            justifyContent="center"
+            opacity={disabled ? 0.5 : 1}
+            hoverStyle={disabled ? undefined : { backgroundColor: ui.surfaceHover }}
+            pressStyle={disabled ? undefined : { scale: 0.92 }}
+            animation="quick"
+            accessibilityLabel="Emoji"
+            aria-label="Emoji"
+          >
+            <Icons.Smile size={20} color={ui.textMuted} />
+          </XStack>
+        </XStack>
+        <Button
+          size="$3"
+          backgroundColor={canSend ? BRAND_BLUE : ui.chip}
+          color={canSend ? 'white' : ui.textMuted}
+          borderRadius={999}
+          disabled={!canSend}
+          onPress={onSubmit}
+          icon={sending ? <Spinner size="small" color="white" /> : <Icons.Send size={16} color="white" />}
+        />
+      </XStack>
+      <EmojiPickerSheet
+        open={emojiOpen}
+        onOpenChange={setEmojiOpen}
+        title="Emoji"
+        onPick={(emoji) => {
+          if (isReactionStickerValue(emoji)) return
+          onInsertEmoji(emoji)
+        }}
+      />
+    </>
   )
 }
