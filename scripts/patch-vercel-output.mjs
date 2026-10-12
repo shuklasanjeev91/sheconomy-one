@@ -152,7 +152,47 @@ function patchFunctionRuntimes() {
   console.log(`[patch-vercel-output] function runtime set to nodejs22.x (${patched} functions)`)
 }
 
+/**
+ * One's SSR entrypoint sends HTML with no Cache-Control and loader JS with
+ * `no-store`, so every visit and crawler hit re-runs the function. That burns
+ * Fluid Active CPU past the Hobby fair-use cap and gets the team paused.
+ * SSR loaders only read route params (no cookies/session), so responses are
+ * safe to share at the CDN. Browsers still revalidate on every navigation.
+ */
+const SSR_CDN_CACHE_CONTROL = 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400'
+
+function patchSsrCacheHeaders() {
+  const functionsDir = resolve(process.cwd(), '.vercel/output/functions')
+  if (!existsSync(functionsDir)) return
+
+  const header = `res.setHeader('Cache-Control', '${SSR_CDN_CACHE_CONTROL}')`
+  let patched = 0
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (entry.name !== 'index.js' || !dir.endsWith('/entrypoint')) continue
+      let source = readFileSync(full, 'utf8')
+      if (!source.includes('entry.default.render') || source.includes(SSR_CDN_CACHE_CONTROL)) continue
+      source = source
+        .replace("res.setHeader('Cache-Control', 'no-store')", header)
+        .replace(
+          "res.setHeader('Content-Type', 'text/html; charset=utf-8')",
+          `res.setHeader('Content-Type', 'text/html; charset=utf-8')\n    ${header}`,
+        )
+      writeFileSync(full, source)
+      patched += 1
+    }
+  }
+  walk(functionsDir)
+  console.log(`[patch-vercel-output] SSR CDN cache headers applied (${patched} functions)`)
+}
+
 patchVercelOutputConfig()
 patchWellKnownHeaders()
 patchInstantNavInRouterBundles()
 patchFunctionRuntimes()
+patchSsrCacheHeaders()
