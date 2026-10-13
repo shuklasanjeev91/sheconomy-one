@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { existsSync, readdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
 
 /**
  * One writes a catch-all rewrite that turns missing `/assets/*` into HTML.
@@ -191,7 +191,128 @@ function patchSsrCacheHeaders() {
   console.log(`[patch-vercel-output] SSR CDN cache headers applied (${patched} functions)`)
 }
 
+/**
+ * One emits one serverless function per `+ssr` route, each a full copy of the
+ * same server bundle that differs only in `routeFile` / `routePattern`. The
+ * Hobby plan rejects deployments with more than 12 functions, so fold every SSR
+ * route into `index.func` and rewrite their routes to `/?__ssr_route=<path>`.
+ */
+const ROUTE_FILE_RE = /^ {2}const routeFile = "([^"]+)"$/m
+const ROUTE_PATTERN_RE = /^ {4}const routePattern = "([^"]+)";$/m
+
+function selectSsrRoute(url, ssrRoutes, defaultRouteFile, defaultRoutePattern) {
+  const requested = url.searchParams.get('__ssr_route')
+  url.searchParams.delete('__ssr_route')
+  const explicit = requested && ssrRoutes.find((route) => route.path === requested)
+  if (explicit) return { ...explicit, explicit: true }
+  const matched = ssrRoutes.find((route) => new RegExp(route.regexSource).test(url.pathname))
+  if (matched) return { ...matched, explicit: false }
+  return { routeFile: defaultRouteFile, routePattern: defaultRoutePattern, explicit: false }
+}
+
+function ssrPathFromRoute(path, params) {
+  return path.replace(/:(\w+)/g, (_, name) => [].concat(params[name] ?? []).join('/'))
+}
+
+function consolidateSsrFunctions() {
+  const outputDir = resolve(process.cwd(), '.vercel/output')
+  const functionsDir = join(outputDir, 'functions')
+  const hostEntry = join(functionsDir, 'index.func/entrypoint/index.js')
+  const configPath = join(outputDir, 'config.json')
+  if (!existsSync(hostEntry) || !existsSync(configPath)) return
+
+  const hostSource = readFileSync(hostEntry, 'utf8')
+  if (!ROUTE_FILE_RE.test(hostSource) || !ROUTE_PATTERN_RE.test(hostSource)) {
+    console.log('[patch-vercel-output] SSR functions already consolidated')
+    return
+  }
+  const normalize = (source) =>
+    source.replace(ROUTE_FILE_RE, '').replace(ROUTE_PATTERN_RE, '')
+  const hostBody = normalize(hostSource)
+
+  const routes = []
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const full = join(dir, entry.name)
+      if (!entry.name.endsWith('.func')) {
+        walk(full)
+        continue
+      }
+      const entryPath = join(full, 'entrypoint/index.js')
+      if (full === dirname(dirname(hostEntry)) || !existsSync(entryPath)) continue
+      const source = readFileSync(entryPath, 'utf8')
+      const routeFile = source.match(ROUTE_FILE_RE)?.[1]
+      const routePattern = source.match(ROUTE_PATTERN_RE)?.[1]
+      if (!routeFile || !routePattern) continue
+      if (normalize(source) !== hostBody) {
+        throw new Error(`[patch-vercel-output] ${relative(functionsDir, full)} differs from index.func; cannot consolidate`)
+      }
+      routes.push({ dir: full, path: `/${relative(functionsDir, full).replace(/\.func$/, '')}`, routeFile, routePattern })
+    }
+  }
+  walk(functionsDir)
+  if (routes.length === 0) return
+
+  const table = routes.map(({ path, routeFile, routePattern }) => ({
+    path,
+    routeFile,
+    routePattern,
+    regexSource: `^${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:\w+/g, '([^/]+)')}/?$`,
+  }))
+  const merged = hostSource
+    .replace(
+      ROUTE_FILE_RE,
+      () => `  const defaultRouteFile = ${JSON.stringify(hostSource.match(ROUTE_FILE_RE)[1])}
+  const defaultRoutePattern = ${JSON.stringify(hostSource.match(ROUTE_PATTERN_RE)[1])}
+  const ssrRoutes = ${JSON.stringify(table)}
+  ${selectSsrRoute.toString()}
+  ${ssrPathFromRoute.toString()}`,
+    )
+    .replace(
+      ROUTE_PATTERN_RE,
+      `    const selected = selectSsrRoute(url, ssrRoutes, defaultRouteFile, defaultRoutePattern)
+    const routeFile = selected.routeFile
+    const routePattern = selected.routePattern;`,
+    )
+    .replace(
+      '    const host = url.hostname;',
+      `    if (selected.explicit) originalPath = ssrPathFromRoute(selected.path, routeParams);
+    const host = url.hostname;`,
+    )
+  if (!merged.includes('selected.explicit) originalPath')) {
+    throw new Error('[patch-vercel-output] SSR entrypoint shape changed; cannot consolidate')
+  }
+  writeFileSync(hostEntry, merged)
+
+  const ssrPaths = new Set(routes.map((route) => route.path))
+  const config = JSON.parse(readFileSync(configPath, 'utf8'))
+  let rewritten = 0
+  config.routes = (config.routes ?? []).map((route) => {
+    if (typeof route.dest !== 'string') return route
+    const [destPath, query] = route.dest.split(/\?(.*)/s)
+    if (!ssrPaths.has(destPath)) return route
+    rewritten += 1
+    const ssrQuery = `__ssr_route=${encodeURIComponent(destPath)}`
+    return { ...route, dest: `/?${ssrQuery}${query ? `&${query}` : ''}` }
+  })
+  writeFileSync(configPath, `${JSON.stringify(config)}\n`)
+
+  for (const { dir } of routes) {
+    rmSync(dir, { recursive: true, force: true })
+    let parent = dirname(dir)
+    while (parent !== functionsDir && readdirSync(parent).length === 0) {
+      rmdirSync(parent)
+      parent = dirname(parent)
+    }
+  }
+  console.log(
+    `[patch-vercel-output] consolidated ${routes.length} SSR functions into index.func (${rewritten} routes rewritten)`,
+  )
+}
+
 patchVercelOutputConfig()
+consolidateSsrFunctions()
 patchWellKnownHeaders()
 patchInstantNavInRouterBundles()
 patchFunctionRuntimes()
