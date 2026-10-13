@@ -214,6 +214,28 @@ function ssrPathFromRoute(path, params) {
   return path.replace(/:(\w+)/g, (_, name) => [].concat(params[name] ?? []).join('/'))
 }
 
+/**
+ * On Vercel, One keeps the request context in one global (`__oneGlobalContextId`)
+ * and SSR loaders publish SEO to `globalThis.__sheconomySsrPageSeo`
+ * (lib/seo/ssr-page-seo-slot.ts). Once all routes share an instance, overlapping
+ * or consecutive requests leak another page's loader data and head tags, so
+ * render one request at a time and clear the SEO slot first.
+ */
+function serializeSsrRequests(handleSsrRequest) {
+  let queue = Promise.resolve()
+  return (req, res) => {
+    const run = queue.then(() => {
+      delete globalThis.__sheconomySsrPageSeo
+      return handleSsrRequest(req, res)
+    })
+    queue = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
+  }
+}
+
 function consolidateSsrFunctions() {
   const outputDir = resolve(process.cwd(), '.vercel/output')
   const functionsDir = join(outputDir, 'functions')
@@ -267,8 +289,11 @@ function consolidateSsrFunctions() {
   const defaultRoutePattern = ${JSON.stringify(hostSource.match(ROUTE_PATTERN_RE)[1])}
   const ssrRoutes = ${JSON.stringify(table)}
   ${selectSsrRoute.toString()}
-  ${ssrPathFromRoute.toString()}`,
+  ${ssrPathFromRoute.toString()}
+  ${serializeSsrRequests.toString()}`,
     )
+    .replace('  const handler = async (req, res) => {', '  const handleSsrRequest = async (req, res) => {')
+    .replace('  export default handler;', '  export default serializeSsrRequests(handleSsrRequest);')
     .replace(
       ROUTE_PATTERN_RE,
       `    const selected = selectSsrRoute(url, ssrRoutes, defaultRouteFile, defaultRoutePattern)
@@ -280,7 +305,10 @@ function consolidateSsrFunctions() {
       `    if (selected.explicit) originalPath = ssrPathFromRoute(selected.path, routeParams);
     const host = url.hostname;`,
     )
-  if (!merged.includes('selected.explicit) originalPath')) {
+  if (
+    !merged.includes('selected.explicit) originalPath') ||
+    !merged.includes('export default serializeSsrRequests(handleSsrRequest)')
+  ) {
     throw new Error('[patch-vercel-output] SSR entrypoint shape changed; cannot consolidate')
   }
   writeFileSync(hostEntry, merged)
