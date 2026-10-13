@@ -8,3 +8,4 @@ export * from './gender-estimate'
 // Base modules resolve to `.web` / `.native` via the bundler platform extension.
 export * from './human-liveness'
 export * from './landmarks'
+export * from './picture-size'

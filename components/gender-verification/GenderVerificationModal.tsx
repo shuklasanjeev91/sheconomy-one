@@ -37,7 +37,7 @@ type GenderVerificationModalProps = {
 
 /**
  * App-wide "Human Verification" popup. Reuses the shared liveness hook and panel
- * (3-blink MediaPipe check + on-device gender estimate) but presents it as a
+ * (one-blink liveness check + on-device gender estimate) but presents it as a
  * dismissible modal instead of a full page.
  */
 export function GenderVerificationModal({
@@ -265,8 +265,9 @@ function VerificationFlow({
           {verification.phase === 'idle' ? (
             <YStack gap="$3">
               <Text fontSize={14} color={ui.textSecondary} lineHeight={21}>
-                Optional face check — blink {verification.requiredBlinks} times to unlock Community,
-                Chat, and Create store. Video stays on this device. Skip anytime to keep using
+                Optional face check — look at the camera and blink{' '}
+                {verification.requiredBlinks === 1 ? 'once' : `${verification.requiredBlinks} times`} to
+                unlock Community, Chat, and Create store. Video stays on this device. Skip anytime to keep using
                 Commerce, Classes, and Co-Work.
               </Text>
               <YStack

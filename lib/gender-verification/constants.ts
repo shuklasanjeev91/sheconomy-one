@@ -5,7 +5,7 @@ import {
 
 export const GENDER_VERIFICATION = {
   /** Natural blinks required for liveness (close → open cycles). */
-  requiredBlinks: 2,
+  requiredBlinks: 1,
   /** Fallback EAR when adaptive baseline is not ready yet. */
   earBlinkThreshold: 0.2,
   earOpenThreshold: 0.26,
@@ -14,16 +14,12 @@ export const GENDER_VERIFICATION = {
    * low enough that a single closed sample still counts on reopen.
    */
   minClosedMs: 50,
-  /**
-   * Reject eyes held shut. Generous on purpose: native frames arrive ~1–2 fps,
-   * so users are asked for a slow blink that the sampler can actually catch.
-   */
+  /** Reject eyes held shut. */
   maxClosedMs: 2500,
-  /**
-   * Native measures closure between photos up to ~1.5 s apart, so a 2 s
-   * "close your eyes" can read as ~3.5 s; still rejects eyes kept shut.
-   */
-  nativeMaxClosedMs: 4000,
+  /** Native measures closure between photos, so allow a little slack over web. */
+  nativeMaxClosedMs: 3000,
+  /** No blink seen for this long after calibration: suggest a slightly slower one. */
+  blinkSlowerHintMs: 5000,
   /** Avoid counting the same blink twice. */
   minBlinkGapMs: 280,
   /**
@@ -54,10 +50,16 @@ export const GENDER_VERIFICATION = {
   nativeGenderSampleEvery: 3,
   sessionMinutes: 15,
   /**
-   * Native capture cadence. takePictureAsync is slow; a short interval only
-   * queues work behind processingRef — prefer fewer, lighter frames.
+   * Native capture cadence. Frames are skipped while the previous one is still
+   * being analyzed, so this is a ceiling; small photos keep it near 3–5 fps.
    */
-  nativeFrameIntervalMs: 350,
+  nativeFrameIntervalMs: 200,
+  /**
+   * Smallest photo side worth capturing. The analyzer downscales to
+   * `nativeDetectMaxSide` anyway; full 12 MP photos made capture ~1–2 fps,
+   * too slow to see a normal blink.
+   */
+  nativePictureMinSide: 640,
   /** Wait after onCameraReady before takePicture — photo output dims need a beat after Allow. */
   nativeCameraSettleMs: 1200,
   /** Warm restart: camera already running, so settle can be much shorter. */

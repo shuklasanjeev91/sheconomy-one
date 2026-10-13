@@ -74,7 +74,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     createFaceQualitySmoother(FACE_QUALITY.webWindow, FACE_QUALITY.webMinHits),
   )
   const qualityTallyRef = useRef(createFaceQualityTally())
-  /** Survives start() so quality retries cannot loop forever within one sheet. */
+  /** Survives start() so quality retries cannot loop forever; only Reset clears it. */
   const qualityRetriesRef = useRef(0)
   /** 'gender' is the follow-up round: blinks are done, we only need more reads. */
   const samplingModeRef = useRef<'blink' | 'gender'>('blink')
@@ -365,7 +365,9 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
               ? 'Hold still — look at the camera'
               : eyesClosed
                 ? 'Open your eyes'
-                : `Blink slowly — ${remaining} left`,
+                : remaining === 1
+                  ? 'Now blink once'
+                  : `Now blink — ${remaining} left`,
           )
           await new Promise((r) => setTimeout(r, 16))
           continue
@@ -480,7 +482,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         if (loopGenerationRef.current !== generation) return
 
         setPhase('camera')
-        setInstruction('Center your face, then blink slowly')
+        setInstruction('Center your face in the circle')
         loopActiveRef.current = true
         void runDetectionLoop()
       } catch (cameraError) {
@@ -537,6 +539,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     setError(null)
     setPhase('idle')
     setInstruction('Start when you are ready')
+    qualityRetriesRef.current = 0
     blinkTrackerRef.current = createBlinkTracker()
     earCalibratorRef.current = createEarCalibrator()
     stableFramesRef.current = 0

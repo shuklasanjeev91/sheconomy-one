@@ -66,6 +66,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const blinkTrackerRef = useRef(createBlinkTracker())
   const earCalibratorRef = useRef(createEarCalibrator())
   const stableFramesRef = useRef(0)
+  /** When the blink prompt first showed, to suggest a slower blink if none is seen. */
+  const blinkPromptAtRef = useRef<number | null>(null)
   const liveSamplesRef = useRef<number[]>([])
   const realSamplesRef = useRef<number[]>([])
   const genderSamplesRef = useRef<GenderSample[]>([])
@@ -73,7 +75,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     createFaceQualitySmoother(FACE_QUALITY.nativeWindow, FACE_QUALITY.nativeMinHits),
   )
   const qualityTallyRef = useRef(createFaceQualityTally())
-  /** Survives start() so quality retries cannot loop forever within one sheet. */
+  /** Survives start() so quality retries cannot loop forever; only Reset clears it. */
   const qualityRetriesRef = useRef(0)
   const frameSeqRef = useRef(0)
   /** 'gender' is the follow-up round: blinks are done, we only need more reads. */
@@ -389,13 +391,19 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
 
       const remaining = Math.max(0, GENDER_VERIFICATION.requiredBlinks - tracker.count)
       if (remaining > 0) {
-        // The camera samples ~1–2 fps here; a quick blink falls between frames.
+        if (blink?.calibrated && blinkPromptAtRef.current == null) blinkPromptAtRef.current = Date.now()
+        // A very quick blink can still fall between photos; only then ask for a slower one.
+        const waitedLong =
+          blinkPromptAtRef.current != null &&
+          Date.now() - blinkPromptAtRef.current > GENDER_VERIFICATION.blinkSlowerHintMs
         setInstruction(
           !blink?.calibrated
             ? 'Hold still — look at the camera'
-            : eyesClosed
-              ? 'Now open your eyes'
-              : `Close your eyes for 2 seconds, then open — ${remaining} left`,
+            : waitedLong
+              ? 'Blink a little slower'
+              : remaining === 1
+                ? 'Now blink once'
+                : `Now blink — ${remaining} left`,
         )
         return
       }
@@ -428,7 +436,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const startCaptureLoop = useCallback(() => {
     if (loopActiveRef.current) return
     loopActiveRef.current = true
-    setInstruction('Center your face, then blink slowly')
+    setInstruction('Center your face in the circle')
     intervalRef.current = setInterval(() => {
       void processFrame()
     }, GENDER_VERIFICATION.nativeFrameIntervalMs)
@@ -537,6 +545,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     blinkTrackerRef.current = createBlinkTracker()
     earCalibratorRef.current = createEarCalibrator()
     stableFramesRef.current = 0
+    blinkPromptAtRef.current = null
     liveSamplesRef.current = []
     realSamplesRef.current = []
     genderSamplesRef.current = []
@@ -596,7 +605,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       setPhase('camera')
       if (cameraReadyRef.current) {
         // Camera stayed mounted (or finished warming during session create).
-        setInstruction('Center your face, then blink slowly')
+        setInstruction('Center your face in the circle')
         scheduleCaptureLoop(
           cameraAlreadyReady
             ? GENDER_VERIFICATION.nativeCameraResettleMs
@@ -650,9 +659,11 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     setError(null)
     setPhase('idle')
     setInstruction('Start when you are ready')
+    qualityRetriesRef.current = 0
     blinkTrackerRef.current = createBlinkTracker()
     earCalibratorRef.current = createEarCalibrator()
     stableFramesRef.current = 0
+    blinkPromptAtRef.current = null
     liveSamplesRef.current = []
     realSamplesRef.current = []
     genderSamplesRef.current = []

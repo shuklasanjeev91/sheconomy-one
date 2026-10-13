@@ -598,6 +598,11 @@ export function getMeetingStageCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
   .sheconomy-tile-menu[data-open='true'] .sheconomy-tile-menu-trigger {
     opacity: 1;
   }
+  @media (hover: none) {
+    .sheconomy-tile-menu-trigger {
+      opacity: 1;
+    }
+  }
   .sheconomy-tile-menu-popover {
     position: absolute;
     top: 34px;

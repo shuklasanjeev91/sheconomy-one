@@ -25,7 +25,7 @@ import {
 
 type EffectMediaStreamTrack = MediaStreamTrack & {
   _setVideoEffects(names: string[]): void
-  getSettings?: () => { width?: number; height?: number }
+  getSettings?: () => { width?: number; height?: number; facingMode?: string }
   applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>
 }
 
@@ -70,9 +70,11 @@ async function maybeApplyCapture(
   track: EffectMediaStreamTrack,
   target: { width: number; height: number; frameRate: number },
 ) {
-  if (Platform.OS === 'android' && !captureNeedsUpdate(track.getSettings?.(), target)) return
+  const settings = track.getSettings?.()
+  if (!captureNeedsUpdate(settings, target)) return
   try {
-    await track.applyConstraints?.(target)
+    // iOS applyConstraints falls back to the front camera when facingMode is missing.
+    await track.applyConstraints?.(settings?.facingMode ? { ...target, facingMode: settings.facingMode } : target)
   } catch {
     // Keep the current camera rather than restarting into a frozen tile.
   }

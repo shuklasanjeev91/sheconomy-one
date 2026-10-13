@@ -75,10 +75,11 @@ describe('virtual background preferences', () => {
     expect(virtualBackgroundUnavailableMessage('native')).toContain('camera stays unfiltered')
   })
 
-  it('uses a soft matte curve instead of a hard person cutout', () => {
+  it('uses a soft matte edge but drops the low-confidence halo around the person', () => {
     expect(personMatteAlpha(0.05)).toBe(0)
-    expect(personMatteAlpha(0.42)).toBeGreaterThan(0.4)
-    expect(personMatteAlpha(0.42)).toBeLessThan(0.6)
+    expect(personMatteAlpha(0.35)).toBe(0)
+    expect(personMatteAlpha(0.6)).toBeGreaterThan(0.4)
+    expect(personMatteAlpha(0.6)).toBeLessThan(0.6)
     expect(personMatteAlpha(0.9)).toBe(1)
   })
 

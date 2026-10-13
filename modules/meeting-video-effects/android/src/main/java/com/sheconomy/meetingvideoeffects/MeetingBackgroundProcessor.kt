@@ -38,9 +38,11 @@ private const val MAX_PROCESS_WIDTH = 960
 private const val MASK_WIDTH = 320
 private const val MIN_PROCESS_INTERVAL_MS = 140L
 private const val CIRCUIT_OPEN_MS = 3_000L
-private const val MATTE_LOW_CONFIDENCE = 0.12f
-private const val MATTE_HIGH_CONFIDENCE = 0.72f
-private const val TEMPORAL_MATTE_BLEND = 0.68f
+/** Below this is background: a lower floor kept the halo where the real room showed through. */
+private const val MATTE_LOW_CONFIDENCE = 0.40f
+private const val MATTE_HIGH_CONFIDENCE = 0.80f
+/** Weight of the previous matte. Higher values left a ghost trail when the person moved. */
+private const val TEMPORAL_MATTE_BLEND = 0.25f
 
 private class MeetingBackgroundProcessor(private val context: Context) : VideoFrameProcessor {
   private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager

@@ -102,7 +102,6 @@ export function MediasoupParticipantTile({
   const micMuted = !isScreen && !participant.isMicrophoneEnabled
   const videoTrack = stopRemoteCamera ? null : (trackRef.publication?.track ?? null)
   const cameraOff = !isScreen && !videoTrack
-  const profileOpenable = !isScreen && !!onOpenProfile
 
   useEffect(() => {
     if (isScreen || participant.isLocal || !trackRef.publication) return
@@ -124,8 +123,9 @@ export function MediasoupParticipantTile({
         isPinned,
         isSpotlighted,
         handRaised,
+        canViewProfile: !!onOpenProfile,
       }),
-    [handRaised, isPinned, isScreen, isSelf, isSpotlighted, tileHostActions?.canModerate],
+    [handRaised, isPinned, isScreen, isSelf, isSpotlighted, onOpenProfile, tileHostActions?.canModerate],
   )
 
   const mirrored = shouldMirrorMeetingVideo({
@@ -171,26 +171,6 @@ export function MediasoupParticipantTile({
       data-lk-speaking={isSpeaking ? 'true' : 'false'}
       data-lk-video-muted={cameraOff ? 'true' : 'false'}
       data-lk-local-participant={participant.isLocal ? 'true' : 'false'}
-      role={profileOpenable ? 'button' : undefined}
-      tabIndex={profileOpenable ? 0 : undefined}
-      onClick={
-        profileOpenable
-          ? (event) => {
-              event.stopPropagation()
-              onOpenProfile?.(identity)
-            }
-          : undefined
-      }
-      onKeyDown={
-        profileOpenable
-          ? (event) => {
-              if (event.key !== 'Enter' && event.key !== ' ') return
-              event.preventDefault()
-              event.stopPropagation()
-              onOpenProfile?.(identity)
-            }
-          : undefined
-      }
     >
       {videoTrack ? (
         <MediasoupVideoElement
@@ -282,6 +262,10 @@ export function MediasoupParticipantTile({
                   onClick={(event) => {
                     event.stopPropagation()
                     setMenuOpen(false)
+                    if (action === 'view_profile') {
+                      onOpenProfile?.(identity)
+                      return
+                    }
                     if (action === 'pin' || action === 'unpin') {
                       togglePinnedUserId(identity)
                       return

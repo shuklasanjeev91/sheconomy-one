@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import { useCallback, useRef, useState, type RefObject } from 'react'
 import { Platform, StyleSheet, useWindowDimensions } from 'react-native'
 import type { CameraView } from 'expo-camera'
 import { CameraView as ExpoCameraView } from 'expo-camera'
@@ -9,7 +9,12 @@ import {
   type NativeFaceAnalyzerHandle,
 } from '~/components/gender-verification/NativeFaceAnalyzer'
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
-import type { FaceTrackingStatus, VerificationPhase } from '~/lib/gender-verification'
+import {
+  GENDER_VERIFICATION,
+  pickAnalysisPictureSize,
+  type FaceTrackingStatus,
+  type VerificationPhase,
+} from '~/lib/gender-verification'
 import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
 
 type FaceCaptureOverlayProps = {
@@ -71,6 +76,31 @@ export function FaceCaptureOverlay({
   const ui = useAppUi()
   const hintColor = useIsDarkTheme() ? '#fbbf24' : '#b45309'
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
+  const [pictureSize, setPictureSize] = useState<string | undefined>()
+  const pictureSizeCheckedRef = useRef(false)
+
+  // Pick the small photo size before the capture loop starts: changing it later
+  // reconfigures the camera session while photos are being taken.
+  const handleCameraReady = useCallback(() => {
+    if (pictureSizeCheckedRef.current) {
+      onCameraReady?.()
+      return
+    }
+    pictureSizeCheckedRef.current = true
+    const camera = cameraRef?.current
+    if (!camera) {
+      onCameraReady?.()
+      return
+    }
+    void camera
+      .getAvailablePictureSizesAsync()
+      .then((sizes) => {
+        const size = pickAnalysisPictureSize(sizes, GENDER_VERIFICATION.nativePictureMinSide)
+        if (size) setPictureSize(size)
+      })
+      .catch(() => {})
+      .finally(() => onCameraReady?.())
+  }, [cameraRef, onCameraReady])
   // Keep the preview mounted through error so Try again doesn't remount the
   // camera and land on a black "Preparing camera…" frame.
   const showCamera =
@@ -118,7 +148,8 @@ export function FaceCaptureOverlay({
               mode="picture"
               mirror
               animateShutter={false}
-              onCameraReady={onCameraReady}
+              pictureSize={pictureSize}
+              onCameraReady={handleCameraReady}
             />
           ) : (
             <YStack flex={1} alignItems="center" justifyContent="center" gap="$3" padding="$5">
@@ -241,7 +272,7 @@ export function FaceCaptureOverlay({
           <YStack width="100%" gap="$2">
             <XStack justifyContent="space-between" alignItems="center">
               <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
-                Liveness blinks
+                {requiredBlinks === 1 ? 'Blink' : 'Blinks'}
               </Text>
               <Text fontSize={12} fontWeight="800" color={ui.text}>
                 {blinkCount}/{requiredBlinks}

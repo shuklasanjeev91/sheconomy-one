@@ -98,6 +98,7 @@ export function NativeVideoTileChrome({
       isPinned,
       isSpotlighted,
       handRaised,
+      canViewProfile: !!onOpenProfile,
     })
     if (actions.length === 0) return
     Alert.alert(
@@ -107,6 +108,10 @@ export function NativeVideoTileChrome({
         ...actions.map((action) => ({
           text: meetingTileActionLabel(action),
           onPress: () => {
+            if (action === 'view_profile') {
+              onOpenProfile?.()
+              return
+            }
             if (action === 'pin' || action === 'unpin') {
               togglePinnedUserId(identity)
               return
@@ -132,7 +137,7 @@ export function NativeVideoTileChrome({
 
   return (
     <Pressable
-      onPress={!isScreen && onOpenProfile ? onOpenProfile : triggerStageTap}
+      onPress={triggerStageTap}
       onLongPress={openTileMenu}
       delayLongPress={420}
       style={{ width, height, maxWidth: '100%' }}

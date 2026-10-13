@@ -133,11 +133,7 @@ export function NativeMeetingVideoStageView<T extends MeetingStageTrack>({
     breakpoint: layout.breakpoint,
   })
   const pipTrack = layoutState.pipTrack
-  const [pipSwapped, setPipSwapped] = useState(false)
-  useEffect(() => {
-    if (!pipTrack) setPipSwapped(false)
-  }, [pipTrack])
-  const floatingTrack = pipTrack ? (pipSwapped ? layoutState.stageTracks[0] : pipTrack) : undefined
+  const floatingTrack = pipTrack ?? undefined
   const filmstripTracks = layoutState.filmstripTracks
   // Virtualized filmstrip: only tiles scrolled into view get camera subscriptions.
   const [filmstripVisibleIds, setFilmstripVisibleIds] = useState<string[] | null>(null)
@@ -222,9 +218,8 @@ export function NativeMeetingVideoStageView<T extends MeetingStageTrack>({
     stageTrailingInset,
   })
   const stageTracks = useMemo(() => {
-    if (galleryMode) return layoutState.stageTracks
-    return pipTrack && pipSwapped ? [pipTrack] : layoutState.stageTracks
-  }, [galleryMode, layoutState.stageTracks, pipSwapped, pipTrack])
+    return layoutState.stageTracks
+  }, [layoutState.stageTracks])
   // One screen holds `pageSize` tiles; the rest continue below and scroll in.
   const minTileHeight = layout.policy === 'landscape-phone' ? 72 : 100
   const gallery = meetingGalleryScrollLayout(stageTracks.length, {
@@ -450,10 +445,10 @@ export function NativeMeetingVideoStageView<T extends MeetingStageTrack>({
 
           {floatingTrack ? (
             <NativeFloatingVideoTile
+              key={`${stageTrackKey(floatingTrack)}-floating`}
               trackRef={floatingTrack}
               areaWidth={mainWidth}
               areaHeight={mainHeight}
-              onSwap={() => setPipSwapped((swapped) => !swapped)}
               localScreenShareActive={isLocalScreenSharing}
               mirrorLocalVideo={selfViewMirror}
               hdVideo={hdVideoPref}
@@ -642,12 +637,11 @@ export function NativeMeetingVideoStageView<T extends MeetingStageTrack>({
   )
 }
 
-/** Zoom-style 1:1 self-view: drag to any corner, tap to swap with the main video. */
+/** Zoom-style 1:1 self-view: drag to any corner without promoting it into the stage. */
 function NativeFloatingVideoTile<T extends MeetingStageTrack>({
   trackRef,
   areaWidth,
   areaHeight,
-  onSwap,
   localScreenShareActive,
   mirrorLocalVideo,
   hdVideo,
@@ -658,12 +652,12 @@ function NativeFloatingVideoTile<T extends MeetingStageTrack>({
   renderTile: (props: NativeStageTileProps<T>) => ReactNode
   areaWidth: number
   areaHeight: number
-  onSwap: () => void
   localScreenShareActive: boolean
   mirrorLocalVideo: boolean
   hdVideo: boolean
   activeSpeaker: boolean
 }) {
+  const { triggerStageTap } = useMeetingLiveSignals()
   const tile = meetingFloatingTileSize({ width: areaWidth, height: areaHeight })
   const area = { width: areaWidth, height: areaHeight }
   const [corner, setCorner] = useState<MeetingFloatingCorner>('bottom-right')
@@ -671,8 +665,8 @@ function NativeFloatingVideoTile<T extends MeetingStageTrack>({
     new Animated.ValueXY(meetingFloatingCornerOrigin('bottom-right', area, tile)),
   ).current
   const dragOriginRef = useRef({ x: 0, y: 0 })
-  const latest = useRef({ area, tile, corner, onSwap })
-  latest.current = { area, tile, corner, onSwap }
+  const latest = useRef({ area, tile, corner })
+  latest.current = { area, tile, corner }
 
   const snapTo = (next: MeetingFloatingCorner) => {
     const { area: currentArea, tile: currentTile } = latest.current
@@ -710,7 +704,7 @@ function NativeFloatingVideoTile<T extends MeetingStageTrack>({
           const current = latest.current
           if (Math.hypot(gesture.dx, gesture.dy) < MEETING_FLOATING_DRAG_SLOP) {
             snapTo(current.corner)
-            current.onSwap()
+            triggerStageTap()
             return
           }
           const origin = dragOriginRef.current
@@ -727,14 +721,12 @@ function NativeFloatingVideoTile<T extends MeetingStageTrack>({
         onPanResponderTerminate: () => snapTo(latest.current.corner),
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [position],
+    [position, triggerStageTap],
   )
 
   return (
     <Animated.View
       {...panResponder.panHandlers}
-      accessibilityRole="button"
-      accessibilityLabel="Swap video with the main view"
       style={{
         position: 'absolute',
         left: 0,

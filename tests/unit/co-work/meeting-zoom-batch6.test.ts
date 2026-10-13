@@ -46,6 +46,33 @@ describe('Zoom parity batch 6 — tile menus, lower hand, security, badges', () 
     expect(meetingTileActionLabel('spotlight')).toMatch(/spotlight/i)
   })
 
+  it('puts View profile first in the tile menu when a profile can open', () => {
+    expect(
+      meetingTileMenuActions({
+        isSelf: false,
+        canModerate: false,
+        isPinned: false,
+        isSpotlighted: false,
+        handRaised: false,
+        canViewProfile: true,
+      }),
+    ).toEqual(['view_profile', 'pin'])
+
+    expect(
+      meetingTileMenuActions({
+        isSelf: false,
+        isScreen: true,
+        canModerate: false,
+        isPinned: false,
+        isSpotlighted: false,
+        handRaised: false,
+        canViewProfile: true,
+      }),
+    ).toEqual([])
+
+    expect(meetingTileActionLabel('view_profile')).toBe('View profile')
+  })
+
   it('toggles pinned identities with a max of three', () => {
     let pins: string[] = []
     pins = togglePinnedIdentity(pins, 'a')

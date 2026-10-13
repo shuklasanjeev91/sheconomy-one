@@ -1,8 +1,10 @@
 /**
- * Zoom-style per-tile menu actions (pin / spotlight / lower hand).
+ * Zoom-style per-tile menu actions (profile / pin / spotlight / lower hand).
+ * Profile lives here because a plain tap on a tile toggles the meeting controls.
  */
 
 export type MeetingTileActionKey =
+  | 'view_profile'
   | 'pin'
   | 'unpin'
   | 'spotlight'
@@ -16,9 +18,12 @@ export function meetingTileMenuActions(input: {
   isPinned: boolean
   isSpotlighted: boolean
   handRaised: boolean
+  canViewProfile?: boolean
 }): MeetingTileActionKey[] {
   if (input.isScreen) return []
   const actions: MeetingTileActionKey[] = []
+
+  if (input.canViewProfile) actions.push('view_profile')
 
   // Anyone can pin/unpin locally (including self).
   actions.push(input.isPinned ? 'unpin' : 'pin')
@@ -46,6 +51,8 @@ export function resolveParticipantsToolbarBadge(input: {
 
 export function meetingTileActionLabel(key: MeetingTileActionKey): string {
   switch (key) {
+    case 'view_profile':
+      return 'View profile'
     case 'pin':
       return 'Pin'
     case 'unpin':

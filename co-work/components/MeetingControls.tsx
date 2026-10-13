@@ -443,6 +443,48 @@ function ControlButton({
   )
 }
 
+/**
+ * Phone dock row. When every control fits, lay them out in one evenly spaced row
+ * (a scroll view with a `100%` min width sized to the whole bar and hid More
+ * under Leave). Only very narrow screens scroll, with Leave pinned on the right.
+ */
+function PhoneDock({
+  scroll,
+  gap,
+  end,
+  children,
+}: {
+  scroll: boolean
+  gap: number
+  end: ReactNode
+  children: ReactNode
+}) {
+  if (!scroll) {
+    return (
+      <XStack width="100%" alignItems="flex-end" justifyContent="space-between">
+        {children}
+        {end}
+      </XStack>
+    )
+  }
+  return (
+    <XStack width="100%" alignItems="flex-end" gap={gap}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+        bounces={false}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ alignItems: 'flex-end', gap, paddingHorizontal: 2 }}
+      >
+        {children}
+      </ScrollView>
+      {end}
+    </XStack>
+  )
+}
+
 function OverflowItem({
   label,
   icon: Icon,
@@ -1392,15 +1434,19 @@ export function MeetingControls({
   const centerKeys = roomy
     ? mediaKeys
     : mediaKeys.filter((key) => key !== 'mic' && key !== 'camera')
-  const phoneActionCount =
-    4 +
-    (caps.supportsVideo !== false ? 1 : 0) +
-    (primaryKeys.includes('share_screen') ? 1 : 0) +
-    (primaryKeys.includes('reactions') && onToggleReactions ? 1 : 0)
-  const phoneControlWidth = windowWidth < 360 ? 52 : windowWidth < 390 ? 56 : 60
+  const phoneDockWidth = windowWidth - 42
   const phoneControlGap = windowWidth < 360 ? 3 : 5
+  const phoneSlotWidth = (count: number) =>
+    Math.floor((phoneDockWidth - (count - 1) * phoneControlGap) / count)
+  const phoneFixedCount =
+    4 + (caps.supportsVideo !== false ? 1 : 0) + (primaryKeys.includes('share_screen') ? 1 : 0)
+  // Reactions are also in the More sheet, so drop them before More gets pushed off-screen.
+  const phoneShowReactions =
+    primaryKeys.includes('reactions') && !!onToggleReactions && phoneSlotWidth(phoneFixedCount + 1) >= 54
+  const phoneActionCount = phoneFixedCount + (phoneShowReactions ? 1 : 0)
+  const phoneControlWidth = Math.max(44, Math.min(60, phoneSlotWidth(phoneActionCount)))
   const phoneDockNeedsScroll =
-    !roomy && phoneActionCount * phoneControlWidth + (phoneActionCount - 1) * phoneControlGap > windowWidth - 42
+    !roomy && phoneActionCount * phoneControlWidth + (phoneActionCount - 1) * phoneControlGap > phoneDockWidth
 
   return (
     <YStack
@@ -1600,22 +1646,21 @@ export function MeetingControls({
               </XStack>
             </>
           ) : (
-            <XStack width="100%" alignItems="flex-end" gap={phoneControlGap}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled
-                bounces={false}
-                style={{ flex: 1 }}
-                contentContainerStyle={{
-                  alignItems: 'flex-end',
-                  justifyContent: phoneDockNeedsScroll ? 'flex-start' : 'space-between',
-                  gap: phoneControlGap,
-                  minWidth: phoneDockNeedsScroll ? undefined : '100%',
-                  paddingHorizontal: phoneDockNeedsScroll ? 2 : 0,
-                }}
-              >
+            <PhoneDock
+              scroll={phoneDockNeedsScroll}
+              gap={phoneControlGap}
+              end={
+                <ControlButton
+                  label={isHost || showEnd ? 'End' : 'Leave'}
+                  icon={Icons.X}
+                  variant="danger"
+                  onPress={() => setEndDialogOpen(true)}
+                  compact={compact}
+                  minWidth={phoneControlWidth}
+                  maxWidth={phoneControlWidth}
+                />
+              }
+            >
                 <ControlButton
                   label={primaryLabel('mic')}
                   icon={audioEnabled ? Icons.Mic : Icons.MicOff}
@@ -1659,7 +1704,7 @@ export function MeetingControls({
                   minWidth={phoneControlWidth}
                   maxWidth={phoneControlWidth}
                 />
-                {primaryKeys.includes('reactions') && onToggleReactions ? (
+                {phoneShowReactions ? (
                   <ControlButton
                     label={primaryLabel('reactions')}
                     icon={Icons.Smile}
@@ -1715,17 +1760,7 @@ export function MeetingControls({
                     maxWidth={phoneControlWidth}
                   />
                 </YStack>
-              </ScrollView>
-              <ControlButton
-                label={isHost || showEnd ? 'End' : 'Leave'}
-                icon={Icons.X}
-                variant="danger"
-                onPress={() => setEndDialogOpen(true)}
-                compact={compact}
-                minWidth={phoneControlWidth}
-                maxWidth={phoneControlWidth}
-              />
-            </XStack>
+            </PhoneDock>
           )}
         </XStack>
       </YStack>

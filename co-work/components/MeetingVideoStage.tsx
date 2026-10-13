@@ -180,7 +180,6 @@ export function MeetingVideoStageView<T extends MeetingStageTrack>({
     isLocalScreenSharing,
   } = gallery
   const stageRef = useRef<HTMLDivElement | null>(null)
-  const [pipSwapped, setPipSwapped] = useState(false)
   const [pipCorner, setPipCorner] = useState<MeetingFloatingCorner>('bottom-right')
   const [pipDragOffset, setPipDragOffset] = useState<{ x: number; y: number } | null>(null)
   const pipPointerRef = useRef<{
@@ -189,14 +188,9 @@ export function MeetingVideoStageView<T extends MeetingStageTrack>({
     startY: number
     moved: boolean
   } | null>(null)
-  useEffect(() => {
-    if (!pipTrack) setPipSwapped(false)
-  }, [pipTrack])
   const floatingTracks = useMemo(() => {
-    if (!pipTrack) return []
-    const floating = pipSwapped ? stageTracks[0] : pipTrack
-    return floating ? [floating] : []
-  }, [pipSwapped, pipTrack, stageTracks])
+    return pipTrack ? [pipTrack] : []
+  }, [pipTrack])
   const [filmstripWidth, setFilmstripWidth] = useState(uiLayout.filmstripWidth)
   const [filmstripOffset, setFilmstripOffset] = useState({ x: 0, y: 0 })
   const [screenShareBannerVisible, setScreenShareBannerVisible] = useState(false)
@@ -269,8 +263,8 @@ export function MeetingVideoStageView<T extends MeetingStageTrack>({
     : { start: 0, end: stageTracks.length, visibleStart: 0, visibleEnd: stageTracks.length }
   const mainStageTracks = useMemo(() => {
     if (galleryModeEarly) return stageTracks.slice(galleryWindow.start, galleryWindow.end)
-    return pipTrack && pipSwapped ? [pipTrack] : stageTracks
-  }, [galleryModeEarly, galleryWindow.end, galleryWindow.start, pipSwapped, pipTrack, stageTracks])
+    return stageTracks
+  }, [galleryModeEarly, galleryWindow.end, galleryWindow.start, stageTracks])
 
   const filmstripMounted = filmstripTracks.length > 0 && !state.participantStripMinimized
   const filmstripScroll = useScrollMetrics(filmstripBesideEarly, filmstripMounted)
@@ -576,7 +570,7 @@ export function MeetingVideoStageView<T extends MeetingStageTrack>({
     pipPointerRef.current = null
     setPipDragOffset(null)
     if (!pointer.moved) {
-      setPipSwapped((swapped) => !swapped)
+      triggerStageTap()
       return
     }
     const rect = stageRef.current?.getBoundingClientRect()
@@ -664,8 +658,6 @@ export function MeetingVideoStageView<T extends MeetingStageTrack>({
       {floatingTracks.length > 0 ? (
         <div
           className="sheconomy-video-pip"
-          role="button"
-          aria-label={pipSwapped ? 'Show the other participant full screen' : 'Show yourself full screen'}
           style={{
             width: pipWidth,
             height: pipHeight,

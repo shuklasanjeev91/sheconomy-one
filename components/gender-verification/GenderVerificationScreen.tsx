@@ -110,8 +110,9 @@ export function GenderVerificationScreen() {
               Confirm it&apos;s you
             </Text>
             <Text fontSize={15} color={ui.textMuted} textAlign="center" lineHeight={22} maxWidth={420}>
-              Optional check — center your face and blink slowly {verification.requiredBlinks}{' '}
-              times to unlock Community, Chat, and Create store. Your video stays on this device. Skip
+              Optional check — look at the camera and blink{' '}
+              {verification.requiredBlinks === 1 ? 'once' : `${verification.requiredBlinks} times`} to
+              unlock Community, Chat, and Create store. Your video stays on this device. Skip
               anytime to keep using Commerce, Classes, and Co-Work.
             </Text>
             <YStack

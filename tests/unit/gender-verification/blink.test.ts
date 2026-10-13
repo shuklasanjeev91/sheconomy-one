@@ -163,21 +163,21 @@ describe('blink liveness across platforms', () => {
     expect(r.firstPassAt!).toBeLessThan(4000)
   })
 
-  it.each([700, 1000, 1500])(
-    'native (a photo every %i ms) counts the "close your eyes for 2 seconds" blink',
+  it.each([200, 250, 300])(
+    'native (a photo every %i ms) counts one ordinary 300 ms blink',
     (frameMs) => {
       const r = simulate({
         frameMs,
-        closedMs: 2000,
-        periodMs: 4500,
-        durationMs: 20000,
+        closedMs: 300,
+        periodMs: 3000,
+        durationMs: 10000,
         openEar: 0.315,
         closedEar: 0.153,
         calibrationSamples: GENDER_VERIFICATION.nativeEarCalibrationSamples,
         maxClosedMs: GENDER_VERIFICATION.nativeMaxClosedMs,
       })
       expect(r.firstPassAt).not.toBeNull()
-      expect(r.firstPassAt!).toBeLessThan(15000)
+      expect(r.firstPassAt!).toBeLessThan(4000)
     },
   )
 

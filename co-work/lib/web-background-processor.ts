@@ -9,9 +9,11 @@ const SELFIE_MODEL_URL =
 /** Segmentation input width; the mask is upscaled with smoothing. */
 const SEGMENT_WIDTH = 384
 const OUTPUT_FPS = 24
-const MATTE_LOW_CONFIDENCE = 0.12
-const MATTE_HIGH_CONFIDENCE = 0.72
-const TEMPORAL_MATTE_BLEND = 0.72
+/** Below this is background: a lower floor kept the halo where the real room showed through. */
+const MATTE_LOW_CONFIDENCE = 0.4
+const MATTE_HIGH_CONFIDENCE = 0.8
+/** Weight of the previous matte. Higher values left a ghost trail when the person moved. */
+const TEMPORAL_MATTE_BLEND = 0.25
 const MATTE_SPATIAL_RADIUS = 1
 
 export type WebBackgroundOptions =

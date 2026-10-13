@@ -3,7 +3,7 @@
     "name": "SHEconomy",
     "slug": "sheconomy",
     "owner": "sheconomy",
-    "version": "6.1.6",
+    "version": "6.1.7",
     "scheme": "sheconomy",
     "newArchEnabled": true,
     "platforms": [
