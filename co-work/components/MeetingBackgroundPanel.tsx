@@ -102,7 +102,11 @@ export function MeetingBackgroundPanel({
           // Give the SFU a beat to publish the camera track before attaching effects.
           await new Promise((resolve) => setTimeout(resolve, 450))
         }
-        const resolved = await resolveVirtualBackgroundSelection(value)
+        const withFilter =
+          effects.selection.filter && effects.selection.filter !== 'none'
+            ? { ...value, filter: effects.selection.filter }
+            : value
+        const resolved = await resolveVirtualBackgroundSelection(withFilter)
         if (resolved.mode === 'image' && !resolved.imageUrl) {
           toast.show('Background not applied', {
             tone: 'danger',

@@ -13,6 +13,8 @@ import {
   loadVirtualBackgroundPreference,
   normalizeVirtualBackground,
   saveVirtualBackgroundPreference,
+  videoEffectIsActive,
+  videoFilterCss,
   virtualBackgroundUnavailableMessage,
   webBackgroundResourceWarning,
 } from '~/co-work/lib/virtual-backgrounds'
@@ -24,6 +26,18 @@ describe('virtual background preferences', () => {
   it('falls back to off for malformed or incomplete preferences', () => {
     expect(normalizeVirtualBackground(null)).toEqual({ mode: 'off' })
     expect(normalizeVirtualBackground({ mode: 'image' })).toEqual({ mode: 'off' })
+  })
+
+  it('keeps a color filter when the background is off and drops unknown grades', () => {
+    expect(normalizeVirtualBackground({ mode: 'off', filter: 'warm' })).toEqual({
+      mode: 'off',
+      filter: 'warm',
+    })
+    expect(normalizeVirtualBackground({ mode: 'blur', blurRadius: 12, filter: 'sepia' }).filter).toBeUndefined()
+    expect(videoEffectIsActive({ mode: 'off', filter: 'mono' })).toBe(true)
+    expect(videoEffectIsActive({ mode: 'off' })).toBe(false)
+    expect(videoFilterCss('vivid')).toContain('saturate')
+    expect(videoFilterCss('none')).toBe('none')
   })
 
   it('clamps blur strength to the supported range', () => {

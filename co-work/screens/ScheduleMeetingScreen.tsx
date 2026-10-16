@@ -37,6 +37,14 @@ import { openMailtoLink } from '~/lib/platform/openMailto'
 import { useProfile } from '~/hooks/useProfile'
 
 import { BRAND_NAME } from '~/config/brand'
+import {
+  MEETING_TEMPLATES,
+  agendaFromTemplate,
+  emptyMeetingStudio,
+  withSkippedDate,
+  type MeetingTemplateId,
+} from '~/co-work/lib/meeting-studio'
+import { RnPressable as Pressable } from '~/co-work/components/RnPressable'
 
 const MEETING_DRAFT_KEY = 'cowork-schedule-meeting'
 
@@ -88,6 +96,10 @@ export function ScheduleMeetingScreen() {
   const [autoRecord, setAutoRecord] = useState(false)
   const [captionsEnabled, setCaptionsEnabled] = useState(false)
   const [isRecurring, setIsRecurring] = useState(false)
+  const [templateId, setTemplateId] = useState<MeetingTemplateId | null>(null)
+  const [waitingRoomNote, setWaitingRoomNote] = useState('')
+  const [seriesScope, setSeriesScope] = useState<'series' | 'occurrence'>('series')
+  const [seedAgenda, setSeedAgenda] = useState(emptyMeetingStudio().agenda)
   const [repeat, setRepeat] = useState<MeetingRepeat>(null)
   const [invitees, setInvitees] = useState<MeetingInvitee[]>([])
   const [exportToCalendar, setExportToCalendar] = useState(true)
@@ -126,6 +138,9 @@ export function ScheduleMeetingScreen() {
     setAllowJoinBeforeHost(meeting.meeting_options?.allowJoinBeforeHost ?? false)
     setAutoRecord(meeting.meeting_options?.autoRecord ?? false)
     setCaptionsEnabled(meeting.meeting_options?.captionsEnabled ?? false)
+    setTemplateId(meeting.meeting_options?.templateId ?? null)
+    setWaitingRoomNote(meeting.meeting_options?.studio?.waitingRoomNote ?? '')
+    setSeedAgenda(meeting.meeting_options?.studio?.agenda ?? [])
     setIsRecurring(Boolean(meeting.is_recurring))
     setRepeat(meeting.repeat ?? null)
     setInvitees(meeting.invitees ?? [])
@@ -380,6 +395,13 @@ export function ScheduleMeetingScreen() {
       allowRecording,
       allowHandRaise,
     }
+    const studio = {
+      ...emptyMeetingStudio(),
+      ...(editMeeting?.meeting_options?.studio ?? {}),
+      agenda: seedAgenda,
+      waitingRoomNote: waitingRoomNote.trim(),
+      updatedAt: Date.now(),
+    }
     const meetingOptions = {
       layout: 'grid' as const,
       defaultVideo,
@@ -392,6 +414,21 @@ export function ScheduleMeetingScreen() {
         | 'manual',
       captionsEnabled,
       enableMeetingChat: allowChat,
+      templateId,
+      studio,
+      skippedDates: editMeeting?.meeting_options?.skippedDates,
+      occurrenceOverrides: editMeeting?.meeting_options?.occurrenceOverrides,
+    }
+    const thisDateOnly = isEditing && isRecurring && seriesScope === 'occurrence' && editMeeting
+    const seriesStartsAt = thisDateOnly ? editMeeting.scheduled_at || startsAt : startsAt
+    const seriesEndsAt = thisDateOnly ? editMeeting.scheduled_end_at || endsAt : endsAt
+    const seriesTitle = thisDateOnly ? editMeeting.title : title.trim()
+    if (thisDateOnly) {
+      const date = startsAt.slice(0, 10)
+      meetingOptions.occurrenceOverrides = [
+        ...(editMeeting.meeting_options?.occurrenceOverrides ?? []).filter((row) => row.date !== date),
+        { date, title: title.trim(), startsAt, endsAt },
+      ]
     }
 
     setSaving(true)
@@ -402,10 +439,10 @@ export function ScheduleMeetingScreen() {
             ? Date.parse(startsAt) > Date.now()
             : false
         const meeting = await updateMeetingSchedule(editMeeting.id, {
-          title: title.trim(),
+          title: seriesTitle,
           description: description.trim() || undefined,
-          scheduledAt: startsAt,
-          scheduledEndAt: endsAt,
+          scheduledAt: seriesStartsAt,
+          scheduledEndAt: seriesEndsAt,
           timeZone: zone,
           maxParticipants: capacity,
           isRecurring,
@@ -593,6 +630,116 @@ export function ScheduleMeetingScreen() {
             ...coworkBoxShadow(coworkShadows, 'card'),
           }}
         >
+          <ScheduleSection title="Template">
+            <XStack gap="$2" flexWrap="wrap">
+              {MEETING_TEMPLATES.map((template) => {
+                const selected = templateId === template.id
+                return (
+                  <Pressable
+                    key={template.id}
+                    onPress={() => {
+                      setTemplateId(template.id)
+                      if (!title.trim()) setTitle(template.title)
+                      setDescription(template.description)
+                      setMuteOnJoin(template.muteOnJoin)
+                      setVideoOffOnJoin(template.videoOffOnJoin)
+                      setCaptionsEnabled(template.captionsEnabled)
+                      setWaitingRoom(template.waitingRoom)
+                      setSeedAgenda(agendaFromTemplate(template))
+                    }}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: selected ? coworkUi.brand : coworkUi.borderSoft,
+                      backgroundColor: selected ? coworkUi.brand : coworkUi.surfaceMuted,
+                    }}
+                  >
+                    <Text fontSize={13} fontWeight="700" color={selected ? '#fff' : coworkUi.text}>
+                      {template.label}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </XStack>
+            <Field label="Waiting room note">
+              <Input
+                value={waitingRoomNote}
+                onChangeText={setWaitingRoomNote}
+                placeholder="What people should know before they are admitted"
+                backgroundColor={coworkUi.surfaceMuted}
+                borderColor={coworkUi.borderSoft}
+                color={coworkUi.text}
+                borderRadius={14}
+              />
+            </Field>
+            {isEditing && isRecurring ? (
+              <YStack gap="$2">
+                <Text fontSize={13} fontWeight="700" color={coworkUi.text}>
+                  Apply changes to
+                </Text>
+                <XStack gap="$2">
+                  <Button
+                    tone={seriesScope === 'occurrence' ? 'primary' : 'outline'}
+                    size="$2"
+                    borderRadius={12}
+                    onPress={() => setSeriesScope('occurrence')}
+                  >
+                    This date
+                  </Button>
+                  <Button
+                    tone={seriesScope === 'series' ? 'primary' : 'outline'}
+                    size="$2"
+                    borderRadius={12}
+                    onPress={() => setSeriesScope('series')}
+                  >
+                    Entire series
+                  </Button>
+                </XStack>
+                <Button
+                  tone="ghost"
+                  size="$2"
+                  onPress={() => {
+                    if (!editMeeting?.scheduled_at) return
+                    const skipped = withSkippedDate(
+                      editMeeting.meeting_options?.skippedDates,
+                      editMeeting.scheduled_at,
+                    )
+                    setSaving(true)
+                    void updateMeetingSchedule(editMeeting.id, {
+                      title: editMeeting.title,
+                      scheduledAt: editMeeting.scheduled_at,
+                      scheduledEndAt:
+                        editMeeting.scheduled_end_at ||
+                        new Date(Date.parse(editMeeting.scheduled_at) + 60 * 60 * 1000).toISOString(),
+                      timeZone: coerceIanaTimeZone(editMeeting.time_zone || timeZone),
+                      isRecurring: true,
+                      repeat: editMeeting.repeat ?? repeat,
+                      meetingOptions: {
+                        ...(editMeeting.meeting_options ?? {}),
+                        skippedDates: skipped,
+                      },
+                    })
+                      .then(() => {
+                        toast.show('This date was skipped', { tone: 'success' })
+                        router.push(coWorkRoutes.home)
+                      })
+                      .catch((cause) =>
+                        toast.show('Could not skip this date', {
+                          tone: 'danger',
+                          message: cause instanceof Error ? cause.message : undefined,
+                        }),
+                      )
+                      .finally(() => setSaving(false))
+                  }}
+                >
+                  Skip this date
+                </Button>
+              </YStack>
+            ) : null}
+          </ScheduleSection>
+
           <ScheduleSection title="Details">
             <Field label="Title" error={fieldErrors.title || undefined} required>
               <Input

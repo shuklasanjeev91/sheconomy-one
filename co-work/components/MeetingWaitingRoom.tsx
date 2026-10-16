@@ -9,6 +9,8 @@ const LONG_WAIT_MS = 90_000
 type MeetingWaitingRoomProps = {
   meetingTitle: string
   meetingCode: string
+  hostName?: string
+  hostNote?: string
   hostPresent: boolean
   realtimeConnected: boolean
   realtimeDegraded: boolean
@@ -20,6 +22,8 @@ type MeetingWaitingRoomProps = {
 export function MeetingWaitingRoom({
   meetingTitle,
   meetingCode,
+  hostName,
+  hostNote,
   hostPresent,
   realtimeConnected,
   realtimeDegraded,
@@ -107,6 +111,16 @@ export function MeetingWaitingRoom({
           <Text color={coworkUi.brandLight} fontSize={16} fontWeight="700" textAlign="center">
             {meetingTitle}
           </Text>
+          {hostName ? (
+            <Text fontSize={13} color={coworkUi.textSecondary} textAlign="center">
+              Hosted by {hostName}
+            </Text>
+          ) : null}
+          {hostNote ? (
+            <Text fontSize={13} color={coworkUi.text} textAlign="center" lineHeight={20}>
+              {hostNote}
+            </Text>
+          ) : null}
         </YStack>
 
         {/* Connection status pill */}

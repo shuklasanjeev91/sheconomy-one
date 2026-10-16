@@ -1,6 +1,11 @@
 import type { ImageSegmenter } from '@mediapipe/tasks-vision'
 
-import type { VirtualBackgroundSelection } from '~/co-work/lib/virtual-backgrounds'
+import {
+  normalizeVideoFilter,
+  videoFilterCss,
+  type VideoFilterId,
+  type VirtualBackgroundSelection,
+} from '~/co-work/lib/virtual-backgrounds'
 
 const TASKS_VISION_VERSION = '0.10.14'
 const WASM_BASE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}/wasm`
@@ -17,18 +22,20 @@ const TEMPORAL_MATTE_BLEND = 0.25
 const MATTE_SPATIAL_RADIUS = 1
 
 export type WebBackgroundOptions =
-  | { mode: 'disabled' }
-  | { mode: 'blur'; blurRadius: number }
-  | { mode: 'image'; imageUrl: string }
+  | { mode: 'disabled'; filter?: VideoFilterId }
+  | { mode: 'blur'; blurRadius: number; filter?: VideoFilterId }
+  | { mode: 'image'; imageUrl: string; filter?: VideoFilterId }
 
 export function webBackgroundOptionsFor(selection: VirtualBackgroundSelection): WebBackgroundOptions {
+  const filter = normalizeVideoFilter(selection.filter)
+  const grade = filter === 'none' ? undefined : filter
   if (selection.mode === 'blur') {
-    return { mode: 'blur', blurRadius: selection.blurRadius ?? 12 }
+    return { mode: 'blur', blurRadius: selection.blurRadius ?? 12, filter: grade }
   }
   if (selection.mode === 'image' && selection.imageUrl) {
-    return { mode: 'image', imageUrl: selection.imageUrl }
+    return { mode: 'image', imageUrl: selection.imageUrl, filter: grade }
   }
-  return { mode: 'disabled' }
+  return { mode: 'disabled', filter: grade }
 }
 
 export type WebBackgroundProcessorEvents = {
@@ -153,6 +160,8 @@ export class WebBackgroundProcessor {
   private readonly segmentCanvas: HTMLCanvasElement
   private readonly maskCanvas: HTMLCanvasElement
   private readonly blurCanvas: HTMLCanvasElement
+  private readonly gradeCanvas: HTMLCanvasElement
+  private filter: VideoFilterId = 'none'
   private maskImage: ImageData | null = null
   private previousMaskValues: Float32Array | null = null
   private hasMask = false
@@ -166,6 +175,7 @@ export class WebBackgroundProcessor {
     this.segmentCanvas = document.createElement('canvas')
     this.maskCanvas = document.createElement('canvas')
     this.blurCanvas = document.createElement('canvas')
+    this.gradeCanvas = document.createElement('canvas')
     const probe = this.maskCanvas.getContext('2d')
     this.supportsFilter = !!probe && 'filter' in probe
   }
@@ -174,6 +184,7 @@ export class WebBackgroundProcessor {
   async switchTo(options: WebBackgroundOptions): Promise<void> {
     if (options.mode !== 'disabled') this.segmenter = await loadSegmenter()
     this.image = options.mode === 'image' ? await loadImage(options.imageUrl) : null
+    this.filter = normalizeVideoFilter(options.filter)
     this.options = options
   }
 
@@ -238,11 +249,13 @@ export class WebBackgroundProcessor {
 
     if (this.options.mode === 'disabled' || !this.segmenter) {
       ctx.drawImage(video, 0, 0, width, height)
+      this.paintFilter(ctx, width, height)
       return
     }
     this.maybeSegment(video)
     if (!this.hasMask) {
       ctx.drawImage(video, 0, 0, width, height)
+      this.paintFilter(ctx, width, height)
       return
     }
 
@@ -281,6 +294,25 @@ export class WebBackgroundProcessor {
         ctx.drawImage(this.blurCanvas, 0, 0, width, height)
       }
     }
+    ctx.restore()
+    this.paintFilter(ctx, width, height)
+  }
+
+  /** Grade the finished frame. Canvas filters apply on draw, so copy then redraw. */
+  private paintFilter(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    const css = videoFilterCss(this.filter)
+    if (css === 'none' || !this.supportsFilter || !this.output) return
+    if (this.gradeCanvas.width !== width || this.gradeCanvas.height !== height) {
+      this.gradeCanvas.width = width
+      this.gradeCanvas.height = height
+    }
+    const grade = this.gradeCanvas.getContext('2d')
+    if (!grade) return
+    grade.drawImage(this.output, 0, 0)
+    ctx.save()
+    ctx.filter = css
+    ctx.drawImage(this.gradeCanvas, 0, 0, width, height)
+    ctx.filter = 'none'
     ctx.restore()
   }
 

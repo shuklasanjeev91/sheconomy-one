@@ -8,6 +8,7 @@ import {
   canChangeParticipantPermissions,
   canOpenHostTools,
 } from '~/co-work/lib/meeting-role-permissions'
+import { MEETING_INTERPRETER_CHANNELS, interpretationChannelLabel } from '~/co-work/lib/meeting-interpretation'
 import { updateMeetingLiveSettings } from '~/co-work/lib/meetings'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting, MeetingParticipantChatWith, MeetingRole } from '~/co-work/lib/types'
@@ -31,6 +32,7 @@ type MeetingHostToolsPanelProps = {
   onOpenQa?: () => void
   onOpenBreakouts?: () => void
   onOpenNotes?: () => void
+  onOpenStudio?: () => void
   onSaveTranscript?: () => void
   onSummarizeMeeting?: () => void
   /** When host enables mute-on-entry mid-meeting, mute everyone already in the room. */
@@ -41,8 +43,9 @@ type MeetingHostToolsPanelProps = {
   onTransferHostPress?: () => void
   webinarMode?: boolean
   onToggleWebinarMode?: (enabled: boolean) => void
-  interpretationChannelId?: string
-  onInterpretationChannelChange?: (channelId: string) => void
+  interpreters?: Record<string, string>
+  interpreterCandidates?: { userId: string; name: string }[]
+  onAssignInterpreter?: (userId: string, channelId: string | null) => void
   onMuteAll?: () => void
   onAskAllToMute?: () => void
   fullWidth?: boolean
@@ -121,6 +124,7 @@ export function MeetingHostToolsPanel({
   onOpenQa,
   onOpenBreakouts,
   onOpenNotes,
+  onOpenStudio,
   onSaveTranscript,
   onSummarizeMeeting,
   onMuteOnJoinEnabled,
@@ -130,8 +134,9 @@ export function MeetingHostToolsPanel({
   onTransferHostPress,
   webinarMode = false,
   onToggleWebinarMode,
-  interpretationChannelId = 'floor',
-  onInterpretationChannelChange,
+  interpreters = {},
+  interpreterCandidates = [],
+  onAssignInterpreter,
   onMuteAll,
   onAskAllToMute,
   fullWidth,
@@ -310,6 +315,13 @@ export function MeetingHostToolsPanel({
                   label="Breakout rooms"
                   icon={Icons.LayoutGrid}
                   onPress={onOpenBreakouts}
+                />
+              ) : null}
+              {onOpenStudio ? (
+                <HostToolsRow
+                  label="Meeting studio"
+                  icon={Icons.Sparkles}
+                  onPress={onOpenStudio}
                 />
               ) : null}
               <HostToolsRow
@@ -509,20 +521,48 @@ export function MeetingHostToolsPanel({
                 checked={webinarMode}
                 onCheckedChange={(checked) => onToggleWebinarMode?.(checked)}
               />
-              <CoWorkSectionLabel>Interpretation channel</CoWorkSectionLabel>
-              <XStack gap="$2" flexWrap="wrap">
-                {(['floor', 'en', 'hi', 'es'] as const).map((channelId) => (
-                  <Button
-                    key={channelId}
-                    tone={interpretationChannelId === channelId ? 'primary' : 'outline'}
-                    size="$2"
-                    borderRadius={999}
-                    onPress={() => onInterpretationChannelChange?.(channelId)}
-                  >
-                    {channelId === 'floor' ? 'Floor' : channelId.toUpperCase()}
-                  </Button>
-                ))}
-              </XStack>
+              <CoWorkSectionLabel>Interpreters</CoWorkSectionLabel>
+              <Text color={coworkUi.textMuted} fontSize={12} lineHeight={17}>
+                Assign a language. That person speaks on the channel, and everyone else picks what they hear in Audio.
+              </Text>
+              {interpreterCandidates.length === 0 ? (
+                <Text color={coworkUi.textMuted} fontSize={13}>
+                  No other participants to assign yet.
+                </Text>
+              ) : (
+                interpreterCandidates.map((person) => {
+                  const assigned = interpreters[person.userId] ?? 'floor'
+                  return (
+                    <YStack key={person.userId} gap="$2">
+                      <Text color={coworkUi.text} fontSize={14} fontWeight="700">
+                        {person.name}
+                        {assigned !== 'floor' ? ` · ${interpretationChannelLabel(assigned)}` : ''}
+                      </Text>
+                      <XStack gap="$2" flexWrap="wrap">
+                        <Button
+                          tone={assigned === 'floor' ? 'primary' : 'outline'}
+                          size="$2"
+                          borderRadius={999}
+                          onPress={() => onAssignInterpreter?.(person.userId, null)}
+                        >
+                          Floor
+                        </Button>
+                        {MEETING_INTERPRETER_CHANNELS.map((channel) => (
+                          <Button
+                            key={channel.id}
+                            tone={assigned === channel.id ? 'primary' : 'outline'}
+                            size="$2"
+                            borderRadius={999}
+                            onPress={() => onAssignInterpreter?.(person.userId, channel.id)}
+                          >
+                            {channel.languageCode.toUpperCase()}
+                          </Button>
+                        ))}
+                      </XStack>
+                    </YStack>
+                  )
+                })
+              )}
             </YStack>
           </YStack>
         ) : null}

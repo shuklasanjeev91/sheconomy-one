@@ -14,6 +14,10 @@ import {
   saveMeetingMediaPrefs,
 } from '~/co-work/lib/meeting-media-prefs'
 import { showCallAudioOutputPicker } from '~/co-work/lib/call-audio'
+import {
+  MEETING_INTERPRETATION_CHANNELS,
+  interpretationChannelLabel,
+} from '~/co-work/lib/meeting-interpretation'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 type MeetingAudioPanelProps = {
@@ -24,6 +28,8 @@ type MeetingAudioPanelProps = {
   onToggleSpeaker: () => void
   onClose: () => void
   fullWidth?: boolean
+  listenChannel?: string
+  onListenChannelChange?: (channelId: string) => void
 }
 
 export function MeetingAudioPanel({
@@ -34,6 +40,8 @@ export function MeetingAudioPanel({
   onToggleSpeaker,
   onClose,
   fullWidth,
+  listenChannel = 'floor',
+  onListenChannelChange,
 }: MeetingAudioPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const [originalSound, setOriginalSound] = useState(false)
@@ -63,6 +71,27 @@ export function MeetingAudioPanel({
       />
       <ScrollView flex={1} padding="$3">
         <YStack gap="$4" paddingBottom="$5">
+          {onListenChannelChange ? (
+            <YStack gap="$2">
+              <CoWorkSectionLabel>Listen in</CoWorkSectionLabel>
+              <Text color={coworkUi.textMuted} fontSize={12} lineHeight={17}>
+                {interpretationChannelLabel(listenChannel)}. Floor is the original room. A language plays only that interpreter.
+              </Text>
+              <XStack gap="$2" flexWrap="wrap">
+                {MEETING_INTERPRETATION_CHANNELS.map((channel) => (
+                  <Button
+                    key={channel.id}
+                    tone={listenChannel === channel.id ? 'primary' : 'outline'}
+                    size="$2"
+                    borderRadius={999}
+                    onPress={() => onListenChannelChange(channel.id)}
+                  >
+                    {channel.id === 'floor' ? 'Floor' : channel.languageCode.toUpperCase()}
+                  </Button>
+                ))}
+              </XStack>
+            </YStack>
+          ) : null}
           <YStack
             padding="$4"
             gap="$3"

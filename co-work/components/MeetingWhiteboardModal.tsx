@@ -20,6 +20,7 @@ import {
   type WhiteboardStroke,
   type WhiteboardTool,
 } from '~/co-work/lib/meeting-whiteboard'
+import { whiteboardTemplateStrokes } from '~/co-work/lib/meeting-studio'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 type MeetingWhiteboardModalProps = {
@@ -266,6 +267,20 @@ export function MeetingWhiteboardModal({
             onPress={handleRedo}
             accessibilityLabel="Redo"
           />
+          {(['canvas', 'swot', 'pricing'] as const).map((kind) => (
+            <Button
+              key={kind}
+              tone="ghost"
+              size="$2"
+              onPress={() => {
+                for (const stroke of whiteboardTemplateStrokes(kind, userId)) onStroke(stroke)
+              }}
+            >
+              <Text fontSize={12} color={ui.textSecondary}>
+                {kind === 'canvas' ? 'Canvas' : kind === 'swot' ? 'SWOT' : 'Pricing'}
+              </Text>
+            </Button>
+          ))}
           <Button tone="ghost" size="$2" onPress={onClear}>
             <Text fontSize={12} color={ui.textSecondary}>
               Clear

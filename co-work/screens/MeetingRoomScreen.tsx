@@ -31,6 +31,8 @@ import { MeetingMediaRoom } from '~/co-work/components/MeetingMediaRoom'
 import type { MeetingDisconnectReason, MeetingMediaControls } from '~/co-work/lib/meeting-media-controls'
 import { MeetingChatPanel } from '~/co-work/components/MeetingChatPanel'
 import { MeetingBackgroundPanel } from '~/co-work/components/MeetingBackgroundPanel'
+import { MeetingFiltersPanel } from '~/co-work/components/MeetingFiltersPanel'
+import { interpretationChannelLabel } from '~/co-work/lib/meeting-interpretation'
 import { MeetingAudioPanel } from '~/co-work/components/MeetingAudioPanel'
 import { MeetingControls } from '~/co-work/components/MeetingControls'
 import { MeetingWhiteboardModal } from '~/co-work/components/MeetingWhiteboardModal'
@@ -45,6 +47,16 @@ import { MeetingShortcutsHelp } from '~/co-work/components/MeetingShortcutsHelp'
 import { useMeetingKeyboardShortcuts } from '~/co-work/hooks/useMeetingKeyboardShortcuts'
 import { MeetingHostToolsPanel } from '~/co-work/components/MeetingHostToolsPanel'
 import { MeetingHostNotesPanel } from '~/co-work/components/MeetingHostNotesPanel'
+import {
+  MeetingGreenRoomHold,
+  MeetingStudioBanner,
+  MeetingStudioPanel,
+} from '~/co-work/components/MeetingStudioPanel'
+import { canEnterFromGreenRoom, watermarkLabel } from '~/co-work/lib/meeting-studio'
+import {
+  buildMeetingTranscriptArchive,
+  transcriptArchiveToPlainText,
+} from '~/co-work/lib/meeting-transcript-archive'
 import { MeetingInfoPanel } from '~/co-work/components/MeetingInfoPanel'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
 import { MeetingLiveCaptions } from '~/co-work/components/MeetingLiveCaptions'
@@ -444,6 +456,8 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
       <MeetingWaitingRoom
         meetingTitle={title}
         meetingCode={formatMeetingCode(props.meeting.meeting_code)}
+        hostName={props.meeting.host?.full_name || props.meeting.host?.username || undefined}
+        hostNote={props.meeting.meeting_options?.studio?.waitingRoomNote}
         hostPresent={presence.isHostPresent}
         realtimeConnected={presence.isRealtimeConnected}
         realtimeDegraded={presence.realtimeDegraded}
@@ -673,6 +687,7 @@ function MeetingRoomOverlay({
     dispatchUi,
   } = useMeetingStateManager()
   const toast = useAppToast()
+  const [listenChannel, setListenChannel] = useState('floor')
   const fullscreen = useMeetingFullscreen()
   const webCapabilities = useMemo(
     () => (Platform.OS === 'web' ? detectMeetingWebCapabilities() : null),
@@ -849,6 +864,29 @@ function MeetingRoomOverlay({
 
   const isAuthoritativeHost = isHost || presence.selfRole === 'host'
   const canModerate = presence.canModerate || isAuthoritativeHost
+  const studioSnapshot = presence.studio
+  const previousPresenterRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!canModerate || !studioSnapshot.updatedAt) return
+    const handle = setTimeout(() => {
+      void updateMeetingLiveSettings(meeting.id, {
+        meetingOptions: { studio: studioSnapshot },
+      }).catch(() => undefined)
+    }, 900)
+    return () => clearTimeout(handle)
+  }, [canModerate, meeting.id, studioSnapshot])
+  useEffect(() => {
+    const name = presence.contentShare?.presenterName?.trim() || null
+    const previous = previousPresenterRef.current
+    previousPresenterRef.current = name
+    if (!studioSnapshot.allowSecondShare || !name || !previous || previous === name) return
+    if (studioSnapshot.coPresenterName === previous) return
+    presence.publishStudio({
+      ...studioSnapshot,
+      coPresenterName: previous,
+      updatedAt: Date.now(),
+    })
+  }, [presence, studioSnapshot])
   const chatEnabled = isMeetingChatEnabled(meetingState)
   const privateChatEnabled = isMeetingPrivateChatEnabled(meetingState)
   const supportsScreenBroadcast =
@@ -1042,17 +1080,27 @@ function MeetingRoomOverlay({
     })
   }, [captions.active, captions.targetLang, captions.targetLangName, toast])
 
-  // Interpretation channel → caption target language (Zoom language interpretation lite).
-  // Only on channel changes: `captions` is a new object every render, and
-  // re-applying the channel would keep overriding the viewer's own Show pick.
+  // The listener's language pick drives captions. It does not follow the host's roster.
   const setCaptionTargetLang = captions.setTargetLang
   useEffect(() => {
-    const channel = presence.interpretationChannelId
-    if (!channel || channel === 'floor') return
-    if (channel === 'en' || channel === 'hi' || channel === 'es') {
-      setCaptionTargetLang(channel)
-    }
-  }, [setCaptionTargetLang, presence.interpretationChannelId])
+    if (listenChannel !== 'en' && listenChannel !== 'hi' && listenChannel !== 'es') return
+    setCaptionTargetLang(listenChannel)
+  }, [listenChannel, setCaptionTargetLang])
+
+  const myInterpreterChannel = presence.interpreters[userId] ?? null
+  const publishInterpretation = callMedia?.publishInterpretation
+  const setInterpretationPlayback = callMedia?.setInterpretationPlayback
+  const mediaConnected = callMedia?.connected ?? false
+  useEffect(() => {
+    if (!mediaConnected || !publishInterpretation) return
+    void publishInterpretation(myInterpreterChannel)
+  }, [mediaConnected, myInterpreterChannel, publishInterpretation])
+  useEffect(() => {
+    setInterpretationPlayback?.({
+      listenChannel,
+      hearFloor: listenChannel === 'floor' || !!myInterpreterChannel,
+    })
+  }, [listenChannel, myInterpreterChannel, setInterpretationPlayback])
 
   const recordingSession = useMeetingRecording({
     roomName: callMedia?.connected ? activeBreakoutRoomId ?? meeting.room_id ?? null : null,
@@ -2320,6 +2368,7 @@ function MeetingRoomOverlay({
           onEnd={isAuthoritativeHost ? handleEnd : handleLeave}
           isHost={isAuthoritativeHost}
         />
+        <MeetingStudioBanner studio={presence.studio} viewerName={displayName} />
 
         {/* Zoom Mobile Top-Left Green Shield (Image 1 & Image 3) */}
         {layout.compactControls && (controlsVisible || sheetPanelOpen) ? (
@@ -2473,6 +2522,14 @@ function MeetingRoomOverlay({
           }
           return null
         })()}
+        {listenChannel !== 'floor' &&
+        !myInterpreterChannel &&
+        !(callMedia?.interpretationChannelsLive ?? []).includes(listenChannel) ? (
+          <CoWorkAlertBanner
+            tone="warning"
+            message={`No interpreter on ${interpretationChannelLabel(listenChannel)}. You'll hear them when they unmute.`}
+          />
+        ) : null}
         {canModerate && presence.waitingParticipants.length > 0 ? (
           <MeetingWaitingRoomRequests
             participants={presence.waitingParticipants}
@@ -2503,6 +2560,8 @@ function MeetingRoomOverlay({
             onToggleSpeaker={() => void callMedia.toggleSpeaker()}
             onClose={() => presence.setPanel('none')}
             fullWidth={panelFullWidth}
+            listenChannel={listenChannel}
+            onListenChannelChange={setListenChannel}
           />
         ) : null}
       </MeetingResponsivePanel>
@@ -2520,6 +2579,35 @@ function MeetingRoomOverlay({
         {callMedia ? (
           <MeetingBackgroundPanel
             userId={userId}
+            effects={callMedia.videoEffects}
+            cameraEnabled={callMedia.videoEnabled}
+            onEnsureCamera={() => {
+              if (callMedia.videoEnabled) return
+              if (!allowSelfStartVideo && !canModerate) {
+                toast.show('The host disabled starting video', { tone: 'info' })
+                return
+              }
+              void presence.syncMediaState({ is_video_off: false })
+              callMedia.toggleVideo()
+            }}
+            onClose={() => presence.setPanel('none')}
+            fullWidth={panelFullWidth}
+          />
+        ) : null}
+      </MeetingResponsivePanel>
+
+      <MeetingResponsivePanel
+        open={!!callMedia && presence.panel === 'filters'}
+        onClose={() => presence.setPanel('none')}
+        presentation={panelPresentation}
+        top={panelTop}
+        bottom={panelBottom}
+        trailingInset={panelTrailingInset}
+        width={sidePanelWidth}
+        overlayPosition={overlayPosition}
+      >
+        {callMedia ? (
+          <MeetingFiltersPanel
             effects={callMedia.videoEffects}
             cameraEnabled={callMedia.videoEnabled}
             onEnsureCamera={() => {
@@ -2734,6 +2822,7 @@ function MeetingRoomOverlay({
           onClose={() => presence.setPanel('none')}
           onInvite={() => presence.setPanel('invite')}
           raisedHands={presence.raisedHands}
+          handOrder={presence.handOrder}
           fullWidth={panelFullWidth}
           spotlightUserId={presence.spotlightUserId}
           onSetSpotlight={canModerate ? (id) => presence.setSpotlight(id) : undefined}
@@ -2770,6 +2859,7 @@ function MeetingRoomOverlay({
           onOpenQa={() => presence.setPanel('qna')}
           onOpenBreakouts={() => presence.setPanel('breakouts')}
           onOpenNotes={() => presence.setPanel('notes')}
+          onOpenStudio={() => presence.setPanel('studio')}
           onSaveTranscript={() => {
             void (async () => {
               const {
@@ -2870,12 +2960,19 @@ function MeetingRoomOverlay({
             presence.setWebinarModeLive(enabled)
             toast.show(enabled ? 'Webinar mode on' : 'Meeting mode on', { tone: 'info' })
           }}
-          interpretationChannelId={presence.interpretationChannelId ?? 'floor'}
-          onInterpretationChannelChange={(channelId) => {
-            presence.setInterpretationChannelLive(channelId)
-            toast.show(`Listening to ${channelId === 'floor' ? 'floor' : channelId}`, {
-              tone: 'info',
-            })
+          interpreters={presence.interpreters}
+          interpreterCandidates={presence.participants
+            .filter((person) => person.status === 'admitted' && person.user_id !== userId)
+            .map((person) => ({
+              userId: person.user_id,
+              name: person.display_name?.trim() || 'Participant',
+            }))}
+          onAssignInterpreter={(targetUserId, channelId) => {
+            presence.assignInterpreter(targetUserId, channelId)
+            toast.show(
+              channelId ? `Interpreter set to ${interpretationChannelLabel(channelId)}` : 'Interpreter removed',
+              { tone: 'info' },
+            )
           }}
           fullWidth={panelFullWidth}
         />
@@ -2894,6 +2991,39 @@ function MeetingRoomOverlay({
         <MeetingHostNotesPanel
           meetingId={meeting.id}
           userId={userId}
+          onClose={() => presence.setPanel('none')}
+          fullWidth={panelFullWidth}
+        />
+      </MeetingResponsivePanel>
+
+      <MeetingResponsivePanel
+        open={presence.panel === 'studio'}
+        onClose={() => presence.setPanel('none')}
+        presentation={panelPresentation}
+        top={panelTop}
+        bottom={panelBottom}
+        trailingInset={panelTrailingInset}
+        width={sidePanelWidth}
+        overlayPosition={overlayPosition}
+      >
+        <MeetingStudioPanel
+          meetingTitle={presence.liveTopic || title}
+          userId={userId}
+          displayName={displayName}
+          canModerate={canModerate}
+          studio={presence.studio}
+          participants={presence.participants}
+          transcriptText={transcriptArchiveToPlainText(
+            buildMeetingTranscriptArchive(meeting.id, presence.liveCaptions),
+          )}
+          inviteEmails={(meeting.invitees ?? [])
+            .map((invitee) => invitee.email)
+            .filter((email): email is string => !!email)}
+          onChange={presence.publishStudio}
+          onAdmitUser={(targetUserId) => {
+            const row = presence.participants.find((participant) => participant.user_id === targetUserId)
+            if (row && row.status === 'waiting') void presence.admit(row.id)
+          }}
           onClose={() => presence.setPanel('none')}
           fullWidth={panelFullWidth}
         />
@@ -3160,6 +3290,19 @@ function MeetingRoomOverlay({
         onOffsetChange={captions.setOverlayOffset}
       />
 
+      {!canEnterFromGreenRoom({
+        greenRoomOpen: presence.studio.greenRoomOpen,
+        isSpeaker: presence.studio.speakerIds.includes(userId),
+        canModerate,
+      }) ? (
+        <MeetingGreenRoomHold
+          title={presence.liveTopic || title}
+          onLeave={() => {
+            void presence.leave().finally(() => onLeave?.())
+          }}
+        />
+      ) : null}
+
       {presence.contentShare && contentHiddenId !== presence.contentShare.id ? (
         <MeetingContentShareStage
           share={presence.contentShare}
@@ -3174,6 +3317,23 @@ function MeetingRoomOverlay({
           onHide={() => setContentHiddenId(presence.contentShare?.id ?? null)}
           onToggleControls={toggleControls}
         />
+      ) : null}
+      {presence.studio.watermarkNames && presence.contentShare && contentHiddenId !== presence.contentShare.id ? (
+        <XStack
+          position="absolute"
+          top={layout.stagePaddingTop + 12}
+          left={Math.max(safeLeft, 0) + 12}
+          zIndex={18}
+          pointerEvents="none"
+          paddingHorizontal="$2"
+          paddingVertical="$1"
+          borderRadius={8}
+          backgroundColor="rgba(0,0,0,0.45)"
+        >
+          <Text fontSize={12} fontWeight="700" color="#fff">
+            {watermarkLabel(displayName)}
+          </Text>
+        </XStack>
       ) : null}
       {presence.contentShare && contentHiddenId === presence.contentShare.id ? (
         <ContentSharePill
@@ -3775,10 +3935,8 @@ function MeetingRoomOverlay({
             label: 'Video filters',
             icon: Icons.Sparkles,
             onPress: () => {
-              toast.show('Video filters', {
-                tone: 'info',
-                message: 'Coming soon — use Virtual background for blur and images.',
-              })
+              if (!callMedia) return
+              presence.togglePanel('filters')
             },
           },
           {

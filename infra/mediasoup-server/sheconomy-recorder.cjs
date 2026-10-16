@@ -393,6 +393,8 @@ class Recording {
 
   async addProducer(producer) {
     if (this.state !== 'recording' || producer.closed || this.tracks.has(producer.id)) return
+    const source = String(producer.appData?.source || '')
+    if (source.startsWith('interpretation')) return
     const track = new Track(this, producer)
     this.tracks.set(producer.id, track)
     try {
@@ -519,7 +521,9 @@ class Recording {
     filters.push(`[${base}]format=yuv420p[vout]`)
 
     const audioLabels = []
-    for (const track of usable.filter((t) => t.kind === 'audio')) {
+    for (const track of usable.filter(
+      (t) => t.kind === 'audio' && !String(t.source || '').startsWith('interpretation'),
+    )) {
       const index = inputIndex(track)
       const delayMs = Math.round(Number(seconds(track.windows[0].start)) * 1000)
       const label = `a${index}`

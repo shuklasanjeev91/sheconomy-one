@@ -15,8 +15,10 @@ import { resolveVirtualBackgroundSelection } from '~/co-work/lib/virtual-backgro
 import {
   loadVirtualBackgroundPreference,
   normalizeVirtualBackground,
+  normalizeVideoFilter,
   OFF_BACKGROUND,
   saveVirtualBackgroundPreference,
+  videoEffectIsActive,
   virtualBackgroundUnavailableMessage,
   type VideoEffectCapability,
   type VideoEffectStatus,
@@ -59,7 +61,7 @@ function detachTrackProcessor(track: EffectMediaStreamTrack | null) {
 
 function clearTrackEffects(track: EffectMediaStreamTrack | null) {
   try {
-    MeetingVideoEffectsNative?.configure?.({ mode: 'off', blurRadius: 12 })
+    MeetingVideoEffectsNative?.configure?.({ mode: 'off', blurRadius: 12, filter: 'none' })
   } catch {
     // ignore
   }
@@ -89,11 +91,13 @@ function applyBackgroundConfig(selection: {
   mode: NativeBackgroundConfiguration['mode']
   imageUrl?: string | null
   blurRadius?: number
+  filter?: NativeBackgroundConfiguration['filter']
 }) {
   MeetingVideoEffectsNative?.configure?.({
     mode: selection.mode,
     imagePath: selection.imageUrl ?? undefined,
     blurRadius: selection.blurRadius ?? 12,
+    filter: normalizeVideoFilter(selection.filter),
   })
 }
 
@@ -130,7 +134,7 @@ export function useMeetingVideoEffects({
         const value = await resolveVirtualBackgroundSelection(await loadVirtualBackgroundPreference())
         if (cancelled) return
         selectionRef.current = value
-        if (value.mode !== 'off') {
+        if (videoEffectIsActive(value)) {
           pendingSelectionRef.current = value
           userAppliedRef.current = true
         }
@@ -161,10 +165,11 @@ export function useMeetingVideoEffects({
     async (nextValue: VirtualBackgroundSelection): Promise<boolean> => {
       const next = normalizeVirtualBackground(nextValue)
       setError(null)
-      userAppliedRef.current = next.mode !== 'off'
-      pendingSelectionRef.current = next.mode === 'off' ? null : next
+      const effectOn = videoEffectIsActive(next)
+      userAppliedRef.current = effectOn
+      pendingSelectionRef.current = effectOn ? next : null
 
-      if (next.mode !== 'off' && capability !== 'supported') {
+      if (effectOn && capability !== 'supported') {
         if (capability === 'checking') {
           selectionRef.current = next
           setSelection(next)
@@ -177,7 +182,7 @@ export function useMeetingVideoEffects({
       }
 
       const track = getNativeTrack(cameraTrack)
-      if (!track && next.mode !== 'off' && isCameraEnabled) {
+      if (!track && videoEffectIsActive(next) && isCameraEnabled) {
         selectionRef.current = next
         setSelection(next)
         await saveVirtualBackgroundPreference(next)
@@ -208,7 +213,7 @@ export function useMeetingVideoEffects({
           throw new Error('Could not prepare this background for the camera on this device.')
         }
 
-        if (resolved.mode === 'off') {
+        if (!videoEffectIsActive(resolved)) {
           clearTrackEffects(track)
           appliedKeyRef.current = 'off'
           pendingSelectionRef.current = null
@@ -228,7 +233,7 @@ export function useMeetingVideoEffects({
         }
         selectionRef.current = resolved
         setSelection(resolved)
-        setStatus(resolved.mode === 'off' ? 'idle' : 'active')
+        setStatus(videoEffectIsActive(resolved) ? 'active' : 'idle')
         await saveVirtualBackgroundPreference(resolved)
         return true
       } catch (cause) {
@@ -251,14 +256,14 @@ export function useMeetingVideoEffects({
   useEffect(() => {
     if (!isCameraEnabled || capability !== 'supported') return
     const pending = pendingSelectionRef.current ?? selectionRef.current
-    if (pending.mode === 'off') return
+    if (!videoEffectIsActive(pending)) return
     userAppliedRef.current = true
     const delay = Platform.OS === 'android' ? 900 : 250
     const timer = setTimeout(() => {
       void apply(pending)
     }, delay)
     return () => clearTimeout(timer)
-  }, [apply, cameraTrack, capability, isCameraEnabled, selection.mode, selection.id, selection.blurRadius])
+  }, [apply, cameraTrack, capability, isCameraEnabled, selection.mode, selection.id, selection.blurRadius, selection.filter])
 
   useEffect(
     () => () => {
@@ -272,7 +277,7 @@ export function useMeetingVideoEffects({
 
   useEffect(() => {
     const memorySubscription = AppState.addEventListener('memoryWarning', () => {
-      if (selectionRef.current.mode === 'off') return
+      if (!videoEffectIsActive(selectionRef.current)) return
       const message =
         'Background effect was turned off because memory is low. Your camera stays unfiltered.'
       setError(message)

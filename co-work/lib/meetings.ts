@@ -15,6 +15,7 @@ import {
 } from '~/co-work/lib/meeting-chat-share'
 import { MEETING_CONTENT_SIGNED_URL_TTL_SEC } from '~/co-work/lib/meeting-content-share'
 import { normalizeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
+import { parseMeetingStudio } from '~/co-work/lib/meeting-studio'
 import { mapMeetingSecurityJoinError } from '~/co-work/lib/meeting-security'
 import type {
   CreateMeetingInput,
@@ -180,6 +181,35 @@ function normalizeMeetingOptions(value: unknown): Meeting['meeting_options'] {
     recordingMode,
     captionsEnabled,
     enableMeetingChat: raw.enableMeetingChat !== false,
+    studio: parseMeetingStudio(raw.studio) ?? undefined,
+    templateId:
+      raw.templateId === 'mentoring' ||
+      raw.templateId === 'class' ||
+      raw.templateId === 'live-selling' ||
+      raw.templateId === 'circle' ||
+      raw.templateId === 'office-hours'
+        ? raw.templateId
+        : undefined,
+    skippedDates: Array.isArray(raw.skippedDates)
+      ? raw.skippedDates.filter((date): date is string => typeof date === 'string').slice(0, 400)
+      : undefined,
+    occurrenceOverrides: Array.isArray(raw.occurrenceOverrides)
+      ? raw.occurrenceOverrides
+          .map((row) => {
+            if (!row || typeof row !== 'object') return null
+            const item = row as Record<string, unknown>
+            const date = typeof item.date === 'string' ? item.date.slice(0, 10) : ''
+            if (!date) return null
+            return {
+              date,
+              title: typeof item.title === 'string' ? item.title : undefined,
+              startsAt: typeof item.startsAt === 'string' ? item.startsAt : undefined,
+              endsAt: typeof item.endsAt === 'string' ? item.endsAt : undefined,
+            }
+          })
+          .filter((row): row is NonNullable<typeof row> => !!row)
+          .slice(0, 50)
+      : undefined,
   }
 }
 

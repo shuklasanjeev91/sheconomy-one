@@ -12,8 +12,14 @@ object MeetingBackgroundConfig {
   @Volatile var mode: String = "off"
   @Volatile var imagePath: String? = null
   @Volatile var blurRadius: Double = 12.0
+  /** Whole-frame grade. `none` leaves pixels unchanged. */
+  @Volatile var filter: String = "none"
   /** Bumped on every configure() so the processor can drop stale async decodes. */
   @Volatile var generation: Int = 0
+
+  fun effectActive(): Boolean {
+    return mode != "off" || (filter.isNotBlank() && filter != "none")
+  }
 }
 
 class MeetingVideoEffectsModule : Module() {
@@ -33,6 +39,7 @@ class MeetingVideoEffectsModule : Module() {
       MeetingBackgroundConfig.mode = options["mode"] as? String ?: "off"
       MeetingBackgroundConfig.imagePath = options["imagePath"] as? String
       MeetingBackgroundConfig.blurRadius = (options["blurRadius"] as? Number)?.toDouble() ?: 12.0
+      MeetingBackgroundConfig.filter = options["filter"] as? String ?: "none"
       MeetingBackgroundConfig.generation = MeetingBackgroundConfig.generation + 1
     }
 

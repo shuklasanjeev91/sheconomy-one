@@ -6,6 +6,7 @@ import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { MeetingCalendarIconButton } from '~/co-work/components/MeetingCalendarIconButton'
 import { MeetingCardOverflowMenu } from '~/co-work/components/MeetingCardOverflowMenu'
 import { fetchMyMeetings, formatMeetingCode, isUpcomingMeeting } from '~/co-work/lib/meetings'
+import { displayOccurrence } from '~/co-work/lib/meeting-studio'
 import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting } from '~/co-work/lib/types'
@@ -20,7 +21,8 @@ import { CACHE_KEYS } from '~/lib/bootstrap/cache-keys'
 import { useCachedQuery } from '~/hooks/useCachedQuery'
 
 function formatWhen(meeting: Meeting) {
-  const raw = meeting.scheduled_at ?? meeting.started_at ?? meeting.created_at
+  const shown = displayOccurrence(meeting)
+  const raw = shown.startsAt ?? meeting.started_at ?? meeting.created_at
   if (!raw) return 'Time TBD'
   return formatMeetingInstantForViewer(raw)
 }
@@ -136,7 +138,7 @@ export function UpcomingMeetingsStrip({
                 />
               </XStack>
               <Text fontWeight="800" fontSize={15} color={coworkUi.text} numberOfLines={2}>
-                {meeting.title}
+                {displayOccurrence(meeting).title}
               </Text>
               <Text fontSize={12} color={coworkUi.textSecondary} numberOfLines={1}>
                 {formatWhen(meeting)}

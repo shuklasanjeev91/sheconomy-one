@@ -47,7 +47,7 @@ type MeetingControlsProps = {
   /** Lock / mute-all / remove-all — host only. */
   canChangeCriticalSettings?: boolean
   isLocked?: boolean
-  panel: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds' | 'audio' | 'host_tools' | 'polls' | 'qna' | 'breakouts'
+  panel: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds' | 'audio' | 'host_tools' | 'polls' | 'qna' | 'breakouts' | 'notes' | 'studio'
   backgroundActive?: boolean
   unreadChatCount?: number
   raisedHandCount?: number

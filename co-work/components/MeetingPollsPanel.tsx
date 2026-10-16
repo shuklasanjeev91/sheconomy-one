@@ -15,6 +15,7 @@ import {
 import { CoWorkPanelShell, CoWorkSectionLabel, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { useMeetingPolls } from '~/co-work/hooks/useMeetingPolls'
+import { formatPollExport } from '~/co-work/lib/meeting-studio'
 import type { MeetingPoll } from '~/co-work/lib/meeting-polls'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
@@ -264,6 +265,33 @@ export function MeetingPollsPanel({
                 {showCreate ? 'Cancel' : 'New poll'}
               </Button>
             ) : null}
+            <Button
+              tone="outline"
+              size="$2"
+              borderRadius={12}
+              onPress={() => {
+                const text = formatPollExport(
+                  polls.map((poll) => ({
+                    question: poll.question,
+                    status: poll.status,
+                    options: poll.options.map((option) => ({
+                      text: option.option_text,
+                      votes: option.vote_count,
+                    })),
+                  })),
+                )
+                void import('~/co-work/lib/meeting-transcript-archive').then(({ copyMeetingTranscriptText }) =>
+                  copyMeetingTranscriptText(text).then((copied) =>
+                    toast.show(copied ? 'Polls copied' : 'Polls ready', {
+                      tone: 'success',
+                      message: copied ? undefined : text.slice(0, 180),
+                    }),
+                  ),
+                )
+              }}
+            >
+              Export
+            </Button>
           </XStack>
 
           {canModerate && showCreate ? (

@@ -2,6 +2,18 @@ import { readPersistentValue, writePersistentValue } from '~/lib/platform/storag
 
 export type VirtualBackgroundMode = 'off' | 'blur' | 'image'
 
+/** Whole-frame color grade. Soft is brightness and contrast, not skin detection. */
+export type VideoFilterId = 'none' | 'warm' | 'cool' | 'vivid' | 'mono' | 'soft'
+
+export const VIDEO_FILTERS: { id: VideoFilterId; label: string }[] = [
+  { id: 'none', label: 'None' },
+  { id: 'warm', label: 'Warm' },
+  { id: 'cool', label: 'Cool' },
+  { id: 'vivid', label: 'Vivid' },
+  { id: 'mono', label: 'Mono' },
+  { id: 'soft', label: 'Soft' },
+]
+
 export type VirtualBackgroundSelection = {
   mode: VirtualBackgroundMode
   /** Built-in preset id or custom database id. */
@@ -11,6 +23,8 @@ export type VirtualBackgroundSelection = {
   /** Storage path for a private custom image. */
   storagePath?: string
   blurRadius?: number
+  /** Omitted when the camera has no color grade. */
+  filter?: VideoFilterId
 }
 
 export type VideoEffectCapability = 'checking' | 'supported' | 'unavailable'
@@ -51,29 +65,79 @@ export function webBackgroundResourceWarning(
   return null
 }
 
+export function normalizeVideoFilter(value: unknown): VideoFilterId {
+  switch (value) {
+    case 'warm':
+    case 'cool':
+    case 'vivid':
+    case 'mono':
+    case 'soft':
+      return value
+    default:
+      return 'none'
+  }
+}
+
+/** CSS `filter` value for the web canvas grade. `none` leaves pixels unchanged. */
+export function videoFilterCss(filter: VideoFilterId | null | undefined): string {
+  switch (normalizeVideoFilter(filter)) {
+    case 'warm':
+      return 'sepia(0.35) saturate(1.15) contrast(1.05)'
+    case 'cool':
+      return 'saturate(0.9) hue-rotate(18deg) contrast(1.04)'
+    case 'vivid':
+      return 'saturate(1.45) contrast(1.08)'
+    case 'mono':
+      return 'grayscale(1) contrast(1.06)'
+    case 'soft':
+      return 'brightness(1.06) contrast(0.94) saturate(0.92)'
+    default:
+      return 'none'
+  }
+}
+
+export function videoEffectIsActive(selection: VirtualBackgroundSelection): boolean {
+  return selection.mode !== 'off' || normalizeVideoFilter(selection.filter) !== 'none'
+}
+
+function withVideoFilter(
+  selection: VirtualBackgroundSelection,
+  filter: VideoFilterId,
+): VirtualBackgroundSelection {
+  if (filter === 'none') return selection
+  return { ...selection, filter }
+}
+
 export function normalizeVirtualBackground(
   value: Partial<VirtualBackgroundSelection> | null | undefined,
 ): VirtualBackgroundSelection {
-  if (!value || value.mode === 'off') return OFF_BACKGROUND
+  const filter = normalizeVideoFilter(value?.filter)
+  if (!value || value.mode === 'off' || value.mode == null) return withVideoFilter(OFF_BACKGROUND, filter)
   if (value.mode === 'blur') {
     const radius = Number(value.blurRadius)
-    return {
-      mode: 'blur',
-      id: 'blur',
-      blurRadius: Number.isFinite(radius)
-        ? Math.min(MAX_BLUR_RADIUS, Math.max(MIN_BLUR_RADIUS, radius))
-        : DEFAULT_BLUR_RADIUS,
-    }
+    return withVideoFilter(
+      {
+        mode: 'blur',
+        id: 'blur',
+        blurRadius: Number.isFinite(radius)
+          ? Math.min(MAX_BLUR_RADIUS, Math.max(MIN_BLUR_RADIUS, radius))
+          : DEFAULT_BLUR_RADIUS,
+      },
+      filter,
+    )
   }
   if (value.mode === 'image' && (value.imageUrl || value.storagePath || value.id)) {
-    return {
-      mode: 'image',
-      id: value.id,
-      imageUrl: value.imageUrl,
-      storagePath: value.storagePath,
-    }
+    return withVideoFilter(
+      {
+        mode: 'image',
+        id: value.id,
+        imageUrl: value.imageUrl,
+        storagePath: value.storagePath,
+      },
+      filter,
+    )
   }
-  return OFF_BACKGROUND
+  return withVideoFilter(OFF_BACKGROUND, filter)
 }
 
 export async function loadVirtualBackgroundPreference(): Promise<VirtualBackgroundSelection> {

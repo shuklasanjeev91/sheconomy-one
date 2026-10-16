@@ -13,10 +13,12 @@ public final class MeetingVideoEffectsModule: Module {
       let mode = options["mode"] as? String ?? "off"
       let imagePath = options["imagePath"] as? String
       let blurRadius = options["blurRadius"] as? Double ?? 12
+      let filter = options["filter"] as? String ?? "none"
       MeetingVideoEffectsProcessor.configureMode(
         mode,
         imagePath: imagePath,
-        blurRadius: blurRadius
+        blurRadius: blurRadius,
+        filter: filter
       )
     }
 

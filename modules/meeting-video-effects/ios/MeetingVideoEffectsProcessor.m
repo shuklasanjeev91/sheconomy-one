@@ -13,6 +13,7 @@ static NSString *const kProcessorName = @"sheconomyVirtualBackground";
 static NSString *gMode = @"off";
 static NSString *gImagePath = nil;
 static double gBlurRadius = 12.0;
+static NSString *gFilter = @"none";
 static dispatch_queue_t gConfigQueue;
 
 /**
@@ -306,12 +307,15 @@ static CGImagePropertyOrientation SHEPropertyOrientation(UIImageOrientation orie
   __block NSString *mode;
   __block NSString *imagePath;
   __block double blurRadius;
+  __block NSString *filter;
   dispatch_sync(gConfigQueue, ^{
     mode = gMode;
     imagePath = gImagePath;
     blurRadius = gBlurRadius;
+    filter = gFilter;
   });
-  if ([mode isEqualToString:@"off"]) {
+  BOOL filterOn = filter.length > 0 && ![filter isEqualToString:@"none"];
+  if ([mode isEqualToString:@"off"] && !filterOn) {
     if (self.latestMask) {
       self.latestMask = nil;
       dispatch_async(_segmentationQueue, ^{
@@ -319,6 +323,13 @@ static CGImagePropertyOrientation SHEPropertyOrientation(UIImageOrientation orie
       });
     }
     return frame;
+  }
+  if ([mode isEqualToString:@"off"] && filterOn) {
+    if (![frame.buffer isKindOfClass:[RTCCVPixelBuffer class]]) return frame;
+    CVPixelBufferRef source = ((RTCCVPixelBuffer *)frame.buffer).pixelBuffer;
+    CIImage *graded = [self applyLook:[CIImage imageWithCVPixelBuffer:source] filter:filter];
+    RTCVideoFrame *filtered = [self frameFromImage:graded source:source original:frame];
+    return filtered ?: frame;
   }
   if (![frame.buffer isKindOfClass:[RTCCVPixelBuffer class]]) return frame;
   CVPixelBufferRef source = ((RTCCVPixelBuffer *)frame.buffer).pixelBuffer;
@@ -337,9 +348,65 @@ static CGImagePropertyOrientation SHEPropertyOrientation(UIImageOrientation orie
                            mask:mask
                            mode:mode
                       imagePath:imagePath
-                     blurRadius:blurRadius];
+                     blurRadius:blurRadius
+                         filter:filter];
   }
   return result;
+}
+
+- (CIImage *)applyLook:(CIImage *)image filter:(NSString *)filter {
+  if (filter.length == 0 || [filter isEqualToString:@"none"] || !image) return image;
+  if ([filter isEqualToString:@"mono"]) {
+    CIFilter *mono = [CIFilter filterWithName:@"CIPhotoEffectMono"];
+    [mono setValue:image forKey:kCIInputImageKey];
+    return mono.outputImage ?: image;
+  }
+  if ([filter isEqualToString:@"warm"] || [filter isEqualToString:@"cool"]) {
+    CIFilter *matrix = [CIFilter filterWithName:@"CIColorMatrix"];
+    [matrix setValue:image forKey:kCIInputImageKey];
+    if ([filter isEqualToString:@"warm"]) {
+      [matrix setValue:[CIVector vectorWithX:1.12 Y:0.06 Z:0.0 W:0] forKey:@"inputRVector"];
+      [matrix setValue:[CIVector vectorWithX:0.02 Y:1.02 Z:0.0 W:0] forKey:@"inputGVector"];
+      [matrix setValue:[CIVector vectorWithX:0.0 Y:0.0 Z:0.84 W:0] forKey:@"inputBVector"];
+    } else {
+      [matrix setValue:[CIVector vectorWithX:0.86 Y:0.0 Z:0.04 W:0] forKey:@"inputRVector"];
+      [matrix setValue:[CIVector vectorWithX:0.0 Y:1.0 Z:0.02 W:0] forKey:@"inputGVector"];
+      [matrix setValue:[CIVector vectorWithX:0.0 Y:0.04 Z:1.14 W:0] forKey:@"inputBVector"];
+    }
+    [matrix setValue:[CIVector vectorWithX:0 Y:0 Z:0 W:1] forKey:@"inputAVector"];
+    [matrix setValue:[CIVector vectorWithX:0 Y:0 Z:0 W:0] forKey:@"inputBiasVector"];
+    return matrix.outputImage ?: image;
+  }
+  CIFilter *controls = [CIFilter filterWithName:@"CIColorControls"];
+  [controls setValue:image forKey:kCIInputImageKey];
+  if ([filter isEqualToString:@"vivid"]) {
+    [controls setValue:@(1.45) forKey:kCIInputSaturationKey];
+    [controls setValue:@(1.08) forKey:kCIInputContrastKey];
+    [controls setValue:@(0) forKey:kCIInputBrightnessKey];
+  } else {
+    [controls setValue:@(0.92) forKey:kCIInputSaturationKey];
+    [controls setValue:@(0.94) forKey:kCIInputContrastKey];
+    [controls setValue:@(0.06) forKey:kCIInputBrightnessKey];
+  }
+  return controls.outputImage ?: image;
+}
+
+- (RTCVideoFrame *)frameFromImage:(CIImage *)image
+                           source:(CVPixelBufferRef)source
+                         original:(RTCVideoFrame *)frame {
+  if (!image) return nil;
+  CGRect extent = image.extent;
+  CVPixelBufferRef output = SHENewPooledBuffer(&_outputPool, &_outputWidth, &_outputHeight,
+                                               kCVPixelFormatType_32BGRA,
+                                               CVPixelBufferGetWidth(source), CVPixelBufferGetHeight(source));
+  if (!output) return nil;
+  [self.context render:image toCVPixelBuffer:output bounds:extent colorSpace:_colorSpace];
+  RTCCVPixelBuffer *buffer = [[RTCCVPixelBuffer alloc] initWithPixelBuffer:output];
+  RTCVideoFrame *processed = [[RTCVideoFrame alloc] initWithBuffer:buffer
+                                                          rotation:frame.rotation
+                                                       timeStampNs:frame.timeStampNs];
+  CVPixelBufferRelease(output);
+  return processed;
 }
 
 - (RTCVideoFrame *)composeFrame:(RTCVideoFrame *)frame
@@ -347,7 +414,8 @@ static CGImagePropertyOrientation SHEPropertyOrientation(UIImageOrientation orie
                            mask:(CIImage *)mask
                            mode:(NSString *)mode
                       imagePath:(NSString *)imagePath
-                     blurRadius:(double)blurRadius {
+                     blurRadius:(double)blurRadius
+                         filter:(NSString *)filter {
   CIImage *foreground = [CIImage imageWithCVPixelBuffer:source];
   CGRect extent = foreground.extent;
   if (!CGRectEqualToRect(mask.extent, extent)) {
@@ -373,21 +441,10 @@ static CGImagePropertyOrientation SHEPropertyOrientation(UIImageOrientation orie
   [blend setValue:foreground forKey:kCIInputImageKey];
   [blend setValue:background forKey:kCIInputBackgroundImageKey];
   [blend setValue:mask forKey:kCIInputMaskImageKey];
-  CIImage *outputImage = [blend.outputImage imageByCroppingToRect:extent];
+  CIImage *outputImage = [[blend.outputImage imageByCroppingToRect:extent] imageByCroppingToRect:extent];
+  outputImage = [[self applyLook:outputImage filter:filter] imageByCroppingToRect:extent];
   if (!outputImage) return frame;
-
-  CVPixelBufferRef output = SHENewPooledBuffer(&_outputPool, &_outputWidth, &_outputHeight,
-                                               kCVPixelFormatType_32BGRA,
-                                               CVPixelBufferGetWidth(source), CVPixelBufferGetHeight(source));
-  if (!output) return frame;
-
-  [self.context render:outputImage toCVPixelBuffer:output bounds:extent colorSpace:_colorSpace];
-  RTCCVPixelBuffer *buffer = [[RTCCVPixelBuffer alloc] initWithPixelBuffer:output];
-  RTCVideoFrame *processed = [[RTCVideoFrame alloc] initWithBuffer:buffer
-                                                          rotation:frame.rotation
-                                                       timeStampNs:frame.timeStampNs];
-  CVPixelBufferRelease(output);
-  return processed;
+  return [self frameFromImage:outputImage source:source original:frame] ?: frame;
 }
 
 @end
@@ -405,11 +462,15 @@ static CGImagePropertyOrientation SHEPropertyOrientation(UIImageOrientation orie
   [ProcessorProvider addProcessor:[SHEVirtualBackgroundFrameProcessor new] forName:kProcessorName];
 }
 
-+ (void)configureMode:(NSString *)mode imagePath:(NSString *)imagePath blurRadius:(double)blurRadius {
++ (void)configureMode:(NSString *)mode
+             imagePath:(NSString *)imagePath
+            blurRadius:(double)blurRadius
+                filter:(NSString *)filter {
   dispatch_async(gConfigQueue, ^{
     gMode = [mode copy] ?: @"off";
     gImagePath = [imagePath copy];
     gBlurRadius = blurRadius;
+    gFilter = [filter copy] ?: @"none";
   });
 }
 

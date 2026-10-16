@@ -15,6 +15,7 @@ import {
 import { CoWorkPanelShell, CoWorkSectionLabel, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { useMeetingBreakouts } from '~/co-work/hooks/useMeetingBreakouts'
+import { assignParticipantsToTopics } from '~/co-work/lib/meeting-studio'
 import type { MeetingBreakoutRoom } from '~/co-work/lib/meeting-breakouts'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
@@ -80,6 +81,7 @@ export function MeetingBreakoutPanel({
       meetingId,
     })
   const [roomCount, setRoomCount] = useState('3')
+  const [topics, setTopics] = useState('Pricing, Product')
   const [timerMinutes, setTimerMinutes] = useState('10')
   const [broadcastText, setBroadcastText] = useState('')
   const [moveUserId, setMoveUserId] = useState('')
@@ -122,6 +124,47 @@ export function MeetingBreakoutPanel({
       })
     } catch (err) {
       toast.show('Could not create breakouts', {
+        tone: 'danger',
+        message: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleAssignByTopic() {
+    const topicNames = topics.split(',').map((topic) => topic.trim()).filter(Boolean).slice(0, 20)
+    if (topicNames.length < 2) {
+      toast.show('Add at least two topics, separated by commas', { tone: 'info' })
+      return
+    }
+    setBusy(true)
+    try {
+      const created = await createRooms({
+        count: topicNames.length,
+        createdBy: userId,
+        meetingRoomId,
+      })
+      const grouped = assignParticipantsToTopics({
+        participants: assignableUserIds.map((id, index) => ({
+          userId: id,
+          topic: topicNames[index % topicNames.length] ?? topicNames[0] ?? '',
+        })),
+        topics: topicNames,
+      })
+      for (const [index, group] of grouped.entries()) {
+        const room = created[index]
+        if (!room) continue
+        for (const memberId of group.userIds) {
+          await assignUser({ breakoutId: room.id, userId: memberId, assignedBy: userId })
+        }
+      }
+      toast.show('Assigned by topic', {
+        tone: 'success',
+        message: topicNames.join(' · '),
+      })
+    } catch (err) {
+      toast.show('Could not assign by topic', {
         tone: 'danger',
         message: err instanceof Error ? err.message : undefined,
       })
@@ -265,6 +308,17 @@ export function MeetingBreakoutPanel({
                   borderRadius={14}
                 />
               </Field>
+              <Field label="Topics">
+                <Input
+                  value={topics}
+                  onChangeText={setTopics}
+                  placeholder="Pricing, Product"
+                  backgroundColor={coworkUi.surface}
+                  borderColor={coworkUi.borderSoft}
+                  color={coworkUi.text}
+                  borderRadius={14}
+                />
+              </Field>
               <Field label="Timer (minutes, optional)">
                 <Input
                   value={timerMinutes}
@@ -296,6 +350,15 @@ export function MeetingBreakoutPanel({
                   onPress={() => void handleCreateAndAssign()}
                 >
                   Create & assign
+                </Button>
+                <Button
+                  tone="outline"
+                  size="$2"
+                  borderRadius={12}
+                  disabled={busy}
+                  onPress={() => void handleAssignByTopic()}
+                >
+                  Assign by topic
                 </Button>
                 <Button
                   tone="outline"

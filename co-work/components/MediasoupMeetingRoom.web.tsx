@@ -150,7 +150,7 @@ function useRemoteAudioUnlock() {
 
 function remoteAudioTracks(peers: MediasoupRemotePeer[]) {
   return peers.flatMap((peer) =>
-    [peer.audio, peer.screenAudio].flatMap((remote) =>
+    [peer.audio, peer.screenAudio, peer.interpretation].flatMap((remote) =>
       remote ? [{ key: remote.consumerId, track: remote.track }] : [],
     ),
   )

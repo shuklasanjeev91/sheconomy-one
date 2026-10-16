@@ -33,6 +33,12 @@ export type MeetingMediaControls = {
   activeSpeakerIdentity: string | null
   /** User ids of remote participants connected to the media server. */
   remoteUserIds: string[]
+  /** Language codes with a live (unmuted) interpreter mic. */
+  interpretationChannelsLive: string[]
+  /** Publish this peer's mic on an interpretation channel. `null` returns to the floor. */
+  publishInterpretation: (channelId: string | null) => Promise<void>
+  /** Choose which remote audio plays: floor, or one interpreter language. */
+  setInterpretationPlayback: (input: { listenChannel: string; hearFloor: boolean }) => void
   toggleAudio: () => void
   toggleVideo: () => void
   /** Resolves false when nothing changed (picker cancelled, busy, not connected). */

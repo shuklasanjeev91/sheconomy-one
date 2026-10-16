@@ -5,6 +5,7 @@ import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'rea
 import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { CommunitySuggestionSectionCard } from '~/community/components/CommunitySuggestionSectionCard'
 import { CommunityFeedHeader } from '~/community/components/CommunityFeedHeader'
+import { MutedWordsBar } from '~/community/components/MutedWordsBar'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { SponsoredPostImpressionBoundary } from '~/community/components/SponsoredPostImpressionBoundary'
@@ -16,6 +17,7 @@ import { useCommunityFeed } from '~/community/hooks/useCommunityFeed'
 import { useCommunitySuggestions } from '~/community/hooks/useCommunitySuggestions'
 import { useSponsoredFeed } from '~/community/hooks/useSponsoredFeed'
 import { interleaveCommunityFeed, type FeedEntry } from '~/community/lib/interleave-feed-suggestions'
+import { filterPostsByMutedWords, useMutedWords } from '~/community/lib/muted-words'
 import { recordSponsoredImpressionOnce } from '~/community/lib/sponsored-ads'
 import { refreshStories } from '~/community/lib/story-refresh'
 import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
@@ -77,15 +79,21 @@ export function CommunityFeedScreen() {
 
   // Only skip in-feed suggestions when the right sidebar actually shows them.
   const showSuggestionsInFeed = !hasDualSideRails && sections.length > 0
+  const mutedWords = useMutedWords()
+  const visibleItems = useMemo(
+    () => filterPostsByMutedWords(items, mutedWords),
+    [items, mutedWords],
+  )
+  const hiddenByMute = items.length - visibleItems.length
 
   const feedEntries = useMemo((): FeedEntry[] => {
     return interleaveCommunityFeed(
-      items,
+      visibleItems,
       showSuggestionsInFeed ? sections : [],
       contentFilter ? [] : sponsoredItems,
       { suggestionInterval: SUGGESTION_INTERVAL, sponsoredInterval: 6 },
     )
-  }, [contentFilter, items, sections, showSuggestionsInFeed, sponsoredItems])
+  }, [contentFilter, visibleItems, sections, showSuggestionsInFeed, sponsoredItems])
 
   const onRefresh = useCallback(async () => {
     refresh()
@@ -212,14 +220,17 @@ export function CommunityFeedScreen() {
 
   const listHeader = useMemo(
     () => (
-      <CommunityFeedHeader
-        contentFilter={contentFilter}
-        sort={sort}
-        onContentFilterChange={handleContentFilterChange}
-        onSortChange={setSort}
-      />
+      <>
+        <CommunityFeedHeader
+          contentFilter={contentFilter}
+          sort={sort}
+          onContentFilterChange={handleContentFilterChange}
+          onSortChange={setSort}
+        />
+        <MutedWordsBar hiddenCount={hiddenByMute} />
+      </>
     ),
-    [contentFilter, sort],
+    [contentFilter, hiddenByMute, sort],
   )
 
   const listFooter = useMemo(

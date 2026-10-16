@@ -35,6 +35,7 @@ import type {
   MeetingRole,
 } from '~/co-work/lib/types'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
+import { extractChatMentions, formatChatReply, splitChatReply } from '~/co-work/lib/meeting-studio'
 import type { MeetingChatAudience } from '~/co-work/lib/meeting-role-permissions'
 import {
   canDeleteMeetingChatMessage,
@@ -132,6 +133,7 @@ export function MeetingChatPanel({
   const toast = useAppToast()
   const keyboardInset = useComposerKeyboardInset()
   const [draft, setDraft] = useState('')
+  const [replyTo, setReplyTo] = useState<{ name: string; snippet: string } | null>(null)
   const [audience, setAudience] = useState<MeetingChatAudience>('everyone')
   const [recipientId, setRecipientId] = useState<string | null>(null)
   const [recipientQuery, setRecipientQuery] = useState('')
@@ -304,8 +306,10 @@ export function MeetingChatPanel({
     if (audience === 'private' && recipientId) {
       lastPrivateRecipientRef.current = recipientId
     }
-    onSend(text, audience, audience === 'private' ? recipientId : null)
+    const outgoing = replyTo ? formatChatReply({ name: replyTo.name, snippet: replyTo.snippet, body: text }) : text
+    onSend(outgoing, audience, audience === 'private' ? recipientId : null)
     setDraft('')
+    setReplyTo(null)
   }
 
   function sendShare(share: MeetingChatShare) {
@@ -906,6 +910,11 @@ export function MeetingChatPanel({
                   {msg.share ? (
                     <MeetingChatShareCard share={msg.share} currentUserId={currentUserId} />
                   ) : null}
+                  {splitChatReply(caption || '').replyTo ? (
+                    <Text fontSize={11} color={coworkUi.textMuted} numberOfLines={2}>
+                      {splitChatReply(caption || '').replyTo}
+                    </Text>
+                  ) : null}
                   {caption ? (
                     stickerOnly ? (
                       <ReactionStickerImage value={caption} size={132} borderRadius={16} />
@@ -937,11 +946,52 @@ export function MeetingChatPanel({
                               {part.text}
                             </Text>
                           ) : (
-                            <Text key={`text-${index}`}>{part.text}</Text>
+                            <Text key={`text-${index}`}>
+                              {part.text.split(/(@[A-Za-z0-9_.-]{2,32})/g).map((piece, pieceIndex) =>
+                                piece.startsWith('@') && extractChatMentions(piece).length ? (
+                                  <Text key={`${piece}-${pieceIndex}`} fontWeight="800" color={coworkUi.brandLight}>
+                                    {piece}
+                                  </Text>
+                                ) : (
+                                  piece
+                                ),
+                              )}
+                            </Text>
                           ),
                         )}
                       </Text>
                     )
+                  ) : null}
+                  {caption && !stickerOnly ? (
+                    <XStack gap="$2">
+                      <Button
+                        tone="ghost"
+                        size="$1"
+                        height={22}
+                        onPress={() => setReplyTo({ name: senderName, snippet: splitChatReply(caption).body || caption })}
+                      >
+                        Reply
+                      </Button>
+                      <Button
+                        tone="ghost"
+                        size="$1"
+                        height={22}
+                        onPress={() => {
+                          void import('~/co-work/lib/caption-translate').then(async ({ translateCaptionText }) => {
+                            const translated = await translateCaptionText({
+                              text: splitChatReply(caption).body || caption,
+                              targetLang: 'en',
+                            })
+                            toast.show('Translation', {
+                              tone: 'info',
+                              message: translated.translatedText.slice(0, 180),
+                            })
+                          })
+                        }}
+                      >
+                        Translate
+                      </Button>
+                    </XStack>
                   ) : null}
                 </YStack>
               </XStack>
@@ -1444,6 +1494,16 @@ export function MeetingChatPanel({
               </XStack>
             </ScrollView>
           </YStack>
+        ) : null}
+        {replyTo ? (
+          <XStack alignItems="center" justifyContent="space-between" gap="$2" paddingBottom="$1">
+            <Text flex={1} fontSize={12} color={coworkUi.textMuted} numberOfLines={1}>
+              Replying to {replyTo.name}: {replyTo.snippet}
+            </Text>
+            <Button tone="ghost" size="$1" onPress={() => setReplyTo(null)}>
+              Cancel
+            </Button>
+          </XStack>
         ) : null}
         {/* Zoom composer: attachment · input · emoji · send — always contrast-safe. */}
         <View

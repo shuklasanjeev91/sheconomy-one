@@ -17,6 +17,7 @@ import { CoWorkPanelShell, CoWorkSectionLabel, CoWorkStatusPill } from '~/co-wor
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { useMeetingQa } from '~/co-work/hooks/useMeetingQa'
 import type { MeetingQuestion } from '~/co-work/lib/meeting-qna'
+import { formatQaExport } from '~/co-work/lib/meeting-studio'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 type MeetingQaPanelProps = {
@@ -182,7 +183,30 @@ export function MeetingQaPanel({
             borderColor={coworkUi.borderSoft}
             backgroundColor={coworkUi.surfaceMuted}
           >
-            <CoWorkSectionLabel>Ask a question</CoWorkSectionLabel>
+            <XStack alignItems="center" justifyContent="space-between">
+              <CoWorkSectionLabel>Ask a question</CoWorkSectionLabel>
+              <Button
+                tone="ghost"
+                size="$2"
+                onPress={() => {
+                  const text = formatQaExport(
+                    questions.map((question) => ({
+                      body: question.body,
+                      status: question.status,
+                      votes: question.upvote_count,
+                      asker: question.anonymous ? 'Anonymous' : question.askerName || 'Participant',
+                    })),
+                  )
+                  void import('~/co-work/lib/meeting-transcript-archive').then(({ copyMeetingTranscriptText }) =>
+                    copyMeetingTranscriptText(text).then((copied) =>
+                      toast.show(copied ? 'Q&A copied' : 'Q&A ready', { tone: 'success' }),
+                    ),
+                  )
+                }}
+              >
+                Export
+              </Button>
+            </XStack>
             <Field label="Your question">
               <Input
                 value={draft}

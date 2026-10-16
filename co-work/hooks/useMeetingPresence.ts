@@ -47,6 +47,14 @@ import type {
   SignalPayload,
 } from '~/co-work/lib/types'
 import type { LiveCaptionLine } from '~/co-work/lib/live-captions'
+import { normalizeInterpretationAssignments } from '~/co-work/lib/meeting-interpretation'
+import {
+  emptyMeetingStudio,
+  mergeMeetingStudio,
+  parseMeetingStudio,
+  updateHandQueue,
+  type MeetingStudioState,
+} from '~/co-work/lib/meeting-studio'
 import type { FloatingMeetingReaction } from '~/co-work/lib/meeting-reactions'
 import {
   isMeetingNonverbalStatusId,
@@ -144,12 +152,14 @@ export function useMeetingPresence({
     | 'info'
     | 'recordings'
     | 'backgrounds'
+    | 'filters'
     | 'audio'
     | 'host_tools'
     | 'polls'
     | 'qna'
     | 'breakouts'
     | 'notes'
+    | 'studio'
   >('none')
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(true)
@@ -157,6 +167,12 @@ export function useMeetingPresence({
   const [removedByHost, setRemovedByHost] = useState(false)
   const [handRaised, setHandRaised] = useState(false)
   const [raisedHands, setRaisedHands] = useState<Record<string, boolean>>({})
+  const [handOrder, setHandOrder] = useState<string[]>([])
+  const [studio, setStudio] = useState<MeetingStudioState>(() =>
+    parseMeetingStudio(meeting.meeting_options?.studio) ?? emptyMeetingStudio(),
+  )
+  const studioRef = useRef(studio)
+  studioRef.current = studio
   const [liveCaptions, setLiveCaptions] = useState<LiveCaptionLine[]>([])
   const [captionWantedByUser, setCaptionWantedByUser] = useState<Record<string, boolean>>({})
   const [realtimeDegraded, setRealtimeDegraded] = useState(false)
@@ -194,6 +210,9 @@ export function useMeetingPresence({
   const [spotlightUserId, setSpotlightUserId] = useState<string | null>(null)
   const [webinarMode, setWebinarMode] = useState(false)
   const [interpretationChannelId, setInterpretationChannelId] = useState<string | null>('floor')
+  const [interpreters, setInterpreters] = useState<Record<string, string>>({})
+  const interpretersRef = useRef(interpreters)
+  interpretersRef.current = interpreters
   const [breakoutBroadcast, setBreakoutBroadcast] = useState<{
     id: string
     message: string
@@ -238,6 +257,8 @@ export function useMeetingPresence({
   const selfRoleRef = useRef(selfRole)
   selfRoleRef.current = selfRole
   const canModerate = canManageMeeting(selfRole)
+  const canModerateRef = useRef(canModerate)
+  canModerateRef.current = canModerate
   const isWaiting = selfParticipant?.status === 'waiting'
   const isRejected = selfParticipant?.status === 'rejected'
   const isRemoved = removedByHost || selfParticipant?.status === 'removed'
@@ -478,6 +499,15 @@ export function useMeetingPresence({
     (requestId: string) => {
       const own = freshOwnContentShare()
       if (own) sendSignal({ type: 'content-share', from: userId, share: own })
+      const studioSnapshot = studioRef.current
+      if (studioSnapshot.updatedAt > 0) {
+        sendSignal({
+          type: 'studio-state',
+          from: userId,
+          state: studioSnapshot,
+          timestamp: Date.now(),
+        })
+      }
       const board = whiteboardRef.current
       if (!board.active) return
       // Whoever started the board answers first; others only if nobody has.
@@ -520,6 +550,14 @@ export function useMeetingPresence({
       if (payload.type === 'share-state-request') {
         if (payload.from !== userId && typeof payload.requestId === 'string') {
           answerShareStateRequest(payload.requestId)
+          if (Object.keys(interpretersRef.current).length > 0 && canModerateRef.current) {
+            sendSignal({
+              type: 'interpretation-roster',
+              from: userId,
+              assignments: interpretersRef.current,
+              timestamp: Date.now(),
+            })
+          }
         }
         return
       }
@@ -573,6 +611,7 @@ export function useMeetingPresence({
         handRaisedRef.current = false
         setHandRaised(false)
         setRaisedHands({})
+        setHandOrder([])
         return
       }
       if (payload.type === 'lower-hand' && payload.targetUserId) {
@@ -587,6 +626,7 @@ export function useMeetingPresence({
           delete next[target]
           return next
         })
+        setHandOrder((order) => updateHandQueue(order, target, false))
         return
       }
       if (payload.type === 'clear-all-feedback') {
@@ -677,6 +717,12 @@ export function useMeetingPresence({
         setInterpretationChannelId(payload.channelId ? String(payload.channelId) : 'floor')
         return
       }
+      if (payload.type === 'interpretation-roster') {
+        const next = normalizeInterpretationAssignments(payload.assignments)
+        interpretersRef.current = next
+        setInterpreters(next)
+        return
+      }
       if (payload.type === 'breakout-broadcast') {
         setBreakoutBroadcast({
           id: `bo-bcast-${payload.timestamp}`,
@@ -759,6 +805,12 @@ export function useMeetingPresence({
         setLiveRecordingSignal(payload.isRecording)
         return
       }
+      if (payload.type === 'studio-state' && payload.state) {
+        const incoming = parseMeetingStudio(payload.state)
+        if (!incoming) return
+        setStudio((current) => mergeMeetingStudio(current, incoming))
+        return
+      }
       if (payload.type !== 'presence' || payload.from === userId) return
 
       const handUp = !!payload.hand
@@ -766,6 +818,7 @@ export function useMeetingPresence({
         if (!!prev[payload.from] === handUp) return prev
         return { ...prev, [payload.from]: handUp }
       })
+      setHandOrder((order) => updateHandQueue(order, payload.from, handUp))
 
       if (handUp) {
         const name = displayNameByUserRef.current[payload.from] || 'Someone'
@@ -1052,6 +1105,7 @@ export function useMeetingPresence({
     handRaisedRef.current = false
     setHandRaised(false)
     setRaisedHands({})
+    setHandOrder([])
     sendSignal({ type: 'lower-all-hands', from: userId, timestamp: Date.now() })
   }, [sendSignal, userId])
 
@@ -1069,6 +1123,7 @@ export function useMeetingPresence({
         delete next[target]
         return next
       })
+      setHandOrder((order) => updateHandQueue(order, target, false))
       sendSignal({
         type: 'lower-hand',
         from: userId,
@@ -1221,6 +1276,7 @@ export function useMeetingPresence({
     handRaisedRef.current = next
     setHandRaised(next)
     setRaisedHands((prev) => ({ ...prev, [userId]: next }))
+    setHandOrder((order) => updateHandQueue(order, userId, next))
     sendSignal({
       type: 'presence',
       from: userId,
@@ -1400,12 +1456,14 @@ export function useMeetingPresence({
         | 'info'
         | 'recordings'
         | 'backgrounds'
+        | 'filters'
         | 'audio'
         | 'host_tools'
         | 'polls'
         | 'qna'
         | 'breakouts'
-        | 'notes',
+        | 'notes'
+        | 'studio',
     ) => {
     setPanel((current) => {
       const opening = current !== next
@@ -1427,12 +1485,14 @@ export function useMeetingPresence({
         | 'info'
         | 'recordings'
         | 'backgrounds'
+        | 'filters'
         | 'audio'
         | 'host_tools'
         | 'polls'
         | 'qna'
         | 'breakouts'
-        | 'notes',
+        | 'notes'
+        | 'studio',
     ) => {
       if (next === 'chat') {
         setUnreadChatCount(0)
@@ -1637,6 +1697,24 @@ export function useMeetingPresence({
     [sendSignal, userId],
   )
 
+  const assignInterpreter = useCallback(
+    (targetUserId: string, channelId: string | null) => {
+      const next = { ...interpretersRef.current }
+      if (!channelId || channelId === 'floor') delete next[targetUserId]
+      else next[targetUserId] = channelId
+      const normalized = normalizeInterpretationAssignments(next)
+      interpretersRef.current = normalized
+      setInterpreters(normalized)
+      sendSignal({
+        type: 'interpretation-roster',
+        from: userId,
+        assignments: normalized,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
+
   const setInterpretationChannelLive = useCallback(
     (channelId: string | null) => {
       const next = channelId ? String(channelId) : 'floor'
@@ -1767,6 +1845,16 @@ export function useMeetingPresence({
     [sendSignal, userId],
   )
 
+  const publishStudio = useCallback(
+    (next: MeetingStudioState) => {
+      const parsed = parseMeetingStudio(next) ?? next
+      studioRef.current = parsed
+      setStudio(parsed)
+      sendSignal({ type: 'studio-state', from: userId, state: parsed, timestamp: Date.now() })
+    },
+    [sendSignal, userId],
+  )
+
   return {
     participants,
     moderationSettings,
@@ -1783,6 +1871,9 @@ export function useMeetingPresence({
     waitingParticipants,
     handRaised,
     raisedHands,
+    handOrder,
+    studio,
+    publishStudio,
     liveCaptions,
     roomWantsCaptions,
     setCaptionWanted,
@@ -1856,6 +1947,8 @@ export function useMeetingPresence({
     setWebinarModeLive,
     interpretationChannelId,
     setInterpretationChannelLive,
+    interpreters,
+    assignInterpreter,
     breakoutBroadcast,
     breakoutEndsAt,
     broadcastToBreakouts,

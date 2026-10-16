@@ -10,6 +10,10 @@ import type {
   Transport,
 } from 'mediasoup-client/types'
 
+import {
+  interpretationChannelFromSource,
+  interpretationConsumersToPause,
+} from '~/co-work/lib/meeting-interpretation'
 import { mediasoupPeerUserId } from '~/co-work/lib/mediasoup/peer-identity'
 import { ProtooPeer, type ProtooWebSocketFactory } from '~/co-work/lib/mediasoup/protoo'
 
@@ -23,13 +27,15 @@ export type MediasoupConnectionState =
 export type CameraFacing = 'user' | 'environment'
 
 /** What a producer carries — matches the mediasoup-demo `appData.source` values. */
-export type MediasoupSource = 'audio' | 'video' | 'screensharing' | 'screenaudio'
+export type MediasoupSource = 'audio' | 'video' | 'screensharing' | 'screenaudio' | 'interpretation'
 
 export type MediasoupRemoteTrack = {
   consumerId: string
   track: MediaStreamTrack
   /** The sender paused it (muted mic). */
   producerPaused: boolean
+  /** Set when `source` is `interpretation:<channel>`. */
+  channelId?: string | null
 }
 
 export type MediasoupRemotePeer = {
@@ -42,6 +48,8 @@ export type MediasoupRemotePeer = {
   screen: MediasoupRemoteTrack | null
   /** Computer sound shared with the screen. */
   screenAudio: MediasoupRemoteTrack | null
+  /** Interpreter microphone for one language channel. */
+  interpretation: MediasoupRemoteTrack | null
 }
 
 export type MediasoupLocalState = {
@@ -139,6 +147,7 @@ export function mediasoupSourceOf(appData: { source?: string } | undefined): Med
   const source = appData?.source
   if (source === 'screensharing' || source === 'share') return 'screensharing'
   if (source === 'screenaudio') return 'screenaudio'
+  if (source === 'interpretation' || source?.startsWith('interpretation:')) return 'interpretation'
   if (source === 'audio' || source === 'mic') return 'audio'
   return 'video'
 }
@@ -183,6 +192,11 @@ export class MediasoupRoom {
   private cameraProducer: Producer | null = null
   private screenProducer: Producer | null = null
   private screenAudioProducer: Producer | null = null
+  private interpretationProducer: Producer | null = null
+  /** Language this peer is interpreting. Floor mic stays paused while set. */
+  private interpretingChannel: string | null = null
+  private listenChannel = 'floor'
+  private hearFloor = true
   private readonly consumers = new Map<string, Consumer>()
   private readonly locallyPausedConsumers = new Set<string>()
   private readonly preferredLayers = new Map<string, number>()
@@ -289,6 +303,15 @@ export class MediasoupRoom {
   async setMicEnabled(enabled: boolean, constraints?: MediaTrackConstraints) {
     if (constraints) this.micConstraints = constraints
     this.wantMic = enabled
+    if (this.interpretingChannel) {
+      this.pauseFloorProducer()
+      if (!this.interpretationProducer) {
+        await this.ensureInterpretationProducer(this.interpretingChannel)
+      }
+      this.syncInterpretationMute()
+      this.updateLocal()
+      return
+    }
     const producer = this.micProducer
     if (!enabled) {
       if (producer && !producer.paused) {
@@ -316,9 +339,64 @@ export class MediasoupRoom {
     await this.produceMic()
   }
 
+  /**
+   * Interpreter mic. `null` / `floor` closes that producer and restores the floor mic.
+   * The floor producer stays paused so the translation is not heard on the original channel.
+   */
+  async publishInterpretation(channelId: string | null): Promise<void> {
+    const next = interpretationChannelFromSource(
+      channelId && channelId !== 'floor' ? `interpretation:${channelId}` : undefined,
+    )
+    if (!this.sendTransport) {
+      this.interpretingChannel = next
+      return
+    }
+    if (next === this.interpretingChannel) {
+      if (next && this.interpretationProducer) return
+      if (!next && !this.interpretationProducer) return
+    }
+    if (!next) {
+      this.interpretingChannel = null
+      this.closeInterpretationProducer()
+      if (this.wantMic) {
+        const producer = this.micProducer
+        if (producer?.paused && trackIsLive(producer.track)) {
+          producer.resume()
+          this.signal('resumeProducer', { producerId: producer.id })
+        } else if (!producer) {
+          await this.produceMic()
+        }
+      }
+      this.updateLocal()
+      return
+    }
+    this.interpretingChannel = next
+    this.pauseFloorProducer()
+    await this.ensureInterpretationProducer(next)
+    this.syncInterpretationMute()
+    this.updateLocal()
+  }
+
+  /** Local listen mix. Interpreters pass `hearFloor: true` so they still hear the original room. */
+  setInterpretationPlayback(input: { listenChannel: string; hearFloor: boolean }) {
+    this.listenChannel = input.listenChannel || 'floor'
+    this.hearFloor = input.hearFloor || this.listenChannel === 'floor'
+    this.applyInterpretationMix()
+  }
+
   /** Recapture the microphone with new constraints (e.g. Original Sound). */
   async restartMic(constraints: MediaTrackConstraints) {
     this.micConstraints = constraints
+    if (this.interpretingChannel) {
+      const floor = this.micProducer
+      if (floor) await this.replaceMicTrack(floor, constraints)
+      this.closeInterpretationProducer()
+      await this.ensureInterpretationProducer(this.interpretingChannel)
+      this.pauseFloorProducer()
+      this.syncInterpretationMute()
+      this.updateLocal()
+      return
+    }
     const producer = this.micProducer
     if (!producer || producer.paused) return
     await this.replaceMicTrack(producer, constraints)
@@ -547,6 +625,11 @@ export class MediasoupRoom {
     this.update({ connection: 'connected', error: null })
 
     if (this.wantMic) await this.produceMic().catch((error) => this.reportError(error))
+    if (this.interpretingChannel) {
+      this.pauseFloorProducer()
+      await this.ensureInterpretationProducer(this.interpretingChannel).catch((error) => this.reportError(error))
+      this.syncInterpretationMute()
+    }
     if (this.wantCamera) await this.produceCamera().catch((error) => this.reportError(error))
   }
 
@@ -630,7 +713,13 @@ export class MediasoupRoom {
 
   /** Producers stop their tracks on close; a reconnect captures fresh ones. */
   private teardownMedia() {
-    const producers = [this.micProducer, this.cameraProducer, this.screenProducer, this.screenAudioProducer]
+    const producers = [
+      this.micProducer,
+      this.cameraProducer,
+      this.screenProducer,
+      this.screenAudioProducer,
+      this.interpretationProducer,
+    ]
     for (const producer of producers) {
       if (!producer) continue
       const track = producer.track
@@ -645,6 +734,7 @@ export class MediasoupRoom {
     this.cameraProducer = null
     this.screenProducer = null
     this.screenAudioProducer = null
+    this.interpretationProducer = null
     this.releaseRawCamera()
     for (const consumer of this.consumers.values()) {
       try {
@@ -675,6 +765,109 @@ export class MediasoupRoom {
   private requireSendTransport(): Transport {
     if (!this.sendTransport) throw new Error('Meeting media is still connecting. Try again in a moment.')
     return this.sendTransport
+  }
+
+  private pauseFloorProducer() {
+    const producer = this.micProducer
+    if (!producer || producer.paused) return
+    producer.pause()
+    this.signal('pauseProducer', { producerId: producer.id })
+  }
+
+  private syncInterpretationMute() {
+    const producer = this.interpretationProducer
+    if (!producer || this.closed) return
+    if (this.wantMic && producer.paused) {
+      producer.resume()
+      this.signal('resumeProducer', { producerId: producer.id })
+      return
+    }
+    if (!this.wantMic && !producer.paused) {
+      producer.pause()
+      this.signal('pauseProducer', { producerId: producer.id })
+    }
+  }
+
+  private closeInterpretationProducer() {
+    const producer = this.interpretationProducer
+    this.interpretationProducer = null
+    if (!producer) return
+    const track = producer.track
+    try {
+      producer.close()
+    } catch {
+      // Transport already gone.
+    }
+    stopTrack(track)
+    this.signal('closeProducer', { producerId: producer.id })
+  }
+
+  private async ensureInterpretationProducer(channelId: string) {
+    const source = `interpretation:${channelId}`
+    const current = this.interpretationProducer
+    const currentSource = (current?.appData as { source?: string } | undefined)?.source
+    if (current && currentSource === source) return
+    this.closeInterpretationProducer()
+    const transport = this.requireSendTransport()
+    let track: MediaStreamTrack | undefined
+    const floor = this.micProducer?.track
+    if (floor && trackIsLive(floor)) {
+      track = floor.clone()
+    } else {
+      const stream = await this.options.mediaDevices().getUserMedia({ audio: this.micConstraints })
+      track = stream.getAudioTracks()[0]
+    }
+    if (!track) throw new Error('No microphone found.')
+    if (this.interpretingChannel !== channelId || this.closed) {
+      stopTrack(track)
+      return
+    }
+    this.interpretationProducer = await transport.produce({
+      track,
+      codecOptions: { opusStereo: false, opusDtx: true, opusFec: true },
+      appData: { source },
+    })
+  }
+
+  private applyInterpretationMix() {
+    const slots = [...this.peers.values()].flatMap((peer) => {
+      const rows: { consumerId: string; kind: 'floor' | 'interpretation'; channelId: string | null }[] = []
+      if (peer.audio) rows.push({ consumerId: peer.audio.consumerId, kind: 'floor', channelId: null })
+      if (peer.interpretation) {
+        rows.push({
+          consumerId: peer.interpretation.consumerId,
+          kind: 'interpretation',
+          channelId: peer.interpretation.channelId ?? null,
+        })
+      }
+      return rows
+    })
+    const paused = new Set(
+      interpretationConsumersToPause({
+        listenChannel: this.listenChannel,
+        hearFloor: this.hearFloor,
+        slots,
+      }),
+    )
+    for (const slot of slots) {
+      this.setConsumerPlayback(slot.consumerId, paused.has(slot.consumerId))
+    }
+  }
+
+  private setConsumerPlayback(consumerId: string, paused: boolean) {
+    const consumer = this.consumers.get(consumerId)
+    if (!consumer) return
+    const currently = this.locallyPausedConsumers.has(consumerId)
+    if (paused === currently) return
+    if (paused) {
+      this.locallyPausedConsumers.add(consumerId)
+      consumer.pause()
+      this.signal('pauseConsumer', { consumerId })
+      return
+    }
+    this.locallyPausedConsumers.delete(consumerId)
+    consumer.resume()
+    this.signal('resumeConsumer', { consumerId })
   }
 
   private async produceMic() {
@@ -917,6 +1110,8 @@ export class MediasoupRoom {
     const transport = this.recvTransport
     if (!transport) throw new Error('Not ready to receive media')
     const source = mediasoupSourceOf(request.appData)
+    const channelId =
+      source === 'interpretation' ? interpretationChannelFromSource(request.appData?.source) : null
     const consumer = await transport.consume<ConsumerAppData>({
       id: request.consumerId ?? request.id ?? '',
       producerId: request.producerId,
@@ -935,19 +1130,25 @@ export class MediasoupRoom {
       consumerId: consumer.id,
       track: consumer.track,
       producerPaused: !!request.producerPaused,
+      channelId,
     }
     const slot =
       source === 'audio'
         ? 'audio'
-        : source === 'screensharing'
-          ? 'screen'
-          : source === 'screenaudio'
-            ? 'screenAudio'
-            : 'video'
+        : source === 'interpretation'
+          ? 'interpretation'
+          : source === 'screensharing'
+            ? 'screen'
+            : source === 'screenaudio'
+              ? 'screenAudio'
+              : 'video'
     this.peers.set(peer.peerId, { ...peer, [slot]: remote })
     this.emitPeers()
     // After our answer is sent, so the server's resume never lands after our pause.
-    setTimeout(() => this.applyVisibility(), 0)
+    setTimeout(() => {
+      this.applyVisibility()
+      this.applyInterpretationMix()
+    }, 0)
     return {}
   }
 
@@ -971,7 +1172,7 @@ export class MediasoupRoom {
     patch: (current: MediasoupRemoteTrack) => MediasoupRemoteTrack | null,
   ) {
     for (const peer of this.peers.values()) {
-      for (const slot of ['audio', 'video', 'screen', 'screenAudio'] as const) {
+      for (const slot of ['audio', 'video', 'screen', 'screenAudio', 'interpretation'] as const) {
         const current = peer[slot]
         if (current?.consumerId !== consumerId) continue
         this.peers.set(peer.peerId, { ...peer, [slot]: patch(current) })
@@ -1075,6 +1276,7 @@ export class MediasoupRoom {
       video: existing?.video ?? null,
       screen: existing?.screen ?? null,
       screenAudio: existing?.screenAudio ?? null,
+      interpretation: existing?.interpretation ?? null,
     }
     this.peers.set(peerId, peer)
     this.emitPeers()
@@ -1093,13 +1295,14 @@ export class MediasoupRoom {
 
   private updateLocal() {
     const mic = this.micProducer
+    const spoken = this.interpretingChannel ? this.interpretationProducer : mic
     const camera = this.cameraProducer
     const screen = this.screenProducer
     this.update({
       local: {
         ...this.snapshot.local,
-        micEnabled: !!mic && !mic.paused && trackIsLive(mic.track),
-        micTrack: mic?.track ?? null,
+        micEnabled: !!spoken && !spoken.paused && trackIsLive(spoken.track),
+        micTrack: spoken?.track ?? mic?.track ?? null,
         cameraEnabled: !!camera && trackIsLive(camera.track) && trackIsLive(this.rawCameraTrack),
         cameraTrack: camera?.track ?? null,
         cameraRawTrack: camera ? this.rawCameraTrack : null,

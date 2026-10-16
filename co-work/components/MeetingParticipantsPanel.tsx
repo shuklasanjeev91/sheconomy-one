@@ -23,6 +23,7 @@ import { useCoWorkTheme, useMeetingControlPalette } from '~/co-work/lib/theme'
 import { useAuth } from '~/hooks/useAuth'
 import type { MeetingParticipant, MeetingRole } from '~/co-work/lib/types'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
+import { handQueueLabel } from '~/co-work/lib/meeting-studio'
 import {
   compareMeetingActivity,
   type MeetingActivitySignals,
@@ -74,6 +75,7 @@ type MeetingParticipantsPanelProps = {
   onClose: () => void
   onInvite?: () => void
   raisedHands?: Record<string, boolean>
+  handOrder?: string[]
   fullWidth?: boolean
   spotlightUserId?: string | null
   onSetSpotlight?: (userId: string | null) => void
@@ -131,6 +133,7 @@ export function MeetingParticipantsPanel({
   onClose,
   onInvite,
   raisedHands = {},
+  handOrder = [],
   fullWidth,
   spotlightUserId = null,
   onSetSpotlight,
@@ -525,6 +528,7 @@ export function MeetingParticipantsPanel({
                     participant={p}
                     isSelf={isSelf}
                     handRaised={!!raisedHands[p.user_id]}
+                    queueLabel={handQueueLabel(handOrder, p.user_id)}
                     isSpotlighted={spotlightedUserId === p.user_id}
                     socialActions={
                       isAuthenticated && !isSelf ? (
@@ -758,6 +762,7 @@ function ParticipantRow({
   action,
   socialActions,
   handRaised,
+  queueLabel,
   isSelf,
   isSpotlighted,
 }: {
@@ -765,6 +770,7 @@ function ParticipantRow({
   action?: ReactNode
   socialActions?: ReactNode
   handRaised?: boolean
+  queueLabel?: string | null
   isSelf?: boolean
   isSpotlighted?: boolean
 }) {
@@ -821,6 +827,11 @@ function ParticipantRow({
               </Text>
             </Text>
             {handRaised ? <Text fontSize={13}>✋</Text> : null}
+            {queueLabel ? (
+              <Text fontSize={11} fontWeight="700" color={coworkUi.brandLight}>
+                {queueLabel}
+              </Text>
+            ) : null}
             {isSpotlighted ? (
               <XStack
                 alignItems="center"

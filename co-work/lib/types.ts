@@ -1,3 +1,4 @@
+import type { MeetingStudioState, MeetingOccurrenceOverride, MeetingTemplateId } from '~/co-work/lib/meeting-studio'
 import type { MeetingContentKind, MeetingContentShare } from '~/co-work/lib/meeting-content-share'
 import type { MeetingChatShare } from '~/co-work/lib/meeting-chat-share'
 import type { WhiteboardStroke } from '~/co-work/lib/meeting-whiteboard'
@@ -73,6 +74,11 @@ export type MeetingOptions = {
   recordingMode?: 'disabled' | 'manual' | 'automatic'
   captionsEnabled?: boolean
   enableMeetingChat?: boolean
+  /** Live agenda, shared notes, registration, and follow-up state. */
+  studio?: MeetingStudioState
+  templateId?: MeetingTemplateId | null
+  skippedDates?: string[]
+  occurrenceOverrides?: MeetingOccurrenceOverride[]
 }
 
 export type Meeting = {
@@ -283,6 +289,13 @@ export type SignalPayload =
   | { type: 'recording-response'; from: string; to: string; accepted: boolean; timestamp: number }
   /** Live interpretation channel hint (UI routing). */
   | { type: 'interpretation-channel'; from: string; channelId: string | null; timestamp: number }
+  /** Host roster: user id → interpreter language (`en` | `hi` | `es`). */
+  | {
+      type: 'interpretation-roster'
+      from: string
+      assignments: Record<string, string>
+      timestamp: number
+    }
   /** Host webinar mode — attendees stay muted with hand-raise privileges. */
   | { type: 'webinar-mode'; from: string; enabled: boolean; timestamp: number }
   /** Host broadcast into open breakout rooms. */
@@ -310,6 +323,8 @@ export type SignalPayload =
   | { type: 'host-transferred'; from: string; newHostId: string; newHostName?: string; timestamp: number }
   /** Host/recorder: immediate broadcast of active recording status. */
   | { type: 'recording-status'; from: string; isRecording: boolean; timestamp: number }
+  /** Agenda, shared notes, pinned listing, and the rest of the meeting studio. */
+  | { type: 'studio-state'; from: string; state: MeetingStudioState; timestamp: number }
 
 export type MediaCapabilities = {
   supportsVideo: boolean

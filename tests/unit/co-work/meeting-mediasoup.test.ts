@@ -17,6 +17,7 @@ vi.mock('~/co-work/lib/meeting-media-reconnect', () => ({
   meetingMediaCredentialRetryDelayMs: () => 0,
 }))
 
+import { interpretationConsumersToPause } from '~/co-work/lib/meeting-interpretation'
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
 import { fetchMediasoupCredentials } from '~/co-work/lib/mediasoup/mediasoup-credentials'
 import {
@@ -74,6 +75,7 @@ function remote(
       : null,
     screen: options.screen ? { consumerId: `${peerId}-s`, track: fakeTrack(`${peerId}-s`), producerPaused: false } : null,
     screenAudio: null,
+    interpretation: null,
   }
 }
 
@@ -137,7 +139,25 @@ describe('mediasoup signalling', () => {
     expect(mediasoupSourceOf({ source: 'share' })).toBe('screensharing')
     expect(mediasoupSourceOf({ source: 'mic' })).toBe('audio')
     expect(mediasoupSourceOf({ source: 'webcam' })).toBe('video')
+    expect(mediasoupSourceOf({ source: 'interpretation:hi' })).toBe('interpretation')
     expect(mediasoupSourceOf(undefined)).toBe('video')
+  })
+
+  it('keeps a floor listener off interpreter audio', () => {
+    const slots = [
+      { consumerId: 'floor-1', kind: 'floor' as const, channelId: null },
+      { consumerId: 'hi-1', kind: 'interpretation' as const, channelId: 'hi' },
+      { consumerId: 'en-1', kind: 'interpretation' as const, channelId: 'en' },
+    ]
+    expect(
+      interpretationConsumersToPause({ listenChannel: 'floor', hearFloor: true, slots }),
+    ).toEqual(['hi-1', 'en-1'])
+    expect(
+      interpretationConsumersToPause({ listenChannel: 'hi', hearFloor: false, slots }).sort(),
+    ).toEqual(['en-1', 'floor-1'])
+    expect(
+      interpretationConsumersToPause({ listenChannel: 'hi', hearFloor: true, slots }),
+    ).toEqual(['hi-1', 'en-1'])
   })
 
   it('keys peers by user id across sessions', () => {

@@ -623,6 +623,9 @@ if (typeof g.Response !== 'function') {
         // throw "new version of the pre-bundle … page reload" on meeting routes.
         'mediasoup-client',
         '@mediapipe/tasks-vision',
+        // QR panels import this lazily. A late discovery rebundles every dep,
+        // and the reload mixes two React copies → Slot useContext crashes on (store).
+        'qrcode',
       ],
     },
 

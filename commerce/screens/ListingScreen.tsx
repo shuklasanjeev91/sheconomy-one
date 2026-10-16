@@ -14,6 +14,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { PriceWatchCard } from '~/commerce/components/PriceWatchCard'
 import { MediaLightbox } from '~/components/media/MediaLightbox'
 import {
   AvailableOffersCard,
@@ -739,6 +740,12 @@ export function ListingScreen({
                   <ListingPreorderNote metadata={listingMeta} />
                   <LowStockHint stock={displayStock} />
                   <StockNotifyButton listingId={listing.id} outOfStock={outOfStock && !allowPreorder} />
+                  <PriceWatchCard
+                    listingId={listing.id}
+                    title={listing.title}
+                    price={displayPrice}
+                    currency={currency}
+                  />
                   <ListingBundleOffer
                     listingId={listing.id}
                     onAddBundle={async (bundleId) => {
@@ -997,6 +1004,12 @@ export function ListingScreen({
           <ListingPreorderNote metadata={listingMeta} />
           <LowStockHint stock={displayStock} />
           <StockNotifyButton listingId={listing.id} outOfStock={outOfStock && !allowPreorder} />
+          <PriceWatchCard
+            listingId={listing.id}
+            title={listing.title}
+            price={displayPrice}
+            currency={currency}
+          />
           <ListingBundleOffer
             listingId={listing.id}
             onAddBundle={async (bundleId) => {

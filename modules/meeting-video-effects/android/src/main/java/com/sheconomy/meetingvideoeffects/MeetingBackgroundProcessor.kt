@@ -4,7 +4,11 @@ import android.content.Context
 import android.app.ActivityManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
@@ -69,7 +73,7 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
   @Volatile private var decodeInFlightPath: String? = null
 
   override fun process(frame: VideoFrame, textureHelper: SurfaceTextureHelper): VideoFrame {
-    if (MeetingBackgroundConfig.mode == "off") {
+    if (!MeetingBackgroundConfig.effectActive()) {
       clearPending()
       return frame
     }
@@ -212,6 +216,11 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
     // Segment the upright picture. The camera buffer itself may be rotated.
     val upright = rotateBitmap(source, rotation)
     if (upright !== source) source.recycle()
+    if (MeetingBackgroundConfig.mode == "off") {
+      val graded = applyVideoFilter(upright)
+      if (graded !== upright) upright.recycle()
+      return finishFrame(graded, origW, origH, rotation)
+    }
     val maskSource = if (upright.width > MASK_WIDTH) {
       val maskHeight = (upright.height * MASK_WIDTH / upright.width).coerceAtLeast(2)
       Bitmap.createScaledBitmap(upright, MASK_WIDTH, maskHeight - maskHeight % 2, true)
@@ -235,7 +244,13 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
     }
     if (background !== cachedImage && background !== upright) background.recycle()
     upright.recycle()
+    val graded = applyVideoFilter(composited)
+    if (graded !== composited) composited.recycle()
+    return finishFrame(graded, origW, origH, rotation)
+  }
 
+  private fun finishFrame(bitmap: Bitmap, origW: Int, origH: Int, rotation: Int): VideoFrame.I420Buffer? {
+    var composited = bitmap
     val unrotated = rotateBitmap(composited, (360 - ((rotation % 360) + 360) % 360) % 360)
     if (unrotated !== composited) composited.recycle()
     composited = unrotated
@@ -255,6 +270,58 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
     }
     composited.recycle()
     return output
+  }
+
+  private fun applyVideoFilter(source: Bitmap): Bitmap {
+    val matrix = videoFilterMatrix(MeetingBackgroundConfig.filter) ?: return source
+    val out = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { colorFilter = ColorMatrixColorFilter(matrix) }
+    Canvas(out).drawBitmap(source, 0f, 0f, paint)
+    return out
+  }
+
+  private fun videoFilterMatrix(filter: String): ColorMatrix? {
+    val matrix = ColorMatrix()
+    when (filter) {
+      "warm" -> matrix.set(floatArrayOf(
+        1.12f, 0.06f, 0f, 0f, 8f,
+        0.02f, 1.02f, 0f, 0f, 2f,
+        0f, 0f, 0.84f, 0f, 0f,
+        0f, 0f, 0f, 1f, 0f,
+      ))
+      "cool" -> matrix.set(floatArrayOf(
+        0.86f, 0f, 0.04f, 0f, 0f,
+        0f, 1f, 0.02f, 0f, 0f,
+        0f, 0.04f, 1.14f, 0f, 6f,
+        0f, 0f, 0f, 1f, 0f,
+      ))
+      "vivid" -> {
+        matrix.setSaturation(1.45f)
+        val contrast = ColorMatrix()
+        val scale = 1.08f
+        val translate = (-0.5f * scale + 0.5f) * 255f
+        contrast.set(floatArrayOf(
+          scale, 0f, 0f, 0f, translate,
+          0f, scale, 0f, 0f, translate,
+          0f, 0f, scale, 0f, translate,
+          0f, 0f, 0f, 1f, 0f,
+        ))
+        matrix.postConcat(contrast)
+      }
+      "mono" -> matrix.setSaturation(0f)
+      "soft" -> {
+        matrix.setSaturation(0.92f)
+        val soft = ColorMatrix(floatArrayOf(
+          0.94f, 0f, 0f, 0f, 18f,
+          0f, 0.94f, 0f, 0f, 18f,
+          0f, 0f, 0.94f, 0f, 18f,
+          0f, 0f, 0f, 1f, 0f,
+        ))
+        matrix.postConcat(soft)
+      }
+      else -> return null
+    }
+    return matrix
   }
 
   private fun rotateBitmap(bitmap: Bitmap, rotation: Int): Bitmap {

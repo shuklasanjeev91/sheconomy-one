@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { applyAnnotationEvent, emptyAnnotationSession } from '~/co-work/lib/meeting-annotation'
 import { buildMeetingTranscriptArchive, transcriptArchiveToPlainText } from '~/co-work/lib/meeting-transcript-archive'
 import { canOpenMeetingPopout } from '~/co-work/lib/meeting-dual-monitor'
-import { defaultInterpretationChannelId, MEETING_INTERPRETATION_CHANNELS } from '~/co-work/lib/meeting-interpretation'
+import {
+  defaultInterpretationChannelId,
+  interpretationChannelFromSource,
+  interpretationConsumersToPause,
+  MEETING_INTERPRETATION_CHANNELS,
+} from '~/co-work/lib/meeting-interpretation'
 import type { LiveCaptionLine } from '~/co-work/lib/live-captions'
 
 describe('meeting phase 3–4 helpers', () => {
@@ -57,7 +62,15 @@ describe('meeting phase 3–4 helpers', () => {
 
   it('exposes interpretation channels and dual-monitor capability flag', () => {
     expect(defaultInterpretationChannelId()).toBe('floor')
-    expect(MEETING_INTERPRETATION_CHANNELS.length).toBeGreaterThan(1)
+    expect(MEETING_INTERPRETATION_CHANNELS.map((channel) => channel.id)).toEqual(['floor', 'en', 'hi', 'es'])
+    expect(interpretationChannelFromSource('interpretation:hi')).toBe('hi')
+    expect(
+      interpretationConsumersToPause({
+        listenChannel: 'floor',
+        hearFloor: true,
+        slots: [{ consumerId: 'interp', kind: 'interpretation', channelId: 'hi' }],
+      }),
+    ).toEqual(['interp'])
     expect(typeof canOpenMeetingPopout()).toBe('boolean')
   })
 })

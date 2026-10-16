@@ -415,6 +415,32 @@ export function useMediasoupMeeting(input: {
     })()
   }, [clearError, reportError, room])
 
+  const publishInterpretation = useCallback(
+    (channelId: string | null) => {
+      if (!room) return Promise.resolve()
+      return room.publishInterpretation(channelId).catch((cause) => {
+        reportError(platformRef.current.errorMessage('microphone', cause))
+      })
+    },
+    [reportError, room],
+  )
+
+  const setInterpretationPlayback = useCallback(
+    (input: { listenChannel: string; hearFloor: boolean }) => {
+      room?.setInterpretationPlayback(input)
+    },
+    [room],
+  )
+
+  const interpretationChannelsLive = useMemo(() => {
+    const channels = new Set<string>()
+    for (const peer of snapshot.peers) {
+      const channel = peer.interpretation?.channelId
+      if (channel && !peer.interpretation?.producerPaused) channels.add(channel)
+    }
+    return [...channels]
+  }, [snapshot.peers])
+
   const toggleVideo = useCallback(() => {
     if (!room || cameraBusyRef.current) return
     const local = room.getSnapshot().local
@@ -567,6 +593,9 @@ export function useMediasoupMeeting(input: {
       speakingIdentities,
       activeSpeakerIdentity,
       remoteUserIds,
+      interpretationChannelsLive,
+      publishInterpretation,
+      setInterpretationPlayback,
       toggleAudio,
       toggleVideo,
       toggleScreenShare,
@@ -583,6 +612,9 @@ export function useMediasoupMeeting(input: {
     featuredVideo,
     flipCamera,
     remoteUserIds,
+    interpretationChannelsLive,
+    publishInterpretation,
+    setInterpretationPlayback,
     restartMicrophone,
     room,
     screenShareIdentity,

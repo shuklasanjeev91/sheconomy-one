@@ -8,6 +8,7 @@ import {
   normalizeVirtualBackground,
   OFF_BACKGROUND,
   saveVirtualBackgroundPreference,
+  videoEffectIsActive,
   type VideoEffectCapability,
   type VideoEffectStatus,
   type VirtualBackgroundSelection,
@@ -103,7 +104,7 @@ export function useMeetingVideoEffects({ room }: MediasoupVideoEffectsInput): Me
       const next = normalizeVirtualBackground(nextValue)
       setError(null)
 
-      if (next.mode !== 'off' && capability !== 'supported') {
+      if (videoEffectIsActive(next) && capability !== 'supported') {
         if (capability === 'checking') {
           selectionRef.current = next
           setSelection(next)
@@ -122,7 +123,7 @@ export function useMeetingVideoEffects({ room }: MediasoupVideoEffectsInput): Me
           throw new Error('The selected background image is not available.')
         }
 
-        if (resolved.mode === 'off') {
+        if (!videoEffectIsActive(resolved)) {
           await room?.setCameraProcessor(null)
         } else {
           const processor = ensureProcessor()
@@ -132,7 +133,7 @@ export function useMeetingVideoEffects({ room }: MediasoupVideoEffectsInput): Me
 
         selectionRef.current = resolved
         setSelection(resolved)
-        setStatus(resolved.mode === 'off' ? 'idle' : 'active')
+        setStatus(videoEffectIsActive(resolved) ? 'active' : 'idle')
         await saveVirtualBackgroundPreference(resolved)
         return true
       } catch (cause) {
@@ -140,7 +141,7 @@ export function useMeetingVideoEffects({ room }: MediasoupVideoEffectsInput): Me
         setError(message)
         setStatus('error')
         await room?.setCameraProcessor(null).catch(() => undefined)
-        if (/too long|timed out|Timeout/i.test(message) && next.mode !== 'off') {
+        if (/too long|timed out|Timeout/i.test(message) && videoEffectIsActive(next)) {
           // Keep the preference; the next room / camera start retries.
           selectionRef.current = next
           setSelection(next)
@@ -157,7 +158,7 @@ export function useMeetingVideoEffects({ room }: MediasoupVideoEffectsInput): Me
   // Re-apply the saved choice once support is known and the room exists.
   useEffect(() => {
     if (!room || capability !== 'supported') return
-    if (selectionRef.current.mode === 'off') return
+    if (!videoEffectIsActive(selectionRef.current)) return
     void apply(selectionRef.current)
     // Only on room / capability changes; `apply` itself changes with them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
