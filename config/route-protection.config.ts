@@ -62,6 +62,8 @@ export const ROUTE_ACCESS: ReadonlyArray<readonly [prefix: string, rule: RouteAc
   ['/auth/callback', { access: 'PUBLIC' }],
   ['/auth/complete-profile', { access: 'AUTH_ONLY' }],
   ['/auth/verify-gender', { access: 'AUTH_ONLY' }],
+  // Phone opened from a QR code. The token authorizes the check; the phone need not be signed in.
+  ['/auth/verify-handoff', { access: 'PUBLIC' }],
   ['/auth', { access: 'PUBLIC' }],
 
   // --- Admin console (admins only) ---

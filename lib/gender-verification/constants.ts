@@ -31,9 +31,9 @@ export const GENDER_VERIFICATION = {
   minLiveScore: 0.4,
   minRealScore: 0.4,
   /**
-   * Mean female probability required to pass, judged across many frames rather
-   * than one. Mirrored by `complete_gender_verification_session` — keep this in
-   * sync with the latest gender-verification migration.
+   * Mean female probability that used to be required on its own. A majority of
+   * female labels now passes even under this floor; the server stores the score
+   * and sets `profiles.gender` from the female boolean.
    */
   minGenderConfidence: 0.6,
   /** Usable gender samples needed before we judge the run at all. */

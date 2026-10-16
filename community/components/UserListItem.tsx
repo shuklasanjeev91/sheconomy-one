@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { useWindowDimensions } from 'react-native'
+
 import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
 import { ProfileFollowButton } from '~/community/components/ProfileFollowButton'
 import { ProfileLink } from '~/community/components/ProfileLink'
@@ -5,6 +8,9 @@ import { useCommunityUi } from '~/community/lib/community-theme'
 import type { UserListMember } from '~/community/lib/user-lists'
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
+
+/** Phone rows cannot fit avatar + name + Follow + Connected (or Ignore + Accept). */
+const STACK_ACTIONS_BELOW_WIDTH = 520
 
 type UserListItemProps = {
   member: UserListMember
@@ -21,68 +27,112 @@ export function UserListItem({
 }: UserListItemProps) {
   const communityUi = useCommunityUi()
   const subtitle = member.headline || member.industry || member.location
+  const { width: windowWidth } = useWindowDimensions()
+  const [rowWidth, setRowWidth] = useState(0)
+  const showActions = showConnect || showFollow
+  // Prefer the window on phones. A row can report a width wider than the
+  // screen when the buttons refuse to shrink, which would keep them inline
+  // and crush the name into a one-character column.
+  const stackActions =
+    showActions &&
+    ((windowWidth > 0 && windowWidth < STACK_ACTIONS_BELOW_WIDTH) ||
+      (rowWidth > 0 && rowWidth < STACK_ACTIONS_BELOW_WIDTH))
+
+  const actions = (
+    <XStack
+      gap={8}
+      flexShrink={0}
+      alignItems="center"
+      flexWrap="wrap"
+      width={stackActions ? '100%' : undefined}
+    >
+      {showFollow ? <ProfileFollowButton targetUserId={member.user_id} size="sm" /> : null}
+      {showConnect ? (
+        <ProfileConnectButton
+          targetUserId={member.user_id}
+          size="sm"
+          fullWidth={stackActions && !showFollow}
+        />
+      ) : null}
+    </XStack>
+  )
 
   return (
-    <XStack
-      gap={12}
-      alignItems={compact ? 'center' : 'flex-start'}
+    <YStack
+      width="100%"
+      alignSelf="stretch"
       paddingVertical={compact ? 8 : 12}
       paddingHorizontal={10}
       borderRadius={radius.chip}
       borderBottomWidth={1}
       borderBottomColor={communityUi.borderLight}
       hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+      onLayout={(event) => {
+        const width = Math.round(event.nativeEvent.layout.width)
+        if (width !== rowWidth) setRowWidth(width)
+      }}
     >
-      <ProfileLink userId={member.user_id} username={member.username}>
-        <Avatar
-          name={member.full_name}
-          src={member.avatar_url ?? undefined}
-          size={compact ? '$4' : '$5'}
-          cursor="pointer"
-        />
-      </ProfileLink>
-
-      <YStack flex={1} gap={4} minWidth={0}>
+      <XStack gap={12} alignItems={compact ? 'center' : 'flex-start'} width="100%">
         <ProfileLink userId={member.user_id} username={member.username}>
-          <XStack gap={4} alignItems="center" flexWrap="wrap">
-            <Text
-              fontSize={compact ? 14 : 16}
-              fontWeight="600"
-              color={communityUi.text}
-              numberOfLines={1}
-              cursor="pointer"
-              hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
-            >
-              {member.full_name}
-            </Text>
-            {member.is_verified ? (
-              <Text fontSize={11} color={communityUi.brand} fontWeight="700">
-                ✓
-              </Text>
-            ) : null}
-          </XStack>
+          <Avatar
+            name={member.full_name}
+            src={member.avatar_url ?? undefined}
+            size={compact ? '$4' : '$5'}
+            cursor="pointer"
+          />
         </ProfileLink>
 
-        {subtitle ? (
-          <Text fontSize={compact ? 12 : 14} color={communityUi.textMuted} numberOfLines={2} lineHeight={18}>
-            {subtitle}
-          </Text>
-        ) : null}
+        <YStack flex={1} gap={4} minWidth={0}>
+          <ProfileLink userId={member.user_id} username={member.username}>
+            <XStack gap={4} alignItems="center" minWidth={0}>
+              <Text
+                flexShrink={1}
+                fontSize={compact ? 14 : 16}
+                fontWeight="600"
+                color={communityUi.text}
+                numberOfLines={1}
+                cursor="pointer"
+                hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
+              >
+                {member.full_name}
+              </Text>
+              {member.is_verified ? (
+                <Text flexShrink={0} fontSize={11} color={communityUi.brand} fontWeight="700">
+                  ✓
+                </Text>
+              ) : null}
+            </XStack>
+          </ProfileLink>
 
-        {member.mutual_count > 0 ? (
-          <XStack gap={4} alignItems="center">
-            <Icons.Users size={12} color={communityUi.textMuted} />
-            <Text fontSize={12} color={communityUi.textMuted}>
-              {member.mutual_count} mutual connection{member.mutual_count === 1 ? '' : 's'}
+          {subtitle ? (
+            <Text
+              fontSize={compact ? 12 : 14}
+              color={communityUi.textMuted}
+              numberOfLines={2}
+              lineHeight={18}
+            >
+              {subtitle}
             </Text>
-          </XStack>
-        ) : null}
-      </YStack>
+          ) : null}
 
-      <XStack gap={8} flexShrink={0} alignItems="center">
-        {showFollow ? <ProfileFollowButton targetUserId={member.user_id} size="sm" /> : null}
-        {showConnect ? <ProfileConnectButton targetUserId={member.user_id} size="sm" /> : null}
+          {member.mutual_count > 0 ? (
+            <XStack gap={4} alignItems="center" width="100%">
+              <Icons.Users size={12} color={communityUi.textMuted} />
+              <Text flex={1} fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
+                {member.mutual_count} mutual connection{member.mutual_count === 1 ? '' : 's'}
+              </Text>
+            </XStack>
+          ) : null}
+        </YStack>
+
+        {showActions && !stackActions ? actions : null}
       </XStack>
-    </XStack>
+
+      {stackActions ? (
+        <YStack paddingLeft={compact ? 48 : 56} paddingTop={8} width="100%">
+          {actions}
+        </YStack>
+      ) : null}
+    </YStack>
   )
 }

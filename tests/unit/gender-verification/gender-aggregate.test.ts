@@ -21,8 +21,8 @@ const male = (confidence: number): GenderSample => ({ isFemale: false, confidenc
 
 /**
  * Mirror of the server pass rule in
- * `complete_gender_verification_session` — kept here so a client-side "pass"
- * can be checked against the exact bar the RPC enforces.
+ * `complete_gender_verification_session`. `profiles.gender` is the female
+ * boolean; access also needs blinks and liveness. Confidence is stored, not gated.
  */
 function serverWouldVerify(input: {
   detectedBlinks: number
@@ -34,7 +34,7 @@ function serverWouldVerify(input: {
     input.detectedBlinks >= GENDER_VERIFICATION.requiredBlinks &&
     input.livenessScore >= GENDER_VERIFICATION.minLivenessScore &&
     input.genderDetected === true &&
-    input.genderConfidence >= GENDER_VERIFICATION.minGenderConfidence
+    input.genderConfidence >= 0
   )
 }
 
@@ -73,13 +73,14 @@ describe('summarizeGenderSamples', () => {
     expect(verdict.samples).toBe(3)
   })
 
-  it('asks for more frames on a borderline mean rather than rejecting', () => {
+  it('passes a woman whose frames are labeled female even under the old confidence floor', () => {
     const verdict = summarizeGenderSamples(
       [female(0.55), female(0.58), female(0.56), female(0.57)],
       OPTIONS,
     )
 
-    expect(verdict.status).toBe('insufficient')
+    expect(verdict.status).toBe('pass')
+    expect(verdict.femaleRatio).toBe(1)
     expect(verdict.femaleScore).toBeCloseTo(0.565, 3)
   })
 
@@ -204,31 +205,38 @@ describe('persona runs (client verdict → server bar)', () => {
 
     expect(verdict.status).toBe('fail')
 
-    // Even if the failed score were forwarded, the server bar rejects it.
     const verified = serverWouldVerify({
       detectedBlinks: GENDER_VERIFICATION.requiredBlinks,
       livenessScore: 0.82,
-      genderDetected: true,
+      genderDetected: false,
       genderConfidence: verdict.femaleScore ?? 0,
     })
     expect(verified).toBe(false)
   })
 
-  it('male user cannot pass by blinking more — liveness does not substitute for the gender bar', () => {
+  it('a non-female result never verifies, however strong the liveness read', () => {
     const verified = serverWouldVerify({
       detectedBlinks: GENDER_VERIFICATION.requiredBlinks + 5,
       livenessScore: 1,
-      genderDetected: true,
+      genderDetected: false,
       genderConfidence: 0.4,
     })
     expect(verified).toBe(false)
   })
 
-  it('borderline female read asks for another round instead of failing outright', () => {
+  it('a female label under the old confidence floor still verifies', () => {
     const verdict = summarizeGenderSamples(
       [female(0.55), female(0.58), female(0.56), female(0.57)],
       AGG,
     )
-    expect(verdict.status).toBe('insufficient')
+    expect(verdict.status).toBe('pass')
+    expect(
+      serverWouldVerify({
+        detectedBlinks: GENDER_VERIFICATION.requiredBlinks,
+        livenessScore: 0.82,
+        genderDetected: true,
+        genderConfidence: verdict.femaleScore ?? 0,
+      }),
+    ).toBe(true)
   })
 })

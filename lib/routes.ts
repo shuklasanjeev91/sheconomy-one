@@ -8,6 +8,7 @@ export const appRoutes = {
   importContacts: '/auth/import-contacts' as Href,
   completeProfile: '/auth/complete-profile' as Href,
   verifyGender: '/auth/verify-gender' as Href,
+  verifyHandoff: '/auth/verify-handoff' as Href,
   notifications: '/notifications' as Href,
   profile: '/profile' as Href,
   userProfile: (handle: string) => `/profile/${encodeURIComponent(handle)}` as Href,

@@ -26,10 +26,14 @@ export function MemberRow({
   const { width: windowWidth } = useWindowDimensions()
   const subtitle = member.headline || member.industry || member.location
   const [rowWidth, setRowWidth] = useState(0)
-  const measuredWidth = rowWidth > 0 ? rowWidth : windowWidth
   // Phone rows cannot fit avatar + name + Ignore + Accept on one line.
   // Keeping the buttons inline crushes the name to a single letter.
-  const stackActions = showConnect && measuredWidth > 0 && measuredWidth < STACK_ACTIONS_BELOW_WIDTH
+  // Window width wins on phones: onLayout can report a width wider than the
+  // screen when the buttons refuse to shrink, which would undo the stack.
+  const stackActions =
+    showConnect &&
+    ((windowWidth > 0 && windowWidth < STACK_ACTIONS_BELOW_WIDTH) ||
+      (rowWidth > 0 && rowWidth < STACK_ACTIONS_BELOW_WIDTH))
 
   return (
     <YStack
@@ -91,9 +95,9 @@ export function MemberRow({
           ) : null}
 
           {member.mutual_count > 0 ? (
-            <XStack gap={4} alignItems="center" minWidth={0}>
+            <XStack gap={4} alignItems="center" width="100%">
               <Icons.Users size={12} color={communityUi.textMuted} />
-              <Text flex={1} minWidth={0} fontSize={12} color={communityUi.textMuted}>
+              <Text flex={1} fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
                 {member.mutual_count} mutual connection{member.mutual_count === 1 ? '' : 's'}
               </Text>
             </XStack>

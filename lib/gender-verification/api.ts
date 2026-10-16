@@ -17,6 +17,8 @@ export type CompleteVerificationInput = {
   genderDetected: boolean
   genderConfidence: number
   clientMetrics?: Json
+  /** Set when this attempt was opened from a phone QR handoff, not the signed-in browser. */
+  handoffToken?: string | null
 }
 
 type CompleteVerificationOutcome = {
@@ -24,7 +26,18 @@ type CompleteVerificationOutcome = {
   error: string | null
 }
 
-export async function createGenderVerificationSession(requiredBlinks = GENDER_VERIFICATION.requiredBlinks) {
+export async function createGenderVerificationSession(
+  requiredBlinks = GENDER_VERIFICATION.requiredBlinks,
+  handoffToken?: string | null,
+) {
+  if (handoffToken) {
+    const { data, error } = await supabase.rpc('start_gender_verification_handoff' as never, {
+      p_token: handoffToken,
+    } as never)
+    if (error) return { sessionId: null as string | null, error: error.message }
+    return { sessionId: data as string, error: null as string | null }
+  }
+
   const { data, error } = await supabase.rpc('create_gender_verification_session', {
     p_required_blinks: requiredBlinks,
   })
@@ -37,14 +50,24 @@ export async function createGenderVerificationSession(requiredBlinks = GENDER_VE
 }
 
 export async function completeGenderVerificationSession(input: CompleteVerificationInput) {
-  const { data, error } = await supabase.rpc('complete_gender_verification_session', {
-    p_session_id: input.sessionId,
-    p_detected_blinks: input.detectedBlinks,
-    p_liveness_score: input.livenessScore,
-    p_gender_detected: input.genderDetected,
-    p_gender_confidence: input.genderConfidence,
-    p_client_metrics: input.clientMetrics,
-  })
+  const { data, error } = input.handoffToken
+    ? await supabase.rpc('complete_gender_verification_handoff' as never, {
+        p_token: input.handoffToken,
+        p_session_id: input.sessionId,
+        p_detected_blinks: input.detectedBlinks,
+        p_liveness_score: input.livenessScore,
+        p_gender_detected: input.genderDetected,
+        p_gender_confidence: input.genderConfidence,
+        p_client_metrics: input.clientMetrics ?? null,
+      } as never)
+    : await supabase.rpc('complete_gender_verification_session', {
+        p_session_id: input.sessionId,
+        p_detected_blinks: input.detectedBlinks,
+        p_liveness_score: input.livenessScore,
+        p_gender_detected: input.genderDetected,
+        p_gender_confidence: input.genderConfidence,
+        p_client_metrics: input.clientMetrics,
+      })
 
   if (error) {
     return { result: null, error: error.message }
@@ -86,7 +109,10 @@ export async function submitGenderVerificationSession(
   const first = await completeGenderVerificationSession(input)
   if (!isStaleOutcome(first)) return { ...first, sessionId: input.sessionId }
 
-  const { sessionId: freshSessionId, error: createError } = await createGenderVerificationSession()
+  const { sessionId: freshSessionId, error: createError } = await createGenderVerificationSession(
+    GENDER_VERIFICATION.requiredBlinks,
+    input.handoffToken,
+  )
   if (!freshSessionId) {
     return { result: first.result, error: createError ?? first.error, sessionId: input.sessionId }
   }

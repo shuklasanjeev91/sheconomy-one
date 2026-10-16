@@ -36,9 +36,13 @@ import {
 
 type UseGenderVerificationOptions = {
   onVerified?: () => void
+  /** Phone opened this attempt from a desktop QR code. */
+  handoffToken?: string | null
 }
 
-export function useGenderVerification({ onVerified }: UseGenderVerificationOptions = {}) {
+export function useGenderVerification({ onVerified, handoffToken }: UseGenderVerificationOptions = {}) {
+  const handoffTokenRef = useRef(handoffToken)
+  handoffTokenRef.current = handoffToken
   const [phase, setPhase] = useState<VerificationPhase>('idle')
   const [error, setError] = useState<string | null>(null)
   const [blinkCount, setBlinkCount] = useState(0)
@@ -225,6 +229,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
           livenessScore: submittedLivenessScore,
           genderDetected: verdict.status === 'pass',
           genderConfidence: verdict.femaleScore,
+          handoffToken: handoffTokenRef.current,
           clientMetrics: {
             platform: 'web',
             femaleScore: verdict.femaleScore,
@@ -458,7 +463,10 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       if (loopGenerationRef.current !== generation) return
 
       const { sessionId: createdSessionId, error: sessionError } =
-        await createGenderVerificationSession()
+        await createGenderVerificationSession(
+          GENDER_VERIFICATION.requiredBlinks,
+          handoffTokenRef.current,
+        )
       if (loopGenerationRef.current !== generation) return
       if (sessionError || !createdSessionId) {
         setError(sessionError ?? 'Could not start verification session.')

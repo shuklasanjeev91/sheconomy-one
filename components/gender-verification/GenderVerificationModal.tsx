@@ -6,7 +6,9 @@ import {
   VerificationSteps,
 } from '~/components/gender-verification/GenderVerificationPanel'
 import { GenderVerificationErrorBoundary } from '~/components/gender-verification/GenderVerificationErrorBoundary'
-import { AppBottomSheet, Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { GenderVerificationHandoffPanel } from '~/components/gender-verification/GenderVerificationHandoffPanel'
+import { usePhoneHandoffOffer } from '~/components/gender-verification/usePhoneHandoffOffer'
+import { AppBottomSheet, Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { BRAND_NAME } from '~/config/brand'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -170,6 +172,7 @@ function VerificationFlow({
   fillHeight: boolean
 }) {
   const ui = useAppUi()
+  const offer = usePhoneHandoffOffer()
   const verification = useGenderVerification({ onVerified })
 
   const isRunning =
@@ -199,6 +202,24 @@ function VerificationFlow({
         : verification.phase === 'error'
           ? 'Try again'
           : 'Verification in progress…'
+
+  if (offer.mode === 'checking') {
+    return (
+      <YStack flexGrow={1} alignItems="center" justifyContent="center" padding="$6">
+        <Spinner size="large" />
+      </YStack>
+    )
+  }
+
+  if (offer.mode === 'qr') {
+    return (
+      <GenderVerificationHandoffPanel
+        onVerified={onVerified}
+        onClose={onClose}
+        onUseCamera={offer.canUseCamera ? offer.chooseCamera : undefined}
+      />
+    )
+  }
 
   if (verification.phase === 'success') {
     return (
@@ -425,6 +446,18 @@ function VerificationFlow({
             <ActionButton
               label="Reset"
               onPress={verification.reset}
+              brand={ui.brand}
+              onBrand={ui.onBrand}
+              text={ui.text}
+              border={ui.borderSubtle}
+            />
+          ) : null}
+
+          {offer.canSwitchToPhone ? (
+            <ActionButton
+              label="Use your phone instead"
+              onPress={offer.choosePhone}
+              accessibilityLabel="Verify by scanning a QR code with your phone"
               brand={ui.brand}
               onBrand={ui.onBrand}
               text={ui.text}

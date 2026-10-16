@@ -48,6 +48,7 @@ function isSuppressedRoute(pathname: string): boolean {
   return (
     pathname.startsWith('/ui-kit') ||
     pathname.startsWith('/auth/verify-gender') ||
+    pathname.startsWith('/auth/verify-handoff') ||
     isCoWorkMeetingRoomPath(pathname)
   )
 }

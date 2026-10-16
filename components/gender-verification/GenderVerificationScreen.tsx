@@ -1,14 +1,16 @@
 import { useRouter } from 'one'
 import { Platform } from 'react-native'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { AuthBackButton } from '~/components/auth/AuthBackButton'
+import { GenderVerificationHandoffPanel } from '~/components/gender-verification/GenderVerificationHandoffPanel'
+import { usePhoneHandoffOffer } from '~/components/gender-verification/usePhoneHandoffOffer'
 import {
   FaceCaptureOverlay,
   VerificationSteps,
 } from '~/components/gender-verification/GenderVerificationPanel'
 import { ScreenFill } from '~/components/layout'
-import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { BRAND_NAME } from '~/config/brand'
 import { useAccess } from '~/hooks/useAccess'
@@ -26,15 +28,28 @@ import { patchSessionProfile } from '~/lib/profile/profile-store'
 import { commerceRoutes, communityRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-export function GenderVerificationScreen() {
+export function GenderVerificationScreen({
+  handoffToken = null,
+  autoStart = false,
+}: {
+  handoffToken?: string | null
+  autoStart?: boolean
+} = {}) {
   const ui = useAppUi()
   const router = useRouter()
   const { isFemale } = useAccess()
   const { profile } = useProfile()
   const { gutter, safeTop, safeBottom } = useAppLayout()
+  const offer = usePhoneHandoffOffer(!!handoffToken)
+  const autoStartedRef = useRef(false)
 
   const verification = useGenderVerification({
+    handoffToken,
     onVerified: () => {
+      if (handoffToken) {
+        refreshProfiles()
+        return
+      }
       if (profile?.id) {
         patchSessionProfile(profile.id, { gender: true, is_verified: true })
       } else {
@@ -47,10 +62,17 @@ export function GenderVerificationScreen() {
   })
 
   useEffect(() => {
-    if (Platform.OS === 'web' || !isFemale) return
+    if (handoffToken || Platform.OS === 'web' || !isFemale) return
     refreshProfiles()
     router.push(communityRoutes.home)
-  }, [isFemale, router])
+  }, [handoffToken, isFemale, router])
+
+  useEffect(() => {
+    if (!autoStart || !handoffToken || autoStartedRef.current) return
+    if (!verification.supported) return
+    autoStartedRef.current = true
+    void verification.start()
+  }, [autoStart, handoffToken, verification])
 
   const handleSkip = () => {
     router.push(commerceRoutes.home)
@@ -64,6 +86,41 @@ export function GenderVerificationScreen() {
   const diagnostics = (verification as { diagnostics?: VerificationDiagnostics | null }).diagnostics
   const diagnosticsLine = diagnostics ? formatVerificationDiagnostics(diagnostics) : null
   const qualityTips = (diagnostics?.issues ?? []).map((issue) => FACE_QUALITY_TIPS[issue])
+
+  const finishOnThisDevice = () => {
+    if (profile?.id) {
+      patchSessionProfile(profile.id, { gender: true, is_verified: true })
+    } else {
+      refreshProfiles()
+    }
+    setTimeout(() => {
+      router.push(communityRoutes.home)
+    }, 600)
+  }
+
+  if (!handoffToken && offer.mode === 'checking') {
+    return (
+      <ScreenFill backgroundColor={ui.background} flex={1} alignItems="center" justifyContent="center">
+        <Spinner size="large" />
+      </ScreenFill>
+    )
+  }
+
+  if (!handoffToken && offer.mode === 'qr') {
+    return (
+      <ScreenFill backgroundColor={ui.background} flex={1}>
+        <ScrollView flex={1} contentContainerStyle={{ flexGrow: 1, padding: gutter, paddingTop: Math.max(safeTop, 16) }}>
+          <YStack width="100%" maxWidth={560} alignSelf="center">
+            <GenderVerificationHandoffPanel
+              onVerified={finishOnThisDevice}
+              onClose={handleSkip}
+              onUseCamera={offer.canUseCamera ? offer.chooseCamera : undefined}
+            />
+          </YStack>
+        </ScrollView>
+      </ScreenFill>
+    )
+  }
 
   const primaryLabel = softRetrying
     ? 'Starting…'
@@ -210,8 +267,10 @@ export function GenderVerificationScreen() {
                 <Text fontSize={16} fontWeight="800" color={ui.text}>
                   You&apos;re verified
                 </Text>
-                <Text fontSize={13} color={ui.textMuted}>
-                  Taking you to {BRAND_NAME}…
+                <Text fontSize={13} color={ui.textMuted} textAlign="center">
+                  {handoffToken
+                    ? 'You can close this page and return to the device where you started.'
+                    : `Taking you to ${BRAND_NAME}…`}
                 </Text>
               </YStack>
             ) : (
@@ -246,6 +305,18 @@ export function GenderVerificationScreen() {
                     Open Settings
                   </Button>
                 ) : null}
+                {offer.canSwitchToPhone ? (
+                  <Button
+                    tone="outline"
+                    size="$4"
+                    borderRadius={radius.pill}
+                    width="100%"
+                    onPress={offer.choosePhone}
+                  >
+                    Use your phone instead
+                  </Button>
+                ) : null}
+                {handoffToken ? null : (
                 <Button
                   tone="outline"
                   size="$4"
@@ -256,9 +327,12 @@ export function GenderVerificationScreen() {
                 >
                   Skip for now
                 </Button>
-                <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={17}>
-                  Continue with Commerce, Classes, and Co-Work without sharing camera data.
-                </Text>
+                )}
+                {handoffToken ? null : (
+                  <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={17}>
+                    Continue with Commerce, Classes, and Co-Work without sharing camera data.
+                  </Text>
+                )}
               </YStack>
             )}
           </YStack>

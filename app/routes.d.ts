@@ -87,6 +87,7 @@ declare module 'one' {
         | `/auth/sign-in`
         | `/auth/sign-up`
         | `/auth/verify-gender`
+        | `/auth/verify-handoff`
         | `/blog`
         | `/blogs`
         | `/browse`

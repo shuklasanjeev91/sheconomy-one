@@ -26,6 +26,7 @@ export const guestPublicRoutes = [
   '/auth/sign-in',
   '/auth/complete-profile',
   '/auth/verify-gender',
+  '/auth/verify-handoff',
   '/auth/import-contacts',
   '/auth/qr',
   // Community

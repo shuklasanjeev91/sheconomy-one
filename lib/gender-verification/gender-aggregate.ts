@@ -78,12 +78,15 @@ export function summarizeGenderSamples(
     return { status: 'insufficient', femaleScore, femaleRatio, samples: usable.length }
   }
 
-  // A confident mean still needs the labels to agree, so a handful of very
-  // high-confidence frames cannot outvote a mostly-male read.
-  if (femaleScore >= options.threshold && femaleRatio >= 0.5) {
+  // The label is the gender. A majority of female frames is a woman, including
+  // when the mean probability sits under the confidence floor — that floor was
+  // rejecting real women and never writing profiles.gender.
+  if (femaleRatio >= 0.5) {
     return { status: 'pass', femaleScore, femaleRatio, samples: usable.length }
   }
 
+  // Mostly-male but close to the line: ask for another round instead of a
+  // final "not a woman" that would store gender = false.
   if (femaleScore >= options.threshold - options.borderlineBand) {
     return { status: 'insufficient', femaleScore, femaleRatio, samples: usable.length }
   }
