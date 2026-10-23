@@ -13,7 +13,7 @@ export default function SearchPage() {
   const pathname = usePathname()
   const mode = searchModeFromRouteParams(params)
   const scope =
-    mode === 'ai'
+    mode === 'ai' || mode === 'sheai'
       ? 'listings'
       : (searchScopeFromRouteParams(params) ??
         (pathname.startsWith('/search') ? 'all' : searchScopeFromPath(pathname)))

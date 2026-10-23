@@ -6,6 +6,7 @@ import { useUserGeo } from '~/commerce/hooks/useUserGeo'
 import {
   buildFilterSearchParams,
   type ListingBrowseFilters,
+  type SearchMode,
 } from '~/commerce/lib/filters'
 import {
   clearSearchHistory,
@@ -14,6 +15,9 @@ import {
   useSearchHistory,
 } from '~/commerce/lib/search-history'
 import { SearchHitRow } from '~/components/search/SearchHitRow'
+import { SheaiAskAgain, SheaiPrompt } from '~/components/search/SheaiPrompt'
+import { SheaiResultsSection } from '~/components/search/SheaiResultsSection'
+import { useSheaiRecommend } from '~/hooks/useSheaiRecommend'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
 import { Button, EmptyState, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { countActiveFilters, hasActiveFilters } from '~/commerce/lib/filters'
@@ -21,6 +25,7 @@ import { useAccess } from '~/hooks/useAccess'
 import { useProfile } from '~/hooks/useProfile'
 import {
   availableSearchScopes,
+  buildSheaiSearchHref,
   canAccessSearchScope,
   federatedSearch,
   runAiSearch,
@@ -38,7 +43,7 @@ type UnifiedSearchScreenProps = {
   query?: string
   scope?: SearchScope
   filters?: ListingBrowseFilters
-  mode?: 'ai' | null
+  mode?: SearchMode
 }
 
 type SectionKey =
@@ -84,7 +89,8 @@ export function UnifiedSearchScreen({
   const history = useSearchHistory()
   const query = queryProp.trim()
   const aiMode = modeProp === 'ai'
-  const scope = aiMode ? 'listings' : scopeProp
+  const sheaiMode = modeProp === 'sheai'
+  const scope = aiMode || sheaiMode ? 'listings' : scopeProp
   const [aiAnswer, setAiAnswer] = useState<string | null>(null)
   const [aiSearchTerm, setAiSearchTerm] = useState<string | null>(null)
   const [aiFilters, setAiFilters] = useState<ListingBrowseFilters>({})
@@ -213,6 +219,7 @@ export function UnifiedSearchScreen({
     if (query) params.set('q', query)
     params.set('scope', 'listings')
     if (aiMode) params.set('mode', 'ai')
+    if (sheaiMode) params.set('mode', 'sheai')
     const search = params.toString()
     replaceApp((search ? `/search?${search}` : '/search?scope=listings') as never)
   }
@@ -223,21 +230,32 @@ export function UnifiedSearchScreen({
   }
 
   const gated = scope !== 'all' && !canAccessSearchScope(tier, scope)
+  const sheaiEnabled = !gated && scope === 'listings' && query.length > 0
+  const sheai = useSheaiRecommend(query, sheaiEnabled, 10)
+  const visibleScopes = sheaiMode ? (['listings'] as SearchScope[]) : scopes
 
   const visibleSections = SECTION_META.filter(
     (section) => scope === 'all' || scope === section.scope,
   )
 
+  function runSheaiTerm(term: string) {
+    recordSearchTerm(term)
+    navigateApp(buildSheaiSearchHref(term) as never)
+  }
+
   return (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$5" gap="$4">
+        {sheaiMode && !query ? null : (
         <YStack gap="$3" width="100%">
           <Text fontSize={22} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
-            {aiMode && query
-              ? `AI results for “${query}”`
-              : query
-                ? `Results for “${query}”`
-                : 'Search'}
+            {sheaiMode && query
+              ? `SHEai results for “${query}”`
+              : aiMode && query
+                ? `AI results for “${query}”`
+                : query
+                  ? `Results for “${query}”`
+                  : 'Search'}
           </Text>
 
           {aiMode && query ? (
@@ -282,7 +300,7 @@ export function UnifiedSearchScreen({
           ) : null}
 
           <HorizontalScrollRow gap="$2">
-            {scopes.map((item) => {
+            {visibleScopes.map((item) => {
               const active = item === scope
               return (
                 <XStack
@@ -334,6 +352,7 @@ export function UnifiedSearchScreen({
             </XStack>
           ) : null}
         </YStack>
+        )}
 
         {gated ? (
           <YStack gap="$3" paddingVertical="$6" alignItems="flex-start">
@@ -353,11 +372,23 @@ export function UnifiedSearchScreen({
           </YStack>
         ) : null}
 
-        {!gated && !query ? (
+        {!gated && !query && sheaiMode ? (
+          <YStack
+            width="100%"
+            alignItems="center"
+            justifyContent="center"
+            paddingVertical="$8"
+            minHeight={420}
+          >
+            <SheaiPrompt onPickChip={runSheaiTerm} onSubmit={runSheaiTerm} />
+          </YStack>
+        ) : null}
+
+        {!gated && !query && !sheaiMode ? (
           <YStack gap="$4" width="100%">
             <Text fontSize={14} color={ui.textSecondary}>
               Search listings, shops, people, companies, groups, jobs, posts, programs, and
-              meetings. Use the camera, mic, or Ask AI in the search bar.
+              meetings. Use the camera, mic, or SHEai in the search bar.
             </Text>
             {history.length > 0 ? (
               <YStack gap="$3" width="100%">
@@ -418,6 +449,14 @@ export function UnifiedSearchScreen({
 
         {!gated && query && scope === 'listings' ? (
           <ListingFiltersShell filters={filters} onApply={updateFilters}>
+            <YStack gap="$4" width="100%">
+            {sheaiMode ? <SheaiAskAgain onSubmit={runSheaiTerm} /> : null}
+            <SheaiResultsSection
+              query={query}
+              items={sheai.items}
+              loading={sheai.loading}
+              error={sheai.error}
+            />
             <ListingBrowseView
               key={filterKey}
               title="Listing results"
@@ -440,6 +479,7 @@ export function UnifiedSearchScreen({
                   : `No listing results for “${effectiveListingQuery || query}”.`
               }
             />
+            </YStack>
           </ListingFiltersShell>
         ) : null}
 

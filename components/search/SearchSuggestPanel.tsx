@@ -1,8 +1,11 @@
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { AdaptiveTypeaheadPanel } from '~/components/search/AdaptiveTypeaheadPanel'
 import { SearchHitRow } from '~/components/search/SearchHitRow'
+import { SheaiHitRow } from '~/components/search/SheaiHitRow'
+import { SheaiPrompt } from '~/components/search/SheaiPrompt'
 import { SuggestSectionHeader } from '~/components/search/SuggestSectionHeader'
 import type { SearchHit } from '~/lib/search'
+import type { SheaiRecommendItem } from '~/lib/search/sheai'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type SearchSuggestPanelProps = {
@@ -17,7 +20,11 @@ type SearchSuggestPanelProps = {
   onClearRecent?: () => void
   onRemoveRecent?: (term: string) => void
   onHitPress?: () => void
-  onAskAi?: () => void
+  sheaiActive?: boolean
+  sheaiHits?: SheaiRecommendItem[]
+  sheaiLoading?: boolean
+  onAskSheai?: () => void
+  onPickSheaiChip?: (query: string) => void
 }
 
 export function SearchSuggestPanel({
@@ -32,14 +39,22 @@ export function SearchSuggestPanel({
   onClearRecent,
   onRemoveRecent,
   onHitPress,
-  onAskAi,
+  sheaiActive,
+  sheaiHits = [],
+  sheaiLoading,
+  onAskSheai,
+  onPickSheaiChip,
 }: SearchSuggestPanelProps) {
   const ui = useAppUi()
   const trimmed = query.trim()
 
   const body = (
     <YStack gap="$3" width="100%" paddingBottom="$2" paddingTop="$2">
-      {trimmed && onAskAi ? (
+      {sheaiActive && !trimmed && onPickSheaiChip ? (
+        <SheaiPrompt compact onPickChip={onPickSheaiChip} />
+      ) : null}
+
+      {trimmed && onAskSheai ? (
         <XStack
           paddingHorizontal="$3"
           paddingVertical="$2.5"
@@ -47,19 +62,19 @@ export function SearchSuggestPanel({
           cursor="pointer"
           hoverStyle={{ backgroundColor: ui.surfaceHover }}
           onPress={() => {
-            onAskAi()
+            onAskSheai()
             onOpenChange(false)
           }}
           alignItems="center"
           gap="$2.5"
           accessibilityRole="button"
-          aria-label="Ask AI to search"
+          aria-label="Ask SHEai"
         >
           <YStack
             width={32}
             height={32}
             borderRadius={999}
-            backgroundColor={ui.surfaceMuted}
+            backgroundColor={ui.roseSurface}
             alignItems="center"
             justifyContent="center"
           >
@@ -67,13 +82,35 @@ export function SearchSuggestPanel({
           </YStack>
           <YStack flex={1} minWidth={0} gap={2}>
             <Text fontSize={14} fontWeight="600" color={ui.text} numberOfLines={1}>
-              Ask AI: “{trimmed}”
+              Ask SHEai: “{trimmed}”
             </Text>
             <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
-              Understand your request and find matching listings
+              Describe it naturally — SHEai finds matching listings
             </Text>
           </YStack>
         </XStack>
+      ) : null}
+
+      {trimmed && (sheaiLoading || sheaiHits.length > 0) ? (
+        <YStack gap="$1">
+          <SuggestSectionHeader label="SUGGESTED BY SHEAI" />
+          {sheaiLoading && sheaiHits.length === 0 ? (
+            <YStack padding="$4" alignItems="center">
+              <Spinner size="small" />
+            </YStack>
+          ) : (
+            sheaiHits.map((item) => (
+              <SheaiHitRow
+                key={`${item.slug ?? item.href}-${item.title}`}
+                item={item}
+                onPress={() => {
+                  onHitPress?.()
+                  onOpenChange(false)
+                }}
+              />
+            ))
+          )}
+        </YStack>
       ) : null}
 
       {!trimmed && recent.length > 0 ? (
@@ -154,7 +191,7 @@ export function SearchSuggestPanel({
         </YStack>
       ) : null}
 
-      {!trimmed && recent.length === 0 ? (
+      {!trimmed && recent.length === 0 && !sheaiActive ? (
         <Text paddingHorizontal="$3" paddingVertical="$2" fontSize={13} color={ui.textSecondary} lineHeight={20}>
           Search listings, shops, people, jobs, programs, and more.
         </Text>
@@ -167,7 +204,7 @@ export function SearchSuggestPanel({
       open={open}
       onOpenChange={onOpenChange}
       title="Search"
-      maxHeight={440}
+      maxHeight={sheaiActive ? 520 : 440}
       searchValue={query}
       onSearchChange={onQueryChange}
       searchPlaceholder="Search everywhere"

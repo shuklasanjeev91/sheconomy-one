@@ -22,7 +22,8 @@ import {
   type SearchHit,
   type SearchScope,
 } from '~/lib/search'
-import { buildAiSearchHref } from '~/lib/search/ai-search'
+import { buildSheaiSearchHref } from '~/lib/search/sheai'
+import { useSheaiRecommend } from '~/hooks/useSheaiRecommend'
 import { appRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -98,13 +99,23 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
   const [hits, setHits] = useState<SearchHit[]>([])
   const [loading, setLoading] = useState(false)
   const [imageBusy, setImageBusy] = useState(false)
+  const routeMode = typeof routeParams.mode === 'string' ? routeParams.mode : Array.isArray(routeParams.mode) ? routeParams.mode[0] : ''
+  const [sheaiActive, setSheaiActive] = useState(routeMode === 'sheai')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blurCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submitVoiceRef = useRef<(term: string) => void>(() => {})
 
   const fieldHeight = compact ? 40 : isDesktop ? 44 : 42
-  const showFocusRing = focused || open
-  const placeholder = 'Search for anything'
+  const showFocusRing = focused || open || sheaiActive
+  const placeholder = sheaiActive
+    ? 'e.g. something special for my mother’s 60th birthday…'
+    : 'Search for anything'
+
+  const sheaiSuggestEnabled =
+    Boolean(sheaiActive || activeScope === 'listings' || activeScope === 'all') &&
+    open &&
+    query.trim().length >= 3
+  const sheaiSuggest = useSheaiRecommend(query, sheaiSuggestEnabled, 6)
 
   const voice = useVoiceSearch({
     onPartial: (text) => {
@@ -122,6 +133,10 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
   useEffect(() => {
     setQuery(initialQuery)
   }, [initialQuery])
+
+  useEffect(() => {
+    setSheaiActive(routeMode === 'sheai')
+  }, [routeMode])
 
   useEffect(() => {
     if (!voice.error) return
@@ -170,12 +185,17 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
     userGeo.longitude,
   ])
 
-  function submitSearch(term?: string, mode?: 'ai' | null) {
+  function submitSearch(term?: string, mode?: 'ai' | 'sheai' | null) {
     const trimmed = (term ?? query).trim()
     if (trimmed) recordAppSearchTerm(trimmed)
     setOpen(false)
     setFocused(false)
     void voice.stop()
+    const useSheai = mode === 'sheai' || (mode == null && sheaiActive)
+    if (useSheai) {
+      navigateApp(buildSheaiSearchHref(trimmed || undefined) as never)
+      return
+    }
     if (mode === 'ai') {
       if (!trimmed) {
         toast.show('Ask AI', {
@@ -184,10 +204,29 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
         })
         return
       }
-      navigateApp(buildAiSearchHref(trimmed) as never)
+      navigateApp(appRoutes.search(trimmed, 'listings', 'ai') as never)
       return
     }
     navigateApp(appRoutes.search(trimmed || undefined, activeScope) as never)
+  }
+
+  function toggleSheai() {
+    if (sheaiActive) {
+      setSheaiActive(false)
+      if (routeMode === 'sheai') {
+        navigateApp(appRoutes.search(query.trim() || undefined, 'listings') as never)
+      }
+      return
+    }
+    setSheaiActive(true)
+    setOpen(true)
+    setFocused(true)
+    const trimmed = query.trim()
+    if (trimmed) {
+      submitSearch(trimmed, 'sheai')
+      return
+    }
+    navigateApp(buildSheaiSearchHref() as never)
   }
 
   submitVoiceRef.current = (term: string) => submitSearch(term)
@@ -224,7 +263,6 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
     }
   }
 
-  const showAskAi = !compact
   const actionColor = ui.textMuted
 
   return (
@@ -314,15 +352,13 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
           </SearchIconButton>
         ) : null}
 
-        {showAskAi ? (
-          <SearchIconButton
-            label="Ask AI search"
-            onPress={() => submitSearch(undefined, 'ai')}
-            disabled={!query.trim()}
-          >
-            <Icons.Sparkles size={15} color={query.trim() ? ui.brand : actionColor} />
-          </SearchIconButton>
-        ) : null}
+        <SearchIconButton
+          label={sheaiActive ? 'Turn off SHEai' : 'Ask SHEai'}
+          onPress={toggleSheai}
+          active={sheaiActive}
+        >
+          <Icons.Sparkles size={15} color={sheaiActive ? ui.brand : actionColor} />
+        </SearchIconButton>
 
         {query.length > 0 ? (
           <SearchIconButton
@@ -355,13 +391,22 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
         onClearRecent={() => clearAppSearchHistory()}
         onRemoveRecent={(term) => removeAppSearchTerm(term)}
         onHitPress={() => setOpen(false)}
-        onAskAi={
+        sheaiActive={sheaiActive}
+        sheaiHits={sheaiSuggest.items}
+        sheaiLoading={sheaiSuggest.loading}
+        onAskSheai={
           query.trim()
             ? () => {
-                submitSearch(undefined, 'ai')
+                setSheaiActive(true)
+                submitSearch(undefined, 'sheai')
               }
             : undefined
         }
+        onPickSheaiChip={(term) => {
+          setQuery(term)
+          setSheaiActive(true)
+          submitSearch(term, 'sheai')
+        }}
       />
     </YStack>
   )

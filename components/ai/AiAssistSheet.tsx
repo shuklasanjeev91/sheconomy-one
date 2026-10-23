@@ -11,6 +11,8 @@ import {
   YStack,
 } from '~/components/ui'
 import { HorizontalScrollRow } from '~/components/layout'
+import { SheaiPrompt } from '~/components/search/SheaiPrompt'
+import { SheaiResultsSection } from '~/components/search/SheaiResultsSection'
 import { BRAND_NAME } from '~/config/brand'
 import { radius } from '~/config/tokens'
 import {
@@ -23,9 +25,21 @@ import {
   type AiSuggestion,
 } from '~/lib/ai'
 import { helpHref } from '~/lib/help/types'
+import {
+  buildSheaiSearchHref,
+  parseSheaiListingsFromAnswer,
+  recommendWithSheai,
+  type SheaiRecommendItem,
+} from '~/lib/search/sheai'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAiAssist } from '~/providers/AiAssistProvider'
 import { navigateApp } from '~/lib/platform/navigate'
+
+type SheetMessage = AiAssistMessage & { sheaiItems?: SheaiRecommendItem[] }
+
+function usesSheaiProduct(product: AiProduct) {
+  return product === 'commerce'
+}
 
 function newLocalId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -33,6 +47,7 @@ function newLocalId() {
 
 const QUICK_ACTIONS: Record<AiProduct, Array<{ label: string; prompt: string; href?: string }>> = {
   commerce: [
+    { label: 'Open SHEai', prompt: '', href: buildSheaiSearchHref() },
     { label: 'Buy t-shirt', prompt: 'I want to buy a t-shirt — show me matching listings' },
     { label: 'Track order', prompt: 'Help me track my recent orders' },
     { label: 'Returns', prompt: 'How do returns and refunds work?' },
@@ -97,7 +112,7 @@ export function AiAssistSheet() {
   const context = { ...routeContext.context, ...(override?.context ?? {}) }
 
   const [suggestions, setSuggestions] = useState<AiSuggestion[]>([])
-  const [messages, setMessages] = useState<AiAssistMessage[]>([])
+  const [messages, setMessages] = useState<SheetMessage[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -121,6 +136,10 @@ export function AiAssistSheet() {
       setInput('')
       setMessages((prev) => [...prev, { id: newLocalId(), role: 'user', content: text }])
 
+      const sheaiTask = usesSheaiProduct(product)
+        ? recommendWithSheai(text, { topK: 6 }).then((result) => result.results)
+        : Promise.resolve([] as SheaiRecommendItem[])
+
       try {
         const result = await sendAiMessage({
           product,
@@ -129,18 +148,31 @@ export function AiAssistSheet() {
           contextPage,
           context,
         })
+        let sheaiItems = await sheaiTask.catch(() => [] as SheaiRecommendItem[])
+        if (sheaiItems.length === 0) {
+          sheaiItems = parseSheaiListingsFromAnswer(result.answer)
+        }
         sessionIdRef.current = result.sessionId
         setSessionId(result.sessionId)
+        const sheaiLinks =
+          sheaiItems.length > 0
+            ? [{ label: 'See all SHEai listings', href: buildSheaiSearchHref(text) }]
+            : []
         setMessages((prev) => [
           ...prev,
           {
             id: newLocalId(),
             role: 'assistant',
-            content: result.answer,
-            deepLinks: result.deepLinks,
+            content:
+              sheaiItems.length > 0
+                ? 'SHEai picked these listings for you.'
+                : result.answer,
+            deepLinks: [...result.deepLinks, ...sheaiLinks],
+            sheaiItems,
           },
         ])
       } catch (err) {
+        const sheaiItems = await sheaiTask.catch(() => [] as SheaiRecommendItem[])
         setError(err instanceof Error ? err.message : 'Something went wrong.')
         setMessages((prev) => [
           ...prev,
@@ -148,7 +180,13 @@ export function AiAssistSheet() {
             id: newLocalId(),
             role: 'assistant',
             content: `I couldn’t reach ${BRAND_NAME} AI just now. Try again, or open Help & Support.`,
-            deepLinks: [{ label: 'Help Center', href: helpHref(product === 'account' ? '' : product) }],
+            deepLinks: [
+              { label: 'Help Center', href: helpHref(product === 'account' ? '' : product) },
+              ...(sheaiItems.length > 0
+                ? [{ label: 'See all SHEai listings', href: buildSheaiSearchHref(text) }]
+                : []),
+            ],
+            sheaiItems,
           },
         ])
       } finally {
@@ -200,7 +238,11 @@ export function AiAssistSheet() {
         <Input
           value={input}
           onChangeText={setInput}
-          placeholder={`Ask about ${aiProductLabel(product).toLowerCase()}…`}
+          placeholder={
+            usesSheaiProduct(product)
+              ? 'e.g. something special for my mother’s 60th birthday…'
+              : `Ask about ${aiProductLabel(product).toLowerCase()}…`
+          }
           onSubmitEditing={() => void handleSend()}
           returnKeyType="send"
           editable={!sending}
@@ -224,7 +266,7 @@ export function AiAssistSheet() {
       onOpenChange={(next) => {
         if (!next) closeAssist()
       }}
-      title={`${BRAND_NAME} AI`}
+      title={usesSheaiProduct(product) ? `${BRAND_NAME} AI · SHEai` : `${BRAND_NAME} AI`}
       footer={footer}
     >
       <YStack gap="$4" paddingHorizontal="$4" paddingTop="$2" paddingBottom="$4">
@@ -294,7 +336,11 @@ export function AiAssistSheet() {
           </YStack>
         ) : null}
 
-        {messages.length === 0 && !sending ? (
+        {messages.length === 0 && !sending && usesSheaiProduct(product) ? (
+          <SheaiPrompt compact onPickChip={(query) => void handleSend(query)} />
+        ) : null}
+
+        {messages.length === 0 && !sending && !usesSheaiProduct(product) ? (
           <YStack
             padding="$4"
             borderRadius={12}
@@ -318,8 +364,9 @@ export function AiAssistSheet() {
           return (
             <YStack
               key={message.id}
-              alignSelf={isUser ? 'flex-end' : 'flex-start'}
-              maxWidth="92%"
+              alignSelf={isUser ? 'flex-end' : 'stretch'}
+              maxWidth={isUser ? '92%' : '100%'}
+              width={isUser ? undefined : '100%'}
               gap="$2"
             >
               <YStack
@@ -329,11 +376,20 @@ export function AiAssistSheet() {
                 backgroundColor={isUser ? ui.brand : ui.surface}
                 borderWidth={isUser ? 0 : 1}
                 borderColor={ui.borderSubtle}
+                alignSelf={isUser ? 'flex-end' : 'stretch'}
               >
                 <Text fontSize={14} color={isUser ? ui.onBrand : ui.text} lineHeight={20}>
                   {message.content}
                 </Text>
               </YStack>
+              {message.sheaiItems?.length ? (
+                <SheaiResultsSection
+                  query=""
+                  items={message.sheaiItems}
+                  compact
+                  onItemPress={(item) => goLink(item.href)}
+                />
+              ) : null}
               {message.deepLinks?.length ? (
                 <XStack gap="$2" flexWrap="wrap">
                   {message.deepLinks.map((link) => (
@@ -363,7 +419,7 @@ export function AiAssistSheet() {
           <XStack alignItems="center" gap="$2">
             <Spinner size="small" color={ui.brand} />
             <Text fontSize={13} color={ui.textMuted}>
-              Thinking…
+              {usesSheaiProduct(product) ? 'SHEai is understanding you…' : 'Thinking…'}
             </Text>
           </XStack>
         ) : null}

@@ -127,10 +127,13 @@ export function searchQueryFromRouteParams(params: RouteSearchParams): string {
   return ''
 }
 
-export function searchModeFromRouteParams(params: RouteSearchParams): 'ai' | null {
+export type SearchMode = 'ai' | 'sheai' | null
+
+export function searchModeFromRouteParams(params: RouteSearchParams): SearchMode {
   const value = params.mode
   const raw = typeof value === 'string' ? value : Array.isArray(value) ? value[0] : ''
-  return raw === 'ai' ? 'ai' : null
+  if (raw === 'ai' || raw === 'sheai') return raw
+  return null
 }
 
 export function buildFilterSearchParams(
