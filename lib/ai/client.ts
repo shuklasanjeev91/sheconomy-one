@@ -1,5 +1,4 @@
-import { invokeOwnedAssist, readableAiError } from '~/lib/ai/owned-service'
-import { supabase } from '~/lib/supabase'
+import { invokeOwnedAssist } from '~/lib/ai/owned-service'
 
 import type {
   AiFeedbackParams,
@@ -30,65 +29,12 @@ export type {
   ListingDraftFromImageResult,
 } from '~/lib/ai/types'
 
-type InvokeErrorPayload = {
-  error?: string
-}
-
-/**
- * supabase-js wraps non-2xx as FunctionsHttpError with a generic message.
- * The real reason is usually in `data.error` or `error.context` (Response body).
- */
-async function readFunctionErrorMessage(error: unknown, data: unknown, fallback: string) {
-  if (data && typeof data === 'object' && 'error' in data) {
-    const message = (data as InvokeErrorPayload).error
-    if (typeof message === 'string' && message.trim()) return message.trim()
-  }
-  if (error && typeof error === 'object' && 'context' in error) {
-    const context = (error as { context?: unknown }).context
-    if (typeof Response !== 'undefined' && context instanceof Response) {
-      try {
-        const body = (await context.clone().json()) as InvokeErrorPayload
-        if (typeof body?.error === 'string' && body.error.trim()) return body.error.trim()
-      } catch {
-        // ignore
-      }
-    }
-    if (context && typeof context === 'object' && typeof (context as { json?: unknown }).json === 'function') {
-      try {
-        const body = (await (context as Response).clone().json()) as InvokeErrorPayload
-        if (typeof body?.error === 'string' && body.error.trim()) return body.error.trim()
-      } catch {
-        // ignore
-      }
-    }
-  }
-  if (error instanceof Error && error.message && !/non-2xx/i.test(error.message)) {
-    return error.message
-  }
-  return fallback
-}
-
 async function invokeAiAssist<T>(body: Record<string, unknown>): Promise<T> {
-  try {
-    const owned = await invokeOwnedAssist<T>(body)
-    if (owned) return owned
-  } catch {
-    // Owned service missing or down — Gemini edge function still answers.
+  const owned = await invokeOwnedAssist<T>(body)
+  if (!owned) {
+    throw new Error('SHERPA is unavailable right now.')
   }
-
-  const { data, error } = await supabase.functions.invoke('ai-assist', { body })
-
-  if (error) {
-    throw new Error(
-      readableAiError(await readFunctionErrorMessage(error, data, 'SHERPA is unavailable right now.')),
-    )
-  }
-
-  if (data && typeof data === 'object' && 'error' in data && (data as InvokeErrorPayload).error) {
-    throw new Error(readableAiError(String((data as InvokeErrorPayload).error)))
-  }
-
-  return data as T
+  return owned
 }
 
 export async function fetchAiSuggestions(

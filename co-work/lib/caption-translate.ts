@@ -1,5 +1,5 @@
 import type { LiveCaptionLine } from '~/co-work/lib/live-captions'
-import { supabase } from '~/lib/supabase'
+import { invokeOwnedAssist } from '~/lib/ai/owned-service'
 import { languageLabel, languageLocale } from '~/lib/locale/region-data'
 
 export type TranslateTextResult = {
@@ -218,7 +218,7 @@ export function captionLanguageName(languageCode: string): string {
 
 /**
  * Translate meeting caption text into the viewer's preferred language.
- * Cross-platform (web / iOS / Android) via ai-assist edge function.
+ * Cross-platform (web, Android, and iOS) via SHERPA. The original caption stays when there is no translation.
  */
 export async function translateCaptionText(input: {
   text: string
@@ -263,22 +263,17 @@ export async function translateCaptionText(input: {
 
   const request = (async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('ai-assist', {
-        body: {
-          action: 'translate',
-          product: 'cowork',
-          message: text,
-          context: {
-            target_lang: targetLang,
-            source_lang: sourceLang,
-            target_label: captionLanguageName(targetLang),
-          },
+      const payload = await invokeOwnedAssist<Partial<TranslateTextResult>>({
+        action: 'translate',
+        product: 'cowork',
+        message: text,
+        context: {
+          target_lang: targetLang,
+          source_lang: sourceLang,
+          target_label: captionLanguageName(targetLang),
         },
       })
-
-      if (error) throw error
-
-      const payload = data as Partial<TranslateTextResult> | null
+      if (!payload) throw new Error('SHERPA is unavailable right now.')
       const translated =
         typeof payload?.translatedText === 'string' && payload.translatedText.trim()
           ? payload.translatedText.trim()

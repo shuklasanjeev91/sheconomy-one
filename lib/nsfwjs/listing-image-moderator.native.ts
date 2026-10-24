@@ -1,13 +1,12 @@
 /**
- * Native listing image moderator — server-side vision via ai-assist.
- * Keeps native uploads from fail-open when client TF.js is unavailable.
+ * Native listing image moderator. SHERPA checks the photo and a failure stays rejected.
  */
 
+import { invokeOwnedAssist } from '~/lib/ai/owned-service'
 import type {
   ImageModerationResult,
   ImageModerator,
 } from '~/lib/listing/listing-images.service'
-import { supabase } from '~/lib/supabase'
 
 async function blobToDataUrl(image: Blob | File): Promise<string> {
   if (typeof FileReader !== 'undefined') {
@@ -35,31 +34,27 @@ async function moderateViaServer(image: Blob | File): Promise<ImageModerationRes
     return { verdict: 'rejected', reasons: ['unreadable'], confidence: 1 }
   }
 
-  const { data, error } = await supabase.functions.invoke('ai-assist', {
-    body: {
+  let payload: { verdict?: string; reasons?: string[]; confidence?: number } | null = null
+  try {
+    payload = await invokeOwnedAssist({
       action: 'moderate_image',
       product: 'commerce',
       message: dataUrl.slice(0, 2_000_000),
       context: {
         mime_type: image.type || 'image/jpeg',
       },
-    },
-  })
+    })
+  } catch {
+    payload = null
+  }
 
-  if (error) {
-    // Fail closed for safety on native when the moderator cannot run.
+  if (!payload) {
     return {
       verdict: 'rejected',
       reasons: ['moderation_unavailable'],
       confidence: 1,
     }
   }
-
-  const payload = data as {
-    verdict?: string
-    reasons?: string[]
-    confidence?: number
-  } | null
 
   if (payload?.verdict === 'approved') {
     return {

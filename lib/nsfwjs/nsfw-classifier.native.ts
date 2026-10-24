@@ -1,9 +1,8 @@
 /**
- * Native NSFW classifier — server-side vision via ai-assist (same as listing moderator).
- * Keeps @tensorflow/* out of the native bundle while staying fail-closed.
+ * Native NSFW classifier. SHERPA checks the photo and a failure stays rejected.
  */
 
-import { supabase } from '~/lib/supabase'
+import { invokeOwnedAssist } from '~/lib/ai/owned-service'
 
 export type NsfwImageInput = string | Blob | File
 
@@ -31,20 +30,21 @@ async function moderateViaServer(image: Blob | File): Promise<NsfwAnalysisResult
     return { verdict: 'reject', confidence: 1, rejectionReasons: ['moderation_unavailable'] }
   }
 
-  const { data, error } = await supabase.functions.invoke('ai-assist', {
-    body: {
+  let payload: { verdict?: string; reasons?: string[]; confidence?: number } | null = null
+  try {
+    payload = await invokeOwnedAssist({
       action: 'moderate_image',
       product: 'commerce',
       message: dataUrl.slice(0, 2_000_000),
       context: { mime_type: image.type || 'image/jpeg' },
-    },
-  })
-
-  if (error) {
-    return { verdict: 'reject', confidence: 1, rejectionReasons: ['moderation_unavailable'] }
+    })
+  } catch {
+    payload = null
   }
 
-  const payload = data as { verdict?: string; reasons?: string[]; confidence?: number } | null
+  if (!payload) {
+    return { verdict: 'reject', confidence: 1, rejectionReasons: ['moderation_unavailable'] }
+  }
   if (payload?.verdict === 'rejected') {
     return {
       verdict: 'reject',

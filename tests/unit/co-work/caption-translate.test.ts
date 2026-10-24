@@ -2,12 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const invoke = vi.fn()
 
-vi.mock('~/lib/supabase', () => ({
-  supabase: {
-    functions: {
-      invoke: (...args: unknown[]) => invoke(...args),
-    },
-  },
+vi.mock('~/lib/ai/owned-service', () => ({
+  invokeOwnedAssist: (...args: unknown[]) => invoke(...args),
 }))
 
 import {
@@ -113,12 +109,9 @@ describe('localizeCaptionLine', () => {
 
   it('translates into the viewer language even when sourceLang was mis-tagged as the region', async () => {
     invoke.mockResolvedValue({
-      data: {
-        translatedText: 'नमस्ते दोस्तों',
-        detectedSourceLang: 'en',
-        usedFallback: false,
-      },
-      error: null,
+      translatedText: 'नमस्ते दोस्तों',
+      detectedSourceLang: 'en',
+      usedFallback: false,
     })
 
     const localized = await localizeCaptionLine(
@@ -136,15 +129,12 @@ describe('localizeCaptionLine', () => {
     )
 
     expect(invoke).toHaveBeenCalledWith(
-      'ai-assist',
       expect.objectContaining({
-        body: expect.objectContaining({
-          action: 'translate',
-          message: 'Hello everyone',
-          context: expect.objectContaining({
-            target_lang: 'hi',
-            source_lang: 'auto',
-          }),
+        action: 'translate',
+        message: 'Hello everyone',
+        context: expect.objectContaining({
+          target_lang: 'hi',
+          source_lang: 'auto',
         }),
       }),
     )
@@ -155,12 +145,9 @@ describe('localizeCaptionLine', () => {
 
   it('translates Hindi speech into English when English captions are selected', async () => {
     invoke.mockResolvedValue({
-      data: {
-        translatedText: 'Hello friends',
-        detectedSourceLang: 'hi',
-        usedFallback: false,
-      },
-      error: null,
+      translatedText: 'Hello friends',
+      detectedSourceLang: 'hi',
+      usedFallback: false,
     })
 
     const localized = await localizeCaptionLine(

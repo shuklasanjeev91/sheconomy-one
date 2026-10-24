@@ -1,8 +1,6 @@
-import { supabase } from '~/lib/supabase/client'
+import { sendAiMessage } from '~/lib/ai'
 
-/**
- * Ask ai-assist for a short meeting summary from caption/transcript text.
- */
+/** Ask SHERPA for a short meeting summary from caption text. */
 export async function summarizeMeetingTranscript(input: {
   meetingTitle?: string
   transcript: string
@@ -20,17 +18,12 @@ export async function summarizeMeetingTranscript(input: {
     .filter(Boolean)
     .join('\n\n')
 
-  const { data, error } = await supabase.functions.invoke('ai-assist', {
-    body: {
-      mode: 'chat',
-      messages: [{ role: 'user', content: prompt }],
-    },
+  const result = await sendAiMessage({
+    product: 'cowork',
+    message: prompt,
+    contextPage: 'meeting',
   })
-  if (error) throw new Error(error.message || 'AI summary failed')
-  const reply =
-    (data as { reply?: string; message?: string; text?: string } | null)?.reply ||
-    (data as { message?: string } | null)?.message ||
-    (data as { text?: string } | null)?.text
-  if (typeof reply === 'string' && reply.trim()) return reply.trim()
+  const reply = result.answer.trim()
+  if (reply) return reply
   throw new Error('AI summary returned an empty response')
 }

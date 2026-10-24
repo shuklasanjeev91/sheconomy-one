@@ -11,7 +11,9 @@ export type OwnedRankKind =
   | 'low_stock'
   | 'unfulfilled'
 
-const GUEST_ACTIONS = new Set(['ai_search', 'chat', 'suggestions', 'writing_check'])
+const SHERPA_URL = 'https://d314vqsvc8rb4h.cloudfront.net'
+
+const GUEST_ACTIONS = new Set(['ai_search', 'chat', 'suggestions', 'writing_check', 'translate', 'describe_search_image'])
 const GUEST_RANK = new Set(['similar', 'frequently_bought_together'])
 
 export function readableAiError(message: string): string {
@@ -33,6 +35,8 @@ const OWNED_ACTIONS = new Set([
   'moderate_image',
   'feedback',
   'writing_check',
+  'translate',
+  'describe_search_image',
 ])
 
 /** True when SHERPA can generate a try-on image. Unpaid image plans stay hidden. */
@@ -49,11 +53,10 @@ export async function ownedTryOnReady(): Promise<boolean> {
   }
 }
 
-export function ownedAiServiceUrl(): string | null {
+export function ownedAiServiceUrl(): string {
   const raw = process.env.EXPO_PUBLIC_AI_SERVICE_URL
-  if (typeof raw !== 'string') return null
-  const trimmed = raw.trim().replace(/\/$/, '')
-  return trimmed || null
+  const trimmed = typeof raw === 'string' ? raw.trim().replace(/\/$/, '') : ''
+  return trimmed || SHERPA_URL
 }
 
 export function usesOwnedAiAction(action: string): boolean {
@@ -87,7 +90,11 @@ export async function invokeOwnedAssist<T>(body: Record<string, unknown>): Promi
       ...(authorization ? { Authorization: authorization } : {}),
     },
     body: JSON.stringify(body),
-    signal: timeoutSignal(action === 'listing_draft_from_image' || action === 'moderate_image' ? 45000 : 20000),
+    signal: timeoutSignal(
+      action === 'listing_draft_from_image' || action === 'moderate_image' || action === 'describe_search_image'
+        ? 45000
+        : 20000,
+    ),
   })
 
   const payload = (await response.json().catch(() => null)) as { error?: string } | null
