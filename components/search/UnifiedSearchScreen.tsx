@@ -28,6 +28,8 @@ import {
   availableSearchScopes,
   canAccessSearchScope,
   federatedSearch,
+  isTripListingText,
+  isWeekendPlanQuery,
   runAiSearch,
   SEARCH_SCOPE_LABELS,
   searchScopeGateHref,
@@ -252,7 +254,12 @@ export function UnifiedSearchScreen({
     void fetchListingsByIds(aiListingIds)
       .then((rows) => {
         if (cancelled) return
-        setAiListings(rows)
+        const visible = isWeekendPlanQuery(query)
+          ? rows.filter((listing) =>
+              isTripListingText(`${listing.title} ${listing.category ?? ''} ${listing.shop_name ?? ''}`),
+            )
+          : rows
+        setAiListings(visible)
         setAiListingsLoading(false)
       })
       .catch(() => {
@@ -263,7 +270,7 @@ export function UnifiedSearchScreen({
     return () => {
       cancelled = true
     }
-  }, [aiListingKey, aiListingIds])
+  }, [aiListingKey, aiListingIds, query])
 
   const aiEntityKey = `${aiResultKind}:${aiEntityIds.join(',')}`
   useEffect(() => {

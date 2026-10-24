@@ -6,6 +6,7 @@ export * from '~/lib/search/federate'
 export * from '~/lib/search/suggest'
 export * from '~/lib/search/filter'
 export { buildAiSearchHref, resolveAiListingSearchTerm, runAiSearch } from '~/lib/search/ai-search'
+export { isTripListingText, isWeekendPlanQuery } from '~/lib/search/weekend-plan'
 export { searchQueryFromImage } from '~/lib/search/image-search'
 
 export function buildSearchHref(query?: string, scope?: string, mode?: 'ai' | null): string {

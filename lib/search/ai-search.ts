@@ -1,5 +1,6 @@
 import { searchWithAi, type AiSearchResult } from '~/lib/ai/client'
 import type { ListingBrowseFilters } from '~/commerce/lib/filters'
+import { answerForWeekendPlan } from '~/lib/search/weekend-plan'
 
 export type AiSearchModeResult = AiSearchResult & {
   filters: ListingBrowseFilters
@@ -54,6 +55,7 @@ export async function runAiSearch(message: string, location?: string | null): Pr
 
   return {
     ...result,
+    answer: answerForWeekendPlan(trimmed, result.answer),
     searchTerm: resolveAiListingSearchTerm(trimmed, result.searchTerm.trim() || trimmed),
     filters,
   }
