@@ -18,6 +18,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 import { PageCenter } from '~/components/layout'
 import { fetchShopAddressDetails, type ShopAddressDetails } from '~/commerce/lib/shop-address'
 import { getShadowStyle, radius } from '~/config/tokens'
@@ -264,6 +265,8 @@ export function VendorMyShopScreen() {
         isDeleting={isDeleting}
         onDelete={handleDelete}
       />
+
+      <AiSuggestionRail product="shop" contextPage="home" title="SHERPA suggests" />
 
       {isDesktop ? (
         <XStack gap="$5" alignItems="flex-start">

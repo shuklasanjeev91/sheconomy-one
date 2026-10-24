@@ -49,6 +49,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { communityRoutes } from '~/lib/routes'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 
 type CommunityFeedHeaderProps = {
   contentFilter: FeedContentFilter | null
@@ -182,6 +183,7 @@ export function CommunityFeedHeader({
   return (
     <YStack gap="$3" width="100%" paddingBottom="$2">
       <StoriesStrip />
+      <AiSuggestionRail product="community" contextPage="home" title="SHERPA suggests" inset />
       {forYou}
       <FeedComposer />
       <NativeAdsManagerEntry />

@@ -7,6 +7,7 @@ import { radius } from '~/config/tokens'
 import {
   aiProductLabel,
   fetchAiSuggestions,
+  localAiSuggestionChips,
   sendAiSuggestionFeedback,
   type AiContext,
   type AiProduct,
@@ -28,8 +29,8 @@ type AiSuggestionRailProps = {
 }
 
 /**
- * Compact horizontal suggestion chips for product homes / PDP.
- * Tapping a chip opens the shared AI sheet with that prompt.
+ * Horizontal SHERPA chips for a tab. A chip with a page opens that page.
+ * A chip that is only a question asks SHERPA. Local questions fill an empty reply.
  */
 export function AiSuggestionRail({
   product,
@@ -61,9 +62,18 @@ export function AiSuggestionRail({
     }
   }, [product, contextPage])
 
-  if (!loading && suggestions.length === 0) return null
+  const localSuggestions: AiSuggestion[] = localAiSuggestionChips(product, contextPage)
+  const visible = suggestions.length > 0 ? suggestions : localSuggestions
 
   function onChip(suggestion: AiSuggestion) {
+    const href = suggestion.href?.trim()
+    if (href) {
+      if (!suggestion.id.startsWith('local-')) {
+        void sendAiSuggestionFeedback({ suggestionId: suggestion.id, helpful: true }).catch(() => {})
+      }
+      navigateApp(href as never)
+      return
+    }
     if (!suggestion.id.startsWith('local-')) {
       void sendAiSuggestionFeedback({ suggestionId: suggestion.id, helpful: true }).catch(() => {})
     }
@@ -111,7 +121,7 @@ export function AiSuggestionRail({
         </XStack>
       ) : (
         <HorizontalScrollRow gap="$2">
-          {suggestions.map((suggestion) => (
+          {visible.map((suggestion) => (
             <XStack
               key={suggestion.id}
               paddingHorizontal={14}

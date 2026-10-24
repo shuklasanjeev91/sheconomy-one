@@ -66,6 +66,7 @@ import { commerceRoutes, routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 
 import { BRAND_NAME } from '~/config/brand'
+import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 import { usePageSeo } from '~/components/seo/RouteSeo'
 import { organizationJsonLd } from '~/lib/seo/json-ld'
 import { DEFAULT_DESCRIPTION, SITE_NAME } from '~/lib/seo/seo'
@@ -174,6 +175,8 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
         </PageSection>
 
         <HomeVisitorActions />
+
+        <AiSuggestionRail product="commerce" contextPage="home" title="SHERPA suggests" inset />
 
         {categoriesFeed.items.length > 0 ? (
           <PageSection paddingTop="$2" gap="$3">

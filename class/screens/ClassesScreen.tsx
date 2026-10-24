@@ -31,6 +31,7 @@ import { CardGridSkeleton, Icons, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { mediaTabFromPath } from '~/class/lib/media-tab'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 
 export function ClassesScreen() {
   const ui = useAppUi()
@@ -160,6 +161,7 @@ export function ClassesScreen() {
 
   return (
     <ClassShell refreshing={feed.isRefreshing} onRefresh={() => feed.refresh()}>
+      <AiSuggestionRail product="class" contextPage="home" title="SHERPA suggests" />
       <ContinueLearningRail mediaType={mediaTab} />
       <EnrolledProgramsRevisitRail mediaType={mediaTab} />
       <SavedProgramsRail mediaType={mediaTab} />

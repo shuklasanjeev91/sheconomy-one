@@ -20,6 +20,7 @@ import { communityRoutes } from '~/lib/routes'
 import { QA } from '~/lib/qa/test-ids'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 
 const JOB_TYPE_OPTIONS: FilterOption[] = [
   { label: 'Full-time', value: 'Full-time' },
@@ -238,6 +239,8 @@ export function JobsScreen() {
             </AppLink>
           }
         />
+
+        <AiSuggestionRail product="community" contextPage="jobs" title="SHERPA suggests" />
 
         {user ? (
           <XStack gap={8} flexWrap="wrap">

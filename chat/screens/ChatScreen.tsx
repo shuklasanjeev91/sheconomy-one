@@ -15,6 +15,7 @@ import { Button, Icons, ListSkeleton, Text, XStack, YStack } from '~/components/
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { chatRoutes, routes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 
 const LIST_PANE_WIDTH = 380
 
@@ -128,6 +129,7 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
           minHeight={0}
         >
           <ChatSectionTabs />
+          <AiSuggestionRail product="chat" contextPage="home" title="SHERPA suggests" inset />
           <ChatListPane
             chats={visibleChats}
             isLoading={isLoading}
@@ -171,6 +173,7 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
         </YStack>
       ) : (
         <YStack flex={1} minHeight={0}>
+          <AiSuggestionRail product="chat" contextPage="home" title="SHERPA suggests" inset />
           <ChatListPane
             chats={visibleChats}
             isLoading={isLoading}
