@@ -3,6 +3,7 @@ import { AdaptiveTypeaheadPanel } from '~/components/search/AdaptiveTypeaheadPan
 import { SearchHitRow } from '~/components/search/SearchHitRow'
 import { SuggestSectionHeader } from '~/components/search/SuggestSectionHeader'
 import type { SearchHit } from '~/lib/search'
+import { suggestHint, suggestSectionLabel } from '~/lib/search/suggest-intent'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type SearchSuggestPanelProps = {
@@ -70,7 +71,7 @@ export function SearchSuggestPanel({
               Ask AI: “{trimmed}”
             </Text>
             <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
-              Understand your request and find matching listings
+              {suggestHint(trimmed)}
             </Text>
           </YStack>
         </XStack>
@@ -130,7 +131,7 @@ export function SearchSuggestPanel({
 
       {trimmed ? (
         <YStack gap="$1">
-          <SuggestSectionHeader label="SUGGESTIONS" />
+          <SuggestSectionHeader label={suggestSectionLabel(trimmed)} />
           {loading ? (
             <YStack padding="$4" alignItems="center">
               <Spinner size="small" />

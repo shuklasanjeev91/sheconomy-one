@@ -291,6 +291,106 @@ export async function searchProfiles(
   return data as ProfileSuggestion[]
 }
 
+export type ProfileIntentMatch = ProfileSuggestion & {
+  occupation: string | null
+  industry: string | null
+  business_name: string | null
+  bio: string | null
+  follower_count: number | null
+  location: string | null
+  gender: boolean | null
+}
+
+const PROFILE_INTENT_SELECT =
+  'id, full_name, username, avatar_url, headline, occupation, industry, business_name, bio, follower_count, location, gender'
+
+const CITY_SKIP = new Set(['india', 'near', 'city', 'town', 'area', 'the', 'and', 'me'])
+
+function profileIsWoman(row: ProfileIntentMatch): boolean {
+  if (row.gender === true) return true
+  const role = [row.occupation, row.headline, row.business_name].filter(Boolean).join(' ')
+  return /\b(women|woman)\b/i.test(role)
+}
+
+function profileNearMember(row: ProfileIntentMatch, memberLocation: string): boolean {
+  const cities = memberLocation
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 3 && !CITY_SKIP.has(token))
+  const loc = (row.location ?? '').toLowerCase()
+  if (!loc || !cities.length) return false
+  return cities.some((city) => loc.includes(city))
+}
+
+/**
+ * Match public profiles on occupation, headline, and bio.
+ * Used when the sentence is about people, not a product name.
+ */
+export async function searchProfilesForIntent(
+  tokens: string[],
+  limit = 12,
+  preferWomen = false,
+  memberLocation = '',
+): Promise<ProfileIntentMatch[]> {
+  const unique = [...new Set(tokens.map((token) => sanitizeFilterValue(token)).filter((token) => token.length >= 4))]
+  if (!unique.length) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(PROFILE_INTENT_SELECT)
+      .eq('is_deleted', false)
+      .order('follower_count', { ascending: false, nullsFirst: false })
+      .limit(limit)
+    if (error || !data) return []
+    return data as ProfileIntentMatch[]
+  }
+
+  const fields = ['occupation', 'headline', 'bio', 'industry', 'business_name', 'full_name']
+  const or = unique
+    .flatMap((token) => fields.map((field) => `${field}.ilike.%${token}%`))
+    .join(',')
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(PROFILE_INTENT_SELECT)
+    .eq('is_deleted', false)
+    .or(or)
+    .limit(80)
+  if (error || !data) return []
+
+  let rows = data as ProfileIntentMatch[]
+  if (preferWomen && rows.some(profileIsWoman)) {
+    rows = rows.filter(profileIsWoman)
+  }
+  const city = memberLocation.trim()
+  const ranked = rows.map((row) => {
+    const haystack = [row.occupation, row.headline, row.bio, row.industry, row.business_name, row.full_name]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    return {
+      row,
+      role: unique.some((token) => haystack.includes(token)) ? 1 : 0,
+      place: city && profileNearMember(row, city) ? 1 : 0,
+      followers: row.follower_count ?? 0,
+    }
+  })
+  ranked.sort((a, b) => b.role - a.role || b.place - a.place || b.followers - a.followers)
+  return ranked.slice(0, limit).map((item) => item.row)
+}
+
+/** Load public profiles in the same order as the requested ids. */
+export async function fetchProfilesByIds(ids: string[]): Promise<PublicProfile[]> {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))].slice(0, 24)
+  if (!unique.length) return []
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(PUBLIC_PROFILE_SELECT)
+    .in('id', unique)
+    .eq('is_deleted', false)
+  if (error || !data) return []
+  const byId = new Map((data as PublicProfile[]).map((row) => [row.id, row]))
+  return unique.map((id) => byId.get(id)).filter((row): row is PublicProfile => !!row)
+}
+
 /** Suggest hashtags for the composer autocomplete, ordered by usage. */
 export async function suggestHashtags(
   query: string,

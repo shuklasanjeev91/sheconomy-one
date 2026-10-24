@@ -9,12 +9,13 @@ import {
   loadMessageDraft,
   saveMessageDraft,
 } from '~/chat/lib/message-drafts'
-import { localChatQuickReplies } from '~/chat/lib/quick-replies'
+import { fetchCommentSuggestions } from '~/lib/ai'
 import type { ChatComposerAttachment, ChatMessage } from '~/chat/lib/types'
 import { HorizontalScrollRow } from '~/components/layout'
 import { MediaDropZone } from '~/components/media/MediaDropZone'
 import { UploadProgressBar } from '~/components/media/UploadProgressBar'
 import { Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { WritingSuggestionBar } from '~/components/writing/WritingSuggestionBar'
 import {
   cancelRecording,
   isRecordingSupported,
@@ -43,6 +44,8 @@ type MessageComposerProps = {
   uploadProgress?: number | null
   replyTo?: ChatMessage | null
   replySenderName?: string | null
+  peerName?: string | null
+  latestMessage?: string | null
   onCancelReply?: () => void
   editing?: ChatMessage | null
   onEditSubmit?: (messageId: string, text: string) => void
@@ -94,6 +97,8 @@ export function MessageComposer({
   uploadProgress,
   replyTo,
   replySenderName,
+  peerName,
+  latestMessage,
   onCancelReply,
   editing,
   onEditSubmit,
@@ -112,6 +117,7 @@ export function MessageComposer({
   const [recordSeconds, setRecordSeconds] = useState(0)
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
   const inputRef = useRef<TextInput>(null)
 
   const isEditing = !!editing
@@ -359,12 +365,32 @@ export function MessageComposer({
       : null
 
   const showQuickReplies = !isEditing && !recording && text.trim().length === 0
-  const quickReplies = showQuickReplies
-    ? localChatQuickReplies({
-        isReply: Boolean(replyTo),
-        peerName: replySenderName,
+  const suggestionSource = (replyTo?.content || latestMessage || '').trim()
+  const suggestionName = (replyTo ? replySenderName : peerName) || ''
+
+  useEffect(() => {
+    if (!showQuickReplies || (!suggestionSource && !suggestionName.trim())) {
+      setSuggestions([])
+      return
+    }
+    let cancelled = false
+    void fetchCommentSuggestions({
+      content: suggestionSource,
+      authorName: suggestionName,
+      parentComment: replyTo?.content ?? null,
+    })
+      .then((rows) => {
+        if (!cancelled) setSuggestions(rows.slice(0, 3))
       })
-    : []
+      .catch(() => {
+        if (!cancelled) setSuggestions([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [replyTo?.content, showQuickReplies, suggestionName, suggestionSource])
+
+  const quickReplies = showQuickReplies ? suggestions : []
 
   return (
     <MediaDropZone
@@ -459,6 +485,10 @@ export function MessageComposer({
         </YStack>
       ) : null}
 
+      <YStack paddingHorizontal={12}>
+        {recording ? null : <WritingSuggestionBar value={text} onApply={handleChange} />}
+      </YStack>
+
       <XStack alignItems="flex-end" gap={7} paddingHorizontal={8} paddingVertical={8}>
         {recording ? (
           <XStack
@@ -514,6 +544,8 @@ export function MessageComposer({
               paddingHorizontal={4}
               height={40}
               fontSize={16}
+              spellCheck
+              autoCorrect
               focusStyle={{
                 borderWidth: 0,
                 outlineWidth: 0,

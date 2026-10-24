@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 
 import {
   commentSuggestionContextKey,
-  localCommentSuggestions,
   type CommentSuggestionContext,
 } from '~/community/lib/comment-suggestions'
 import { HorizontalScrollRow } from '~/components/layout'
@@ -30,8 +29,7 @@ function withSuggestionTimeout<T>(promise: Promise<T>, timeoutMs = AI_SUGGESTION
 }
 
 /**
- * Professional comment starters above the composer.
- * Shows local chips immediately, then upgrades with AI when available.
+ * Comment starters written by SHERPA. Hidden when SHERPA returns none.
  */
 export function CommentSuggestionChips({
   context,
@@ -42,21 +40,21 @@ export function CommentSuggestionChips({
   const { user } = useSupabase()
   const contextKey = useMemo(() => commentSuggestionContextKey(context), [context])
   const stableContext = useMemo(() => ({ ...context }), [contextKey])
-  const localSuggestions = useMemo(() => localCommentSuggestions(context), [contextKey])
-  const [suggestions, setSuggestions] = useState(localSuggestions)
+  const [suggestions, setSuggestions] = useState<string[]>([])
   const [loadingAi, setLoadingAi] = useState(false)
 
   useEffect(() => {
-    setSuggestions(localSuggestions)
-  }, [contextKey, localSuggestions])
+    setSuggestions([])
+  }, [contextKey])
 
   useEffect(() => {
     if (!user) {
+      setSuggestions([])
       setLoadingAi(false)
       return
     }
     const cached = aiSuggestionCache.get(contextKey)
-    if (cached?.length) {
+    if (cached) {
       setSuggestions(cached)
       setLoadingAi(false)
       return
@@ -66,13 +64,13 @@ export function CommentSuggestionChips({
     setLoadingAi(true)
     void withSuggestionTimeout(fetchCommentSuggestions(stableContext))
       .then((rows) => {
-        if (cancelled || !rows?.length) return
-        const next = rows.slice(0, 4)
+        if (cancelled) return
+        const next = rows?.slice(0, 4) ?? []
         aiSuggestionCache.set(contextKey, next)
         setSuggestions(next)
       })
       .catch(() => {
-        // Keep local chips when AI is unavailable (quota, offline, etc.)
+        if (!cancelled) setSuggestions([])
       })
       .finally(() => {
         if (!cancelled) setLoadingAi(false)

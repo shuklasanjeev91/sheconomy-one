@@ -1,3 +1,4 @@
+import { blockedImageMessage, BLOCKED_CONTENT_MESSAGE } from '~/lib/safety/content-screen'
 import { supabase } from '~/lib/supabase'
 
 import {
@@ -65,6 +66,13 @@ function extensionForMime(mimeType: string) {
 
 function randomSuffix() {
   return Math.random().toString(36).slice(2, 10)
+}
+
+async function blockMemberImage(
+  mimeType: string,
+  body: ArrayBuffer | Blob | File | Uint8Array | null,
+): Promise<string | null> {
+  return blockedImageMessage({ mimeType, body })
 }
 
 export function getStoragePublicUrl(bucket: string, path: string) {
@@ -182,6 +190,8 @@ export async function uploadEventCoverImage(
   if (!body) {
     return { data: null, error: 'Image data is empty.' }
   }
+  const blocked = await blockMemberImage(file.mimeType, body)
+  if (blocked) return { data: null, error: blocked }
 
   return uploadStorageObject(STORAGE_BUCKETS.postImages, path, body, file.mimeType, options)
 }
@@ -203,6 +213,8 @@ export async function uploadPostImages(
       if (!body) {
         return { error: 'Image data is empty.' }
       }
+      const blocked = await blockMemberImage(file.mimeType, body)
+      if (blocked) return { error: blocked }
       const { data, error } = await uploadStorageObject(
         STORAGE_BUCKETS.postImages,
         path,
@@ -228,13 +240,16 @@ export async function uploadPostImages(
   return { urls: uploads.map((item) => item.publicUrl), error: null as string | null }
 }
 
-/** Upload listing videos to the listing-images bucket (100 MB max each). */
+/** Video files are refused because they cannot be checked the way a photo can. */
 export async function uploadListingVideos(
   userId: string,
   shopId: string,
   files: StorageUploadFile[],
   options?: { onProgress?: UploadProgressHandler },
 ) {
+  if (files.length > 0) {
+    return { urls: [], error: BLOCKED_CONTENT_MESSAGE }
+  }
   const uploads: UploadResult[] = []
 
   const { error: batchError } = await uploadFilesWithAggregateProgress(
@@ -281,6 +296,9 @@ export async function uploadPostVideos(
   files: StorageUploadFile[],
   options?: { onProgress?: UploadProgressHandler },
 ) {
+  if (files.length > 0) {
+    return { urls: [], error: BLOCKED_CONTENT_MESSAGE }
+  }
   const uploads: UploadResult[] = []
 
   const { error: batchError } = await uploadFilesWithAggregateProgress(
@@ -331,6 +349,8 @@ export async function uploadGroupAvatarImage(
   const path = `${userId}/group-avatars/${Date.now()}-${randomSuffix()}.${ext}`
   const body = resolveStorageUploadBody(file)
   if (!body) return { data: null, error: 'Image data is empty.' }
+  const blocked = await blockMemberImage(file.mimeType, body)
+  if (blocked) return { data: null, error: blocked }
 
   return uploadStorageObject(STORAGE_BUCKETS.postImages, path, body, file.mimeType, options)
 }
@@ -362,6 +382,8 @@ export async function uploadProfileAvatarImage(
 ) {
   const body = resolveUploadBody(file)
   if (!body) return { data: null, error: 'Image data is empty.' }
+  const blocked = await blockMemberImage(file.mimeType, body)
+  if (blocked) return { data: null, error: blocked }
   // Prefer mime-based extension so HEIC filenames don't label JPEG bytes as .heic.
   const ext = extensionForMime(file.mimeType)
   const path = `${userId}/avatar/${Date.now()}-${randomSuffix()}.${ext}`
@@ -406,6 +428,8 @@ export async function uploadProfileCoverImage(
 ) {
   const body = resolveUploadBody(file)
   if (!body) return { data: null, error: 'Image data is empty.' }
+  const blocked = await blockMemberImage(file.mimeType, body)
+  if (blocked) return { data: null, error: blocked }
   const ext = extensionForMime(file.mimeType)
   const path = `${userId}/cover/${Date.now()}-${randomSuffix()}.${ext}`
 
@@ -422,6 +446,8 @@ export async function uploadShopLogoImage(
   const path = `${userId}/shops/${shopId}/logo/${Date.now()}-${randomSuffix()}.${ext}`
   const body = resolveStorageUploadBody(file)
   if (!body) return { data: null, error: 'Image data is empty.' }
+  const blocked = await blockMemberImage(file.mimeType, body)
+  if (blocked) return { data: null, error: blocked }
 
   return uploadStorageObject(STORAGE_BUCKETS.shopImages, path, body, file.mimeType, options)
 }

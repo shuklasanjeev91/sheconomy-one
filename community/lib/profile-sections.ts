@@ -6,6 +6,7 @@ import type {
   ProfileSkill,
 } from '~/community/lib/profile-details'
 import { parseSkillTags } from '~/community/lib/profile-format'
+import { blockedContentMessage } from '~/lib/safety/content-screen'
 
 export const EMPLOYMENT_TYPE_OPTIONS = [
   'Full-time',
@@ -437,6 +438,9 @@ export async function updateProfileAbout(
   if (input.marriage_anniversary !== undefined) {
     patch.marriage_anniversary = input.marriage_anniversary?.trim() || null
   }
+
+  const blocked = await blockedContentMessage([patch.headline, patch.bio])
+  if (blocked) return { error: blocked }
 
   const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
 

@@ -26,7 +26,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { loadVendorAnalytics, selectVendorAnalytics } from '~/lib/orders/vendor-orders.store'
 import type { VendorOrderAnalytics } from '~/lib/orders/vendor-orders.type'
 import { openExternalUrl as openPlatformUrl } from '~/lib/platform/openUrl'
-import { commerceRoutes, vendorRoutes } from '~/lib/routes'
+import { commerceRoutes, routes, vendorRoutes } from '~/lib/routes'
 import { deleteShop, loadMyShops, loadShopStats, updateShop } from '~/lib/shop/shop.store'
 import { getShopFollowerCount } from '~/lib/shop/shop.service'
 import type { Shop, ShopStats } from '~/lib/shop/shop.type'
@@ -365,6 +365,11 @@ function ShopHeaderBar({ ui, shop, isDesktop, previewHref, isDeleting, onDelete 
         <AppLink href={previewHref} asChild>
           <Button tone="outline" size="$3" borderRadius={999} icon={<Icons.Eye size={16} />}>
             Preview
+          </Button>
+        </AppLink>
+        <AppLink href={routes.helpSeller} asChild>
+          <Button tone="outline" size="$3" borderRadius={999}>
+            Seller Support
           </Button>
         </AppLink>
         <AppLink href={vendorRoutes.editShop} asChild>

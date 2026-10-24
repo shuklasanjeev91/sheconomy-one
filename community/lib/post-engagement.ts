@@ -2,6 +2,7 @@ import { supabase } from '~/lib/supabase/client'
 
 import { REACTION_TYPES, type ReactionType } from '~/community/lib/constants'
 import { extractMentions } from '~/community/lib/post-text'
+import { blockedContentMessage } from '~/lib/safety/content-screen'
 
 export type PostComment = {
   id: string
@@ -185,6 +186,8 @@ export async function addPostComment(
 ): Promise<{ error: string | null }> {
   const trimmed = content.trim()
   if (!trimmed) return { error: 'Comment cannot be empty.' }
+  const blocked = await blockedContentMessage(trimmed)
+  if (blocked) return { error: blocked }
 
   const mentions = extractMentions(trimmed)
 
@@ -207,6 +210,8 @@ export async function updatePostComment(
 ): Promise<{ error: string | null }> {
   const trimmed = content.trim()
   if (!trimmed) return { error: 'Comment cannot be empty.' }
+  const blocked = await blockedContentMessage(trimmed)
+  if (blocked) return { error: blocked }
 
   const mentions = extractMentions(trimmed)
   const { data, error } = await supabase

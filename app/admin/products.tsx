@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'one'
+import { blockedContentMessage } from '~/lib/safety/content-screen'
 
 import {
   Badge,
@@ -386,6 +387,16 @@ function AdminProductsManager() {
     setSaving(true)
     setError(null)
     const payload = formToListingPayload(form)
+    const blocked = await blockedContentMessage([
+      String(payload.title ?? ''),
+      String(payload.description ?? ''),
+    ])
+    if (blocked) {
+      setSaving(false)
+      setError(blocked)
+      toast.show('Unable to save product', { tone: 'danger', message: blocked })
+      return
+    }
     const result =
       formMode === 'create'
         ? await supabase.from('listings').insert(payload as ListingInsert).select('*').single()

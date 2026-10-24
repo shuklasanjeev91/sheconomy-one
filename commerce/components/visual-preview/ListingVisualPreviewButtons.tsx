@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
+import { ownedAiServiceUrl, ownedTryOnReady } from '~/lib/ai/owned-service'
 import {
   isVisualPreviewEnabled,
   resolveVisualPreviewMode,
@@ -35,6 +36,19 @@ export function ListingVisualPreviewButtons({
 }: ListingVisualPreviewButtonsProps) {
   const ui = useAppUi()
   const [openMode, setOpenMode] = useState<VisualPreviewMode | null>(null)
+  const serviceConfigured = ownedAiServiceUrl() != null
+  const [tryOnReady, setTryOnReady] = useState(!serviceConfigured)
+
+  useEffect(() => {
+    if (!serviceConfigured) return
+    let cancelled = false
+    ownedTryOnReady().then((ready) => {
+      if (!cancelled) setTryOnReady(ready)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [serviceConfigured])
 
   const listingLike = useMemo(
     () => ({
@@ -57,7 +71,7 @@ export function ListingVisualPreviewButtons({
     [listingLike],
   )
 
-  if (!mode) return null
+  if (!mode || !tryOnReady) return null
 
   const isTryOn = mode === 'try_on'
   const label = isTryOn ? 'Try on' : 'View in your room'

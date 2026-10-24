@@ -25,6 +25,7 @@ function loadProjectEnv(mode: string) {
     'EXPO_PUBLIC_SUPABASE_ANON_KEY',
     'EXPO_PUBLIC_WEB_APP_URL',
     'EXPO_PUBLIC_ONESIGNAL_APP_ID',
+    'EXPO_PUBLIC_AI_SERVICE_URL',
     'ONE_SERVER_URL',
     'ONE_CACHE_KEY',
   ] as const
@@ -591,6 +592,12 @@ if (typeof g.Response !== 'function') {
       ),
       'process.env.EXPO_PUBLIC_ONESIGNAL_APP_ID': JSON.stringify(
         env.EXPO_PUBLIC_ONESIGNAL_APP_ID?.trim() || '',
+      ),
+      'process.env.EXPO_PUBLIC_AI_SERVICE_URL': JSON.stringify(
+        env.EXPO_PUBLIC_AI_SERVICE_URL?.trim() || '',
+      ),
+      'import.meta.env.EXPO_PUBLIC_AI_SERVICE_URL': JSON.stringify(
+        env.EXPO_PUBLIC_AI_SERVICE_URL?.trim() || '',
       ),
       'process.env.ONE_SERVER_URL': JSON.stringify(appOrigin),
       'process.env.ONE_CACHE_KEY': JSON.stringify(env.ONE_CACHE_KEY?.trim() || '202607151'),

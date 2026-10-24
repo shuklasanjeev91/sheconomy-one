@@ -1,6 +1,7 @@
 /**
  * Visual commerce preview eligibility: fashion try-on vs Amazon-style view-in-space.
- * Category / title / tag heuristics + optional listing_metadata.visual_preview override.
+ * The listing category decides the mode. Title and tags only suggest wall, floor, or table.
+ * listing_metadata.visual_preview can still force a mode on one listing.
  */
 
 export type VisualPreviewMode = 'try_on' | 'view_in_space'
@@ -126,6 +127,7 @@ const VIEW_IN_SPACE_KEYWORDS = [
   'plant pot',
   'cushion',
   'pillow',
+  'clock',
   'ottoman',
   'sideboard',
   'console',
@@ -214,8 +216,16 @@ function haystackFromListing(listing: VisualPreviewListingLike): string {
   return parts.join(' ').toLowerCase()
 }
 
+function matchesKeyword(haystack: string, keyword: string): boolean {
+  const needle = keyword.toLowerCase().trim()
+  if (!needle) return false
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // Whole words only, so "table" matches a dining table and not "tablets".
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}s?(?=$|[^a-z0-9])`, 'i').test(haystack)
+}
+
 function matchesKeywords(haystack: string, keywords: string[]): boolean {
-  return keywords.some((keyword) => haystack.includes(keyword.toLowerCase()))
+  return keywords.some((keyword) => matchesKeyword(haystack, keyword))
 }
 
 function metadataOverride(listing: VisualPreviewListingLike): VisualPreviewMode | null {
@@ -228,7 +238,7 @@ function metadataOverride(listing: VisualPreviewListingLike): VisualPreviewMode 
 
 /**
  * Resolve which visual preview mode (if any) applies to a listing.
- * Metadata override wins; otherwise category/title/tag keywords decide.
+ * Metadata override wins; otherwise only the category is considered.
  */
 export function resolveVisualPreviewMode(
   listing: VisualPreviewListingLike,
@@ -238,12 +248,11 @@ export function resolveVisualPreviewMode(
   const override = metadataOverride(listing)
   if (override) return override
 
-  const haystack = haystackFromListing(listing)
-  if (!haystack.trim()) return null
+  const category = String(listing.category || '').toLowerCase().trim()
+  if (!category) return null
 
-  // Prefer try-on when apparel signals are present (even if "home" appears in tags).
-  if (matchesKeywords(haystack, TRY_ON_KEYWORDS)) return 'try_on'
-  if (matchesKeywords(haystack, VIEW_IN_SPACE_KEYWORDS)) return 'view_in_space'
+  if (matchesKeywords(category, TRY_ON_KEYWORDS)) return 'try_on'
+  if (matchesKeywords(category, VIEW_IN_SPACE_KEYWORDS)) return 'view_in_space'
   return null
 }
 

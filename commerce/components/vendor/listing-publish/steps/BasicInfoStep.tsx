@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 
 import {
+  Button,
   Checkbox,
   Field,
   Icons,
   Input,
+  Spinner,
   Switch,
   Text,
   TextArea,
@@ -31,6 +33,8 @@ type BasicInfoStepProps = {
   onUpdateMetadata?: (key: string, value: unknown) => void
   onAddTag: (tag: string) => void
   onRemoveTag: (tag: string) => void
+  onWriteWithAi?: () => void
+  writingWithAi?: boolean
 }
 
 export function BasicInfoStep({
@@ -44,6 +48,8 @@ export function BasicInfoStep({
   onUpdateMetadata,
   onAddTag,
   onRemoveTag,
+  onWriteWithAi,
+  writingWithAi,
 }: BasicInfoStepProps) {
   const titleLength = formData.title?.length ?? 0
   const wordCount = useMemo(() => countWords(formData.description ?? ''), [formData.description])
@@ -91,6 +97,47 @@ export function BasicInfoStep({
         </XStack>
       ) : null}
 
+      {onWriteWithAi ? (
+        <XStack
+          width="100%"
+          alignItems="center"
+          justifyContent="space-between"
+          gap="$3"
+          flexWrap="wrap"
+          paddingHorizontal="$4"
+          paddingVertical="$3"
+          borderRadius={16}
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+          backgroundColor={ui.surface}
+        >
+          <YStack flex={1} minWidth={220} gap={2}>
+            <Text fontSize={14} fontWeight="800" color={ui.text}>
+              Write with AI
+            </Text>
+            <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+              Use a product photo to suggest the title, description, price, category, and SEO. Review
+              everything before you publish.
+            </Text>
+          </YStack>
+          <Button
+            tone="outline"
+            borderRadius={999}
+            disabled={writingWithAi}
+            icon={
+              writingWithAi ? (
+                <Spinner size="small" color={ui.brand} />
+              ) : (
+                <Icons.Sparkles size={15} color={ui.brand} />
+              )
+            }
+            onPress={onWriteWithAi}
+          >
+            {writingWithAi ? 'Writing with AI…' : 'Write with AI'}
+          </Button>
+        </XStack>
+      ) : null}
+
       <ListingPublishCard
         ui={ui}
         title="Listing Title"
@@ -101,19 +148,14 @@ export function BasicInfoStep({
         }
       >
         <Field error={errors.title}>
-          <XStack alignItems="center" position="relative">
-            <Input
-              width="100%"
-              value={formData.title}
-              onChangeText={(value) => onUpdate('title', value)}
-              placeholder="Premium Silk Velvet Evening Scarf - Amethyst"
-              maxLength={LISTING_VALIDATION.TITLE.MAX_LENGTH}
-              invalid={!!errors.title}
-            />
-            <YStack position="absolute" right={12} pointerEvents="none">
-              <Icons.Sparkles size={16} color={ui.brand} />
-            </YStack>
-          </XStack>
+          <Input
+            width="100%"
+            value={formData.title}
+            onChangeText={(value) => onUpdate('title', value)}
+            placeholder="Premium Silk Velvet Evening Scarf - Amethyst"
+            maxLength={LISTING_VALIDATION.TITLE.MAX_LENGTH}
+            invalid={!!errors.title}
+          />
         </Field>
         <ListingPublishFieldError ui={ui} message={errors.title} />
       </ListingPublishCard>

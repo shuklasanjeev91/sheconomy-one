@@ -1,8 +1,16 @@
 import type { AccessTier } from '~/lib/auth/access'
 
+import { searchProfilesForIntent } from '~/community/lib/network'
 import { federatedSearch, flattenFederatedHits } from '~/lib/search/federate'
 import { getAppSearchHistorySnapshot } from '~/lib/search/history'
+import { communityRoutes } from '~/lib/routes'
 import { searchScopeFromPath } from '~/lib/search/scope-from-path'
+import {
+  suggestAsksForWomen,
+  suggestFocusTokens,
+  suggestIntent,
+  suggestScope,
+} from '~/lib/search/suggest-intent'
 import type { SearchScope, SearchSuggestResult } from '~/lib/search/types'
 
 export type SuggestOptions = {
@@ -13,6 +21,7 @@ export type SuggestOptions = {
   userId?: string | null
   latitude?: number | null
   longitude?: number | null
+  memberLocation?: string | null
 }
 
 /**
@@ -23,7 +32,7 @@ export async function searchSuggest(
   options: SuggestOptions,
 ): Promise<SearchSuggestResult> {
   const trimmed = query.trim()
-  const scope = options.scope ?? searchScopeFromPath(options.pathname ?? '/')
+  const scope = suggestScope(trimmed) ?? options.scope ?? searchScopeFromPath(options.pathname ?? '/')
   const limit = options.limit ?? 12
 
   if (!trimmed) {
@@ -31,6 +40,32 @@ export async function searchSuggest(
       query: '',
       recent: getAppSearchHistorySnapshot().slice(0, 8),
       hits: [],
+      blockedScopes: [],
+    }
+  }
+
+  if (suggestIntent(trimmed) === 'person') {
+    const rows = await searchProfilesForIntent(
+      suggestFocusTokens(trimmed),
+      limit,
+      suggestAsksForWomen(trimmed),
+      options.memberLocation ?? '',
+    )
+    return {
+      query: trimmed,
+      recent: [],
+      hits: rows.map((row) => {
+        const handle = row.username?.trim() || row.id
+        return {
+          kind: 'person' as const,
+          id: row.id,
+          title: row.full_name?.trim() || row.username || 'Member',
+          subtitle: row.occupation || row.headline || (row.username ? `@${row.username}` : null),
+          imageUrl: row.avatar_url,
+          href: String(communityRoutes.userProfile(handle)),
+          username: row.username,
+        }
+      }),
       blockedScopes: [],
     }
   }

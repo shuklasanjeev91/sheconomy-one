@@ -6,6 +6,7 @@ import { Input as TInput, TextArea as TTextArea, YStack } from 'tamagui'
 import { AppTextField } from '~/components/forms/AppTextField'
 import { SizableText } from '~/components/ui/Text'
 import { BRAND_THEME } from '~/config/tokens'
+import { WritingSuggestionBar } from '~/components/writing/WritingSuggestionBar'
 
 const sharedFieldStyle = {
   borderRadius: '$6',
@@ -53,6 +54,33 @@ type FieldControlExtra = {
   accessibilityLabel?: string
   accessibilityHint?: string
   accessibilityRole?: string
+  /** Spell and grammar chip. On for text areas, off for short inputs. */
+  writingAssist?: boolean
+  /** Skip a check while another suggestion panel is open. */
+  writingPaused?: boolean
+}
+
+function withWritingAssist(
+  field: React.ReactNode,
+  options: {
+    enabled: boolean
+    paused?: boolean
+    value?: unknown
+    flex?: unknown
+    onChangeText?: (text: string) => void
+  },
+) {
+  if (!options.enabled) return field
+  return (
+    <YStack width="100%" minWidth={0} flex={typeof options.flex === 'number' ? options.flex : undefined}>
+      {field}
+      <WritingSuggestionBar
+        value={options.value != null ? String(options.value) : ''}
+        paused={Boolean(options.paused)}
+        onApply={(next) => options.onChangeText?.(next)}
+      />
+    </YStack>
+  )
 }
 
 function webSafeFieldProps<T extends FieldControlExtra>(props: T): T {
@@ -68,7 +96,7 @@ function webSafeFieldProps<T extends FieldControlExtra>(props: T): T {
 
   return {
     ...rest,
-    ...(editable === false ? { readOnly: true } : null),
+    readOnly: editable === false,
     ...(accessibilityLabel ? { 'aria-label': accessibilityLabel } : null),
     ...(accessibilityHint ? { title: accessibilityHint } : null),
   } as T
@@ -81,7 +109,10 @@ type InputProps = GetProps<typeof TInput> & FieldControlExtra
  * Native: RN-backed AppTextField so typing, paste, and autofill work reliably
  * across every screen (Tamagui Input shells often swallow Android touches).
  */
-export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...props }, ref) {
+export const Input = forwardRef<any, InputProps>(function Input(
+  { invalid, writingAssist = false, writingPaused = false, ...props },
+  ref,
+) {
   if (Platform.OS !== 'web') {
     const {
       value,
@@ -144,7 +175,7 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
           ? Number(fontSize)
           : undefined
 
-    return (
+    return withWritingAssist(
       <AppTextField
         ref={ref}
         value={value != null ? String(value) : defaultValue != null ? String(defaultValue) : undefined}
@@ -164,7 +195,7 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
         keyboardType={keyboardType as never}
         inputMode={inputMode as never}
         autoCapitalize={(autoCapitalize as never) ?? 'sentences'}
-        autoCorrect={autoCorrect as never}
+        autoCorrect={writingAssist ? autoCorrect !== false : (autoCorrect as never)}
         secureTextEntry={Boolean(secureTextEntry)}
         returnKeyType={returnKeyType as never}
         enterKeyHint={enterKeyHint as never}
@@ -186,17 +217,25 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
           // when the parent sizes from minHeight alone.
           ...(embedded ? { alignSelf: 'stretch' as const } : null),
         }}
-      />
+      />,
+      {
+        enabled: writingAssist,
+        paused: writingPaused,
+        value,
+        flex,
+        onChangeText,
+      },
     )
   }
 
   const safeProps = webSafeFieldProps(props)
 
-  return (
+  return withWritingAssist(
     <TInput
       ref={ref}
       theme={BRAND_THEME}
       height="$5"
+      spellCheck={writingAssist}
       {...sharedFieldStyle}
       {...(invalid
         ? {
@@ -211,7 +250,14 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
         : null)}
       {...(isEmbeddedField(props) ? embeddedFieldStyle : null)}
       {...safeProps}
-    />
+    />,
+    {
+      enabled: writingAssist,
+      paused: writingPaused,
+      value: props.value,
+      flex: props.flex,
+      onChangeText: (props as { onChangeText?: (text: string) => void }).onChangeText,
+    },
   )
 })
 Input.displayName = 'Input'
@@ -219,7 +265,7 @@ Input.displayName = 'Input'
 export const TextArea = forwardRef<
   any,
   GetProps<typeof TTextArea> & FieldControlExtra
->(function TextArea({ invalid, ...props }, ref) {
+>(function TextArea({ invalid, writingAssist = true, writingPaused = false, ...props }, ref) {
   if (Platform.OS !== 'web') {
     const {
       value,
@@ -244,7 +290,7 @@ export const TextArea = forwardRef<
         autoFocus?: boolean
       }
 
-    return (
+    return withWritingAssist(
       <AppTextField
         ref={ref}
         value={value != null ? String(value) : undefined}
@@ -262,18 +308,26 @@ export const TextArea = forwardRef<
         autoFocus={autoFocus}
         autoCapitalize={(autoCapitalize as never) ?? 'sentences'}
         autoCorrect={autoCorrect !== false}
-      />
+      />,
+      {
+        enabled: writingAssist,
+        paused: writingPaused,
+        value,
+        flex: (props as { flex?: unknown }).flex,
+        onChangeText,
+      },
     )
   }
 
   const safeProps = webSafeFieldProps(props)
 
-  return (
+  return withWritingAssist(
     <TTextArea
       ref={ref}
       theme={BRAND_THEME}
       minHeight={100}
       paddingVertical="$3"
+      spellCheck={writingAssist}
       {...sharedFieldStyle}
       {...(invalid
         ? {
@@ -288,7 +342,14 @@ export const TextArea = forwardRef<
         : null)}
       {...(isEmbeddedField(props) ? embeddedFieldStyle : null)}
       {...safeProps}
-    />
+    />,
+    {
+      enabled: writingAssist,
+      paused: writingPaused,
+      value: props.value,
+      flex: props.flex,
+      onChangeText: (props as { onChangeText?: (text: string) => void }).onChangeText,
+    },
   )
 })
 TextArea.displayName = 'TextArea'

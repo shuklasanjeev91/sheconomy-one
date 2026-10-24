@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState, memo } from 'react'
 import { Alert, Platform } from 'react-native'
 import { useParams } from 'one'
+
+import { AI_NAME } from '~/config/brand'
+import { useAiAssistOptional } from '~/providers/AiAssistProvider'
 import { AppLink } from '~/components/navigation/AppLink'
 import {
   Button,
@@ -21,7 +24,6 @@ import {
   CommercePanel,
   FavoriteButton,
   GetItByChip,
-  ListingAskQuestion,
   ListingDetailsPanel,
   ListingFulfillmentPanel,
   ListingImage,
@@ -35,7 +37,6 @@ import {
   ListingReturnPolicyCard,
   ListingSellerCard,
   ListingShopPolicies,
-  ListingTrustSnapshot,
   ListingVariantPicker,
   LowStockHint,
   RatingSummary,
@@ -160,6 +161,7 @@ export function ListingScreen({
   awaitingInitial = false,
 }: ListingScreenProps = {}) {
   const ui = useAppUi()
+  const ai = useAiAssistOptional()
   const { slug } = useParams<{ slug: string }>()
   const { listing, images, variations, attributes, deliveryProfiles, isLoading, error } = useListing(
     slug,
@@ -561,6 +563,33 @@ export function ListingScreen({
     />
   )
 
+  const askSherpaButton = ai ? (
+    <Button
+      tone="outline"
+      size="$3"
+      borderRadius={999}
+      icon={<Icons.Sparkles size={15} color={ui.brand} />}
+      onPress={() => {
+        const listingSlug = slug ?? listing.slug ?? listing.id
+        ai.openAssist({
+          product: 'commerce',
+          contextPage: 'listing',
+          context: {
+            listing_id: listing.id,
+            listing_slug: listingSlug,
+            listing_title: listing.title,
+            listing_category: listing.category,
+            route: `/listing/${listingSlug}`,
+          },
+          prompt: 'Tell me about this product',
+          autoSend: true,
+        })
+      }}
+    >
+      Ask {AI_NAME}
+    </Button>
+  ) : null
+
   const visualPreviewButtons = (
     <ListingVisualPreviewButtons
       listingId={listing.id}
@@ -618,10 +647,6 @@ export function ListingScreen({
     purchaseLocked,
     isDigital,
   })
-  const handleOpenPolicies = () => {
-    if (!listing.shops) return
-    navigateApp(commerceRoutes.shopReturns(getShopSlug(listing.shops)))
-  }
 
   // ─── Mobile layout ──────────────────────────────────────────────────────────
   if (!hasSideRails) {
@@ -710,13 +735,6 @@ export function ListingScreen({
                 </XStack>
               ) : null}
 
-              <ListingTrustSnapshot
-                snapshot={trustSnapshot}
-                shopId={listing.shops?.id}
-                ownerUserId={listing.shops?.user_id}
-                onOpenPolicies={handleOpenPolicies}
-              />
-
               {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} compact /> : null}
 
               {fulfillmentInfo?.kind === 'physical' ? (
@@ -755,22 +773,16 @@ export function ListingScreen({
                     }}
                   />
                   <ListingReorderScheduleCard listingId={listing.id} metadata={listingMeta} />
-                  <ListingAskQuestion
-                    listingId={listing.id}
-                    shopId={listing.shop_id}
-                    sellerId={listing.shops?.user_id}
-                    listingTitle={listing.title}
-                  />
+                  <XStack gap="$2" flexWrap="wrap">
+                    {askSherpaButton}
+                  </XStack>
                   {visualPreviewButtons}
                 </YStack>
               ) : (
                 <YStack gap="$2">
-                  <ListingAskQuestion
-                    listingId={listing.id}
-                    shopId={listing.shop_id}
-                    sellerId={listing.shops?.user_id}
-                    listingTitle={listing.title}
-                  />
+                  <XStack gap="$2" flexWrap="wrap">
+                    {askSherpaButton}
+                  </XStack>
                   {visualPreviewButtons}
                 </YStack>
               )}
@@ -980,13 +992,6 @@ export function ListingScreen({
 
       {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} /> : null}
 
-      <ListingTrustSnapshot
-        snapshot={trustSnapshot}
-        shopId={listing.shops?.id}
-        ownerUserId={listing.shops?.user_id}
-        onOpenPolicies={handleOpenPolicies}
-      />
-
       {fulfillmentInfo?.kind === 'physical' ? (
         <DeliveryPinCheck
           shopId={listing.shop_id}
@@ -1019,22 +1024,16 @@ export function ListingScreen({
             }}
           />
           <ListingReorderScheduleCard listingId={listing.id} metadata={listingMeta} />
-          <ListingAskQuestion
-            listingId={listing.id}
-            shopId={listing.shop_id}
-            sellerId={listing.shops?.user_id}
-            listingTitle={listing.title}
-          />
+          <XStack gap="$2" flexWrap="wrap">
+            {askSherpaButton}
+          </XStack>
           {visualPreviewButtons}
         </YStack>
       ) : (
         <YStack gap="$2">
-          <ListingAskQuestion
-            listingId={listing.id}
-            shopId={listing.shop_id}
-            sellerId={listing.shops?.user_id}
-            listingTitle={listing.title}
-          />
+          <XStack gap="$2" flexWrap="wrap">
+            {askSherpaButton}
+          </XStack>
           {visualPreviewButtons}
         </YStack>
       )}

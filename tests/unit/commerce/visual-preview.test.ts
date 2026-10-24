@@ -17,25 +17,32 @@ describe('resolveVisualPreviewMode', () => {
     )
   })
 
-  it('returns try_on from fashion titles even without category', () => {
+  it('ignores title and tags when the category does not match', () => {
     expect(
       resolveVisualPreviewMode({
         title: 'Floral summer dress for women',
         hasPrimaryImage: true,
       }),
-    ).toBe('try_on')
+    ).toBeNull()
+    expect(
+      resolveVisualPreviewMode({ tags: ['wall art', 'poster'], hasPrimaryImage: true }),
+    ).toBeNull()
+    expect(
+      resolveVisualPreviewMode({
+        title: 'Handcrafted dining table',
+        category: 'Herbal & Ayurvedic Supplements',
+        hasPrimaryImage: true,
+      }),
+    ).toBeNull()
   })
 
-  it('returns view_in_space for electronics and home', () => {
+  it('returns view_in_space for electronics and home categories', () => {
     expect(
       resolveVisualPreviewMode({ category: 'Electronics / Television', hasPrimaryImage: true }),
     ).toBe('view_in_space')
     expect(
       resolveVisualPreviewMode({ category: 'Home & Living / Furniture', hasPrimaryImage: true }),
     ).toBe('view_in_space')
-    expect(resolveVisualPreviewMode({ tags: ['wall art', 'poster'], hasPrimaryImage: true })).toBe(
-      'view_in_space',
-    )
   })
 
   it('honors listing_metadata override', () => {
@@ -55,12 +62,36 @@ describe('resolveVisualPreviewMode', () => {
     ).toBe('view_in_space')
   })
 
+  it('does not treat tablets as a table for view in your room', () => {
+    expect(
+      resolveVisualPreviewMode({
+        title: 'Bioayurveda Bio Skintone Herbal Tablets',
+        category: 'Herbal & Ayurvedic Supplements',
+        hasPrimaryImage: true,
+      }),
+    ).toBeNull()
+    expect(
+      resolveVisualPreviewMode({
+        title: 'Handcrafted dining table',
+        category: 'Furniture',
+        hasPrimaryImage: true,
+      }),
+    ).toBe('view_in_space')
+    expect(
+      resolveVisualPreviewMode({
+        title: 'Handcrafted Modern MDF & Glass Wall Clock',
+        category: 'Wall Clocks',
+        hasPrimaryImage: true,
+      }),
+    ).toBe('view_in_space')
+  })
+
   it('hides when no image or no matching category', () => {
     expect(resolveVisualPreviewMode({ category: 'Fashion', hasPrimaryImage: false })).toBeNull()
     expect(resolveVisualPreviewMode({ category: 'Books & Magazines', hasPrimaryImage: true })).toBeNull()
   })
 
-  it('matches suit / unstitched apparel titles via keywords', () => {
+  it('matches apparel from the category, not from tags', () => {
     expect(
       resolveVisualPreviewMode({
         category: 'Beauty & Wellness > Fashion > Fashion Consultation',
@@ -73,7 +104,7 @@ describe('resolveVisualPreviewMode', () => {
         tags: ['unstitched suit material'],
         hasPrimaryImage: true,
       }),
-    ).toBe('try_on')
+    ).toBeNull()
   })
 })
 

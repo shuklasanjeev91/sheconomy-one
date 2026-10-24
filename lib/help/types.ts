@@ -9,6 +9,12 @@ export type HelpProduct =
 
 export type HelpTicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
 export type HelpTicketPriority = 'normal' | 'high'
+export type HelpAudience = 'customer' | 'seller'
+
+/** Customer Service is /help. Seller Support is /help/seller. */
+export function helpAudience(_hasShop: boolean, product: HelpProduct): HelpAudience {
+  return product === 'shop' ? 'seller' : 'customer'
+}
 
 export const HELP_PRODUCT_FILTERS: Array<{ key: HelpProduct; label: string }> = [
   { key: '', label: 'All' },
@@ -48,11 +54,15 @@ export type HelpArticle = {
   slug?: string | null
 }
 
-/** Build Help hub href with optional product + article slug. */
+/** Build a help href. Shop topics open Seller Support. */
 export function helpHref(product?: HelpProduct | string | null, articleSlug?: string | null) {
   const params = new URLSearchParams()
-  if (product) params.set('product', product)
   if (articleSlug) params.set('article', articleSlug)
+  if (product === 'shop') {
+    const qs = params.toString()
+    return qs ? (`/help/seller?${qs}` as const) : (`/help/seller` as const)
+  }
+  if (product) params.set('product', product)
   const qs = params.toString()
   return qs ? (`/help?${qs}` as const) : (`/help` as const)
 }

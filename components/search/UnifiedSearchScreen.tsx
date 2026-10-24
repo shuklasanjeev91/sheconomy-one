@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
-import { ListingBrowseView, ListingFiltersShell } from '~/commerce/components'
+import { ListingBrowseView, ListingFiltersShell, ListingGrid, ShopGrid } from '~/commerce/components'
+import { fetchListingsByIds, type ListingSummary, type ShopSummary } from '~/commerce/lib/commerce'
+import { fetchProfilesByIds, type PublicProfile } from '~/community/lib/network'
 import { useSearchListings } from '~/commerce/hooks/useSearchListings'
 import { useSponsoredCommerce } from '~/commerce/hooks/useSponsoredCommerce'
 import { useUserGeo } from '~/commerce/hooks/useUserGeo'
@@ -15,10 +17,12 @@ import {
   useSearchHistory,
 } from '~/commerce/lib/search-history'
 import { SearchHitRow } from '~/components/search/SearchHitRow'
+import { AppLink } from '~/components/navigation/AppLink'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
-import { Button, EmptyState, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Avatar, Button, EmptyState, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { countActiveFilters, hasActiveFilters } from '~/commerce/lib/filters'
 import { useAccess } from '~/hooks/useAccess'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import {
   availableSearchScopes,
@@ -31,6 +35,8 @@ import {
   type SearchHit,
   type SearchScope,
 } from '~/lib/search'
+import type { AiEntityHit, AiResultKind, AiSearchGroup } from '~/lib/ai/types'
+import { getPublicShops } from '~/lib/shop/shop.service'
 import { appRoutes, commerceRoutes } from '~/lib/routes'
 import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -72,6 +78,34 @@ const SECTION_META: Array<{
   { key: 'meetings', scope: 'meetings', title: 'Meetings', pick: (r) => r.meetings },
 ]
 
+function entityHitToSearchHit(hit: AiEntityHit): SearchHit | null {
+  const base = {
+    id: hit.id,
+    title: hit.title,
+    subtitle: hit.subtitle || null,
+    imageUrl: null,
+    href: hit.href,
+  }
+  switch (hit.kind) {
+    case 'job':
+      return { ...base, kind: 'job', companyName: hit.subtitle, location: '' }
+    case 'post':
+      return { ...base, kind: 'post' }
+    case 'program':
+      return { ...base, kind: 'program', slug: hit.id }
+    case 'company':
+      return { ...base, kind: 'company', slug: hit.id }
+    case 'meeting':
+      return { ...base, kind: 'meeting', code: '' }
+    case 'person':
+      return { ...base, kind: 'person', username: null }
+    case 'shop':
+      return { ...base, kind: 'shop', slug: null }
+    default:
+      return null
+  }
+}
+
 export function UnifiedSearchScreen({
   query: queryProp = '',
   scope: scopeProp = 'all',
@@ -79,6 +113,7 @@ export function UnifiedSearchScreen({
   mode: modeProp = null,
 }: UnifiedSearchScreenProps) {
   const ui = useAppUi()
+  const { listingGridColumns } = useAppLayout()
   const { tier } = useAccess()
   const { user, profile } = useProfile()
   const userGeo = useUserGeo(profile?.location)
@@ -91,6 +126,16 @@ export function UnifiedSearchScreen({
   const [aiFilters, setAiFilters] = useState<ListingBrowseFilters>({})
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [aiListingIds, setAiListingIds] = useState<string[]>([])
+  const [aiGroups, setAiGroups] = useState<AiSearchGroup[]>([])
+  const [aiListings, setAiListings] = useState<ListingSummary[]>([])
+  const [aiListingsLoading, setAiListingsLoading] = useState(false)
+  const [aiResultKind, setAiResultKind] = useState<AiResultKind>('listing')
+  const [aiEntityIds, setAiEntityIds] = useState<string[]>([])
+  const [aiHits, setAiHits] = useState<AiEntityHit[]>([])
+  const [aiProfiles, setAiProfiles] = useState<PublicProfile[]>([])
+  const [aiShops, setAiShops] = useState<ShopSummary[]>([])
+  const [aiEntitiesLoading, setAiEntitiesLoading] = useState(false)
 
   const filters = useMemo(
     () => (aiMode ? { ...initialFilters, ...aiFilters } : initialFilters),
@@ -107,7 +152,13 @@ export function UnifiedSearchScreen({
   const effectiveListingQuery = aiMode
     ? (aiSearchTerm?.trim() || query)
     : query
-  const listingsBrowseEnabled = scope === 'listings' && effectiveListingQuery.length > 0
+  const preferAiProducts =
+    aiMode && aiListingIds.length > 0 && (aiListingsLoading || aiListings.length > 0)
+  const listingsBrowseEnabled =
+    scope === 'listings' &&
+    effectiveListingQuery.length > 0 &&
+    !preferAiProducts &&
+    !(aiMode && (aiLoading || aiResultKind !== 'listing'))
   const listingsFeed = useSearchListings({
     query: effectiveListingQuery,
     filters,
@@ -136,6 +187,14 @@ export function UnifiedSearchScreen({
       setAiAnswer(null)
       setAiSearchTerm(null)
       setAiFilters({})
+      setAiListingIds([])
+      setAiGroups([])
+      setAiListings([])
+      setAiResultKind('listing')
+      setAiEntityIds([])
+      setAiHits([])
+      setAiProfiles([])
+      setAiShops([])
       setAiLoading(false)
       setAiError(null)
       return
@@ -144,26 +203,108 @@ export function UnifiedSearchScreen({
     let cancelled = false
     setAiLoading(true)
     setAiError(null)
-    void runAiSearch(query)
+    void runAiSearch(query, profile?.location)
       .then((next) => {
         if (cancelled) return
         setAiAnswer(next.answer)
         setAiSearchTerm(next.searchTerm)
         setAiFilters(next.filters)
+        setAiListingIds(next.listingIds)
+        setAiGroups(next.groups ?? [])
+        setAiResultKind(next.resultKind ?? 'listing')
+        setAiEntityIds(next.entityIds ?? [])
+        setAiHits(next.hits ?? [])
         setAiLoading(false)
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setAiError(err instanceof Error ? err.message : 'AI search failed')
+        setAiError(
+          err instanceof Error
+            ? /unauthorized/i.test(err.message)
+              ? 'Sign in to ask about your own orders or shop.'
+              : err.message
+            : 'AI search failed',
+        )
         setAiSearchTerm(query)
         setAiFilters({})
+        setAiListingIds([])
+        setAiGroups([])
+        setAiResultKind('listing')
+        setAiEntityIds([])
+        setAiHits([])
         setAiLoading(false)
       })
 
     return () => {
       cancelled = true
     }
-  }, [aiMode, query])
+  }, [aiMode, query, profile?.location])
+
+  const aiListingKey = aiListingIds.join(',')
+  useEffect(() => {
+    if (!aiListingKey) {
+      setAiListings([])
+      setAiListingsLoading(false)
+      return
+    }
+    let cancelled = false
+    setAiListingsLoading(true)
+    void fetchListingsByIds(aiListingIds)
+      .then((rows) => {
+        if (cancelled) return
+        setAiListings(rows)
+        setAiListingsLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setAiListings([])
+        setAiListingsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [aiListingKey, aiListingIds])
+
+  const aiEntityKey = `${aiResultKind}:${aiEntityIds.join(',')}`
+  useEffect(() => {
+    if ((aiResultKind !== 'person' && aiResultKind !== 'shop') || aiEntityIds.length === 0) {
+      setAiProfiles([])
+      setAiShops([])
+      setAiEntitiesLoading(false)
+      return
+    }
+    let cancelled = false
+    setAiEntitiesLoading(true)
+    const load =
+      aiResultKind === 'person'
+        ? fetchProfilesByIds(aiEntityIds).then((rows) => {
+            if (cancelled) return
+            setAiProfiles(rows)
+            setAiShops([])
+          })
+        : getPublicShops({ shopIds: aiEntityIds }, { limit: aiEntityIds.length }).then((res) => {
+            if (cancelled) return
+            const byId = new Map((res.data?.items ?? []).map((shop) => [shop.id, shop]))
+            setAiShops(
+              aiEntityIds
+                .map((id) => byId.get(id))
+                .filter((shop): shop is ShopSummary => !!shop),
+            )
+            setAiProfiles([])
+          })
+    void load
+      .catch(() => {
+        if (cancelled) return
+        setAiProfiles([])
+        setAiShops([])
+      })
+      .finally(() => {
+        if (!cancelled) setAiEntitiesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [aiEntityKey, aiResultKind, aiEntityIds])
 
   useEffect(() => {
     if (!query || scope === 'listings') {
@@ -189,6 +330,7 @@ export function UnifiedSearchScreen({
       userId: user?.id,
       latitude: userGeo.latitude,
       longitude: userGeo.longitude,
+      memberLocation: profile?.location,
     }).then((next) => {
       if (cancelled) return
       setResult(next)
@@ -202,7 +344,7 @@ export function UnifiedSearchScreen({
     return () => {
       cancelled = true
     }
-  }, [query, scope, tier, user?.id, userGeo.latitude, userGeo.longitude])
+  }, [query, scope, tier, user?.id, userGeo.latitude, userGeo.longitude, profile?.location])
 
   function setScope(next: SearchScope) {
     const params = buildFilterSearchParams(
@@ -277,12 +419,152 @@ export function UnifiedSearchScreen({
                   {aiError}
                 </Text>
               ) : null}
-              {!aiLoading && aiAnswer ? (
+              {!aiLoading && (aiListingsLoading || aiEntitiesLoading) ? (
+                <XStack alignItems="center" gap="$2">
+                  <Spinner size="small" />
+                  <Text fontSize={13} color={ui.textSecondary}>
+                    {aiResultKind === 'person'
+                      ? 'Loading profiles…'
+                      : aiResultKind === 'shop'
+                        ? 'Loading shops…'
+                        : 'Loading products…'}
+                  </Text>
+                </XStack>
+              ) : null}
+              {!aiLoading && aiResultKind === 'person' && aiProfiles.length > 0 ? (
+                <YStack gap="$3" width="100%">
+                  <Text fontSize={14} color={ui.textSecondary}>
+                    People
+                  </Text>
+                  <XStack gap="$3" flexWrap="wrap" width="100%">
+                    {aiProfiles.map((profile) => {
+                      const name = profile.full_name?.trim() || profile.username
+                      const detail = [profile.headline, profile.occupation].filter(Boolean).join(' · ')
+                      return (
+                        <AppLink key={profile.id} href={appRoutes.userProfile(profile.username)} asChild>
+                          <YStack
+                            width={168}
+                            gap="$2"
+                            padding="$3"
+                            borderRadius={14}
+                            borderWidth={1}
+                            borderColor={ui.borderSubtle}
+                            backgroundColor={ui.surface}
+                            cursor="pointer"
+                          >
+                            <Avatar name={name} src={profile.avatar_url ?? undefined} size="$6" />
+                            <Text fontSize={14} fontWeight="800" color={ui.text} numberOfLines={2}>
+                              {name}
+                            </Text>
+                            {detail ? (
+                              <Text fontSize={12} color={ui.textSecondary} numberOfLines={2}>
+                                {detail}
+                              </Text>
+                            ) : null}
+                          </YStack>
+                        </AppLink>
+                      )
+                    })}
+                  </XStack>
+                </YStack>
+              ) : null}
+              {!aiLoading && aiResultKind === 'shop' && aiShops.length > 0 ? (
+                <YStack gap="$3" width="100%">
+                  <Text fontSize={14} color={ui.textSecondary}>
+                    Shops
+                  </Text>
+                  <ShopGrid shops={aiShops} columns={listingGridColumns} />
+                </YStack>
+              ) : null}
+              {!aiLoading &&
+              !aiEntitiesLoading &&
+              (aiResultKind === 'person' || aiResultKind === 'shop') &&
+              aiProfiles.length === 0 &&
+              aiShops.length === 0 &&
+              aiHits.length > 0 ? (
+                <YStack gap="$2" width="100%">
+                  {aiHits.map((hit) => {
+                    const mapped = entityHitToSearchHit(hit)
+                    return mapped ? <SearchHitRow key={`${hit.kind}-${hit.id}`} hit={mapped} /> : null
+                  })}
+                </YStack>
+              ) : null}
+              {!aiLoading &&
+              aiResultKind !== 'listing' &&
+              aiResultKind !== 'person' &&
+              aiResultKind !== 'shop' &&
+              aiHits.length > 0 ? (
+                <YStack gap="$2" width="100%">
+                  {aiHits.map((hit) => {
+                    const mapped = entityHitToSearchHit(hit)
+                    return mapped ? (
+                      <SearchHitRow key={`${hit.kind}-${hit.id}`} hit={mapped} />
+                    ) : (
+                      <AppLink key={`${hit.kind}-${hit.id}`} href={hit.href as never}>
+                        <Text fontSize={14} fontWeight="700" color={ui.text}>
+                          {hit.title}
+                        </Text>
+                      </AppLink>
+                    )
+                  })}
+                </YStack>
+              ) : null}
+              {!aiLoading && aiResultKind === 'listing' && aiListings.length > 0 && aiGroups.length > 0 ? (
+                <YStack gap="$4" width="100%">
+                  <Text fontSize={14} color={ui.textSecondary}>
+                    Outfits by wedding function
+                  </Text>
+                  {aiGroups.map((group) => {
+                    const cards = group.listingIds
+                      .map((id) => aiListings.find((listing) => listing.id === id))
+                      .filter((listing): listing is ListingSummary => !!listing)
+                    if (!cards.length) return null
+                    return (
+                      <YStack key={group.label} gap="$2" width="100%">
+                        <Text fontSize={16} fontWeight="800" color={ui.text}>
+                          {group.label}
+                        </Text>
+                        <ListingGrid
+                          listings={cards}
+                          columns={listingGridColumns}
+                          personalize={false}
+                          showQuickAdd
+                        />
+                      </YStack>
+                    )
+                  })}
+                </YStack>
+              ) : null}
+              {!aiLoading && aiResultKind === 'listing' && aiListings.length > 0 && aiGroups.length === 0 ? (
+                <YStack gap="$2" width="100%">
+                  <Text fontSize={14} color={ui.text} lineHeight={21}>
+                    {aiAnswer || `Products for “${aiSearchTerm || query}”`}
+                  </Text>
+                  <ListingGrid
+                    listings={aiListings}
+                    columns={listingGridColumns}
+                    personalize={false}
+                    showQuickAdd
+                  />
+                </YStack>
+              ) : null}
+              {!aiLoading &&
+              !aiListingsLoading &&
+              !aiEntitiesLoading &&
+              aiListings.length === 0 &&
+              aiProfiles.length === 0 &&
+              aiShops.length === 0 &&
+              aiHits.length === 0 &&
+              aiAnswer ? (
                 <Text fontSize={14} color={ui.textSecondary} lineHeight={21}>
                   {aiAnswer}
                 </Text>
               ) : null}
-              {!aiLoading && aiSearchTerm && aiSearchTerm !== query ? (
+              {!aiLoading &&
+              aiResultKind === 'listing' &&
+              aiListings.length === 0 &&
+              aiSearchTerm &&
+              aiSearchTerm !== query ? (
                 <Text fontSize={12} color={ui.textMuted}>
                   Searching listings for “{aiSearchTerm}”
                 </Text>
@@ -425,7 +707,7 @@ export function UnifiedSearchScreen({
           </YStack>
         ) : null}
 
-        {!gated && query && scope === 'listings' ? (
+        {!gated && query && listingsBrowseEnabled ? (
           <ListingFiltersShell filters={filters} onApply={updateFilters}>
             <ListingBrowseView
               key={filterKey}

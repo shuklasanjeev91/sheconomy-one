@@ -26,7 +26,7 @@ type MeetingAiDraftPanelProps = {
 }
 
 /**
- * SHEconomy AI meeting creator — describe a meeting in plain language and let AI
+ * SHERPA meeting creator — describe a meeting in plain language and let SHERPA
  * draft the title, agenda, and schedule for you.
  * Fills title, agenda/description, and suggested time on the schedule form.
  */
@@ -90,7 +90,7 @@ export function MeetingAiDraftPanel({ timeZone, onApply, initialPrompt }: Meetin
     autoRanRef.current = true
     setPrompt(seed)
     void generate(seed)
-    // One-shot bootstrap from SHEconomy AI deep link.
+    // One-shot bootstrap from a SHERPA deep link.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPrompt])
 

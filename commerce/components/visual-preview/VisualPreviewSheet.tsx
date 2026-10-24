@@ -12,6 +12,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { AI_NAME } from '~/config/brand'
 import { ShareButton } from '~/components/share'
 import {
   requestTryOn,
@@ -95,7 +96,7 @@ export function VisualPreviewSheet({
   }
 
   async function handlePickGallery() {
-    if (!(await ensureSignedIn())) return
+    if (!isTryOn && !(await ensureSignedIn())) return
     const images = await pickImages({ multiple: false, maxCount: 1 })
     if (images[0]) {
       setResultUrl(null)
@@ -105,7 +106,7 @@ export function VisualPreviewSheet({
   }
 
   async function handleCapture() {
-    if (!(await ensureSignedIn())) return
+    if (!isTryOn && !(await ensureSignedIn())) return
     const image = await captureImage()
     if (image) {
       setResultUrl(null)
@@ -115,12 +116,13 @@ export function VisualPreviewSheet({
   }
 
   async function handleGenerate() {
-    if (!(await ensureSignedIn()) || !user?.id) return
     if (!picked) {
       setErrorMessage('Add a photo first using Gallery or Camera.')
       toast.show('Add a photo first', { tone: 'danger' })
       return
     }
+    if (!isTryOn && !(await ensureSignedIn())) return
+    if (!isTryOn && !user?.id) return
 
     setBusy(true)
     setErrorMessage(null)
@@ -128,15 +130,16 @@ export function VisualPreviewSheet({
     try {
       const result = isTryOn
         ? await requestTryOn({
-            userId: user.id,
+            userId: user?.id,
             listingId,
             userImage: picked,
+            productImageUrl: listingImageUrl,
             title: listingTitle,
             category: listingCategory,
             onStatus: setStatus,
           })
         : await requestViewInSpace({
-            userId: user.id,
+            userId: user?.id ?? '',
             listingId,
             spaceImage: picked,
             placement,
@@ -150,6 +153,12 @@ export function VisualPreviewSheet({
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Could not generate preview. Please try again.'
+      if (/paid Google AI Studio plan/i.test(message)) {
+        setErrorMessage(null)
+        setStatus(null)
+        onOpenChange(false)
+        return
+      }
       setErrorMessage(message)
       setStatus(null)
       toast.show(message, { tone: 'danger' })
@@ -327,8 +336,8 @@ export function VisualPreviewSheet({
                     url: listingShareUrl,
                     title: listingTitle,
                     text: isTryOn
-                      ? `I tried on ${listingTitle} with SHEconomy AI`
-                      : `I previewed ${listingTitle} in my space with SHEconomy AI`,
+                      ? `I tried on ${listingTitle} with ${AI_NAME}`
+                      : `I previewed ${listingTitle} in my space with ${AI_NAME}`,
                   }}
                   label="Share listing"
                   size="$3"

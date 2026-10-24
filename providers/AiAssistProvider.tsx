@@ -8,12 +8,10 @@ import {
 } from 'react'
 import { usePathname } from 'one'
 
-import { AiAssistFab } from '~/components/ai/AiAssistFab'
 import { AiAssistSheet } from '~/components/ai/AiAssistSheet'
 import { YStack } from '~/components/ui'
 import { resolveAiRouteContext } from '~/lib/ai'
 import type { AiContext, AiProduct, AiRouteContext } from '~/lib/ai'
-import { useSupabase } from '~/providers/SupabaseProvider'
 
 type OpenAssistOptions = {
   product?: AiProduct
@@ -38,7 +36,6 @@ type AiAssistContextValue = {
 const AiAssistContext = createContext<AiAssistContextValue | null>(null)
 
 export function AiAssistProvider({ children }: { children: ReactNode }) {
-  const { user } = useSupabase()
   const pathname = usePathname() ?? '/'
   const routeContext = useMemo(() => resolveAiRouteContext(pathname), [pathname])
 
@@ -48,12 +45,11 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
   const [autoSendPrompt, setAutoSendPrompt] = useState(false)
 
   const openAssist = useCallback((options?: OpenAssistOptions) => {
-    if (!user) return
     setOverride(options ?? null)
     setDraftPrompt(options?.prompt?.trim() || null)
     setAutoSendPrompt(Boolean(options?.autoSend && options?.prompt?.trim()))
     setOpen(true)
-  }, [user])
+  }, [])
 
   const closeAssist = useCallback(() => {
     setOpen(false)
@@ -92,12 +88,7 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
     <AiAssistContext.Provider value={value}>
       <YStack flex={1} width="100%" position="relative">
         {children}
-        {user ? (
-          <>
-            <AiAssistFab />
-            <AiAssistSheet />
-          </>
-        ) : null}
+        <AiAssistSheet />
       </YStack>
     </AiAssistContext.Provider>
   )

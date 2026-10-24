@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { HorizontalScrollRow } from '~/components/layout'
+import { AI_NAME } from '~/config/brand'
 import { radius } from '~/config/tokens'
 import {
   aiProductLabel,
   fetchAiSuggestions,
-  localAiSuggestionChips,
   sendAiSuggestionFeedback,
   type AiContext,
   type AiProduct,
@@ -15,7 +15,6 @@ import {
 import { helpHref } from '~/lib/help/types'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAiAssistOptional } from '~/providers/AiAssistProvider'
-import { useSupabase } from '~/providers/SupabaseProvider'
 import { navigateApp } from '~/lib/platform/navigate'
 
 type AiSuggestionRailProps = {
@@ -35,35 +34,24 @@ type AiSuggestionRailProps = {
 export function AiSuggestionRail({
   product,
   contextPage = 'home',
-  title = 'Ask SHEconomy AI',
+  title = `Ask ${AI_NAME}`,
   context,
   inset = false,
 }: AiSuggestionRailProps) {
   const ui = useAppUi()
-  const { user } = useSupabase()
   const ai = useAiAssistOptional()
   const [suggestions, setSuggestions] = useState<AiSuggestion[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!user) {
-      setSuggestions([])
-      return
-    }
     let cancelled = false
     setLoading(true)
     void fetchAiSuggestions({ product, contextPage })
       .then((rows) => {
-        if (cancelled) return
-        if (rows.length > 0) {
-          setSuggestions(rows)
-          return
-        }
-        // Local chips so every tab stays useful when DB/edge is empty or quota-limited.
-        setSuggestions(localAiSuggestionChips(product, contextPage))
+        if (!cancelled) setSuggestions(rows)
       })
       .catch(() => {
-        if (!cancelled) setSuggestions(localAiSuggestionChips(product, contextPage))
+        if (!cancelled) setSuggestions([])
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -71,9 +59,8 @@ export function AiSuggestionRail({
     return () => {
       cancelled = true
     }
-  }, [user, product, contextPage])
+  }, [product, contextPage])
 
-  if (!user) return null
   if (!loading && suggestions.length === 0) return null
 
   function onChip(suggestion: AiSuggestion) {

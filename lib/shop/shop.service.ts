@@ -27,6 +27,7 @@ import { fetchShopDashboard, type ShopDashboardData } from '~/commerce/lib/selle
 import { slugifyTitle } from '~/commerce/lib/seo-urls'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase'
+import { blockedContentMessage } from '~/lib/safety/content-screen'
 import { uploadShopLogoImage, uploadShopGstDocument } from '~/lib/supabase/storage-upload'
 
 import { toFriendlyShopError } from '~/lib/shop/shop.errors'
@@ -458,6 +459,11 @@ export async function updateShop(
   updates: ShopUpdate,
 ): Promise<ShopServiceResponse<Shop>> {
   if (!shopId) return fail('Shop ID is required')
+
+  const blocked = await blockedContentMessage(
+    typeof updates.shop_description === 'string' ? updates.shop_description : '',
+  )
+  if (blocked) return fail(blocked)
 
   try {
     const payload: ShopUpdate = { ...updates, updated_at: new Date().toISOString() }

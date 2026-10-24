@@ -1,5 +1,6 @@
 import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { AppLink } from '~/components/navigation/AppLink'
+import { AI_NAME } from '~/config/brand'
 import { radius } from '~/config/tokens'
 import { helpHref, helpProductLabel, type HelpProduct } from '~/lib/help/types'
 import type { AiProduct } from '~/lib/ai'
@@ -52,7 +53,7 @@ export function ProductHelpBanner({
           {title ?? `Help for ${label}`}
         </Text>
         <Text fontSize={12} color={ui.textMuted}>
-          Guides, contact support, or ask {user ? 'SHEconomy AI' : 'after sign-in'}
+          Guides, contact support, or ask {user ? AI_NAME : 'after sign-in'}
         </Text>
       </YStack>
       <AppLink href={href as never}>

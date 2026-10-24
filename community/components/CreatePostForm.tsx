@@ -15,6 +15,7 @@ import {
   type PostLinkPreview,
   type PostProduct,
 } from '~/community/lib/community'
+import { blockedContentMessage } from '~/lib/safety/content-screen'
 import { createEventAndFeedPost } from '~/community/lib/events'
 import {
   clearComposeDraft,
@@ -739,6 +740,17 @@ export function CreatePostForm({
     // Encoded content carries @mentions as resolvable tokens; fall back to the
     // raw text when nothing was mentioned.
     const finalContent = encodedContentRef.current || content
+    const blocked = await blockedContentMessage([
+      finalContent,
+      articleTitle,
+      eventTitle,
+      celebrationTitle,
+      ...filledPollOptions,
+    ])
+    if (blocked) {
+      toast.show('Could not post', { tone: 'danger', message: blocked })
+      return
+    }
 
     setIsPosting(true)
     setUploadProgress(null)
@@ -1175,9 +1187,14 @@ export function CreatePostForm({
             mode={composeMode}
             seedPrompt={content || articleTitle || celebrationTitle || eventTitle}
             onApplyDraft={(draft) => {
-              form.fields.content.onChange(draft.content.slice(0, contentLimit + 50))
+              const next = draft.content.slice(0, contentLimit + 50)
+              form.fields.content.onChange(next)
+              encodedContentRef.current = next
               if (draft.articleTitle) {
                 setArticleTitle(draft.articleTitle.slice(0, 160))
+              }
+              if (draft.gifUrl && photos.length === 0 && videos.length === 0 && !imageUrl.trim()) {
+                form.fields.imageUrl.setValue(draft.gifUrl)
               }
             }}
           />

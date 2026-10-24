@@ -8,6 +8,7 @@
 import { isUuid } from '~/commerce/lib/seo-urls'
 import { supabase, type Json } from '~/lib/supabase'
 import { getStoragePublicUrl, uploadStorageObject } from '~/lib/supabase/storage-upload'
+import { blockedImageMessage } from '~/lib/safety/content-screen'
 
 import { toFriendlyGroupError } from '~/lib/group/group.errors'
 import {
@@ -912,6 +913,8 @@ async function uploadGroupImage(
 ): Promise<GroupServiceResponse<{ url: string; path: string }>> {
   try {
     const userId = await requireUserId()
+    const blocked = await blockedImageMessage({ mimeType: file.mimeType, body: file.blob })
+    if (blocked) return fail(blocked)
     const ext = file.fileName.split('.').pop()?.toLowerCase().replace('jpg', 'jpeg') ?? 'jpeg'
     const folder = groupId ?? 'unsaved'
     const prefix = kind === 'avatar' ? 'group-avatars' : 'group-covers'

@@ -23,6 +23,7 @@ import {
   type SearchScope,
 } from '~/lib/search'
 import { buildAiSearchHref } from '~/lib/search/ai-search'
+import { suggestScope } from '~/lib/search/suggest-intent'
 import { appRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 import { QA } from '~/lib/qa/test-ids'
@@ -156,6 +157,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
         userId: user?.id,
         latitude: userGeo.latitude,
         longitude: userGeo.longitude,
+        memberLocation: profile?.location,
       }).then((result) => {
         setHits(result.hits)
         setLoading(false)
@@ -174,6 +176,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
     user?.id,
     userGeo.latitude,
     userGeo.longitude,
+    profile?.location,
   ])
 
   function submitSearch(term?: string, mode?: 'ai' | null) {
@@ -193,7 +196,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
       navigateApp(buildAiSearchHref(trimmed) as never)
       return
     }
-    navigateApp(appRoutes.search(trimmed || undefined, activeScope) as never)
+    navigateApp(appRoutes.search(trimmed || undefined, suggestScope(trimmed) ?? activeScope) as never)
   }
 
   submitVoiceRef.current = (term: string) => submitSearch(term)

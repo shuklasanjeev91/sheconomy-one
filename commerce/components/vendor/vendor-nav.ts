@@ -2,6 +2,7 @@ import type { Href } from 'one'
 import { Platform } from 'react-native'
 
 import { Icons } from '~/components/ui'
+import { helpHref } from '~/lib/help/types'
 import { vendorRoutes } from '~/lib/routes'
 
 type IconType = (typeof Icons)[keyof typeof Icons]
@@ -238,6 +239,14 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         href: SETTINGS_CHILDREN[0].href,
         ready: true,
         children: SETTINGS_CHILDREN,
+      },
+      {
+        id: 'seller-help',
+        label: 'Seller help',
+        description: 'Guides and support for your shop.',
+        icon: Icons.HelpCircle,
+        href: helpHref('shop') as Href,
+        ready: true,
       },
     ],
   },

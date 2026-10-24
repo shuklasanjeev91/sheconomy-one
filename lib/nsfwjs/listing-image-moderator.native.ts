@@ -31,8 +31,8 @@ async function blobToDataUrl(image: Blob | File): Promise<string> {
 
 async function moderateViaServer(image: Blob | File): Promise<ImageModerationResult> {
   const dataUrl = await blobToDataUrl(image)
-  if (!dataUrl) {
-    return { verdict: 'approved', reasons: [], confidence: 0 }
+  if (!dataUrl.startsWith('data:image/')) {
+    return { verdict: 'rejected', reasons: ['unreadable'], confidence: 1 }
   }
 
   const { data, error } = await supabase.functions.invoke('ai-assist', {
@@ -61,18 +61,18 @@ async function moderateViaServer(image: Blob | File): Promise<ImageModerationRes
     confidence?: number
   } | null
 
-  if (payload?.verdict === 'rejected') {
+  if (payload?.verdict === 'approved') {
     return {
-      verdict: 'rejected',
-      reasons: Array.isArray(payload.reasons) ? payload.reasons.map(String) : ['inappropriate'],
+      verdict: 'approved',
+      reasons: [],
       confidence: typeof payload.confidence === 'number' ? payload.confidence : 1,
     }
   }
 
   return {
-    verdict: 'approved',
-    reasons: [],
-    confidence: typeof payload?.confidence === 'number' ? payload.confidence : 1,
+    verdict: 'rejected',
+    reasons: Array.isArray(payload?.reasons) ? payload.reasons.map(String) : ['moderation_unavailable'],
+    confidence: 1,
   }
 }
 

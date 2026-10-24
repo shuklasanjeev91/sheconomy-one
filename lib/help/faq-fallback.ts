@@ -87,6 +87,42 @@ export const FAQ_FALLBACK: HelpArticle[] = [
     slug: 'low-stock',
   },
   {
+    id: 'fallback-shop-orders',
+    title: 'How do I manage orders as a seller?',
+    content:
+      'Open Manage shop, then orders. Confirm, ship, and update status from the seller order tools. New order alerts follow your notification settings.',
+    category: 'shop',
+    tags: ['orders', 'seller'],
+    helpful_count: 0,
+    view_count: 0,
+    source: 'fallback',
+    slug: 'seller-orders',
+  },
+  {
+    id: 'fallback-shop-policies',
+    title: 'How do I set shipping and return policies?',
+    content:
+      'In Manage shop settings, set delivery profiles and return policies. Buyers see these on each listing.',
+    category: 'shop',
+    tags: ['shipping', 'returns', 'seller'],
+    helpful_count: 0,
+    view_count: 0,
+    source: 'fallback',
+    slug: 'seller-policies',
+  },
+  {
+    id: 'fallback-shop-hidden',
+    title: 'Why is my listing not visible?',
+    content:
+      'Check that the listing is active and in stock, and that the shop is active. Paused or zero-stock listings stay hidden from browse until you publish them again.',
+    category: 'shop',
+    tags: ['listings', 'seller'],
+    helpful_count: 0,
+    view_count: 0,
+    source: 'fallback',
+    slug: 'listing-hidden',
+  },
+  {
     id: 'fallback-community-connections',
     title: 'How do connection requests work?',
     content:
@@ -209,7 +245,7 @@ export const FAQ_FALLBACK: HelpArticle[] = [
     id: 'fallback-cowork-schedule',
     title: 'How do I schedule a Co-Work meeting for tomorrow?',
     content:
-      'Go to Co-Work → Schedule meeting (/co-work/schedule). Use Create with AI and say something like “team sync tomorrow at 11am”, review the drafted title and time, then create the meeting and share the code or /co-work/meeting/{code} link. You can also ask SHEconomy AI: “Schedule a meeting for tomorrow.”',
+      'Go to Co-Work → Schedule meeting (/co-work/schedule). Use Create with AI and say something like “team sync tomorrow at 11am”, review the drafted title and time, then create the meeting and share the code or /co-work/meeting/{code} link. You can also ask SHERPA: “Schedule a meeting for tomorrow.”',
     category: 'cowork',
     tags: ['meetings', 'schedule', 'ai'],
     helpful_count: 0,
@@ -300,9 +336,15 @@ export const CONTACT_TEMPLATES: Array<{
   },
 ]
 
-export function filterFallbackArticles(product: HelpProduct, query: string): HelpArticle[] {
+export function filterFallbackArticles(
+  product: HelpProduct,
+  query: string,
+  audience: 'customer' | 'seller' = 'customer',
+): HelpArticle[] {
   const q = query.trim().toLowerCase()
   return FAQ_FALLBACK.filter((article) => {
+    const sellerArticle = article.category === 'shop'
+    if (audience === 'seller' ? !sellerArticle : sellerArticle) return false
     if (product && article.category !== product) return false
     if (!q) return true
     return (

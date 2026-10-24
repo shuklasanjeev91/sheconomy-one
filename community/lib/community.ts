@@ -8,6 +8,7 @@ import { extractHashtags, extractMentions } from '~/community/lib/post-text'
 import { notifyHashtagFollowers } from '~/community/lib/hashtag-follows'
 import { isVideoMediaUrl, normalizeUrlList } from '~/community/lib/post-media'
 import { extractFirstUrl, parseVideoProvider } from '~/lib/link-preview'
+import { blockedContentMessage } from '~/lib/safety/content-screen'
 
 export const COMMUNITY_PAGE_SIZE = 20
 
@@ -1052,6 +1053,18 @@ export async function createCommunityPost(
   input: CreatePostInput,
 ): Promise<{ id: string | null; error: string | null }> {
   const content = input.content.trim()
+  const blocked = await blockedContentMessage([
+    content,
+    input.articleTitle,
+    input.eventTitle,
+    input.eventDescription,
+    input.poll?.question,
+    ...(input.poll?.options ?? []),
+    input.celebration?.occasion,
+    input.celebration?.title,
+    input.celebration?.subtitle,
+  ])
+  if (blocked) return { id: null, error: blocked }
   const mediaUrls = normalizeUrlList(input.mediaUrls)
   const imageUrlsInput = normalizeUrlList(input.imageUrls)
   const videoUrlsInput = normalizeUrlList(input.videoUrls)
@@ -1366,6 +1379,8 @@ export async function updateCommunityPost(
   input: UpdatePostInput,
 ): Promise<{ error: string | null }> {
   const content = input.content.trim()
+  const blocked = await blockedContentMessage(content)
+  if (blocked) return { error: blocked }
   if (!content) return { error: 'Post cannot be empty.' }
 
   const { data: existing, error: fetchError } = await supabase

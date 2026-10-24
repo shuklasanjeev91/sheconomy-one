@@ -140,6 +140,7 @@ declare module 'one' {
         | `/favorites`
         | `/following`
         | `/help`
+        | `/help/seller`
         | `/legal/ads`
         | `/legal/cookies`
         | `/legal/privacy`

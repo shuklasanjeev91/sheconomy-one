@@ -88,9 +88,21 @@ export async function listingImageDraftToDataUrl(image: ListingImageDraft): Prom
 
   let blob: Blob | null = image.blob ?? null
   if (!blob && image.image_url) {
-    const response = await fetch(image.image_url)
-    if (!response.ok) throw new Error('Could not load listing photo.')
-    blob = await response.blob()
+    // A saved listing photo often lives on a shop CDN. The browser cannot read
+    // those bytes, so SHERPA fetches the public URL itself.
+    if (image.image_url.startsWith('https://')) {
+      try {
+        const response = await fetch(image.image_url)
+        if (response.ok) blob = await response.blob()
+      } catch {
+        return image.image_url
+      }
+      if (!blob) return image.image_url
+    } else {
+      const response = await fetch(image.image_url)
+      if (!response.ok) throw new Error('Could not load listing photo.')
+      blob = await response.blob()
+    }
   }
   if (!blob) throw new Error('Add a photo before drafting with AI.')
 

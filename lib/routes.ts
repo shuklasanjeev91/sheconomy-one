@@ -16,6 +16,7 @@ export const appRoutes = {
   settingsSection: (section: string) =>
     `/settings/${encodeURIComponent(section)}` as Href,
   help: '/help' as Href,
+  helpSeller: '/help/seller' as Href,
   helpProduct: (product: string) =>
     `/help?product=${encodeURIComponent(product)}` as Href,
   legalTerms: '/legal/terms' as Href,
@@ -249,6 +250,7 @@ export const routes = {
   settings: appRoutes.settings,
   settingsSection: appRoutes.settingsSection,
   help: appRoutes.help,
+  helpSeller: appRoutes.helpSeller,
   notifications: appRoutes.notifications,
   cart: appRoutes.cart,
   checkout: appRoutes.checkout,

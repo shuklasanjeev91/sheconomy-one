@@ -134,10 +134,12 @@ export function MentionInput({
   return (
     <YStack position="relative" flex={flex}>
       {multiline ? (
-        <TextArea width="100%" {...commonProps} />
+        <TextArea width="100%" writingPaused={showPanel} {...commonProps} />
       ) : (
         <Input
           width="100%"
+          writingAssist
+          writingPaused={showPanel}
           {...commonProps}
           onSubmitEditing={() => {
             const token = getActiveToken(value)

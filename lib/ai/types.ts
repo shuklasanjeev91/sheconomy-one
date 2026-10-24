@@ -26,6 +26,7 @@ export type AiSuggestion = {
   priority?: number | null
   usage_count?: number | null
   success_rate?: number | null
+  href?: string | null
 }
 
 export type AiDeepLink = {
@@ -38,6 +39,7 @@ export type AiAssistMessage = {
   role: 'user' | 'assistant'
   content: string
   deepLinks?: AiDeepLink[]
+  listingIds?: string[]
 }
 
 export type AiRouteContext = {
@@ -63,6 +65,7 @@ export type SendAiMessageResult = {
   sessionId: string
   answer: string
   deepLinks: AiDeepLink[]
+  listingIds: string[]
   usedFallback: boolean
   product: AiProduct
 }
@@ -83,6 +86,7 @@ export type CommentSuggestionParams = {
   shopName?: string | null
   articleTitle?: string | null
   hasMedia?: boolean
+  parentComment?: string | null
 }
 
 export type MeetingDraftParams = {
@@ -110,6 +114,19 @@ export type PostDraftResult = {
   title: string | null
   content: string
   usedFallback: boolean
+}
+
+export type PostSuggestionChip = {
+  label: string
+  draft: string
+}
+
+export type WritingIssue = {
+  start: number
+  end: number
+  type: 'spelling' | 'grammar'
+  message: string
+  suggestions: string[]
 }
 
 export type ShopDraftParams = {
@@ -148,12 +165,16 @@ export type ListingDraftFromImageResult = {
   description: string
   tags: string[]
   suggestedPriceInr: number | null
+  priceNote: string
   categoryHint: string | null
+  metaTitle: string
+  metaDescription: string
   usedFallback: boolean
 }
 
 export type AiSearchParams = {
   message: string
+  location?: string | null
 }
 
 export type AiSearchFilters = {
@@ -163,11 +184,40 @@ export type AiSearchFilters = {
   category?: string | null
 }
 
+export type AiSearchGroup = {
+  label: string
+  listingIds: string[]
+}
+
+export type AiResultKind =
+  | 'listing'
+  | 'person'
+  | 'shop'
+  | 'job'
+  | 'program'
+  | 'post'
+  | 'company'
+  | 'event'
+  | 'meeting'
+  | 'help'
+
+export type AiEntityHit = {
+  id: string
+  kind: string
+  title: string
+  subtitle: string
+  href: string
+}
+
 export type AiSearchResult = {
   answer: string
   searchTerm: string
   filters: AiSearchFilters
   listingIds: string[]
+  groups: AiSearchGroup[]
+  resultKind: AiResultKind
+  entityIds: string[]
+  hits: AiEntityHit[]
   deepLinks: AiDeepLink[]
   usedFallback: boolean
 }

@@ -6,6 +6,11 @@ import { ListingPublishErrorBoundary } from '~/commerce/components/ListingPublis
 import { PageCenter } from '~/components/layout'
 import { Button, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import type { ListingDraftFromImageResult } from '~/lib/ai/client'
+import { draftListingFromImage } from '~/lib/ai/client'
+import { listingImageDraftToDataUrl } from '~/commerce/lib/listing-image-data-url'
+import { searchCategories } from '~/lib/listing/listing-categories.service'
+import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
+import type { PickedImage } from '~/lib/media/pick-image'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { loadAttributes } from '~/lib/listing/listing-attributes.store'
 import { loadImages } from '~/lib/listing/listing-images.store'
@@ -22,6 +27,7 @@ import {
   LISTING_STATUS,
   LISTING_TYPES,
   type ListingFormData,
+  type ListingImageDraft,
   type ListingType,
 } from '~/lib/listing/listing.type'
 import { validateListingField } from '~/lib/listing/listing.validation'
@@ -36,6 +42,7 @@ import {
 } from '~/lib/listing/listing.store'
 import { toFriendlyListingError } from '~/lib/listing/listing.errors'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
+import { APP_LAYOUT } from '~/lib/layout/constants'
 import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -70,7 +77,16 @@ import { ImagesStep } from '~/commerce/components/vendor/listing-publish/steps/I
 import { PricingStep } from '~/commerce/components/vendor/listing-publish/steps/PricingStep'
 import { SeoStep } from '~/commerce/components/vendor/listing-publish/steps/SeoStep'
 
-/** Await a side-load, falling back to an empty result instead of failing the page. */
+function pickedToDraft(picked: PickedImage, order: number): ListingImageDraft {
+  return {
+    image_url: picked.uri,
+    mimeType: picked.mimeType,
+    fileName: picked.fileName,
+    blob: picked.file,
+    is_primary: order === 0,
+    display_order: order,
+  }
+}
 async function settleOr<T>(promise: Promise<T>, fallback: T): Promise<T> {
   try {
     return await promise
@@ -137,6 +153,7 @@ function VendorListingPublishContent() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(!isEditMode)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [writingListing, setWritingListing] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   // New listings start on the type chooser; the form is built around that answer.
   const [typeConfirmed, setTypeConfirmed] = useState(isEditMode)
@@ -342,7 +359,7 @@ function VendorListingPublishContent() {
   )
 
   const handleApplyAiDraft = useCallback(
-    (draft: ListingDraftFromImageResult) => {
+    async (draft: ListingDraftFromImageResult) => {
       updateField('title', draft.title)
       updateField('description', draft.description)
       if (draft.tags.length) {
@@ -362,10 +379,70 @@ function VendorListingPublishContent() {
           updateField('price', draft.suggestedPriceInr)
         }
       }
+      if (draft.metaTitle) updateField('meta_title', draft.metaTitle)
+      if (draft.metaDescription) updateField('meta_description', draft.metaDescription)
+      const hint = draft.categoryHint?.trim() ?? ''
+      if (hint.length >= 2) {
+        const found = await searchCategories(hint, { limit: 8 })
+        const rows = found.data ?? []
+        const lowered = hint.toLowerCase()
+        const match =
+          rows.find((row) => row.category.toLowerCase() === lowered) ??
+          rows.find(
+            (row) =>
+              row.category.toLowerCase().includes(lowered) ||
+              lowered.includes(row.category.toLowerCase()),
+          )
+        const current = formData.categories ?? []
+        if (match && !current.some((row) => row.category_id === match.category_id)) {
+          updateField('categories', [
+            ...current,
+            { category_id: match.category_id, is_primary: current.length === 0 },
+          ])
+        }
+      }
+      toast.show('Listing draft ready', {
+        tone: 'success',
+        message: draft.priceNote || 'Review the title, description, and price before publishing.',
+      })
       setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
     },
-    [formData.price, formData.tags, updateField],
+    [formData.categories, formData.price, formData.tags, toast, updateField],
   )
+
+  const writeWithAi = useCallback(async () => {
+    if (writingListing) return
+    setWritingListing(true)
+    try {
+      let primary = (formData.images ?? []).find((image) => image.is_primary) ?? formData.images?.[0]
+      if (!primary) {
+        const picked = await pickImagesWithCrop({
+          multiple: false,
+          maxCount: 1,
+          aspect: 'listing',
+          cropTitle: 'Crop listing photo',
+        })
+        const file = picked[0]
+        if (!file) return
+        const image = pickedToDraft(file, 0)
+        updateField('images', [image])
+        primary = image
+      }
+      const dataUrl = await listingImageDraftToDataUrl(primary)
+      const draft = await draftListingFromImage({ dataUrl })
+      await handleApplyAiDraft(draft)
+    } catch (error) {
+      toast.show('Could not draft listing', {
+        tone: 'danger',
+        message:
+          error instanceof Error
+            ? error.message
+            : "Couldn't read this photo. Try a clearer product picture.",
+      })
+    } finally {
+      setWritingListing(false)
+    }
+  }, [formData.images, handleApplyAiDraft, toast, updateField, writingListing])
 
   const runStepValidation = useCallback(
     (stepId: ListingPublishStepId) => {
@@ -591,6 +668,8 @@ function VendorListingPublishContent() {
   }
 
   const displayErrors = { ...validation.errors, ...stepErrors }
+  const tabClearance = isDesktop ? 0 : APP_LAYOUT.mobileTabBarHeight + safeBottom
+  const footerClearance = isDesktop ? 0 : 88
 
   if (!typeConfirmed) {
     return (
@@ -613,17 +692,17 @@ function VendorListingPublishContent() {
   }
 
   return (
-    <YStack flex={1} minHeight={0} width="100%" backgroundColor={ui.background}>
+    <YStack width="100%" backgroundColor={ui.background}>
       {/* The vendor layout already owns the page scroller — a nested one here
           collapses to zero height on web and blanks the composer. */}
-      <YStack flex={1} minWidth={0} minHeight={0}>
+      <YStack width="100%" minWidth={0}>
         <YStack
           width="100%"
           maxWidth="100%"
           alignSelf="stretch"
           paddingHorizontal={isDesktop ? '$6' : '$3'}
           paddingTop={isDesktop ? '$5' : '$3'}
-          paddingBottom="$6"
+          paddingBottom={24 + tabClearance + footerClearance}
           gap="$4"
         >
           {/* <ListingPublishTopBar
@@ -660,6 +739,8 @@ function VendorListingPublishContent() {
               onUpdateMetadata={updateMetadata}
               onAddTag={handleAddTag}
               onRemoveTag={handleRemoveTag}
+              onWriteWithAi={() => void writeWithAi()}
+              writingWithAi={writingListing}
             />
           ) : null}
 
@@ -722,7 +803,11 @@ function VendorListingPublishContent() {
 
       <YStack
         width="100%"
-        style={Platform.OS === 'web' ? ({ position: 'sticky', bottom: 0 } as const) : undefined}
+        style={
+          Platform.OS === 'web'
+            ? ({ position: 'sticky', bottom: tabClearance } as const)
+            : undefined
+        }
       >
         <ListingPublishFooter
           ui={ui}

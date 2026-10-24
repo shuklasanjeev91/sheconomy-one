@@ -19,7 +19,8 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { radius } from '~/config/tokens'
-import { BRAND_NAME } from '~/config/brand'
+import { AI_NAME } from '~/config/brand'
+import { sendAiMessage } from '~/lib/ai'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { contactTemplatesFor } from '~/lib/help/faq-fallback'
 import {
@@ -36,25 +37,53 @@ import {
   helpProductLabel,
   parseHelpProduct,
   type HelpArticle,
+  type HelpAudience,
   type HelpProduct,
   type SupportTicket,
 } from '~/lib/help/types'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { useAiAssistOptional } from '~/providers/AiAssistProvider'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 type HelpTab = 'faq' | 'contact' | 'tickets'
 
-export function HelpSupportScreen() {
+type SupportTopic = {
+  id: string
+  label: string
+  hint: string
+  product: HelpProduct
+  query: string
+}
+
+const CUSTOMER_TOPICS: SupportTopic[] = [
+  { id: 'orders', label: 'Your orders', hint: 'Tracking, delivery, and checkout', product: 'commerce', query: 'order' },
+  { id: 'returns', label: 'Returns & refunds', hint: 'Start a return from an order', product: 'commerce', query: 'return' },
+  { id: 'payments', label: 'Payments', hint: 'Cards, checkout, and declines', product: 'commerce', query: 'payment' },
+  { id: 'account', label: 'Your account', hint: 'Sign in, profile, and alerts', product: '', query: 'account' },
+  { id: 'community', label: 'Community', hint: 'Posts, network, and jobs', product: 'community', query: '' },
+  { id: 'chat', label: 'Messages', hint: 'Chats, groups, and mute', product: 'chat', query: '' },
+  { id: 'class', label: 'Classes', hint: 'Programs and playback', product: 'class', query: '' },
+  { id: 'cowork', label: 'Co-Work', hint: 'Host, join, and schedule', product: 'cowork', query: '' },
+]
+
+const SELLER_TOPICS: SupportTopic[] = [
+  { id: 'start', label: 'Get started', hint: 'Open and verify your shop', product: 'shop', query: 'create' },
+  { id: 'listings', label: 'Listings', hint: 'Visibility, stock, and edits', product: 'shop', query: 'listing' },
+  { id: 'orders', label: 'Orders', hint: 'Fulfill and manage orders', product: 'shop', query: 'order' },
+  { id: 'payments', label: 'Payments', hint: 'Payouts and bank details', product: 'shop', query: 'payout' },
+  { id: 'shipping', label: 'Shipping & returns', hint: 'Policies and delivery', product: 'shop', query: 'shipping' },
+]
+
+export function HelpSupportScreen({ audience = 'customer' }: { audience?: HelpAudience }) {
   const ui = useAppUi()
   const toast = useAppToast()
   const router = useRouter()
   const { user } = useSupabase()
   const { shops, isLoading: shopsLoading } = useVendorShops()
   const hasShop = Boolean(user && shops.length > 0)
-  const ai = useAiAssistOptional()
+  const topics = audience === 'seller' ? SELLER_TOPICS : CUSTOMER_TOPICS
+  const pageHref = audience === 'seller' ? '/help/seller' : '/help'
   const params = useLocalSearchParams<{ product?: string; article?: string; tab?: string }>()
   const paramProduct = parseHelpProduct(
     typeof params.product === 'string' ? params.product : params.product?.[0],
@@ -64,6 +93,13 @@ export function HelpSupportScreen() {
     () => HELP_PRODUCT_FILTERS.filter((filter) => filter.key !== 'shop' || hasShop),
     [hasShop],
   )
+  const contactFilters = useMemo(
+    () =>
+      audience === 'seller'
+        ? HELP_PRODUCT_FILTERS.filter((filter) => filter.key === 'shop')
+        : productFilters.filter((filter) => filter.key && filter.key !== 'shop'),
+    [audience, productFilters],
+  )
   const articleSlug =
     typeof params.article === 'string' ? params.article : params.article?.[0] ?? null
   const paramTab = typeof params.tab === 'string' ? params.tab : params.tab?.[0]
@@ -71,7 +107,8 @@ export function HelpSupportScreen() {
   const [tab, setTab] = useState<HelpTab>(
     paramTab === 'contact' || paramTab === 'tickets' ? paramTab : 'faq',
   )
-  const [product, setProduct] = useState<HelpProduct>(paramProduct === 'shop' ? '' : paramProduct)
+  const [product, setProduct] = useState<HelpProduct>(audience === 'seller' ? 'shop' : paramProduct === 'shop' ? '' : paramProduct)
+  const [activeTopic, setActiveTopic] = useState<string | null>(null)
   const [ticketFilter, setTicketFilter] = useState<HelpProduct>(
     paramProduct === 'shop' ? '' : paramProduct,
   )
@@ -85,31 +122,34 @@ export function HelpSupportScreen() {
   const viewedRef = useRef<Set<string>>(new Set())
 
   const [formProduct, setFormProduct] = useState<Exclude<HelpProduct, ''>>(
-    paramProduct && paramProduct !== 'shop' ? paramProduct : 'commerce',
+    audience === 'seller' ? 'shop' : paramProduct && paramProduct !== 'shop' ? paramProduct : 'commerce',
   )
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<'normal' | 'high'>('normal')
   const [submitting, setSubmitting] = useState(false)
+  const [sherpaAnswer, setSherpaAnswer] = useState<string | null>(null)
+  const [sherpaLoading, setSherpaLoading] = useState(false)
+  const signInHref = buildSignInUrl(pageHref)
 
-  function setProductAndUrl(next: HelpProduct) {
-    setProduct(next)
-    router.push(helpHref(next || null, articleSlug) as never)
+  function selectTopic(topic: SupportTopic) {
+    setActiveTopic(topic.id)
+    setProduct(audience === 'seller' ? 'shop' : topic.product)
+    setQuery(topic.query)
+    setSherpaAnswer(null)
+    setTab('faq')
+    if (topic.product && topic.product !== 'shop') setFormProduct(topic.product)
   }
 
   useEffect(() => {
-    if (paramProduct === 'shop') {
-      if (shopsLoading) return
-      if (hasShop) {
-        setProduct('shop')
-        setFormProduct('shop')
-        setTicketFilter('shop')
-      } else {
-        setProduct('')
-        setFormProduct('commerce')
-        setTicketFilter('')
-        router.push(helpHref(null, articleSlug) as never)
-      }
+    if (audience === 'customer' && paramProduct === 'shop') {
+      router.replace('/help/seller' as never)
+      return
+    }
+    if (audience === 'seller') {
+      setProduct('shop')
+      setFormProduct('shop')
+      setTicketFilter('shop')
       return
     }
     setProduct(paramProduct)
@@ -117,22 +157,26 @@ export function HelpSupportScreen() {
       setFormProduct(paramProduct)
       setTicketFilter(paramProduct)
     }
-  }, [paramProduct, hasShop, shopsLoading, articleSlug, router])
+  }, [audience, paramProduct, router])
 
-  // Drop Manage shop selection once we know the user has no shop.
   useEffect(() => {
-    if (shopsLoading || hasShop) return
+    if (audience === 'seller') setFormProduct('shop')
+  }, [audience])
+
+  // Customer pages never stay on Manage shop. Seller Support keeps that filter.
+  useEffect(() => {
+    if (audience === 'seller' || shopsLoading || hasShop) return
     setProduct((current) => (current === 'shop' ? '' : current))
     setFormProduct((current) => (current === 'shop' ? 'commerce' : current))
     setTicketFilter((current) => (current === 'shop' ? '' : current))
-  }, [shopsLoading, hasShop])
+  }, [audience, shopsLoading, hasShop])
 
   const loadArticles = useCallback(async () => {
     setArticlesLoading(true)
-    const result = await fetchHelpArticles({ product, query })
+    const result = await fetchHelpArticles({ product, query, audience })
     setArticles(result.articles)
     setArticlesLoading(false)
-  }, [product, query])
+  }, [product, query, audience])
 
   useEffect(() => {
     void loadArticles()
@@ -194,6 +238,38 @@ export function HelpSupportScreen() {
       .slice(0, 3)
   }
 
+  async function askSherpa(prompt?: string) {
+    const text = (prompt ?? query).trim()
+    if (!text) return
+    if (prompt) setQuery(prompt)
+    setTab('faq')
+    setSherpaLoading(true)
+    try {
+      const result = await sendAiMessage({
+        product: audience === 'seller' ? 'shop' : product || 'account',
+        message: text,
+        contextPage: 'help',
+        context: { support: true, audience },
+      })
+      setSherpaAnswer(result.answer)
+      const answered = parseHelpProduct(result.product)
+      if (audience === 'seller') setFormProduct('shop')
+      else if (answered && answered !== 'shop') setFormProduct(answered)
+    } catch {
+      setSherpaAnswer("I don't have a help article for that. You can still contact support.")
+    } finally {
+      setSherpaLoading(false)
+    }
+  }
+
+  function stillNeedHelp() {
+    const question = query.trim() || 'Support request'
+    setSubject(question.slice(0, 140))
+    setDescription(sherpaAnswer ? `${question}\n\n${AI_NAME}:\n${sherpaAnswer}` : question)
+    setFormProduct(audience === 'seller' ? 'shop' : formProduct === 'shop' ? 'commerce' : formProduct)
+    setTab('contact')
+  }
+
   async function handleSubmit() {
     if (!user?.id) return
     setSubmitting(true)
@@ -237,34 +313,19 @@ export function HelpSupportScreen() {
           <XStack alignItems="flex-start" justifyContent="space-between" gap="$3" flexWrap="wrap">
             <YStack flex={1} minWidth={200}>
               <AppPageHeader
-                title="Help & Support"
+                title={audience === 'seller' ? 'Seller Support' : 'Customer Service'}
                 subtitle={
-                  hasShop
-                    ? `Guides and support for Marketplace, Community, Chat, Class, Co-Work, and Manage shop — one hub for every ${BRAND_NAME} tab`
-                    : `Guides and support for Marketplace, Community, Chat, Class, and Co-Work — one hub for every ${BRAND_NAME} tab`
+                  audience === 'seller'
+                    ? 'Help for listings, orders, shipping, and payouts.'
+                    : 'Help for orders, returns, payments, and your account.'
                 }
               />
             </YStack>
-            {user && ai ? (
-              <Button
-                tone="outline"
-                size="$3"
-                borderRadius={999}
-                icon={<Icons.Sparkles size={16} color={ui.brand} />}
-                onPress={() =>
-                  ai.openAssist({
-                    product: (product || 'account') as never,
-                    contextPage: 'help',
-                    autoSend: true,
-                    prompt: product
-                      ? `Help me with ${helpProductLabel(product)} — what should I do next in the app?`
-                      : 'I need support getting started on SHEconomy. What can you help me with?',
-                  })
-                }
-              >
-                Ask AI
+            <AppLink href={(audience === 'seller' ? '/help' : '/help/seller') as never} asChild>
+              <Button tone="outline" size="$3" borderRadius={999}>
+                {audience === 'seller' ? 'Customer Service' : 'Seller Support'}
               </Button>
-            ) : null}
+            </AppLink>
           </XStack>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -288,24 +349,71 @@ export function HelpSupportScreen() {
 
           {tab === 'faq' ? (
             <YStack gap="$4" width="100%">
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <XStack gap="$2">
-                  {productFilters.map((filter) => (
-                    <Chip
-                      key={filter.key || 'all'}
-                      label={filter.label}
-                      active={product === filter.key}
-                      onPress={() => setProductAndUrl(filter.key)}
-                    />
-                  ))}
-                </XStack>
-              </ScrollView>
+              <Text fontSize={18} fontWeight="800" color={ui.text}>
+                What can we help you with?
+              </Text>
+              <XStack flexWrap="wrap" gap="$3" width="100%">
+                {topics.map((topic) => {
+                  const active = activeTopic === topic.id
+                  return (
+                    <YStack
+                      key={topic.id}
+                      width="48%"
+                      minWidth={160}
+                      flexGrow={1}
+                      padding="$3.5"
+                      gap="$1"
+                      borderRadius={radius.card}
+                      borderWidth={1}
+                      borderColor={active ? ui.brand : ui.borderSubtle}
+                      backgroundColor={active ? ui.chip : ui.surface}
+                      cursor="pointer"
+                      hoverStyle={{ borderColor: ui.brand }}
+                      onPress={() => selectTopic(topic)}
+                    >
+                      <Text fontSize={15} fontWeight="700" color={ui.text}>
+                        {topic.label}
+                      </Text>
+                      <Text fontSize={13} color={ui.textMuted} lineHeight={18}>
+                        {topic.hint}
+                      </Text>
+                    </YStack>
+                  )
+                })}
+              </XStack>
 
               <ScreenSearchField
                 value={query}
-                onChangeText={setQuery}
-                placeholder="Search help articles"
+                onChangeText={(value) => {
+                  setQuery(value)
+                  if (!value.trim()) setSherpaAnswer(null)
+                }}
+                onSubmit={() => void askSherpa()}
+                placeholder={
+                  audience === 'seller' ? 'Ask about your shop' : 'Search help or describe a problem'
+                }
               />
+
+              {sherpaLoading ? (
+                <XStack padding="$3" alignItems="center" gap="$2">
+                  <Spinner size="small" />
+                  <Text color={ui.textSecondary}>{AI_NAME} is checking help…</Text>
+                </XStack>
+              ) : sherpaAnswer ? (
+                <SurfaceCard padding="$4" gap="$3" borderRadius={radius.card}>
+                  <Text fontSize={12} fontWeight="800" color={ui.brand} letterSpacing={0.4}>
+                    {AI_NAME}
+                  </Text>
+                  <Text fontSize={14} color={ui.textSecondary} lineHeight={21}>
+                    {sherpaAnswer}
+                  </Text>
+                  {user ? (
+                    <Button tone="primary" borderRadius={999} alignSelf="flex-start" onPress={stillNeedHelp}>
+                      Still need help
+                    </Button>
+                  ) : null}
+                </SurfaceCard>
+              ) : null}
 
               {!query.trim() && popularArticles.length > 0 ? (
                 <YStack gap="$2">
@@ -414,25 +522,18 @@ export function HelpSupportScreen() {
                                     Helpful
                                   </Button>
                                 ) : null}
-                                {ai ? (
-                                  <Button
-                                    size="$3"
-                                    tone="outline"
-                                    borderRadius={999}
-                                    icon={<Icons.Sparkles size={14} color={ui.brand} />}
-                                    onPress={(e) => {
-                                      e?.stopPropagation?.()
-                                      ai.openAssist({
-                                        product: (article.category || 'account') as never,
-                                        contextPage: 'help',
-                                        prompt: article.title,
-                                        autoSend: true,
-                                      })
-                                    }}
-                                  >
-                                    Ask AI
-                                  </Button>
-                                ) : null}
+                                <Button
+                                  size="$3"
+                                  tone="outline"
+                                  borderRadius={999}
+                                  icon={<Icons.Sparkles size={14} color={ui.brand} />}
+                                  onPress={(e) => {
+                                    e?.stopPropagation?.()
+                                    void askSherpa(article.title)
+                                  }}
+                                >
+                                  Ask AI
+                                </Button>
                               </XStack>
                               {related.length ? (
                                 <YStack gap="$2">
@@ -474,7 +575,7 @@ export function HelpSupportScreen() {
                   <Text color={ui.textSecondary} lineHeight={20}>
                     Sign in to contact support so we can update you when your request is resolved.
                   </Text>
-                  <AppLink href={buildSignInUrl('/help') as never} asChild>
+                  <AppLink href={signInHref as never} asChild>
                     <Button tone="primary" borderRadius={999} alignSelf="flex-start">
                       Sign in to continue
                     </Button>
@@ -488,9 +589,7 @@ export function HelpSupportScreen() {
                     </Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                       <XStack gap="$2">
-                        {productFilters
-                          .filter((f) => f.key)
-                          .map((filter) => (
+                        {contactFilters.map((filter) => (
                           <Chip
                             key={filter.key}
                             label={filter.label}
@@ -586,7 +685,7 @@ export function HelpSupportScreen() {
               {!user ? (
                 <SurfaceCard padding="$4" borderRadius={radius.card}>
                   <Text color={ui.textSecondary}>Sign in to see your support requests.</Text>
-                  <AppLink href={buildSignInUrl('/help') as never} asChild>
+                  <AppLink href={signInHref as never} asChild>
                     <Button tone="primary" borderRadius={999} marginTop="$3" alignSelf="flex-start">
                       Sign in
                     </Button>
@@ -596,7 +695,10 @@ export function HelpSupportScreen() {
                 <>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <XStack gap="$2">
-                      {productFilters.map((filter) => (
+                      {(audience === 'seller'
+                        ? HELP_PRODUCT_FILTERS.filter((filter) => filter.key === 'shop' || filter.key === '')
+                        : productFilters.filter((filter) => filter.key !== 'shop')
+                      ).map((filter) => (
                         <Chip
                           key={`ticket-${filter.key || 'all'}`}
                           label={filter.label}
@@ -682,25 +784,20 @@ export function HelpSupportScreen() {
                                       Close request
                                     </Button>
                                   ) : null}
-                                  {ai ? (
-                                    <Button
-                                      size="$3"
-                                      tone="outline"
-                                      borderRadius={999}
-                                      icon={<Icons.Sparkles size={14} color={ui.brand} />}
-                                      onPress={(e) => {
-                                        e?.stopPropagation?.()
-                                        ai.openAssist({
-                                          product: (ticket.product || 'account') as never,
-                                          contextPage: 'help',
-                                          prompt: `Help me with my support request: ${ticket.subject}. ${ticket.description}`,
-                                          autoSend: true,
-                                        })
-                                      }}
-                                    >
-                                      Ask AI about this
-                                    </Button>
-                                  ) : null}
+                                  <Button
+                                    size="$3"
+                                    tone="outline"
+                                    borderRadius={999}
+                                    icon={<Icons.Sparkles size={14} color={ui.brand} />}
+                                    onPress={(e) => {
+                                      e?.stopPropagation?.()
+                                      void askSherpa(
+                                        `Help me with my support request: ${ticket.subject}. ${ticket.description}`,
+                                      )
+                                    }}
+                                  >
+                                    Ask AI about this
+                                  </Button>
                                 </XStack>
                               ) : null}
                             </YStack>

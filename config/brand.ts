@@ -1,6 +1,9 @@
 /** Official product name — always "SHEconomy" in user-facing copy. */
 export const BRAND_NAME = 'SHEconomy' as const
 
+/** In-app assistant. The marketplace brand stays SHEconomy. */
+export const AI_NAME = 'SHERPA' as const
+
 export const BRAND_MEMBER_LABEL = `${BRAND_NAME} member` as const
 export const BRAND_SHOP_LABEL = `${BRAND_NAME} shop` as const
 export const BRAND_COWORK_LABEL = `${BRAND_NAME} Co-Work` as const

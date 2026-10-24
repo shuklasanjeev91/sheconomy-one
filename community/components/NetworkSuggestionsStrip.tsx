@@ -1,49 +1,39 @@
-import { useMemo } from 'react'
+import { useEffect, useState } from 'react'
 
 import { AppLink } from '~/components/navigation/AppLink'
-
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { useReportForYouContent } from '~/community/components/ForYouSlot'
-import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
-import { ProfileLink } from '~/community/components/ProfileLink'
 import { useCommunityFeedHeader } from '~/community/hooks/useCommunityFeedHeader'
-import { useNetwork } from '~/community/hooks/useNetwork'
-import { useProfessionalSpotlight } from '~/community/hooks/useProfessionalSpotlight'
-import { rankNetworkSuggestions } from '~/community/lib/network-suggestions'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import {
-  dismissNetworkSuggestion,
-  useDismissedNetworkSuggestions,
-} from '~/community/lib/dismissed-suggestions'
 import { HorizontalScrollRow } from '~/components/layout'
-import { Avatar, Button, Icons, Text, XStack, YStack } from '~/components/ui'
+import { Button, Text, XStack, YStack } from '~/components/ui'
+import { fetchAiSuggestions, type AiSuggestion } from '~/lib/ai'
 import { communityRoutes } from '~/lib/routes'
 
-const SUGGESTION_LIMIT = 4
+function peopleChips(rows: AiSuggestion[]) {
+  return rows.filter((row) => row.href?.startsWith('/profile/') && row.suggestion_text.trim())
+}
 
 export function NetworkSuggestionsStrip() {
   const communityUi = useCommunityUi()
-  const { hideSidebarRedundantStrips, isAuthenticated } = useCommunityFeedHeader()
-  const network = useNetwork()
-  const { cards: spotlightCards } = useProfessionalSpotlight(12)
-  const dismissedIds = useDismissedNetworkSuggestions()
-  const boostUserIds = useMemo(() => spotlightCards.map((card) => card.userId), [spotlightCards])
-  const excludeUserIds = useMemo(
-    () =>
-      [...network.connections, ...network.pendingSent, ...network.pendingReceived].map(
-        (member) => member.user_id,
-      ),
-    [network.connections, network.pendingReceived, network.pendingSent],
-  )
-  const suggestions = rankNetworkSuggestions(network.suggestions, {
-    dismissedIds,
-    boostUserIds,
-    excludeUserIds,
-    limit: SUGGESTION_LIMIT,
-  })
+  const { hideSidebarRedundantStrips } = useCommunityFeedHeader()
+  const [people, setPeople] = useState<AiSuggestion[]>([])
 
-  const hasContent =
-    !hideSidebarRedundantStrips && isAuthenticated && suggestions.length > 0
+  useEffect(() => {
+    let cancelled = false
+    void fetchAiSuggestions({ product: 'community', contextPage: 'network' })
+      .then((rows) => {
+        if (!cancelled) setPeople(peopleChips(rows))
+      })
+      .catch(() => {
+        if (!cancelled) setPeople([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const hasContent = !hideSidebarRedundantStrips && people.length > 0
   useReportForYouContent(hasContent)
   if (!hasContent) return null
 
@@ -55,7 +45,7 @@ export function NetworkSuggestionsStrip() {
             People you may know
           </Text>
           <Text fontSize={13} color={communityUi.textMuted}>
-            Grow your network with founders and creators matched to your profile.
+            Members SHERPA picked from the community.
           </Text>
         </YStack>
         <AppLink href={communityRoutes.network} asChild>
@@ -66,49 +56,25 @@ export function NetworkSuggestionsStrip() {
       </XStack>
 
       <HorizontalScrollRow gap={10}>
-        {suggestions.map((member) => (
-          <YStack
-            key={member.user_id}
-            width={188}
-            padding={12}
-            gap={10}
-            borderRadius={14}
-            borderWidth={1}
-            borderColor={communityUi.border}
-            backgroundColor={communityUi.pageBg}
-          >
-            <XStack gap={10} alignItems="center">
-              <ProfileLink userId={member.user_id} username={member.username}>
-                <Avatar name={member.full_name} src={member.avatar_url ?? undefined} size="$4" />
-              </ProfileLink>
-              <YStack flex={1} minWidth={0} gap={2}>
-                <ProfileLink userId={member.user_id} username={member.username}>
-                  <Text fontSize={14} fontWeight="700" color={communityUi.text} numberOfLines={1}>
-                    {member.full_name}
-                  </Text>
-                </ProfileLink>
-                {member.headline || member.industry ? (
-                  <Text fontSize={12} color={communityUi.textMuted} numberOfLines={2}>
-                    {member.headline || member.industry}
-                  </Text>
-                ) : null}
-              </YStack>
-              <XStack
-                onPress={() => dismissNetworkSuggestion(member.user_id)}
-                cursor="pointer"
-                padding={4}
-                hitSlop={8}
-              >
-                <Icons.X size={14} color={communityUi.textMuted} />
-              </XStack>
-            </XStack>
-            {member.mutual_count > 0 ? (
-              <Text fontSize={11} color={communityUi.textMuted}>
-                {member.mutual_count} mutual connection{member.mutual_count === 1 ? '' : 's'}
+        {people.map((person) => (
+          <AppLink key={person.id} href={person.href as never}>
+            <YStack
+              width={188}
+              padding={12}
+              gap={6}
+              borderRadius={14}
+              borderWidth={1}
+              borderColor={communityUi.border}
+              backgroundColor={communityUi.pageBg}
+            >
+              <Text fontSize={14} fontWeight="700" color={communityUi.text} numberOfLines={2}>
+                {person.suggestion_text}
               </Text>
-            ) : null}
-            <ProfileConnectButton targetUserId={member.user_id} size="sm" fullWidth />
-          </YStack>
+              <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
+                View profile
+              </Text>
+            </YStack>
+          </AppLink>
         ))}
       </HorizontalScrollRow>
     </CommunityCard>

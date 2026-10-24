@@ -1010,7 +1010,7 @@ function BasicInfoStep({
     } catch {
       toast.show('Could not suggest', {
         tone: 'danger',
-        message: 'SHEconomy AI is unavailable. Try again in a moment.',
+        message: 'SHERPA is unavailable. Try again in a moment.',
       })
     } finally {
       setAiLoading(false)

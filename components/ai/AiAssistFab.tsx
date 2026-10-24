@@ -1,6 +1,7 @@
 import { Platform } from 'react-native'
 import { usePathname } from 'one'
 
+import { AI_NAME } from '~/config/brand'
 import { useComposerState } from '~/community/lib/composer-store'
 import { Icons, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
@@ -83,7 +84,7 @@ export function AiAssistFab() {
       pressStyle={{ scale: 0.94, opacity: 0.9 }}
       animation="quick"
       role="button"
-      aria-label="Ask SHEconomy AI"
+      aria-label={`Ask ${AI_NAME}`}
       onPress={() => openAssist()}
     >
       <Icons.Sparkles size={22} color={ui.onBrand} />

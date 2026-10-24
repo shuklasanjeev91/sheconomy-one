@@ -1,5 +1,6 @@
 import { supabase } from '~/lib/supabase/client'
 import { uploadBlobWithProgress, type UploadProgressHandler } from '~/lib/supabase/storage-upload-progress'
+import { blockedContentMessage, blockedImageMessage } from '~/lib/safety/content-screen'
 
 import { parseChatListingPayload } from '~/chat/lib/listing-message'
 import type {
@@ -516,6 +517,8 @@ export type SendMessageInput = {
 export async function sendMessage(
   input: SendMessageInput,
 ): Promise<{ messageId: string | null; error: string | null }> {
+  const blocked = await blockedContentMessage(input.content ?? '')
+  if (blocked) return { messageId: null, error: blocked }
   const { data, error } = await supabase.rpc('send_message_with_status', {
     p_chat_room_id: input.conversationId,
     p_sender_id: input.senderId,
@@ -608,6 +611,8 @@ export async function editMessage(
   messageId: string,
   content: string,
 ): Promise<{ error: string | null }> {
+  const blocked = await blockedContentMessage(content)
+  if (blocked) return { error: blocked }
   const { error } = await supabase
     .from('messages')
     .update({ content, edited_at: new Date().toISOString() })
@@ -840,6 +845,9 @@ export async function uploadChatMedia(
   file: { blob: Blob; mimeType: string; fileName?: string },
   options?: { onProgress?: UploadProgressHandler },
 ): Promise<{ data: UploadChatMediaResult | null; error: string | null }> {
+  const blocked = await blockedImageMessage({ mimeType: file.mimeType, body: file.blob })
+  if (blocked) return { data: null, error: blocked }
+
   const ext = file.fileName?.split('.').pop()?.toLowerCase() ?? extensionForMime(file.mimeType)
   const rand = Math.random().toString(36).slice(2, 10)
   const path = `chat/${conversationId}/${userId}-${Date.now()}-${rand}.${ext}`

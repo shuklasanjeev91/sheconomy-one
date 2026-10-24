@@ -24,6 +24,7 @@ import {
 } from '~/community/lib/profile-follows'
 import { fetchProfileDetails } from '~/community/lib/profile-details'
 import { refreshProfiles } from '~/lib/profile/refresh'
+import { blockedContentMessage, blockedImageMessage } from '~/lib/safety/content-screen'
 import { supabase } from '~/lib/supabase'
 import {
   getStoragePublicUrl,
@@ -173,6 +174,12 @@ export async function updateProfile(
 ): Promise<ServiceResponse<Profile>> {
   if (!userId) return fail('User ID required')
 
+  const blocked = await blockedContentMessage([
+    typeof updates.headline === 'string' ? updates.headline : null,
+    typeof updates.bio === 'string' ? updates.bio : null,
+  ])
+  if (blocked) return fail(blocked)
+
   try {
     clearProfileCache(userId)
 
@@ -200,6 +207,12 @@ export async function upsertProfile(
   profileData: ProfileUpdate,
 ): Promise<ServiceResponse<Profile>> {
   if (!userId) return fail('User ID required')
+
+  const blocked = await blockedContentMessage([
+    typeof profileData.headline === 'string' ? profileData.headline : null,
+    typeof profileData.bio === 'string' ? profileData.bio : null,
+  ])
+  if (blocked) return fail(blocked)
 
   try {
     clearProfileCache(userId)
@@ -247,6 +260,9 @@ export async function uploadImage(
   options?: { onProgress?: UploadProgressHandler },
 ): Promise<ServiceResponse<Pick<Profile, 'avatar_url' | 'cover_url'>>> {
   if (!userId) return fail('User ID required')
+
+  const blocked = await blockedImageMessage({ mimeType: file.mimeType, body: file.blob })
+  if (blocked) return fail(blocked)
 
   try {
     const ext = extensionForUpload(file)

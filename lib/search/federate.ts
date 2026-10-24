@@ -1,6 +1,6 @@
 import { searchListingsPage, type ListingSummary } from '~/commerce/lib/commerce'
 import { searchJobs } from '~/community/lib/jobs'
-import { searchProfiles } from '~/community/lib/network'
+import { searchProfiles, searchProfilesForIntent } from '~/community/lib/network'
 import { fetchCompanies } from '~/community/lib/companies'
 import { fetchGroups } from '~/community/lib/groups'
 import { searchPosts } from '~/community/lib/community'
@@ -17,6 +17,7 @@ import {
 import { supabase } from '~/lib/supabase/client'
 
 import { blockedSearchScopes, scopesToQuery, type AccessTier } from '~/lib/search/access'
+import { suggestAsksForWomen, suggestFocusTokens, suggestIntent } from '~/lib/search/suggest-intent'
 import type {
   CategoryHit,
   CompanyHit,
@@ -137,7 +138,11 @@ async function searchCategoryHits(query: string, limit: number): Promise<Categor
 }
 
 async function searchShopHits(query: string, limit: number): Promise<ShopHit[]> {
-  const res = await getPublicShops({ search: query }, { limit, offset: 0, sortBy: 'rating' })
+  const focus = suggestIntent(query) === 'shop' ? suggestFocusTokens(query).join(' ') : query
+  const res = await getPublicShops(
+    focus ? { search: focus } : {},
+    { limit, offset: 0, sortBy: 'rating' },
+  )
   if (!res.success || !res.data) return []
   return res.data.items.map((shop) => {
     const slug = shop.slug?.trim() || shop.id
@@ -153,15 +158,29 @@ async function searchShopHits(query: string, limit: number): Promise<ShopHit[]> 
   })
 }
 
-async function searchPeopleHits(query: string, limit: number): Promise<PersonHit[]> {
-  const rows = await searchProfiles(query, limit)
+async function searchPeopleHits(
+  query: string,
+  limit: number,
+  memberLocation?: string | null,
+): Promise<PersonHit[]> {
+  const intent = suggestIntent(query) === 'person'
+  const rows = intent
+    ? await searchProfilesForIntent(
+        suggestFocusTokens(query),
+        limit,
+        suggestAsksForWomen(query),
+        memberLocation ?? '',
+      )
+    : await searchProfiles(query, limit)
   return rows.map((row) => {
     const handle = row.username?.trim() || row.id
+    const detail =
+      ('occupation' in row && row.occupation) || row.headline || (row.username ? `@${row.username}` : null)
     return {
       kind: 'person' as const,
       id: row.id,
       title: row.full_name?.trim() || row.username || 'Member',
-      subtitle: row.headline || (row.username ? `@${row.username}` : null),
+      subtitle: detail,
       imageUrl: row.avatar_url,
       href: String(communityRoutes.userProfile(handle)),
       username: row.username,
@@ -316,7 +335,7 @@ export async function federatedSearch(
   }
   if (targets.includes('people')) {
     tasks.push(
-      searchPeopleHits(trimmed, limit).then((people) => {
+      searchPeopleHits(trimmed, limit, options.memberLocation).then((people) => {
         result.people = people
       }),
     )

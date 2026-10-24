@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
-import { localCommentSuggestions } from '~/community/lib/comment-suggestions'
+import { fetchCommentSuggestions } from '~/lib/ai'
 import { addPostComment } from '~/community/lib/post-engagement'
 import type { CommunityPost } from '~/community/lib/community'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -29,12 +29,28 @@ export function CongratulateSheet({
   const { user } = useSupabase()
   const [note, setNote] = useState('')
   const [sending, setSending] = useState(false)
+  const [presets, setPresets] = useState<string[]>([])
+  const celebrationTitle = post.celebration?.title ?? post.article_title ?? ''
 
-  const presets = localCommentSuggestions({
-    postType: 'celebration',
-    authorName: post.author?.full_name,
-    celebrationTitle: post.celebration?.title ?? post.article_title,
-  })
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void fetchCommentSuggestions({
+      postType: 'celebration',
+      content: post.content,
+      authorName: post.author?.full_name,
+      celebrationTitle,
+    })
+      .then((rows) => {
+        if (!cancelled) setPresets(rows.slice(0, 3))
+      })
+      .catch(() => {
+        if (!cancelled) setPresets([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [celebrationTitle, open, post.author?.full_name, post.content])
 
   async function send(message: string) {
     if (!user) {

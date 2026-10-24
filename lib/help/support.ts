@@ -3,6 +3,7 @@ import { supabase } from '~/lib/supabase/client'
 import { filterFallbackArticles } from '~/lib/help/faq-fallback'
 import type {
   HelpArticle,
+  HelpAudience,
   HelpProduct,
   HelpTicketPriority,
   SupportTicket,
@@ -17,6 +18,7 @@ type KbRow = {
   helpful_count: number | null
   view_count: number | null
   slug?: string | null
+  user_type?: string | null
 }
 
 function mapArticle(row: KbRow): HelpArticle {
@@ -33,17 +35,24 @@ function mapArticle(row: KbRow): HelpArticle {
   }
 }
 
-/** Load active FAQ articles for a product filter, with static fallback. */
+function isSellerArticle(userType: string | null | undefined, category: string): boolean {
+  const type = (userType || '').toLowerCase()
+  return type === 'vendor' || type === 'seller' || type === 'shop' || category === 'shop'
+}
+
+/** Load active FAQ articles for a product and audience, with static fallback. */
 export async function fetchHelpArticles(input: {
   product?: HelpProduct
   query?: string
+  audience?: HelpAudience
 }): Promise<{ articles: HelpArticle[]; error: string | null }> {
   const product = input.product ?? ''
   const queryText = input.query?.trim() ?? ''
+  const audience = input.audience ?? 'customer'
 
   let request = supabase
     .from('support_knowledge_base')
-    .select('id, title, content, category, tags, helpful_count, view_count, slug')
+    .select('id, title, content, category, tags, helpful_count, view_count, slug, user_type')
     .eq('is_active', true)
     .order('helpful_count', { ascending: false })
     .limit(100)
@@ -57,12 +66,18 @@ export async function fetchHelpArticles(input: {
       return fetchHelpArticlesWithoutSlug(input)
     }
     return {
-      articles: filterFallbackArticles(product, queryText),
+      articles: filterFallbackArticles(product, queryText, audience),
       error: error.message,
     }
   }
 
-  let articles = (data ?? []).map((row) => mapArticle(row as KbRow))
+  let articles = (data ?? [])
+    .filter((row) => {
+      const item = row as KbRow
+      const seller = isSellerArticle(item.user_type, item.category)
+      return audience === 'seller' ? seller : !seller
+    })
+    .map((row) => mapArticle(row as KbRow))
   if (queryText) {
     const q = queryText.toLowerCase()
     articles = articles.filter(
@@ -75,7 +90,7 @@ export async function fetchHelpArticles(input: {
   }
 
   if (!articles.length) {
-    return { articles: filterFallbackArticles(product, queryText), error: null }
+    return { articles: filterFallbackArticles(product, queryText, audience), error: null }
   }
 
   return { articles, error: null }
@@ -84,9 +99,11 @@ export async function fetchHelpArticles(input: {
 async function fetchHelpArticlesWithoutSlug(input: {
   product?: HelpProduct
   query?: string
+  audience?: HelpAudience
 }): Promise<{ articles: HelpArticle[]; error: string | null }> {
   const product = input.product ?? ''
   const queryText = input.query?.trim() ?? ''
+  const audience = input.audience ?? 'customer'
   let request = supabase
     .from('support_knowledge_base')
     .select('id, title, content, category, tags, helpful_count, view_count')
@@ -96,9 +113,15 @@ async function fetchHelpArticlesWithoutSlug(input: {
   if (product) request = request.eq('category', product)
   const { data, error } = await request
   if (error) {
-    return { articles: filterFallbackArticles(product, queryText), error: error.message }
+    return { articles: filterFallbackArticles(product, queryText, audience), error: error.message }
   }
-  let articles = (data ?? []).map((row) => mapArticle(row as KbRow))
+  let articles = (data ?? [])
+    .filter((row) => {
+      const item = row as KbRow
+      const seller = isSellerArticle(item.user_type, item.category)
+      return audience === 'seller' ? seller : !seller
+    })
+    .map((row) => mapArticle(row as KbRow))
   if (queryText) {
     const q = queryText.toLowerCase()
     articles = articles.filter(
@@ -109,7 +132,7 @@ async function fetchHelpArticlesWithoutSlug(input: {
     )
   }
   if (!articles.length) {
-    return { articles: filterFallbackArticles(product, queryText), error: null }
+    return { articles: filterFallbackArticles(product, queryText, audience), error: null }
   }
   return { articles, error: null }
 }

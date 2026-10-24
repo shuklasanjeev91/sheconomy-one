@@ -12,6 +12,8 @@ export type {
   MeetingDraftResult,
   PostDraftParams,
   PostDraftResult,
+  PostSuggestionChip,
+  WritingIssue,
   SendAiMessageParams,
   SendAiMessageResult,
   ShopDraftParams,
@@ -24,6 +26,8 @@ export {
   draftShopWithAi,
   fetchAiSuggestions,
   fetchCommentSuggestions,
+  fetchPostSuggestions,
+  fetchWritingIssues,
   sendAiMessage,
   sendAiSuggestionFeedback,
 } from '~/lib/ai/client'

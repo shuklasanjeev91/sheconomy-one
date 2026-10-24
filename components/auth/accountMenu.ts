@@ -1,3 +1,4 @@
+import { AI_NAME } from '~/config/brand'
 import type { Href } from 'one'
 
 import { Icons } from '~/components/ui'
@@ -222,7 +223,7 @@ export function getAccountMenuSections({
       item(ctx, 'help', Icons.HelpCircle, 'Help & Support', routes.help, undefined, {
         description: 'FAQs and contact for every tab',
       }),
-      item(ctx, 'ai-assist', Icons.Sparkles, 'Ask SHEconomy AI', routes.help, undefined, {
+      item(ctx, 'ai-assist', Icons.Sparkles, `Ask ${AI_NAME}`, routes.help, undefined, {
         description: 'Contextual help for every product',
         action: 'open-ai',
       }),

@@ -116,6 +116,7 @@ export function PostComments({
               isAuthenticated={isAuthenticated}
               currentUserId={currentUserId}
               canModerate={canModerate}
+              suggestionContext={suggestionContext}
               onLikeComment={onLikeComment}
               onEditComment={onEditComment}
               onDeleteComment={onDeleteComment}
@@ -174,6 +175,7 @@ function CommentThread({
   isAuthenticated,
   currentUserId,
   canModerate,
+  suggestionContext,
   onLikeComment,
   onEditComment,
   onDeleteComment,
@@ -184,6 +186,7 @@ function CommentThread({
   isAuthenticated: boolean
   currentUserId: string | null
   canModerate: boolean
+  suggestionContext?: CommentSuggestionContext
   onLikeComment: (commentId: string, reactionType?: ReactionType) => void
   onEditComment: (commentId: string, content: string) => Promise<{ error?: string | null } | unknown>
   onDeleteComment: (commentId: string) => Promise<{ error?: string | null } | unknown>
@@ -278,7 +281,19 @@ function CommentThread({
       ) : null}
 
       {replyOpen && isAuthenticated ? (
-        <YStack paddingLeft={40}>
+        <YStack paddingLeft={40} gap="$2">
+          <CommentSuggestionChips
+            context={{
+              ...(suggestionContext ?? {}),
+              parentComment: comment.content,
+              authorName: comment.authorName,
+            }}
+            disabled={isSending}
+            onSelect={(text) => {
+              replyEncodedRef.current = text
+              setReplyDraft(text)
+            }}
+          />
           <CommentDraftRow
             value={replyDraft}
             placeholder={`Reply to ${comment.authorName}…`}

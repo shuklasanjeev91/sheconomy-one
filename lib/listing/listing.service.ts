@@ -20,6 +20,7 @@ import { supabase } from '~/lib/supabase'
 import type { Database } from '~/lib/supabase'
 
 import { fail, isAdminUser, ok, resolveUserId, verifyListingManageAccess, verifyShopManageAccess } from '~/lib/listing/listing.access'
+import { blockedContentMessage } from '~/lib/safety/content-screen'
 import { prepareListingDataForSubmission } from '~/lib/listing/listing.utils'
 import { validateCategoryData } from '~/lib/listing/listing.validation'
 import { addImage, uploadAndAttachImage } from '~/lib/listing/listing-images.service'
@@ -633,6 +634,12 @@ export async function createListing(
     const access = await verifyShopManageAccess(shopId, id)
     if (!access.success) return fail(access.error)
 
+    const blocked = await blockedContentMessage([
+      typeof formData.title === 'string' ? formData.title : null,
+      typeof formData.description === 'string' ? formData.description : null,
+    ])
+    if (blocked) return fail(blocked)
+
     const payload = prepareListingDataForSubmission({ ...formData, shop_id: shopId })
     // A newly published listing gets a timestamp; drafts do not.
     if (payload.listing_status === LISTING_STATUS.ACTIVE && !payload.published_at) {
@@ -682,6 +689,12 @@ export async function updateListing(
     const access = await verifyListingManageAccess(listingId, id)
     if (!access.success) return fail(access.error)
 
+    const blocked = await blockedContentMessage([
+      typeof updates.title === 'string' ? updates.title : null,
+      typeof updates.description === 'string' ? updates.description : null,
+    ])
+    if (blocked) return fail(blocked)
+
     const clean = Object.fromEntries(
       Object.entries(updates).filter(([, value]) => value !== undefined),
     )
@@ -716,6 +729,12 @@ export async function updateListingWithDetails(
   try {
     const access = await verifyListingManageAccess(listingId, id)
     if (!access.success) return fail(access.error)
+
+    const blocked = await blockedContentMessage([
+      typeof formData.title === 'string' ? formData.title : null,
+      typeof formData.description === 'string' ? formData.description : null,
+    ])
+    if (blocked) return fail(blocked)
 
     const payload = prepareListingDataForSubmission(formData) as ListingUpdate
     delete (payload as { shop_id?: string }).shop_id

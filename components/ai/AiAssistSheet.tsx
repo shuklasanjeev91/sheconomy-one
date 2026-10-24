@@ -11,8 +11,10 @@ import {
   YStack,
 } from '~/components/ui'
 import { HorizontalScrollRow } from '~/components/layout'
-import { BRAND_NAME } from '~/config/brand'
+import { AI_NAME } from '~/config/brand'
 import { radius } from '~/config/tokens'
+import { ListingGrid } from '~/commerce/components/ListingGrid'
+import { fetchListingsByIds, type ListingSummary } from '~/commerce/lib/commerce'
 import {
   aiProductLabel,
   fetchAiSuggestions,
@@ -23,6 +25,7 @@ import {
   type AiSuggestion,
 } from '~/lib/ai'
 import { helpHref } from '~/lib/help/types'
+import { productQuestionChips } from '~/lib/listing/product-questions'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAiAssist } from '~/providers/AiAssistProvider'
 import { navigateApp } from '~/lib/platform/navigate'
@@ -31,50 +34,25 @@ function newLocalId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-const QUICK_ACTIONS: Record<AiProduct, Array<{ label: string; prompt: string; href?: string }>> = {
-  commerce: [
-    { label: 'Buy t-shirt', prompt: 'I want to buy a t-shirt — show me matching listings' },
-    { label: 'Track order', prompt: 'Help me track my recent orders' },
-    { label: 'Returns', prompt: 'How do returns and refunds work?' },
-    { label: 'Open Help', prompt: '', href: '/help?product=commerce' },
-  ],
-  community: [
-    { label: 'What to post', prompt: 'Suggest a professional post topic for today' },
-    { label: 'Grow network', prompt: 'Suggest how to grow my professional network this week' },
-    { label: 'Jobs tips', prompt: 'Tips for applying to roles on SHEconomy' },
-    { label: 'Open Help', prompt: '', href: '/help?product=community' },
-  ],
-  chat: [
-    { label: 'Start chat', prompt: 'How do I start a new conversation?' },
-    { label: 'Mute tips', prompt: 'How do I mute a noisy conversation?' },
-    { label: 'Group chat', prompt: 'How do group chats work?' },
-    { label: 'Open Help', prompt: '', href: '/help?product=chat' },
-  ],
-  class: [
-    { label: 'Browse classes', prompt: 'Help me find a class to enroll in' },
-    { label: 'Enroll', prompt: 'How do I enroll in a class or program?' },
-    { label: 'Playback', prompt: 'Video or audio will not play — what should I try?' },
-    { label: 'Open Help', prompt: '', href: '/help?product=class' },
-  ],
-  cowork: [
-    { label: 'Schedule tomorrow', prompt: 'Schedule a Co-Work meeting for tomorrow at 11am' },
-    { label: 'Host meeting', prompt: 'How do I host a Co-Work meeting and share the code?' },
-    { label: 'Join with code', prompt: 'How do I join a meeting with a code?' },
-    { label: 'AV help', prompt: 'Camera or mic is blocked — how do I fix it?' },
-    { label: 'Open Help', prompt: '', href: '/help?product=cowork' },
-  ],
-  shop: [
-    { label: 'New orders', prompt: 'Show me how to manage new shop orders' },
-    { label: 'Boost sales', prompt: 'How can I increase my shop sales this week?' },
-    { label: 'Low stock', prompt: 'What should I do about low-stock listings?' },
-    { label: 'Open Help', prompt: '', href: '/help?product=shop' },
-  ],
-  account: [
-    { label: 'Schedule Co-Work', prompt: 'Schedule a Co-Work meeting for tomorrow at 11am' },
-    { label: 'Notifications', prompt: 'Help me tune alerts across products' },
-    { label: 'Shop marketplace', prompt: 'I want to buy something on the marketplace' },
-    { label: 'Open Help', prompt: '', href: '/help' },
-  ],
+function RelatedListingCards({ ids }: { ids: string[] }) {
+  const [rows, setRows] = useState<ListingSummary[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchListingsByIds(ids).then((listings) => {
+      if (cancelled) return
+      const order = new Map(ids.map((id, index) => [id, index]))
+      setRows(
+        [...listings].sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0)),
+      )
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [ids])
+
+  if (!rows.length) return null
+  return <ListingGrid listings={rows} columns={2} personalize={false} showQuickAdd />
 }
 
 /**
@@ -95,6 +73,10 @@ export function AiAssistSheet() {
   const product: AiProduct = override?.product ?? routeContext.product
   const contextPage = override?.contextPage ?? routeContext.contextPage
   const context = { ...routeContext.context, ...(override?.context ?? {}) }
+  const listingTitle = typeof context.listing_title === 'string' ? context.listing_title.trim() : ''
+  const listingCategory = typeof context.listing_category === 'string' ? context.listing_category : ''
+  const onListing = contextPage === 'listing' && Boolean(listingTitle || context.listing_slug || context.listing_id)
+  const productQuestions = onListing ? productQuestionChips(listingCategory) : []
 
   const [suggestions, setSuggestions] = useState<AiSuggestion[]>([])
   const [messages, setMessages] = useState<AiAssistMessage[]>([])
@@ -138,6 +120,7 @@ export function AiAssistSheet() {
             role: 'assistant',
             content: result.answer,
             deepLinks: result.deepLinks,
+            listingIds: result.listingIds,
           },
         ])
       } catch (err) {
@@ -147,7 +130,7 @@ export function AiAssistSheet() {
           {
             id: newLocalId(),
             role: 'assistant',
-            content: `I couldn’t reach ${BRAND_NAME} AI just now. Try again, or open Help & Support.`,
+            content: `I couldn’t reach ${AI_NAME} just now. Try again, or open Help & Support.`,
             deepLinks: [{ label: 'Help Center', href: helpHref(product === 'account' ? '' : product) }],
           },
         ])
@@ -200,7 +183,7 @@ export function AiAssistSheet() {
         <Input
           value={input}
           onChangeText={setInput}
-          placeholder={`Ask about ${aiProductLabel(product).toLowerCase()}…`}
+          placeholder={onListing ? 'Ask about this product…' : `Ask about ${aiProductLabel(product).toLowerCase()}…`}
           onSubmitEditing={() => void handleSend()}
           returnKeyType="send"
           editable={!sending}
@@ -224,74 +207,60 @@ export function AiAssistSheet() {
       onOpenChange={(next) => {
         if (!next) closeAssist()
       }}
-      title={`${BRAND_NAME} AI`}
+      title={onListing && listingTitle ? listingTitle : AI_NAME}
       footer={footer}
     >
       <YStack gap="$4" paddingHorizontal="$4" paddingTop="$2" paddingBottom="$4">
-        <Text fontSize={13} color={ui.textMuted}>
-          Context: {aiProductLabel(product)}
-          {contextPage ? ` · ${contextPage}` : ''}
-        </Text>
+        {onListing ? null : (
+          <Text fontSize={13} color={ui.textMuted}>
+            {`Context: ${aiProductLabel(product)}${contextPage ? ` · ${contextPage}` : ''}`}
+          </Text>
+        )}
 
-        <HorizontalScrollRow gap="$2">
-          {(QUICK_ACTIONS[product] ?? QUICK_ACTIONS.account).map((action) => (
-            <XStack
-              key={action.label}
-              paddingHorizontal={12}
-              paddingVertical={8}
-              borderRadius={radius.pill}
-              borderWidth={1}
-              borderColor={ui.borderSubtle}
-              backgroundColor={ui.surface}
-              cursor="pointer"
-              pressStyle={{ opacity: 0.85 }}
-              onPress={() => {
-                if (action.href) {
-                  goLink(action.href)
-                  return
-                }
-                void handleSend(action.prompt)
-              }}
-            >
-              <Text fontSize={13} fontWeight="600" color={ui.text} numberOfLines={1}>
-                {action.label}
-              </Text>
-            </XStack>
-          ))}
-        </HorizontalScrollRow>
+        {onListing && productQuestions.length > 0 ? (
+          <HorizontalScrollRow gap="$2">
+            {productQuestions.map((action) => (
+              <XStack
+                key={action.label}
+                paddingHorizontal={12}
+                paddingVertical={8}
+                borderRadius={radius.pill}
+                borderWidth={1}
+                borderColor={ui.borderSubtle}
+                backgroundColor={ui.surface}
+                cursor="pointer"
+                pressStyle={{ opacity: 0.85 }}
+                onPress={() => void handleSend(action.prompt)}
+              >
+                <Text fontSize={13} fontWeight="600" color={ui.text} numberOfLines={1}>
+                  {action.label}
+                </Text>
+              </XStack>
+            ))}
+          </HorizontalScrollRow>
+        ) : null}
 
-        {suggestions.length > 0 ? (
-          <YStack gap="$2">
-            <Text
-              fontSize={12}
-              fontWeight="700"
-              color={ui.textSecondary}
-              textTransform="uppercase"
-              letterSpacing={0.6}
-            >
-              Suggestions
-            </Text>
-            <HorizontalScrollRow gap="$2">
-              {suggestions.map((suggestion) => (
-                <XStack
-                  key={suggestion.id}
-                  paddingHorizontal={12}
-                  paddingVertical={8}
-                  borderRadius={radius.pill}
-                  borderWidth={1}
-                  borderColor={ui.borderSubtle}
-                  backgroundColor={ui.chip}
-                  cursor="pointer"
-                  pressStyle={{ opacity: 0.85 }}
-                  onPress={() => onChip(suggestion)}
-                >
-                  <Text fontSize={13} fontWeight="600" color={ui.text} numberOfLines={1}>
-                    {suggestion.suggestion_text}
-                  </Text>
-                </XStack>
-              ))}
-            </HorizontalScrollRow>
-          </YStack>
+        {!onListing && suggestions.length > 0 ? (
+          <HorizontalScrollRow gap="$2">
+            {suggestions.map((suggestion) => (
+              <XStack
+                key={suggestion.id}
+                paddingHorizontal={12}
+                paddingVertical={8}
+                borderRadius={radius.pill}
+                borderWidth={1}
+                borderColor={ui.borderSubtle}
+                backgroundColor={ui.surface}
+                cursor="pointer"
+                pressStyle={{ opacity: 0.85 }}
+                onPress={() => onChip(suggestion)}
+              >
+                <Text fontSize={13} fontWeight="600" color={ui.text} numberOfLines={1}>
+                  {suggestion.suggestion_text}
+                </Text>
+              </XStack>
+            ))}
+          </HorizontalScrollRow>
         ) : null}
 
         {messages.length === 0 && !sending ? (
@@ -304,17 +273,19 @@ export function AiAssistSheet() {
             gap="$2"
           >
             <Text fontSize={15} fontWeight="700" color={ui.text}>
-              How can I help?
+              {onListing ? 'Ask about this product' : 'How can I help?'}
             </Text>
             <Text fontSize={14} color={ui.textMuted} lineHeight={20}>
-              AI support for Marketplace, Community, Chat, Classes, Co-Work, and your shop —
-              including scheduling meetings, tracking orders, and seller tips.
+              {onListing
+                ? 'Answers come from this listing.'
+                : 'AI support for Marketplace, Community, Chat, Classes, Co-Work, and your shop — including scheduling meetings, tracking orders, and seller tips.'}
             </Text>
           </YStack>
         ) : null}
 
         {messages.map((message) => {
           const isUser = message.role === 'user'
+          const links = onListing ? [] : (message.deepLinks ?? [])
           return (
             <YStack
               key={message.id}
@@ -334,9 +305,9 @@ export function AiAssistSheet() {
                   {message.content}
                 </Text>
               </YStack>
-              {message.deepLinks?.length ? (
+              {links.length ? (
                 <XStack gap="$2" flexWrap="wrap">
-                  {message.deepLinks.map((link) => (
+                  {links.map((link) => (
                     <XStack
                       key={`${message.id}-${link.href}`}
                       paddingHorizontal={10}
@@ -355,6 +326,7 @@ export function AiAssistSheet() {
                   ))}
                 </XStack>
               ) : null}
+              {message.listingIds?.length ? <RelatedListingCards ids={message.listingIds} /> : null}
             </YStack>
           )
         })}
@@ -374,17 +346,19 @@ export function AiAssistSheet() {
           </Text>
         ) : null}
 
-        <XStack
-          alignItems="center"
-          gap="$2"
-          cursor="pointer"
-          onPress={() => goLink(helpHref(product === 'account' ? '' : product))}
-        >
-          <Icons.HelpCircle size={16} color={ui.textMuted} />
-          <Text fontSize={13} color={ui.textMuted}>
-            Open Help & Support
-          </Text>
-        </XStack>
+        {!onListing ? (
+          <XStack
+            alignItems="center"
+            gap="$2"
+            cursor="pointer"
+            onPress={() => goLink(helpHref(product === 'account' ? '' : product))}
+          >
+            <Icons.HelpCircle size={16} color={ui.textMuted} />
+            <Text fontSize={13} color={ui.textMuted}>
+              Open Help & Support
+            </Text>
+          </XStack>
+        ) : null}
       </YStack>
     </AppBottomSheet>
   )

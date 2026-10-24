@@ -34,13 +34,13 @@ export function resolveAiListingSearchTerm(original: string, aiTerm: string): st
 /**
  * Natural-language marketplace search via the ai-assist edge function.
  */
-export async function runAiSearch(message: string): Promise<AiSearchModeResult> {
+export async function runAiSearch(message: string, location?: string | null): Promise<AiSearchModeResult> {
   const trimmed = message.trim()
   if (!trimmed) {
     throw new Error('Enter what you are looking for.')
   }
 
-  const result = await searchWithAi({ message: trimmed })
+  const result = await searchWithAi({ message: trimmed, location })
   const filters: ListingBrowseFilters = {}
   if (result.filters?.minPrice != null && Number.isFinite(result.filters.minPrice)) {
     filters.minPrice = result.filters.minPrice

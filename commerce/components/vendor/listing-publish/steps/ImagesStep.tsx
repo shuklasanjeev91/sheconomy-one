@@ -90,14 +90,10 @@ export function ImagesStep({
       const dataUrl = await listingImageDraftToDataUrl(primary)
       const draft = await draftListingFromImage({ dataUrl })
       onApplyAiDraft(draft)
-      toast.show('Listing draft ready', {
-        tone: 'success',
-        message: 'Title, description, and tags filled from your photo. Review before publishing.',
-      })
     } catch (error) {
       toast.show('Could not draft listing', {
         tone: 'danger',
-        message: error instanceof Error ? error.message : 'Try again with a clearer product photo.',
+        message: error instanceof Error ? error.message : "Couldn't read this photo. Try a clearer product picture.",
       })
     } finally {
       setIsDrafting(false)

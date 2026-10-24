@@ -2,6 +2,7 @@ import { supabase } from '~/lib/supabase'
 import type { Database, Tables, TablesUpdate } from '~/lib/supabase'
 import { slugifyTitle } from '~/commerce/lib/seo-urls'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
+import { blockedContentMessage } from '~/lib/safety/content-screen'
 
 /** Refresh every browse/category/home feed that can show seller inventory. */
 function invalidateSellerCatalogueCaches() {
@@ -158,6 +159,8 @@ export async function updateSellerListing(listingId: string, shopId: string, inp
 }
 
 export async function updateShopProfile(shopId: string, userId: string, input: UpdateShopProfileInput) {
+  const blocked = await blockedContentMessage(input.shop_description ?? '')
+  if (blocked) return { shop: null, error: blocked }
   const { data, error } = await supabase
     .from('shops')
     .update({

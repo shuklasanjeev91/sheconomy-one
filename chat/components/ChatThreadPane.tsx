@@ -888,6 +888,12 @@ export function ChatThreadPane({
           uploadProgress={uploadProgress}
           replyTo={replyTarget}
           replySenderName={replyTarget ? resolveSenderName(replyTarget.senderId) : null}
+          peerName={chat.otherUserName ?? chat.name}
+          latestMessage={
+            replyTarget?.content ||
+            [...visibleMessages].reverse().find((message) => !message.deletedAt && message.content.trim())?.content ||
+            ''
+          }
           onCancelReply={() => setReplyTarget(null)}
           editing={editingTarget}
           onEditSubmit={(messageId, text) => {

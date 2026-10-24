@@ -136,6 +136,7 @@ export type FederateOptions = {
   userId?: string | null
   latitude?: number | null
   longitude?: number | null
+  memberLocation?: string | null
 }
 
 export const SEARCH_SCOPE_LABELS: Record<SearchScope, string> = {

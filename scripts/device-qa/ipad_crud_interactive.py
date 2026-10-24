@@ -78,7 +78,7 @@ ACCOUNT_IDS = {
     "Delivery addresses": "qa-account-addresses",
     "Start your shop": "qa-account-shop-manager",
     "Manage your shop": "qa-account-shop-manager",
-    "Ask SHEconomy AI": "qa-account-ai-assist",
+    "Ask SHERPA": "qa-account-ai-assist",
 }
 
 SETTINGS_IDS = {
@@ -380,7 +380,7 @@ def main() -> int:
         "Payment methods",
         "Delivery addresses",
         "Start your shop",
-        "Ask SHEconomy AI",
+        "Ask SHERPA",
     ]:
         ok = tap_any(ACCOUNT_IDS.get(lab, ""), lab)
         time.sleep(1.0)

@@ -1,3 +1,4 @@
+import { invokeOwnedAssist, readableAiError } from '~/lib/ai/owned-service'
 import { supabase } from '~/lib/supabase'
 
 import type {
@@ -15,6 +16,8 @@ import type {
   MeetingDraftResult,
   PostDraftParams,
   PostDraftResult,
+  PostSuggestionChip,
+  WritingIssue,
   SendAiMessageParams,
   SendAiMessageResult,
   ShopDraftParams,
@@ -66,16 +69,23 @@ async function readFunctionErrorMessage(error: unknown, data: unknown, fallback:
 }
 
 async function invokeAiAssist<T>(body: Record<string, unknown>): Promise<T> {
+  try {
+    const owned = await invokeOwnedAssist<T>(body)
+    if (owned) return owned
+  } catch {
+    // Owned service missing or down — Gemini edge function still answers.
+  }
+
   const { data, error } = await supabase.functions.invoke('ai-assist', { body })
 
   if (error) {
     throw new Error(
-      await readFunctionErrorMessage(error, data, 'SHEconomy AI is unavailable right now.'),
+      readableAiError(await readFunctionErrorMessage(error, data, 'SHERPA is unavailable right now.')),
     )
   }
 
   if (data && typeof data === 'object' && 'error' in data && (data as InvokeErrorPayload).error) {
-    throw new Error(String((data as InvokeErrorPayload).error))
+    throw new Error(readableAiError(String((data as InvokeErrorPayload).error)))
   }
 
   return data as T
@@ -110,12 +120,15 @@ export async function sendAiMessage(params: SendAiMessageParams): Promise<SendAi
   })
 
   if (!result?.sessionId || !result.answer) {
-    throw new Error('Empty response from SHEconomy AI.')
+    throw new Error('Empty response from SHERPA.')
   }
 
   return {
     ...result,
     deepLinks: Array.isArray(result.deepLinks) ? result.deepLinks : [],
+    listingIds: Array.isArray(result.listingIds)
+      ? result.listingIds.map((id) => String(id)).filter(Boolean).slice(0, 4)
+      : [],
     usedFallback: Boolean(result.usedFallback),
   }
 }
@@ -146,6 +159,7 @@ export async function fetchCommentSuggestions(
       shop_name: params.shopName ?? null,
       article_title: params.articleTitle ?? null,
       has_media: Boolean(params.hasMedia),
+      parent_comment: params.parentComment ?? null,
     },
   })
   return Array.isArray(result.suggestions)
@@ -256,6 +270,62 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
   }
 }
 
+/** Short original post starters for the composer. Empty when SHERPA has none. */
+export async function fetchPostSuggestions(params?: {
+  mode?: string | null
+  memberName?: string | null
+  headline?: string | null
+  location?: string | null
+}): Promise<PostSuggestionChip[]> {
+  const result = await invokeAiAssist<{ suggestions?: PostSuggestionChip[] }>({
+    action: 'post_suggestions',
+    product: 'community',
+    context: {
+      compose_mode: params?.mode ?? 'text',
+      member_name: params?.memberName ?? null,
+      headline: params?.headline ?? null,
+      location: params?.location ?? null,
+    },
+  })
+  if (!Array.isArray(result.suggestions)) return []
+  return result.suggestions
+    .map((row) => ({
+      label: String(row?.label ?? '').trim(),
+      draft: String(row?.draft ?? '').trim(),
+    }))
+    .filter((row) => row.label && row.draft)
+    .slice(0, 4)
+}
+
+/** Spell and grammar issues for a sentence the member is still editing. */
+export async function fetchWritingIssues(text: string): Promise<WritingIssue[]> {
+  const result = await invokeAiAssist<{ issues?: WritingIssue[] }>({
+    action: 'writing_check',
+    product: 'community',
+    message: text,
+  })
+  if (!Array.isArray(result.issues)) return []
+  return result.issues
+    .map((row) => ({
+      start: Number(row?.start),
+      end: Number(row?.end),
+      type: row?.type === 'grammar' ? ('grammar' as const) : ('spelling' as const),
+      message: String(row?.message ?? '').trim(),
+      suggestions: Array.isArray(row?.suggestions)
+        ? row.suggestions.map((item) => String(item ?? '').trim()).filter(Boolean)
+        : [],
+    }))
+    .filter(
+      (row) =>
+        Number.isFinite(row.start) &&
+        Number.isFinite(row.end) &&
+        row.end > row.start &&
+        row.end <= text.length &&
+        row.suggestions.length > 0,
+    )
+    .slice(0, 8)
+}
+
 /** Turn a product photo into marketplace search keywords. */
 export async function describeSearchImage(
   params: DescribeSearchImageParams,
@@ -288,16 +358,25 @@ export async function describeSearchImage(
 export async function draftListingFromImage(
   params: ListingDraftFromImageParams,
 ): Promise<ListingDraftFromImageResult> {
-  const result = await invokeAiAssist<ListingDraftFromImageResult>({
-    action: 'listing_draft_from_image',
-    product: 'commerce',
-    message: params.dataUrl,
-  })
+  let result: ListingDraftFromImageResult
+  try {
+    result = await invokeAiAssist<ListingDraftFromImageResult>({
+      action: 'listing_draft_from_image',
+      product: 'commerce',
+      message: params.dataUrl,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    if (/sign in/i.test(message)) throw error instanceof Error ? error : new Error(message)
+    if (/too large/i.test(message)) throw new Error('That photo is too large. Use a smaller image.')
+    if (/add a product photo/i.test(message)) throw new Error('Add a product photo first.')
+    throw new Error("Couldn't read this photo. Try a clearer product picture.")
+  }
 
   const title = String(result.title ?? '').trim()
   const description = String(result.description ?? '').trim()
   if (!title || !description) {
-    throw new Error('Could not draft listing copy from this photo. Try another angle.')
+    throw new Error("Couldn't read this photo. Try a clearer product picture.")
   }
 
   const priceRaw = result.suggestedPriceInr
@@ -313,20 +392,25 @@ export async function draftListingFromImage(
       ? result.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 8)
       : [],
     suggestedPriceInr,
+    priceNote: String(result.priceNote ?? '').trim(),
     categoryHint:
       typeof result.categoryHint === 'string' && result.categoryHint.trim()
         ? result.categoryHint.trim()
         : null,
+    metaTitle: String(result.metaTitle ?? '').trim().slice(0, 60),
+    metaDescription: String(result.metaDescription ?? '').trim().slice(0, 160),
     usedFallback: Boolean(result.usedFallback),
   }
 }
 
 /** Natural-language product search with structured filters + listing hits. */
 export async function searchWithAi(params: AiSearchParams): Promise<AiSearchResult> {
+  const location = params.location?.trim()
   const result = await invokeAiAssist<AiSearchResult>({
     action: 'ai_search',
     product: 'commerce',
     message: params.message,
+    ...(location ? { context: { location } } : {}),
   })
 
   const searchTerm = String(result.searchTerm ?? '').trim() || params.message.trim()
@@ -355,6 +439,47 @@ export async function searchWithAi(params: AiSearchParams): Promise<AiSearchResu
     },
     listingIds: Array.isArray(result.listingIds)
       ? result.listingIds.map((id) => String(id)).filter(Boolean).slice(0, 24)
+      : [],
+    groups: Array.isArray(result.groups)
+      ? result.groups
+          .map((group) => ({
+            label: String(group?.label ?? '').trim(),
+            listingIds: Array.isArray(group?.listingIds)
+              ? group.listingIds.map((id) => String(id)).filter(Boolean).slice(0, 8)
+              : [],
+          }))
+          .filter((group) => group.label && group.listingIds.length > 0)
+      : [],
+    resultKind: (
+      [
+        'listing',
+        'person',
+        'shop',
+        'job',
+        'program',
+        'post',
+        'company',
+        'event',
+        'meeting',
+        'help',
+      ] as const
+    ).includes(result.resultKind)
+      ? result.resultKind
+      : 'listing',
+    entityIds: Array.isArray(result.entityIds)
+      ? result.entityIds.map((id) => String(id)).filter(Boolean).slice(0, 24)
+      : [],
+    hits: Array.isArray(result.hits)
+      ? result.hits
+          .map((hit) => ({
+            id: String(hit?.id ?? ''),
+            kind: String(hit?.kind ?? ''),
+            title: String(hit?.title ?? ''),
+            subtitle: String(hit?.subtitle ?? ''),
+            href: String(hit?.href ?? ''),
+          }))
+          .filter((hit) => hit.id && hit.title && hit.href)
+          .slice(0, 24)
       : [],
     deepLinks: Array.isArray(result.deepLinks) ? result.deepLinks : [],
     usedFallback: Boolean(result.usedFallback),

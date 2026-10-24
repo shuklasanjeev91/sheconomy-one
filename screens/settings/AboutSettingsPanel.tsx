@@ -6,6 +6,7 @@ import { usePwaInstall } from '~/components/pwa/PwaBootstrap'
 import { Icons, ListItem, Separator, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { SurfaceCard } from '~/components/layout'
 import { SettingsPanel } from '~/components/settings/SettingsPanel'
+import { AI_NAME } from '~/config/brand'
 import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { resetAppOnboardingSeen } from '~/lib/onboarding/first-launch'
@@ -74,10 +75,32 @@ export function AboutSettingsPanel() {
             <Icons.HelpCircle size={18} color={ui.brand} />
             <YStack flex={1} gap={2}>
               <Text fontSize={15} color={ui.text} fontWeight="600">
-                Help & Support
+                Customer Service
               </Text>
               <Text fontSize={13} color={ui.textMuted}>
-                FAQs and contact for Marketplace, Community, Chat, Class, Co-Work, and shops
+                Orders, returns, payments, and your account
+              </Text>
+            </YStack>
+            <Icons.ChevronRight size={16} color={ui.textMuted} />
+          </XStack>
+        </AppLink>
+        <Separator />
+        <AppLink href={routes.helpSeller} asChild>
+          <XStack
+            alignItems="center"
+            gap="$3"
+            paddingHorizontal="$4"
+            paddingVertical="$3.5"
+            hoverStyle={{ backgroundColor: ui.navHover }}
+            cursor="pointer"
+          >
+            <Icons.Store size={18} color={ui.brand} />
+            <YStack flex={1} gap={2}>
+              <Text fontSize={15} color={ui.text} fontWeight="600">
+                Seller Support
+              </Text>
+              <Text fontSize={13} color={ui.textMuted}>
+                Listings, orders, shipping, and payouts
               </Text>
             </YStack>
             <Icons.ChevronRight size={16} color={ui.textMuted} />
@@ -96,7 +119,7 @@ export function AboutSettingsPanel() {
           <Icons.Sparkles size={18} color={ui.brand} />
           <YStack flex={1} gap={2}>
             <Text fontSize={15} color={ui.text} fontWeight="600">
-              Ask SHEconomy AI
+              Ask {AI_NAME}
             </Text>
             <Text fontSize={13} color={ui.textMuted}>
               Contextual tips for the tab you’re on

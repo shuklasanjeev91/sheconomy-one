@@ -121,7 +121,7 @@ SURFACE_CTAS = {
     "class": ["Video", "Audio", "Playlists", "Browse all", "Play"],
     "account": [
         "Settings & privacy", "Your profile", "Notifications", "Help & Support",
-        "Ask SHEconomy AI", "Payment methods", "Delivery addresses",
+        "Ask SHERPA", "Payment methods", "Delivery addresses",
         "Start your shop", "Orders", "Wishlist",
     ],
 }

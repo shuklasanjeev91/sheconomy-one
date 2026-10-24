@@ -13,6 +13,7 @@ export type CommentSuggestionContext = {
   shopName?: string | null
   articleTitle?: string | null
   hasMedia?: boolean
+  parentComment?: string | null
 }
 
 export function commentSuggestionContextKey(ctx: CommentSuggestionContext): string {
@@ -26,6 +27,7 @@ export function commentSuggestionContextKey(ctx: CommentSuggestionContext): stri
     shopName: ctx.shopName ?? null,
     articleTitle: ctx.articleTitle ?? null,
     hasMedia: Boolean(ctx.hasMedia),
+    parentComment: ctx.parentComment?.slice(0, 500) ?? null,
   })
 }
 

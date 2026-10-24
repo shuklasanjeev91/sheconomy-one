@@ -9,6 +9,7 @@ import {
   fetchListingsByIds,
   type ListingSummary,
 } from '~/commerce/lib/commerce'
+import { idsFromOwnedRank, type OwnedRankKind } from '~/lib/ai/owned-service'
 
 const DEFAULT_LIMIT = Platform.OS === 'web' ? 12 : 6
 
@@ -19,6 +20,27 @@ function cacheKey(
 ) {
   // v2: image-required cards (invalidates stale placeholder-only rails)
   return `listing-recs:v2:${kind}:${id}:${limit}`
+}
+
+async function listingsFromOwnedRank(
+  kind: OwnedRankKind,
+  limit: number,
+  options?: { listingId?: string; excludeIds?: string[] },
+): Promise<ListingSummary[] | null> {
+  try {
+    const ids = await idsFromOwnedRank({
+      product: 'commerce',
+      kind,
+      listingId: options?.listingId,
+      excludeIds: options?.excludeIds,
+      limit,
+    })
+    if (!ids?.length) return null
+    const items = withImages(await fetchListingsByIds(ids), limit)
+    return items.length ? items : null
+  } catch {
+    return null
+  }
 }
 
 function withImages(items: ListingSummary[], limit?: number): ListingSummary[] {
@@ -84,6 +106,11 @@ async function refreshRelated(
   key: string,
 ): Promise<ListingSummary[]> {
   const fetchLimit = Math.max(limit * 2, limit + 6)
+  const ranked = await listingsFromOwnedRank('similar', limit, { listingId })
+  if (ranked?.length) {
+    void writeAppCache(key, ranked)
+    return ranked
+  }
 
   // Native: never wait on recommendation RPCs (often multi-second).
   if (Platform.OS !== 'web') {
@@ -277,6 +304,12 @@ export async function fetchFrequentlyBoughtTogether(
   const cached = withImages(peekAppCache<ListingSummary[]>(key) ?? [])
   if (cached.length) return cached.slice(0, limit)
 
+  const ranked = await listingsFromOwnedRank('frequently_bought_together', limit, { listingId })
+  if (ranked?.length) {
+    void writeAppCache(key, ranked)
+    return ranked
+  }
+
   try {
     const { supabase } = await import('~/lib/supabase/client')
     const { data } = await supabase.rpc('get_frequently_bought_together', {
@@ -293,6 +326,9 @@ export async function fetchFrequentlyBoughtTogether(
 }
 
 export async function fetchForYouListings(limit = DEFAULT_LIMIT): Promise<ListingSummary[]> {
+  const ranked = await listingsFromOwnedRank('for_you', limit)
+  if (ranked?.length) return ranked
+
   try {
     const { supabase } = await import('~/lib/supabase/client')
     const { data } = await supabase.rpc('get_for_you_listing_ids', { max_results: Math.max(limit * 2, 24) })
