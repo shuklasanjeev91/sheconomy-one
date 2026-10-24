@@ -110,6 +110,9 @@ export type MeetingDraftResult = {
 export type PostDraftParams = {
   prompt: string
   mode?: string | null
+  photoCount?: number
+  videoCount?: number
+  link?: { url: string; title?: string | null; description?: string | null } | null
 }
 
 export type PostDraftResult = {

@@ -1186,15 +1186,23 @@ export function CreatePostForm({
           <PostComposeAiBar
             mode={composeMode}
             seedPrompt={content || articleTitle || celebrationTitle || eventTitle}
+            photoCount={photos.length}
+            videoCount={videos.length}
+            link={
+              linkPreview
+                ? {
+                    url: linkPreview.url,
+                    title: linkPreview.title,
+                    description: linkPreview.description,
+                  }
+                : null
+            }
             onApplyDraft={(draft) => {
               const next = draft.content.slice(0, contentLimit + 50)
               form.fields.content.onChange(next)
               encodedContentRef.current = next
               if (draft.articleTitle) {
                 setArticleTitle(draft.articleTitle.slice(0, 160))
-              }
-              if (draft.gifUrl && photos.length === 0 && videos.length === 0 && !imageUrl.trim()) {
-                form.fields.imageUrl.setValue(draft.gifUrl)
               }
             }}
           />

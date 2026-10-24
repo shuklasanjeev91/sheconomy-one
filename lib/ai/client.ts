@@ -225,6 +225,9 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
     message: params.prompt,
     context: {
       compose_mode: params.mode ?? 'text',
+      photo_count: params.photoCount ?? 0,
+      video_count: params.videoCount ?? 0,
+      link: params.link ?? null,
     },
   })
 
@@ -241,6 +244,10 @@ export async function fetchPostSuggestions(params?: {
   memberName?: string | null
   headline?: string | null
   location?: string | null
+  prompt?: string | null
+  photoCount?: number
+  videoCount?: number
+  link?: { url: string; title?: string | null } | null
 }): Promise<PostSuggestionChip[]> {
   const result = await invokeAiAssist<{ suggestions?: PostSuggestionChip[] }>({
     action: 'post_suggestions',
@@ -250,6 +257,10 @@ export async function fetchPostSuggestions(params?: {
       member_name: params?.memberName ?? null,
       headline: params?.headline ?? null,
       location: params?.location ?? null,
+      prompt: params?.prompt ?? '',
+      photo_count: params?.photoCount ?? 0,
+      video_count: params?.videoCount ?? 0,
+      link: params?.link ?? null,
     },
   })
   if (!Array.isArray(result.suggestions)) return []
