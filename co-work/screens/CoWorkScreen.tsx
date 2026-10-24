@@ -40,7 +40,6 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { buildAppUrl } from '~/config/app-origin'
 import { copyShareLink } from '~/lib/share'
 import { BRAND_NAME } from '~/config/brand'
-import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 
 export function CoWorkScreen() {
   const { ui } = useCoWorkTheme()
@@ -308,7 +307,6 @@ export function CoWorkScreen() {
       onRefresh={() => setMeetingsRefreshKey((k) => k + 1)}
     >
       <YStack gap="$6" width="100%" {...LAYOUT_STRETCH}>
-        <AiSuggestionRail product="cowork" contextPage="home" title="SHERPA suggests" />
         {/* Main Dashboard: Split View on Desktop, Column on Mobile */}
         <DashboardSplit
           gap="$6"

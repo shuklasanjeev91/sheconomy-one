@@ -43,7 +43,6 @@ import { useProfile } from '~/hooks/useProfile'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { usePageSeo } from '~/components/seo/RouteSeo'
-import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 
 type ShopTab = 'products' | 'about' | 'reviews'
 type ShopSort = 'featured' | 'price-asc' | 'price-desc' | 'newest' | 'rating'
@@ -266,10 +265,6 @@ export function ShopScreen(
           ownerUserId={shop.owner?.id}
           shopSlug={shopSlug}
         />
-
-        <PageSection paddingTop="$3" paddingBottom="$0">
-          <AiSuggestionRail product="commerce" contextPage="shop" title="SHERPA suggests" />
-        </PageSection>
 
         {announcement ? (
           <PageSection paddingTop="$3" paddingBottom="$0">

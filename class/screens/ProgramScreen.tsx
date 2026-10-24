@@ -30,7 +30,6 @@ import { getShadowStyle, radius } from '~/config/tokens'
 import { classRoutes } from '~/lib/routes'
 import { getProgramShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 import { usePageSeo } from '~/components/seo/RouteSeo'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { navigateApp } from '~/lib/platform/navigate'
@@ -248,7 +247,6 @@ export function ProgramScreen() {
   return (
     <ClassShell>
       <YStack gap="$5" width="100%">
-        <AiSuggestionRail product="class" contextPage="program" title="SHERPA suggests" />
         <XStack
           gap="$4"
           width="100%"

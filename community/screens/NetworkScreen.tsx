@@ -35,7 +35,6 @@ import { useSupabase } from '~/providers/SupabaseProvider'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { BRAND_NAME } from '~/config/brand'
-import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 
 export function NetworkScreen() {
   const communityUi = useCommunityUi()
@@ -384,7 +383,6 @@ function NetworkHero({
 }) {
   return (
     <CommunityCard padding={18} gap={12}>
-      <AiSuggestionRail product="community" contextPage="network" title="SHERPA suggests" />
       <CommunityPageHeader
         title="My network"
         subtitle={

@@ -10,7 +10,6 @@ import { useVendorShops } from '~/hooks/useVendorShops'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { SettingsNav } from '~/components/settings/SettingsNav'
-import { AiSuggestionRail } from '~/components/ai/AiSuggestionRail'
 
 const SIDEBAR_WIDTH = 260
 
@@ -77,7 +76,6 @@ export function SettingsHubList() {
 
   return (
     <YStack gap="$4" width="100%">
-      <AiSuggestionRail product="account" contextPage="home" title="SHERPA suggests" />
       <SettingsNav showShop={showShop} compact />
     </YStack>
   )
