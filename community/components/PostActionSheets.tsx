@@ -357,6 +357,8 @@ export function PostActionSheets({
             shopName: post.shop?.name,
             articleTitle: post.article_title,
             hasMedia: postHasMedia(post),
+            imageUrl: collectPostMedia(post).find((item) => item.kind === 'image')?.url ?? null,
+            hasVideo: collectPostMedia(post).some((item) => item.kind === 'video'),
           }}
           onSubmit={(encoded) => {
             if (!engagement.isAuthenticated) {

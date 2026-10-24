@@ -62,10 +62,11 @@ export function CommentSuggestionChips({
 
     let cancelled = false
     setLoadingAi(true)
-    void withSuggestionTimeout(fetchCommentSuggestions(stableContext))
+    const waitMs = stableContext.imageUrl ? 12000 : AI_SUGGESTION_TIMEOUT_MS
+    void withSuggestionTimeout(fetchCommentSuggestions(stableContext), waitMs)
       .then((rows) => {
         if (cancelled) return
-        const next = rows?.slice(0, 4) ?? []
+        const next = rows?.slice(0, 6) ?? []
         aiSuggestionCache.set(contextKey, next)
         setSuggestions(next)
       })

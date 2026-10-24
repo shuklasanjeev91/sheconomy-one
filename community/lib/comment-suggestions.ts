@@ -13,6 +13,8 @@ export type CommentSuggestionContext = {
   shopName?: string | null
   articleTitle?: string | null
   hasMedia?: boolean
+  imageUrl?: string | null
+  hasVideo?: boolean
   parentComment?: string | null
 }
 
@@ -27,6 +29,8 @@ export function commentSuggestionContextKey(ctx: CommentSuggestionContext): stri
     shopName: ctx.shopName ?? null,
     articleTitle: ctx.articleTitle ?? null,
     hasMedia: Boolean(ctx.hasMedia),
+    imageUrl: ctx.imageUrl ?? null,
+    hasVideo: Boolean(ctx.hasVideo),
     parentComment: ctx.parentComment?.slice(0, 500) ?? null,
   })
 }

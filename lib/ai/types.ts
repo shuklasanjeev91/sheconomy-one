@@ -86,6 +86,8 @@ export type CommentSuggestionParams = {
   shopName?: string | null
   articleTitle?: string | null
   hasMedia?: boolean
+  imageUrl?: string | null
+  hasVideo?: boolean
   parentComment?: string | null
 }
 

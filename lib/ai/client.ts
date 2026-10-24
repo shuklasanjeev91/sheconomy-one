@@ -159,6 +159,8 @@ export async function fetchCommentSuggestions(
       shop_name: params.shopName ?? null,
       article_title: params.articleTitle ?? null,
       has_media: Boolean(params.hasMedia),
+      image_url: params.imageUrl ?? null,
+      has_video: Boolean(params.hasVideo),
       parent_comment: params.parentComment ?? null,
     },
   })
