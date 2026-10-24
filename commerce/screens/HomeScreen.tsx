@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Platform } from 'react-native'
 import { AppLink } from '~/components/navigation/AppLink'
 
@@ -7,6 +8,7 @@ import { CommerceSection } from '~/commerce/components/CommerceSection'
 import { FollowedShopDigestEntryCard } from '~/commerce/components/FollowedShopDigestEntryCard'
 import { FollowedShopsRail } from '~/commerce/components/FollowedShopsRail'
 import { HomeHeroSlider, buildHomeHeroSlides } from '~/commerce/components/HomeHeroSlider'
+import { HomeVisitorActions } from '~/commerce/components/HomeVisitorActions'
 import { InfiniteHorizontalSection } from '~/commerce/components/InfiniteHorizontalSection'
 import { InfiniteListingSection } from '~/commerce/components/InfiniteListingSection'
 import { BuyerInTransitHomeStrip } from '~/commerce/components/BuyerInTransitHomeStrip'
@@ -64,6 +66,9 @@ import { commerceRoutes, routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 
 import { BRAND_NAME } from '~/config/brand'
+import { usePageSeo } from '~/components/seo/RouteSeo'
+import { organizationJsonLd } from '~/lib/seo/json-ld'
+import { DEFAULT_DESCRIPTION, SITE_NAME } from '~/lib/seo/seo'
 
 export { homeLoader } from '~/commerce/lib/home-loader'
 export type { HomeBootstrapData }
@@ -101,6 +106,15 @@ const EMPTY_HERO_IMAGES: HomeHeroImageSet = {
 export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
   const ui = useAppUi()
   const { canManageShops } = useAccess()
+  const homeSeo = useMemo(
+    () => ({
+      title: `${SITE_NAME} — Marketplace & Community for Women`,
+      description: DEFAULT_DESCRIPTION,
+      jsonLd: organizationJsonLd(),
+    }),
+    [],
+  )
+  usePageSeo(homeSeo)
   // Start category/shop rails even before bootstrap stats arrive.
   const feedsEnabled = !error || !!data
   const categoriesFeed = useCategoriesFeed(feedsEnabled)
@@ -158,6 +172,8 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
         <PageSection bleed paddingTop={0}>
           <HomeHeroSlider slides={heroSlides} />
         </PageSection>
+
+        <HomeVisitorActions />
 
         {categoriesFeed.items.length > 0 ? (
           <PageSection paddingTop="$2" gap="$3">

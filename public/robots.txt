@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+Disallow: /cart
+Disallow: /checkout
+Disallow: /orders
+Disallow: /admin
+Disallow: /auth
+Disallow: /chat
+Disallow: /settings
+Disallow: /favorites
+Disallow: /api
+
+Sitemap: https://www.sheconomy.in/sitemap.xml

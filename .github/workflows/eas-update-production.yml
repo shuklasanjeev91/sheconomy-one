@@ -24,8 +24,8 @@ jobs:
       contents: read
     env:
       NODE_OPTIONS: --max-old-space-size=8192
-      EXPO_PUBLIC_WEB_APP_URL: https://sheconomy.in
-      ONE_SERVER_URL: https://sheconomy.in
+      EXPO_PUBLIC_WEB_APP_URL: https://www.sheconomy.in
+      ONE_SERVER_URL: https://www.sheconomy.in
       EXPO_PUBLIC_APP_ENV: production
       # Public client defaults (same as eas.json production). Secrets override when set.
       EXPO_PUBLIC_SUPABASE_URL_DEFAULT: https://zsaqrrzwygzwrlzgymxk.supabase.co
@@ -103,8 +103,8 @@ jobs:
           eas update --channel production --message "$MESSAGE" --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          EXPO_PUBLIC_WEB_APP_URL: https://sheconomy.in
-          ONE_SERVER_URL: https://sheconomy.in
+          EXPO_PUBLIC_WEB_APP_URL: https://www.sheconomy.in
+          ONE_SERVER_URL: https://www.sheconomy.in
           EXPO_PUBLIC_APP_ENV: production
 
       - name: Verify latest production update

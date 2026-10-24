@@ -15,7 +15,7 @@ export const OAUTH_CALLBACK_PATH = '/auth/callback'
 
 export function resolveOAuthRedirectUrl(): string {
   // Web OAuth must return to the current host (localhost / preview allowlists).
-  // Public share + notification links use resolveAppOrigin() → sheconomy.in.
+  // Public share + notification links use resolveAppOrigin() → www.sheconomy.in.
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const callback = `${window.location.origin}${OAUTH_CALLBACK_PATH}`
     const returnTo = String(getReturnToFromLocation())

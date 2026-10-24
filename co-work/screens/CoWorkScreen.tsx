@@ -37,6 +37,7 @@ import { SHECONOMY_MEETING_COLORS, useCoWorkTheme } from '~/co-work/lib/theme'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { buildAppUrl } from '~/config/app-origin'
 import { copyShareLink } from '~/lib/share'
 import { BRAND_NAME } from '~/config/brand'
 
@@ -292,7 +293,7 @@ export function CoWorkScreen() {
       router.push('/auth/sign-in' as never)
       return
     }
-    await copyShareLink(`https://sheconomy.in/co-work/join?code=${userPmi.replace(/\s/g, '')}`)
+    await copyShareLink(buildAppUrl(`/co-work/join?code=${userPmi.replace(/\s/g, '')}`))
     toast.show('PMI Invitation Link Copied', { tone: 'success' })
   }
 

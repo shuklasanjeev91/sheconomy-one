@@ -67,6 +67,7 @@ import { useProfile } from '~/hooks/useProfile'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { formatMeetingWhenLabel } from '~/co-work/lib/meeting-revisit'
 import { addMeetingToDeviceCalendar } from '~/lib/calendar/device-calendar'
+import { toPublicShareUrl } from '~/config/app-origin'
 import { copyShareLink } from '~/lib/share'
 
 const MeetingBackgroundPreview = lazy(() =>
@@ -390,7 +391,13 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   }
 
   const handleCopyLink = async () => {
-    await copyShareLink(typeof window !== 'undefined' ? window.location.href : `https://sheconomy.in/co-work/meeting/${normalizedCode}`)
+    await copyShareLink(
+      toPublicShareUrl(
+        typeof window !== 'undefined'
+          ? window.location.href
+          : `/co-work/meeting/${normalizedCode}`,
+      ),
+    )
     toast.show('Meeting link copied to clipboard', { tone: 'success' })
   }
 

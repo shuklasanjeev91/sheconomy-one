@@ -38,7 +38,8 @@ function seoEqual(a: PageSeo, b: PageSeo) {
     a.image === b.image &&
     a.type === b.type &&
     a.noindex === b.noindex &&
-    a.canonicalPath === b.canonicalPath
+    a.canonicalPath === b.canonicalPath &&
+    JSON.stringify(a.jsonLd ?? null) === JSON.stringify(b.jsonLd ?? null)
   )
 }
 
@@ -124,6 +125,12 @@ function RouteSeoTags({ getOverride }: { getOverride: () => PageSeo | null }) {
       <meta name="twitter:title" content={title} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={imageUrl} />
+      {seo.jsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(seo.jsonLd) }}
+        />
+      ) : null}
     </>
   )
 }
@@ -143,6 +150,8 @@ export function usePageSeo(seo: PageSeo | null | undefined) {
     context.primeOverride(seo)
   }
 
+  const jsonLdKey = seo?.jsonLd ? JSON.stringify(seo.jsonLd) : ''
+
   useEffect(() => {
     if (!context || Platform.OS !== 'web') return
     if (!seo) return
@@ -155,6 +164,7 @@ export function usePageSeo(seo: PageSeo | null | undefined) {
     seo?.type,
     seo?.noindex,
     seo?.canonicalPath,
+    jsonLdKey,
   ])
 
   useEffect(() => {

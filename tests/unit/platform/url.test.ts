@@ -17,7 +17,7 @@ describe('buildAbsoluteUrl', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses sheconomy.in, not window.location or Vercel preview hosts', () => {
+  it('uses www.sheconomy.in, not window.location or Vercel preview hosts', () => {
     vi.stubEnv('EXPO_PUBLIC_WEB_APP_URL', 'https://sheconomy.in')
     vi.stubGlobal('window', {
       location: { origin: 'https://sheconomy-one-eight.vercel.app' },
@@ -35,22 +35,22 @@ describe('buildAbsoluteUrl', () => {
     expect(buildAbsoluteUrl('listings/foo')).toBe(`${DEFAULT_APP_ORIGIN}/listings/foo`)
   })
 
-  it('maps brand aliases (.com / www) and Vercel previews to sheconomy.in', () => {
+  it('maps brand aliases (.com / apex) and Vercel previews to www.sheconomy.in', () => {
     expect(normalizeAppOrigin('https://sheconomy.com')).toBe(DEFAULT_APP_ORIGIN)
-    expect(normalizeAppOrigin('https://www.sheconomy.in/path')).toBe(DEFAULT_APP_ORIGIN)
+    expect(normalizeAppOrigin('https://sheconomy.in/path')).toBe(DEFAULT_APP_ORIGIN)
     expect(canonicalizePublicUrl('https://sheconomy.com/community/post/1')).toBe(
-      'https://sheconomy.in/community/post/1',
+      `${DEFAULT_APP_ORIGIN}/community/post/1`,
     )
     expect(
       canonicalizePublicUrl(
         'https://sheconomy-one-eight.vercel.app/co-work/meeting/ABC',
       ),
-    ).toBe('https://sheconomy.in/co-work/meeting/ABC')
+    ).toBe(`${DEFAULT_APP_ORIGIN}/co-work/meeting/ABC`)
     expect(
       toPublicShareUrl('https://sheconomy-one-eight.vercel.app/community/post/1'),
-    ).toBe('https://sheconomy.in/community/post/1')
-    expect(toPublicShareUrl('https://www.sheconomy.in/listing/bag')).toBe(
-      'https://sheconomy.in/listing/bag',
+    ).toBe(`${DEFAULT_APP_ORIGIN}/community/post/1`)
+    expect(toPublicShareUrl('https://sheconomy.in/listing/bag')).toBe(
+      `${DEFAULT_APP_ORIGIN}/listing/bag`,
     )
   })
 
@@ -75,8 +75,8 @@ describe('buildAbsoluteUrl', () => {
         text: 'Join my meeting',
       }),
     ).toContain(encodeURIComponent('https://www.sheconomy.in/co-work/meeting/EJB-GHW-FJY'))
-    expect(getListingShareUrl('handmade-bag')).toMatch(/^https:\/\/sheconomy\.in\//)
-    expect(getPostShareUrl('abc')).toMatch(/^https:\/\/sheconomy\.in\//)
+    expect(getListingShareUrl('handmade-bag')).toBe(`${DEFAULT_APP_ORIGIN}/listing/handmade-bag`)
+    expect(getPostShareUrl('abc').startsWith(`${DEFAULT_APP_ORIGIN}/`)).toBe(true)
     expect(getProfileShopShareUrl('jane')).toMatch(/\/profile\/jane\/shop$/)
     expect(getShoppableFeedShareUrl()).toContain('shoppable=1')
     expect(getCommunityListingShareUrl('/listing/scarf', 'post-1', 'feed')).toContain('source=feed')
@@ -84,6 +84,6 @@ describe('buildAbsoluteUrl', () => {
       buildShareTargetUrl('whatsapp', {
         url: 'https://sheconomy-one-eight.vercel.app/listing/bag',
       }),
-    ).toContain(encodeURIComponent('https://sheconomy.in/listing/bag'))
+    ).toContain(encodeURIComponent(`${DEFAULT_APP_ORIGIN}/listing/bag`))
   })
 })

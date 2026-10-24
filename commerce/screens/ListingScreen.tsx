@@ -63,7 +63,7 @@ import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
 import { PageCenter, PageScroll, StickyRail } from '~/components/layout'
 import { DeliveryPinCheck } from '~/components/location'
-import { ShareButton } from '~/components/share'
+import { ShareButton, WhatsAppShareButton } from '~/components/share'
 import { openComposer } from '~/community/lib/composer-store'
 import { ShareListingSheet } from '~/chat/components/ShareListingSheet'
 import { listingDetailToChatListing } from '~/chat/lib/listing-message'
@@ -102,6 +102,8 @@ import { buildSignInUrl } from '~/lib/auth/redirect'
 import { getListingShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { usePageSeo } from '~/components/seo/RouteSeo'
+import { productJsonLd } from '~/lib/seo/json-ld'
+import { buildAbsoluteUrl } from '~/lib/platform/url'
 import { trackCommerceEvent } from '~/lib/analytics'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -195,12 +197,29 @@ export function ListingScreen({
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 200)
+      const canonicalPath = String(commerceRoutes.listing(slug ?? listing.slug ?? listing.id))
+      const url = buildAbsoluteUrl(canonicalPath)
+      const stock = listing.stock
+      const quantity = listing.quantity
+      const inStock =
+        listing.listing_status === 'active' &&
+        (stock == null || stock > 0) &&
+        (quantity == null || quantity > 0)
       return {
         title: listing.title,
         description: plainDescription || undefined,
         image: primaryImage,
         type: 'product' as const,
-        canonicalPath: String(commerceRoutes.listing(slug ?? listing.slug ?? listing.id)),
+        canonicalPath,
+        jsonLd: productJsonLd({
+          name: listing.title,
+          description: plainDescription,
+          image: primaryImage,
+          url,
+          price: listing.price,
+          currency: listing.shops?.shop_currency,
+          inStock,
+        }),
       }
     }, [listing, images, slug]),
   )
@@ -522,7 +541,7 @@ export function ListingScreen({
     setShareChatOpen(true)
   }
   const listingShareButton = (
-    <XStack gap="$1.5" alignItems="center">
+    <XStack gap="$1.5" alignItems="center" flexWrap="wrap">
       <Button
         tone="ghost"
         size="$3"
@@ -549,6 +568,15 @@ export function ListingScreen({
           url: getListingShareUrl(listingShareSlug),
           title: listing.title,
           text: listing.shops?.shop_name ? `From ${listing.shops.shop_name}` : undefined,
+        }}
+      />
+      <WhatsAppShareButton
+        payload={{
+          url: getListingShareUrl(listingShareSlug),
+          title: listing.title,
+          text: listing.shops?.shop_name
+            ? `${listing.title} from ${listing.shops.shop_name} on SHEconomy`
+            : `${listing.title} on SHEconomy`,
         }}
       />
     </XStack>

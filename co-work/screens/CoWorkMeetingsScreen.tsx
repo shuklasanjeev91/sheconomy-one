@@ -34,6 +34,7 @@ import { navigateApp } from '~/lib/platform/navigate'
 import type { Meeting } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
+import { buildAppUrl } from '~/config/app-origin'
 import { copyShareLink } from '~/lib/share'
 
 function formatWhen(meeting: Meeting) {
@@ -156,7 +157,7 @@ export function CoWorkMeetingsScreen() {
   }
 
   const handleCopyPmi = async () => {
-    await copyShareLink(`https://sheconomy.in/co-work/join?code=${userPmi.replace(/\s/g, '')}`)
+    await copyShareLink(buildAppUrl(`/co-work/join?code=${userPmi.replace(/\s/g, '')}`))
     toast.show('PMI Link Copied to clipboard', { tone: 'success' })
   }
 

@@ -11,7 +11,7 @@ export const SITE_NAME = 'SHEconomy'
 export const DEFAULT_DESCRIPTION =
   'SHEconomy is a women-first marketplace and community: shop from women-led businesses, join groups and events, find jobs, learn with classes, and grow together.'
 
-export const DEFAULT_OG_IMAGE = '/app-icon.png'
+export const DEFAULT_OG_IMAGE = '/brand-logo-1024.png'
 
 export type PageSeo = {
   /** Page title without the site suffix. */
@@ -24,6 +24,8 @@ export type PageSeo = {
   noindex?: boolean
   /** Overrides the canonical path (defaults to the current pathname). */
   canonicalPath?: string
+  /** Schema.org JSON-LD object rendered on web. */
+  jsonLd?: Record<string, unknown>
 }
 
 export function buildPageTitle(title?: string | null) {

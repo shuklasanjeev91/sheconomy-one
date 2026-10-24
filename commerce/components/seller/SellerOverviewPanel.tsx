@@ -4,7 +4,7 @@ import { SellerDraftsCard } from '~/commerce/components/seller/SellerDraftsCard'
 import { SellerLowStockCard } from '~/commerce/components/seller/SellerLowStockCard'
 import { CommercePanel } from '~/commerce/components'
 import type { ShopDashboardData } from '~/commerce/lib/seller-dashboard'
-import { ShareButton } from '~/components/share'
+import { ShareButton, WhatsAppShareButton } from '~/components/share'
 import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
 import { BRAND_NAME } from '~/config/brand'
 import { formatCurrency } from '~/lib/format'
@@ -32,6 +32,7 @@ export function SellerOverviewPanel({
   const sales = dashboard.sales
   const publicHref = commerceRoutes.shop(shopSlug ?? shopId)
   const shopShareSlug = shopSlug ?? shopId
+  const shopName = summary?.shopName?.trim() || 'my shop'
 
   return (
     <YStack gap="$4" width="100%">
@@ -97,6 +98,14 @@ export function SellerOverviewPanel({
                 url: getShopShareUrl(shopShareSlug),
                 title: `Shop on ${BRAND_NAME}`,
                 text: `Browse my shop on ${BRAND_NAME}`,
+              }}
+            />
+            <WhatsAppShareButton
+              label="Send on WhatsApp"
+              payload={{
+                url: getShopShareUrl(shopShareSlug),
+                title: shopName,
+                text: `I sell on ${BRAND_NAME}. You can see ${shopName} here:`,
               }}
             />
           </XStack>

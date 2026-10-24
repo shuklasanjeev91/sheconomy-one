@@ -6,7 +6,7 @@ import { SellerTrustStrip } from '~/commerce/components/SellerTrustStrip'
 import { StarRating } from '~/commerce/components/StarRating'
 import type { ReviewSummary } from '~/commerce/lib/reviews'
 import { AppLink } from '~/components/navigation/AppLink'
-import { ShareButton } from '~/components/share'
+import { ShareButton, WhatsAppShareButton } from '~/components/share'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { getShopShareUrl } from '~/lib/share'
 import { commerceRoutes } from '~/lib/routes'
@@ -240,6 +240,13 @@ export function ShopHero({
               url: getShopShareUrl(shopSlug),
               title: shopName,
               text: description ?? undefined,
+            }}
+          />
+          <WhatsAppShareButton
+            payload={{
+              url: getShopShareUrl(shopSlug),
+              title: shopName,
+              text: `${shopName} on SHEconomy`,
             }}
           />
           {websiteUrl ? (

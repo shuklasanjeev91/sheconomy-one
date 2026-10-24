@@ -7,7 +7,9 @@ import {
   buildAndroidAutoIntentUrl,
   buildAndroidIntentUrl,
   buildOpenInAppSchemeUrl,
+  buildSmartAppBannerContent,
   getWebPathForApp,
+  IOS_APP_STORE_URL,
   launchNativeApp,
 } from '~/lib/platform/open-in-app'
 
@@ -25,14 +27,21 @@ const MEETING_PATH = /^\/co-?work\/meeting\//i
  *
  * - Android: a scheme-only `intent://` that no-ops when the app is missing.
  * - iOS: only inside a known in-app browser, where Universal Links never fire.
- *   In real Safari the scheme would raise "address is invalid" for visitors
- *   without the app, so the banner button stays the only trigger there.
+ *   The banner button tries the app, then opens the App Store if it does not.
  */
 export function OpenInAppHost() {
   const [visible, setVisible] = useState(false)
   const device = detectMobileDevice()
   // Meeting pages hand off from the lobby card; a banner there would cover call controls.
-  const onMeetingPage = MEETING_PATH.test(usePathname() ?? '')
+  const pathname = usePathname() ?? ''
+  const onMeetingPage = MEETING_PATH.test(pathname)
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const meta = document.querySelector('meta[name="apple-itunes-app"]')
+    if (!meta) return
+    meta.setAttribute('content', buildSmartAppBannerContent(getWebPathForApp()))
+  }, [pathname])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -99,7 +108,9 @@ export function OpenInAppHost() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>Open in {BRAND_NAME}</div>
           <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 12, marginTop: 2 }}>
-            Continue in the app for the full experience
+            {device.isAndroid
+              ? 'Opens the app, or the Play Store if it is not installed'
+              : 'Opens the app, or the App Store if it is not installed'}
           </div>
         </div>
         <button
@@ -148,5 +159,13 @@ export function OpenInAppHost() {
 function openNativeApp(isAndroid: boolean) {
   if (typeof window === 'undefined') return
   const path = getWebPathForApp()
-  launchNativeApp(isAndroid ? buildAndroidIntentUrl(path) : buildOpenInAppSchemeUrl(path))
+  if (isAndroid) {
+    launchNativeApp(buildAndroidIntentUrl(path))
+    return
+  }
+  launchNativeApp(buildOpenInAppSchemeUrl(path), {
+    onResult: (opened) => {
+      if (!opened) window.location.href = IOS_APP_STORE_URL
+    },
+  })
 }

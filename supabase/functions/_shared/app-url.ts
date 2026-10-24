@@ -1,5 +1,5 @@
 /** Canonical production web origin for emails, push, and invite links. */
-export const DEFAULT_PUBLIC_APP_ORIGIN = 'https://sheconomy.in'
+export const DEFAULT_PUBLIC_APP_ORIGIN = 'https://www.sheconomy.in'
 
 function isEphemeralHost(hostname: string): boolean {
   const host = hostname.toLowerCase()
@@ -25,7 +25,7 @@ function isBrandAliasHost(hostname: string): boolean {
   )
 }
 
-/** Resolve PUBLIC_APP_URL / APP_URL to the canonical sheconomy.in origin. */
+/** Resolve PUBLIC_APP_URL / APP_URL to the canonical www.sheconomy.in origin. */
 export function resolvePublicAppOrigin(): string {
   const candidates = [
     Deno.env.get('PUBLIC_APP_URL'),
@@ -68,7 +68,7 @@ export function resolvePaymentAppOrigin(preferred?: string | null): string {
 
 /**
  * Absolute public URL for notifications / emails.
- * Rewrites vercel / sheconomy.com / www onto https://sheconomy.in.
+ * Rewrites vercel / sheconomy.com / apex onto https://www.sheconomy.in.
  */
 export function toCanonicalPublicUrl(url: string | null | undefined): string | null {
   if (!url) return null

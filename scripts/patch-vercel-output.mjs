@@ -28,10 +28,12 @@ function patchVercelOutputConfig() {
     }
   })
 
-  config.routes = [{ handle: 'filesystem' }, { handle: 'rewrite' }, ...patched]
+  const sitemapRoute = { src: '^/sitemap\\.xml$', dest: '/api/sitemap' }
+  const withoutSitemap = patched.filter((route) => route.dest !== '/api/sitemap')
+  config.routes = [{ handle: 'filesystem' }, { handle: 'rewrite' }, sitemapRoute, ...withoutSitemap]
 
   writeFileSync(configPath, `${JSON.stringify(config)}\n`)
-  console.log('[patch-vercel-output] patched routes for /assets + filesystem handle')
+  console.log('[patch-vercel-output] patched routes for /assets, filesystem, and /sitemap.xml')
 }
 
 /**

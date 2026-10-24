@@ -1,14 +1,16 @@
 /** Custom URL scheme — opens the native app (sheconomy://path). */
 export const APP_SCHEME = 'sheconomy'
 
-/** Default production web origin when env vars are unset. */
-export const DEFAULT_APP_ORIGIN = 'https://sheconomy.in'
+/**
+ * Production web origin. The apex 308s here, and this is the host Google,
+ * share sheets, and canonical tags should use.
+ */
+export const DEFAULT_APP_ORIGIN = 'https://www.sheconomy.in'
 
 /**
- * Host used only for incoming Universal Links / App Links. Android Digital
- * Asset Links and Apple AASA are registered on `www` (the apex 308s and
- * those fetchers do not follow redirects). Share sheets and copied links still
- * use `DEFAULT_APP_ORIGIN` (`https://sheconomy.in`).
+ * Host used for incoming Universal Links / App Links. Android Digital Asset
+ * Links and Apple AASA are registered on `www` (the apex 308s and those
+ * fetchers do not follow redirects). Share links use the same host.
  */
 export const DEEP_LINK_ORIGIN = 'https://www.sheconomy.in'
 
@@ -56,7 +58,7 @@ function parseOrigin(value: string): string | undefined {
 /**
  * Normalize a candidate origin for public share / notification / deep links.
  * Ephemeral hosts (*.vercel.app, localhost, …) and brand aliases collapse to
- * https://sheconomy.in. Unknown non-ephemeral origins are kept (staging).
+ * https://www.sheconomy.in. Unknown non-ephemeral origins are kept (staging).
  */
 export function normalizeAppOrigin(value?: string | null): string {
   if (!value) return DEFAULT_APP_ORIGIN
@@ -151,7 +153,7 @@ export function resolveDeepLinkOrigin(): string {
 
 /**
  * Public HTTPS URL for share sheets, OG tags, invites, and copied links.
- * Always the apex production domain — never a Vercel preview host or www.
+ * Always https://www.sheconomy.in — never a Vercel preview host.
  */
 export function buildAppUrl(path: string): string {
   const normalized = path.startsWith('/') ? path : `/${path}`
