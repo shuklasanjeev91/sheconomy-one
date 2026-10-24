@@ -16,7 +16,7 @@ type CommentSuggestionChipsProps = {
   disabled?: boolean
 }
 
-const AI_SUGGESTION_TIMEOUT_MS = 4500
+const AI_SUGGESTION_TIMEOUT_MS = 8000
 const aiSuggestionCache = new Map<string, string[]>()
 
 function withSuggestionTimeout<T>(promise: Promise<T>, timeoutMs = AI_SUGGESTION_TIMEOUT_MS): Promise<T | null> {
@@ -62,11 +62,11 @@ export function CommentSuggestionChips({
 
     let cancelled = false
     setLoadingAi(true)
-    const waitMs = stableContext.imageUrl ? 12000 : AI_SUGGESTION_TIMEOUT_MS
-    void withSuggestionTimeout(fetchCommentSuggestions(stableContext), waitMs)
+    void withSuggestionTimeout(fetchCommentSuggestions(stableContext), AI_SUGGESTION_TIMEOUT_MS)
       .then((rows) => {
-        if (cancelled) return
-        const next = rows?.slice(0, 6) ?? []
+        if (cancelled || !rows) return
+        const next = rows.slice(0, 6)
+        if (!next.length) return
         aiSuggestionCache.set(contextKey, next)
         setSuggestions(next)
       })
