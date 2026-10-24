@@ -9,7 +9,8 @@ import {
   loadMessageDraft,
   saveMessageDraft,
 } from '~/chat/lib/message-drafts'
-import { fetchCommentSuggestions } from '~/lib/ai'
+import { localChatQuickReplies } from '~/chat/lib/quick-replies'
+import { fetchChatSuggestions } from '~/lib/ai'
 import type { ChatComposerAttachment, ChatMessage } from '~/chat/lib/types'
 import { HorizontalScrollRow } from '~/components/layout'
 import { MediaDropZone } from '~/components/media/MediaDropZone'
@@ -368,19 +369,23 @@ export function MessageComposer({
   const suggestionSource = (replyTo?.content || latestMessage || '').trim()
   const suggestionName = (replyTo ? replySenderName : peerName) || ''
 
+  const localReplies = showQuickReplies
+    ? localChatQuickReplies({ isReply: Boolean(replyTo), peerName: suggestionName })
+    : []
+
   useEffect(() => {
-    if (!showQuickReplies || (!suggestionSource && !suggestionName.trim())) {
+    if (!showQuickReplies) {
       setSuggestions([])
       return
     }
     let cancelled = false
-    void fetchCommentSuggestions({
-      content: suggestionSource,
-      authorName: suggestionName,
-      parentComment: replyTo?.content ?? null,
+    setSuggestions([])
+    void fetchChatSuggestions({
+      peerName: suggestionName,
+      latestMessage: suggestionSource,
     })
       .then((rows) => {
-        if (!cancelled) setSuggestions(rows.slice(0, 3))
+        if (!cancelled && rows.length) setSuggestions(rows.slice(0, 3))
       })
       .catch(() => {
         if (!cancelled) setSuggestions([])
@@ -388,9 +393,9 @@ export function MessageComposer({
     return () => {
       cancelled = true
     }
-  }, [replyTo?.content, showQuickReplies, suggestionName, suggestionSource])
+  }, [showQuickReplies, suggestionName, suggestionSource])
 
-  const quickReplies = showQuickReplies ? suggestions : []
+  const quickReplies = suggestions.length ? suggestions : localReplies
 
   return (
     <MediaDropZone

@@ -88,6 +88,23 @@ export async function sendAiSuggestionFeedback(params: AiFeedbackParams): Promis
   })
 }
 
+/** Short lines for the open chat: a greeting, or a reply to the latest message. */
+export async function fetchChatSuggestions(params: {
+  peerName?: string | null
+  latestMessage?: string | null
+}): Promise<string[]> {
+  const result = await invokeAiAssist<{ suggestions?: string[] }>({
+    action: 'chat_suggestions',
+    product: 'chat',
+    context: {
+      peer_name: params.peerName?.trim() || null,
+      latest_message: params.latestMessage?.trim() || null,
+    },
+  })
+  if (!result || !Array.isArray(result.suggestions)) return []
+  return result.suggestions.map((line) => String(line).trim()).filter(Boolean).slice(0, 3)
+}
+
 /** Professional comment starters for a community post. */
 export async function fetchCommentSuggestions(
   params: CommentSuggestionParams,

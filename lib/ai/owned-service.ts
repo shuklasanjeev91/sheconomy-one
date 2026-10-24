@@ -26,6 +26,7 @@ const OWNED_ACTIONS = new Set([
   'suggestions',
   'ai_search',
   'comment_suggestions',
+  'chat_suggestions',
   'meeting_draft',
   'post_draft',
   'post_suggestions',

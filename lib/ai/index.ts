@@ -25,6 +25,7 @@ export {
   draftPostWithAi,
   draftShopWithAi,
   fetchAiSuggestions,
+  fetchChatSuggestions,
   fetchCommentSuggestions,
   fetchPostSuggestions,
   fetchWritingIssues,
