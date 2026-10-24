@@ -28,6 +28,7 @@ import {
   availableSearchScopes,
   canAccessSearchScope,
   federatedSearch,
+  isShopSetupQuestion,
   isTripListingText,
   isWeekendPlanQuery,
   runAiSearch,
@@ -39,7 +40,7 @@ import {
 } from '~/lib/search'
 import type { AiEntityHit, AiResultKind, AiSearchGroup } from '~/lib/ai/types'
 import { getPublicShops } from '~/lib/shop/shop.service'
-import { appRoutes, commerceRoutes } from '~/lib/routes'
+import { appRoutes, commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -398,6 +399,36 @@ export function UnifiedSearchScreen({
                 : 'Search'}
           </Text>
 
+          {query && isShopSetupQuestion(query) ? (
+            <YStack
+              gap="$2"
+              padding="$3.5"
+              borderRadius={14}
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+              backgroundColor={ui.surface}
+            >
+              <Text fontSize={16} fontWeight="800" color={ui.text}>
+                Create a shop
+              </Text>
+              <Text fontSize={14} color={ui.text} lineHeight={21}>
+                Open Create shop from the menu, or go to Create shop. Sign in first. If verification is still pending, finish it, then continue. After the shop exists, manage it from Manage shop.
+              </Text>
+              <XStack gap="$3" flexWrap="wrap">
+                <AppLink href={commerceRoutes.createShop}>
+                  <Text fontSize={14} fontWeight="700" color={ui.brand}>
+                    Create shop
+                  </Text>
+                </AppLink>
+                <AppLink href={vendorRoutes.myShop}>
+                  <Text fontSize={14} fontWeight="700" color={ui.brand}>
+                    Manage shop
+                  </Text>
+                </AppLink>
+              </XStack>
+            </YStack>
+          ) : null}
+
           {aiMode && query ? (
             <YStack
               gap="$2"
@@ -502,6 +533,11 @@ export function UnifiedSearchScreen({
               aiResultKind !== 'shop' &&
               aiHits.length > 0 ? (
                 <YStack gap="$2" width="100%">
+                  {aiAnswer ? (
+                    <Text fontSize={14} color={ui.text} lineHeight={21}>
+                      {aiAnswer}
+                    </Text>
+                  ) : null}
                   {aiHits.map((hit) => {
                     const mapped = entityHitToSearchHit(hit)
                     return mapped ? (

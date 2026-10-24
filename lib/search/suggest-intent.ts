@@ -3,6 +3,7 @@ import type { SearchScope } from '~/lib/search/types'
 const PEOPLE =
   /\b(entrepren\w*|enterpren\w*|founders?|business owners?|people|members|profiles)\b/i
 const SHOP = /\b(shops?|stores?|sellers?)\b/i
+const SHOP_SETUP = /\b(how|open|create)\b/i
 const SELLER_ADMIN = /\b(manage shop|low stock|payouts?|inventory|fulfill|my shop)\b/i
 const PRODUCT =
   /\b(t[\s-]?shirts?|sarees?|lehengas?|kurtas?|kurtis?|sherwanis?|jeans|dresses?|shoes?|bags?|gifts?|clothes|clothing|outfits?|apparel)\b|\bshop\s+for\b/i
@@ -50,9 +51,15 @@ const SKIP = new Set([
 
 export type SuggestIntent = 'person' | 'shop' | 'job' | 'program' | 'post' | 'company' | 'listing'
 
+/** “How do I open or create a shop” is setup help, not a directory of shops. */
+export function isShopSetupQuestion(query: string): boolean {
+  return SHOP.test(query) && SHOP_SETUP.test(query)
+}
+
 /** What the typed sentence is asking for. Product words stay on listings. */
 export function suggestIntent(query: string): SuggestIntent {
   const lower = query.toLowerCase()
+  if (isShopSetupQuestion(lower)) return 'listing'
   if (PRODUCT.test(lower)) return 'listing'
   if (PEOPLE.test(lower)) return 'person'
   if (SHOP.test(lower) && !SELLER_ADMIN.test(lower)) return 'shop'
@@ -64,6 +71,7 @@ export function suggestIntent(query: string): SuggestIntent {
 }
 
 export function suggestScope(query: string): SearchScope | null {
+  if (isShopSetupQuestion(query)) return 'listings'
   switch (suggestIntent(query)) {
     case 'person':
       return 'people'
