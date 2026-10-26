@@ -19,7 +19,7 @@ type ProductHelpBannerProps = {
 }
 
 /**
- * Compact Help + Ask AI strip for product homes and secondary surfaces.
+ * Compact Help + Ask SHERPA strip for product homes and secondary surfaces.
  */
 export function ProductHelpBanner({
   product,
@@ -80,7 +80,7 @@ export function ProductHelpBanner({
         >
           <Icons.Sparkles size={14} color={ui.onBrand} />
           <Text fontSize={12} fontWeight="700" color={ui.onBrand}>
-            Ask AI
+            Ask {AI_NAME}
           </Text>
         </XStack>
       ) : null}

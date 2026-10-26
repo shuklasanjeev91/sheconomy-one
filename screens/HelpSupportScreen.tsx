@@ -532,7 +532,7 @@ export function HelpSupportScreen({ audience = 'customer' }: { audience?: HelpAu
                                     void askSherpa(article.title)
                                   }}
                                 >
-                                  Ask AI
+                                  Ask {AI_NAME}
                                 </Button>
                               </XStack>
                               {related.length ? (
@@ -796,7 +796,7 @@ export function HelpSupportScreen({ audience = 'customer' }: { audience?: HelpAu
                                       )
                                     }}
                                   >
-                                    Ask AI about this
+                                    Ask {AI_NAME} about this
                                   </Button>
                                 </XStack>
                               ) : null}

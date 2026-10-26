@@ -42,6 +42,7 @@ import type { AiEntityHit, AiResultKind, AiSearchGroup } from '~/lib/ai/types'
 import { getPublicShops } from '~/lib/shop/shop.service'
 import { appRoutes, commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { navigateApp, replaceApp } from '~/lib/platform/navigate'
+import { AI_NAME } from '~/config/brand'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type UnifiedSearchScreenProps = {
@@ -441,7 +442,7 @@ export function UnifiedSearchScreen({
               <XStack alignItems="center" gap="$2">
                 <Icons.Sparkles size={16} color={ui.brand} />
                 <Text fontSize={13} fontWeight="700" color={ui.text}>
-                  Ask AI
+                  Ask {AI_NAME}
                 </Text>
               </XStack>
               {aiLoading ? (
@@ -691,7 +692,7 @@ export function UnifiedSearchScreen({
           <YStack gap="$4" width="100%">
             <Text fontSize={14} color={ui.textSecondary}>
               Search listings, shops, people, companies, groups, jobs, posts, programs, and
-              meetings. Use the camera, mic, or Ask AI in the search bar.
+              meetings. Use the camera, mic, or Ask {AI_NAME} in the search bar.
             </Text>
             {history.length > 0 ? (
               <YStack gap="$3" width="100%">

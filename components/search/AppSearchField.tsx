@@ -26,6 +26,7 @@ import { buildAiSearchHref } from '~/lib/search/ai-search'
 import { suggestScope } from '~/lib/search/suggest-intent'
 import { appRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
+import { AI_NAME } from '~/config/brand'
 import { QA } from '~/lib/qa/test-ids'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -111,7 +112,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
 
   const fieldHeight = compact ? 40 : isDesktop ? 44 : 42
   const showFocusRing = focused || open
-  const placeholder = 'Search for anything'
+  const placeholder = `Search anything or Ask ${AI_NAME}`
 
   const voice = useVoiceSearch({
     onPartial: (text) => {
@@ -187,9 +188,9 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
     void voice.stop()
     if (mode === 'ai') {
       if (!trimmed) {
-        toast.show('Ask AI', {
+        toast.show(`Ask ${AI_NAME}`, {
           tone: 'danger',
-          message: 'Describe what you are looking for, then tap Ask AI.',
+          message: `Describe what you are looking for, then tap Ask ${AI_NAME}.`,
         })
         return
       }
@@ -326,7 +327,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
 
         {showAskAi ? (
           <SearchIconButton
-            label="Ask AI search"
+            label={`Ask ${AI_NAME}`}
             onPress={() => submitSearch(undefined, 'ai')}
             disabled={!query.trim()}
           >

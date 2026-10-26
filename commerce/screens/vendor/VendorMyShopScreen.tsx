@@ -36,6 +36,7 @@ import { fetchLowStockListings, type LowStockListing } from '~/commerce/lib/low-
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
+import { AI_NAME } from '~/config/brand'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type IconType = (typeof Icons)[keyof typeof Icons]
@@ -601,7 +602,7 @@ function MainColumn({
               }
               onPress={onAskLowStockAdvice}
             >
-              {adviceLoading ? 'Asking AI…' : 'Ask AI what to do'}
+              {adviceLoading ? `Asking ${AI_NAME}…` : `Ask ${AI_NAME} what to do`}
             </Button>
             <AppLink href={vendorRoutes.products as Href} asChild>
               <Button size="$3" tone="primary" borderRadius={999}>

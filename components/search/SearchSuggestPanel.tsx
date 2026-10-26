@@ -1,4 +1,5 @@
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { AI_NAME } from '~/config/brand'
 import { AdaptiveTypeaheadPanel } from '~/components/search/AdaptiveTypeaheadPanel'
 import { SearchHitRow } from '~/components/search/SearchHitRow'
 import { SuggestSectionHeader } from '~/components/search/SuggestSectionHeader'
@@ -54,7 +55,7 @@ export function SearchSuggestPanel({
           alignItems="center"
           gap="$2.5"
           accessibilityRole="button"
-          aria-label="Ask AI to search"
+          aria-label={`Ask ${AI_NAME} to search`}
         >
           <YStack
             width={32}
@@ -68,7 +69,7 @@ export function SearchSuggestPanel({
           </YStack>
           <YStack flex={1} minWidth={0} gap={2}>
             <Text fontSize={14} fontWeight="600" color={ui.text} numberOfLines={1}>
-              Ask AI: “{trimmed}”
+              Ask {AI_NAME}: “{trimmed}”
             </Text>
             <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
               {suggestHint(trimmed)}
@@ -171,7 +172,7 @@ export function SearchSuggestPanel({
       maxHeight={440}
       searchValue={query}
       onSearchChange={onQueryChange}
-      searchPlaceholder="Search everywhere"
+      searchPlaceholder={`Search anything or Ask ${AI_NAME}`}
     >
       {body}
     </AdaptiveTypeaheadPanel>
