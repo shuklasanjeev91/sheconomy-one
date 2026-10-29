@@ -1,4 +1,13 @@
-import { existsSync, readdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 
 /**
@@ -341,9 +350,41 @@ function consolidateSsrFunctions() {
   )
 }
 
+/**
+ * Google Play rejects privacy-policy URLs that are JS-only SPA shells
+ * ("Invalid Privacy policy"). Ship a plain-HTML policy that crawlers can
+ * read without executing JavaScript, and overwrite the SPA shell at
+ * `/legal/privacy` so the URL already linked in Play Console works.
+ */
+function patchStaticPrivacyPolicy() {
+  const source = resolve(process.cwd(), 'public/privacy-policy.html')
+  if (!existsSync(source)) {
+    console.warn('[patch-vercel-output] public/privacy-policy.html missing — skip')
+    return
+  }
+
+  const targets = [
+    resolve(process.cwd(), 'dist/client/privacy-policy.html'),
+    resolve(process.cwd(), 'dist/client/legal/privacy.html'),
+    resolve(process.cwd(), '.vercel/output/static/privacy-policy.html'),
+    resolve(process.cwd(), '.vercel/output/static/legal/privacy.html'),
+  ]
+
+  let written = 0
+  for (const target of targets) {
+    mkdirSync(dirname(target), { recursive: true })
+    copyFileSync(source, target)
+    written += 1
+  }
+  console.log(
+    `[patch-vercel-output] static privacy policy copied to ${written} paths (Play-crawler safe)`,
+  )
+}
+
 patchVercelOutputConfig()
 consolidateSsrFunctions()
 patchWellKnownHeaders()
 patchInstantNavInRouterBundles()
 patchFunctionRuntimes()
 patchSsrCacheHeaders()
+patchStaticPrivacyPolicy()

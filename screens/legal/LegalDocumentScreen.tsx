@@ -37,23 +37,27 @@ const COPY: Record<
   },
   privacy: {
     title: 'Privacy policy',
-    updated: 'August 1, 2026',
+    updated: 'October 29, 2026',
     sections: [
       {
         heading: 'Who we are',
-        body: `${BRAND_NAME} (“we”, “us”) operates the ${BRAND_NAME} marketplace, community, chat, classes, and co-work meeting experiences. This policy explains what data we collect, how we use it, who we share it with, and how you can control or delete it.`,
+        body: `${BRAND_NAME} Pvt Ltd (“we”, “us”) operates the ${BRAND_NAME} marketplace, community, chat, classes, and co-work meeting experiences on web, iOS, and Android (including package com.sheconomy.ecommerce). This Privacy Policy explains what personal data we collect, how we use it, who we share it with, how we protect it, and how you can control or delete it.`,
       },
       {
         heading: 'What we collect',
-        body: `We collect account details (email, phone, name, profile photo), profile and shop information, marketplace activity (listings, orders, addresses, payments metadata), community content (posts, comments, messages), device and usage data needed for security and performance, and optional permissions you grant — camera and microphone for video meetings and gender/liveness verification, photos for uploads, contacts you choose to connect with, and location while using address or nearby-shop features.`,
+        body: `We collect account details (email, phone, name, profile photo, Apple/Google sign-in identifiers), profile and shop information, marketplace activity (listings, orders, addresses, payment metadata), community content (posts, comments, messages), device and usage data needed for security and performance, push notification tokens when enabled, and optional permissions you grant — camera and microphone for video meetings and gender/liveness verification, photos for uploads, contacts you choose to connect with, and location while using address or nearby-shop features. Precise location is optional and not used in the background.`,
       },
       {
         heading: 'How we use information',
-        body: 'We use your information to provide and improve the product, personalize discovery (including region and currency preferences), process orders and payments, enable chat and meetings, send transactional and optional marketing notifications, prevent fraud and abuse, and keep the community safe.',
+        body: 'We use your information to provide and improve the product, authenticate accounts, personalize discovery (including region and currency preferences), process orders and payments, enable chat and meetings, send transactional and optional marketing notifications, prevent fraud and abuse, comply with legal obligations, and keep the community safe.',
       },
       {
         heading: 'Third parties',
-        body: 'We use service providers that process data on our behalf under contractual protections comparable to this policy, including hosting and auth (Supabase), push notifications (OneSignal), real-time meetings (our media servers hosted on Amazon Web Services), payment processors for checkout, analytics (for example Microsoft Clarity where enabled), and Apple/Google for sign-in and store distribution. We do not sell your personal information.',
+        body: 'We do not sell your personal information. We use service providers that process data on our behalf under contractual protections comparable to this policy, including hosting and auth (Supabase), push notifications (OneSignal), real-time meetings (our media servers hosted on Amazon Web Services), payment processors for checkout, analytics (for example Microsoft Clarity where enabled), and Apple/Google for sign-in and store distribution. We may disclose information if required by law or to protect rights and safety.',
+      },
+      {
+        heading: 'Data security',
+        body: 'We use industry-standard safeguards appropriate to the sensitivity of the data, including encrypted transport (HTTPS/TLS), access controls, and secure authentication. No method of transmission or storage is 100% secure, but we work to prevent unauthorized access, alteration, or disclosure.',
       },
       {
         heading: 'Retention and deletion',
@@ -61,11 +65,15 @@ const COPY: Record<
       },
       {
         heading: 'Your choices',
-        body: 'You can review privacy-related controls in Settings → Privacy, manage notifications on your device, and manage country, language, and currency from the marketplace footer. You may withdraw optional permissions in system settings; some features will not work without them.',
+        body: 'You can review privacy-related controls in Settings → Privacy, manage notifications on your device, and manage country, language, and currency from the marketplace footer. You may withdraw optional permissions in system settings; some features will not work without them. You may also request access, correction, or deletion of your personal data.',
+      },
+      {
+        heading: 'Children’s privacy',
+        body: `${BRAND_NAME} is not directed to children under 13 (or the minimum age required in your country). We do not knowingly collect personal information from children. If you believe a child has provided personal data, contact us and we will take appropriate steps to delete it.`,
       },
       {
         heading: 'Contact',
-        body: 'Privacy questions and data requests can be sent through Help Center → Contact us.',
+        body: `Privacy questions and data requests: privacy@sheconomy.com, or Help Center → Contact us. Controller: ${BRAND_NAME} Pvt Ltd. Website: https://www.sheconomy.in`,
       },
     ],
   },

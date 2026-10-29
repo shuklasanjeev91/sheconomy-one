@@ -14,9 +14,35 @@
     {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy-policy.html"
     }
   ],
   "headers": [
+    {
+      "source": "/privacy-policy.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300"
+        },
+        {
+          "key": "Content-Type",
+          "value": "text/html; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/legal/privacy",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300"
+        }
+      ]
+    },
     {
       "source": "/robots.txt",
       "headers": [
