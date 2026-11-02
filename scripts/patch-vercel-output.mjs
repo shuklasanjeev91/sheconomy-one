@@ -115,6 +115,14 @@ function patchWellKnownHeaders() {
       continue: true,
     },
     {
+      src: '/\\.well-known/apple-developer-merchantid-domain-association',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Cache-Control': 'public, max-age=3600',
+      },
+      continue: true,
+    },
+    {
       src: '/\\.well-known/assetlinks\\.json',
       headers: {
         'Content-Type': 'application/json',
@@ -127,7 +135,11 @@ function patchWellKnownHeaders() {
   // Drop prior well-known header routes so re-runs stay idempotent.
   const withoutOld = routes.filter((route) => {
     const src = typeof route?.src === 'string' ? route.src : ''
-    return !src.includes('.well-known/apple-app-site-association') && !src.includes('.well-known/assetlinks')
+    return (
+      !src.includes('.well-known/apple-app-site-association') &&
+      !src.includes('.well-known/apple-developer-merchantid-domain-association') &&
+      !src.includes('.well-known/assetlinks')
+    )
   })
 
   config.routes = [...wellKnownHeaders, ...withoutOld]
