@@ -112,8 +112,8 @@ export function VendorWalletScreen() {
           Shipping credit
         </Text>
         <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
-          Buyer-paid freight is credited here when an order is paid. Labels debit this balance —
-          recharge if you fall short of pending freight.
+          0% commission — you fund this wallet. Every shipping label, return, and RTO charge is
+          auto-debited here. Top up before processing orders.
         </Text>
       </YStack>
 
@@ -191,7 +191,7 @@ export function VendorWalletScreen() {
             {loading ? '…' : formatOrderAmount(status?.pendingCost ?? 0, currency)}
           </Text>
           <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-            Sum of open order shipping quotes credited for shipping labels
+            Open order freight you should keep funded in this wallet
             {status && status.pendingOrderCount > 0
               ? ` · ${status.pendingOrderCount} open order${status.pendingOrderCount === 1 ? '' : 's'}`
               : ''}

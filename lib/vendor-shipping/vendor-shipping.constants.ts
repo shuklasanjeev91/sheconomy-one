@@ -9,8 +9,8 @@ export const GETTING_STARTED_STEPS = [
     id: 'fund-easyship',
     title: 'Fund shipping credit',
     description:
-      'Buyer-paid DDP freight credits your Easyship shipping ledger on payment. Top up under Shipping credit if balance is short.',
-    compactDescription: 'Keep Easyship shipping credit funded',
+      'SHEconomy takes 0% commission. Fund your shipping wallet yourself — every label, return, and RTO charge is auto-debited from it.',
+    compactDescription: 'Keep shipping credit funded (seller-paid)',
   },
   {
     id: 'add-custom',

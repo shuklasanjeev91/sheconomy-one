@@ -6,7 +6,7 @@
 2. Single Pay → Edge Function `commerce-create-checkout` (idempotency key):
    - Validates cart, stock, and seller KYC (`payu_verified` when a KYC row exists).
    - Calls `atomic_marketplace_checkout` → **one** `commerce_checkout_groups` row + **N** child orders (items + `order_delivery` + inventory reservations) + **N** per-shop payment steps (`platform_fee_amount: 0`).
-   - Per-shop shipping from delivery profiles (charged amount). Online DDP checkout uses Easyship rates; seller labels debit `easyship_shipping_credits`.
+   - Per-shop shipping from delivery profiles / Easyship DDP is included in the seller absolute split (0% platform fee). Sellers self-fund `easyship_shipping_credits`; labels debit that wallet.
    - Online SHEPay: `finalize_shepay_bundle_charge` → one charge step with `metadata.allocations[]`.
 3. Buyer pays once via hosted/S2S (`shepay-payu-create` → txnid + hash → `https://secure.payu.in/_payment`).
 4. Public webhook `shepay-payu-webhook` (reverse-hash verified, idempotent):

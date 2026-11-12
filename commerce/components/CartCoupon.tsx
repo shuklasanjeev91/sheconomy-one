@@ -11,6 +11,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import { getShadowStyle, radius, touchSlop } from '~/config/tokens'
 import { useCart } from '~/commerce/hooks/useCart'
 import { filterSelectedCartItems } from '~/commerce/lib/cart-selection'
@@ -140,16 +141,16 @@ export function CartCoupon() {
           accessibilityLabel={offersOpen ? 'Hide offers' : 'Show offers'}
           onPress={() => setOffersOpen((open) => !open)}
         >
-          <Icons.Sparkles size={15} color={ui.brand} />
+          <SafeIcon icon={Icons.Sparkles} size={15} color={ui.brand} />
           <Text flex={1} minWidth={0} fontSize={13} fontWeight="700" color={ui.brand}>
             {appliedId
               ? `${otherOffers.length} other ${otherOffers.length === 1 ? 'offer' : 'offers'}`
               : `${otherOffers.length} ${otherOffers.length === 1 ? 'offer' : 'offers'} available`}
           </Text>
           {offersOpen ? (
-            <Icons.ChevronUp size={16} color={ui.brand} />
+            <SafeIcon icon={Icons.ChevronUp} size={16} color={ui.brand} />
           ) : (
-            <Icons.ChevronDown size={16} color={ui.brand} />
+            <SafeIcon icon={Icons.ChevronDown} size={16} color={ui.brand} />
           )}
         </XStack>
 
@@ -177,7 +178,7 @@ export function CartCoupon() {
                       borderRadius={radius.chip}
                       backgroundColor={ui.badgeBrandBg}
                     >
-                      <Icons.Tag size={12} color={ui.badgeBrandText} />
+                      <SafeIcon icon={Icons.Tag} size={12} color={ui.badgeBrandText} />
                       <Text fontSize={12} fontWeight="800" color={ui.badgeBrandText}>
                         {offer.code}
                       </Text>
@@ -245,7 +246,7 @@ export function CartCoupon() {
               justifyContent="center"
               backgroundColor={ui.badgeSuccessBg}
             >
-              <Icons.BadgeCheck size={20} color={ui.badgeSuccessText} />
+              <SafeIcon icon={Icons.BadgeCheck} size={20} color={ui.badgeSuccessText} />
             </YStack>
 
             <YStack flex={1} minWidth={0} gap={2}>
@@ -286,7 +287,7 @@ export function CartCoupon() {
               disabled={removing}
               accessibilityLabel="Remove coupon"
               onPress={handleRemove}
-              icon={removing ? <Spinner size="small" /> : <Icons.X size={15} color={ui.danger} />}
+              icon={removing ? <Spinner size="small" /> : <SafeIcon icon={Icons.X} size={15} color={ui.danger} />}
             >
               Remove
             </Button>
@@ -322,7 +323,7 @@ export function CartCoupon() {
             justifyContent="center"
             backgroundColor={ui.badgeBrandBg}
           >
-            <Icons.TicketPercent size={20} color={ui.badgeBrandText} />
+            <SafeIcon icon={Icons.TicketPercent} size={20} color={ui.badgeBrandText} />
           </YStack>
           <YStack flex={1} minWidth={0} gap={2}>
             <Text fontSize={14} fontWeight="800" color={ui.text} numberOfLines={1}>
@@ -334,10 +335,17 @@ export function CartCoupon() {
           </YStack>
         </XStack>
 
-        <XStack alignItems="center" gap="$2">
+        <XStack
+          alignItems="center"
+          gap="$2"
+          width="100%"
+          flexDirection="row"
+          flexWrap="nowrap"
+        >
           <XStack
             flex={1}
             minWidth={0}
+            maxWidth="100%"
             alignItems="center"
             gap="$2"
             height={FIELD_HEIGHT}
@@ -347,10 +355,11 @@ export function CartCoupon() {
             borderColor={fieldBorderColor}
             backgroundColor={ui.inputBackground}
           >
-            <Icons.TicketPercent size={18} color={fieldBorderColor} />
+            <SafeIcon icon={Icons.TicketPercent} size={18} color={fieldBorderColor} />
             <Input
               flex={1}
               minWidth={0}
+              width="100%"
               borderWidth={0}
               paddingHorizontal={0}
               backgroundColor="transparent"
@@ -391,7 +400,7 @@ export function CartCoupon() {
                   setError(null)
                 }}
               >
-                <Icons.X size={13} color={ui.icon} />
+                <SafeIcon icon={Icons.X} size={13} color={ui.icon} />
               </YStack>
             ) : null}
           </XStack>
@@ -399,8 +408,12 @@ export function CartCoupon() {
           <Button
             tone="primary"
             height={FIELD_HEIGHT}
+            width="auto"
             minWidth={96}
+            maxWidth={120}
+            flexGrow={0}
             flexShrink={0}
+            alignSelf="center"
             paddingHorizontal="$4"
             borderRadius={radius.chip}
             disabled={!canApply}
@@ -413,7 +426,7 @@ export function CartCoupon() {
 
         {error ? (
           <XStack alignItems="center" gap="$1.5">
-            <Icons.AlertCircle size={14} color={ui.error} />
+            <SafeIcon icon={Icons.AlertCircle} size={14} color={ui.error} />
             <Text flex={1} minWidth={0} fontSize={12} color={ui.error}>
               {error}
             </Text>

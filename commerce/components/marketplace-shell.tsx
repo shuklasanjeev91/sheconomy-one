@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 import { Platform } from 'react-native'
 
 import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import { getShadowStyle } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useCommercePalette } from '~/commerce/components/commerce-ui'
@@ -170,7 +171,7 @@ export function MarketplaceShopHeader({
           alignItems="center"
           justifyContent="center"
         >
-          <Icons.Store size={14} color={e.brand} />
+          <SafeIcon icon={Icons.Store} size={14} color={e.brand} />
         </YStack>
         <Text fontSize={15} color={e.text} fontWeight="700" numberOfLines={1} flex={1}>
           {shopName}
@@ -178,7 +179,7 @@ export function MarketplaceShopHeader({
       </XStack>
       {deliveryLabel ? (
         <XStack alignItems="center" gap="$1.5">
-          <Icons.Truck size={14} color={e.inStock} />
+          <SafeIcon icon={Icons.Truck} size={14} color={e.inStock} />
           <Text fontSize={12} color={e.inStock} fontWeight="600">
             {deliveryLabel}
           </Text>
@@ -252,7 +253,7 @@ export function MarketplaceStepCard({
           justifyContent="center"
         >
           {complete ? (
-            <Icons.Check size={16} color={ui.onBrand} />
+            <SafeIcon icon={Icons.Check} size={16} color={ui.onBrand} />
           ) : (
             <Text fontSize={13} fontWeight="800" color={ui.onBrand}>
               {step}
@@ -395,7 +396,7 @@ export function MarketplaceTrustNote({ children }: { children: string }) {
   const e = useMarketplaceShellPalette()
   return (
     <XStack alignItems="flex-start" gap="$2">
-      <Icons.ShieldCheck size={14} color={e.secondary} />
+      <SafeIcon icon={Icons.ShieldCheck} size={14} color={e.secondary} />
       <Text fontSize={12} color={e.secondary} lineHeight={17} flex={1}>
         {children}
       </Text>

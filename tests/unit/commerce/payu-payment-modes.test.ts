@@ -20,6 +20,24 @@ describe('payu-payment-modes', () => {
     expect(fields).toMatchObject({ pg: 'UPI', bankcode: 'INTENT' })
   })
 
+  it('resolves live get_checkout_details instrument ids to pg + bankcode', () => {
+    expect(resolvePayuPaymentMode('nb_AXIB')).toMatchObject({
+      pg: 'NB',
+      bankcode: 'AXIB',
+    })
+    expect(resolvePayuPaymentMode('wallet_MOBIKWIK')).toMatchObject({
+      pg: 'CASH',
+      bankcode: 'MOBIKWIK',
+    })
+    expect(resolvePayuPaymentMode('emi_AXISD03')).toMatchObject({
+      pg: 'EMI',
+      bankcode: 'AXISD03',
+    })
+    expect(payuModeNeedsS2s('nb_AXIB')).toBe(false)
+    expect(payuModeNeedsS2s('emi_AXISD03')).toBe(false)
+    expect(payuGroupIdForMode('nb_AXIB')).toBe('netbanking')
+  })
+
   it('maps cards / wallets / pluxee / neft per PayU docs', () => {
     expect(applyPayuPaymentModeFields({}, { modeId: 'cards' })).toMatchObject({
       pg: 'CC',

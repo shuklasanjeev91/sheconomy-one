@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import QRCode from 'react-native-qrcode-svg'
+import QrCodeSvgImport from 'react-native-qrcode-svg'
 
 import { CheckoutPayuMethodPicker } from '~/commerce/components/CheckoutPayuMethodPicker'
 import {
@@ -18,8 +18,12 @@ import {
   validatePayuCardInput,
 } from '~/commerce/lib/payu-card'
 import {
+  buildFallbackPayuCheckoutSections,
+  buildPayuCheckoutSections,
+  type PayuCheckoutSection,
+} from '~/commerce/lib/payu-checkout-details'
+import {
   normalizePayuIntentUri,
-  payuGroupIdForMode,
   resolvePayuPaymentMode,
   type PayuPaymentModeId,
 } from '~/commerce/lib/payu-payment-modes'
@@ -27,12 +31,21 @@ import { launchPayuUpiIntent, payuUpiShouldShowQr } from '~/commerce/lib/payu-up
 import {
   createShepayPayuSession,
   fetchPayuBinInfo,
+  fetchPayuCheckoutDetails,
   verifyShepayPayuPayment,
 } from '~/commerce/lib/shepay'
 import { platformPayuService } from '~/lib/platform-payu'
 import { Button, Input, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
+
+// Rolldown may expose the web stub as `{ default }` or a named binding; never render undefined.
+const QRCode =
+  typeof QrCodeSvgImport === 'function'
+    ? QrCodeSvgImport
+    : typeof (QrCodeSvgImport as { default?: unknown })?.default === 'function'
+      ? (QrCodeSvgImport as { default: typeof QrCodeSvgImport }).default
+      : null
 
 export type CheckoutPayuSession = {
   actionUrl: string
@@ -41,17 +54,6 @@ export type CheckoutPayuSession = {
   paymentStepId?: string
   orderPaymentId?: string
   provider?: 'shepay' | 'platform_payu'
-}
-
-type PayuPickerSectionId = 'upi' | 'cards' | 'netbanking' | 'wallets' | 'more'
-
-function pickerSectionForMode(mode: PayuPaymentModeId): PayuPickerSectionId {
-  if (['emi', 'bnpl', 'paypal', 'pluxee', 'neft'].includes(mode)) return 'more'
-  const group = payuGroupIdForMode(mode)
-  if (group === 'cards' || group === 'upi' || group === 'netbanking' || group === 'wallets') {
-    return group
-  }
-  return 'upi'
 }
 
 type CheckoutPayuPanelProps = {
@@ -64,6 +66,8 @@ type CheckoutPayuPanelProps = {
   initialVpa?: string
   /** Formatted amount e.g. "₹898.00" shown on QR screen */
   amountLabel?: string | null
+  /** Order total used to fetch live PayU instruments. */
+  amount?: number | null
   /** Skip method list and charge immediately (method chosen on checkout accordion). */
   autoStart?: boolean
   hideMethodPicker?: boolean
@@ -75,8 +79,8 @@ type CheckoutPayuPanelProps = {
     cvv: string
     bankcode?: string
   } | null
-  /** Visible in the list but not selectable (net banking, wallets, EMI, etc.). */
-  disabledMethodSections?: PayuPickerSectionId[]
+  /** @deprecated All PayU methods are shown; ignored. */
+  disabledMethodSections?: string[]
   session: CheckoutPayuSession
   onPaid: () => void
   onFailed: (message: string) => void
@@ -94,6 +98,13 @@ type CheckoutPayuPanelProps = {
    * Used to place the order + initiate PayU when the shopper taps Pay.
    */
   onEnsureSession?: () => Promise<CheckoutPayuSession | null>
+  /** COD row inside the same accordion list. */
+  cod?: {
+    selected: boolean
+    onSelect: () => void
+    title?: string
+    subtitle?: string
+  } | null
 }
 
 export function CheckoutPayuPanel({
@@ -105,10 +116,11 @@ export function CheckoutPayuPanel({
   initialMode,
   initialVpa = '',
   amountLabel = null,
+  amount = null,
   autoStart = false,
   hideMethodPicker = false,
   card: lockedCard = null,
-  disabledMethodSections = [],
+  disabledMethodSections: _disabledMethodSections = [],
   session,
   onPaid,
   onFailed,
@@ -118,7 +130,9 @@ export function CheckoutPayuPanel({
   onAuthActiveChange,
   onSelectOnline,
   onEnsureSession,
+  cod = null,
 }: CheckoutPayuPanelProps) {
+  void _disabledMethodSections
   const [mode, setMode] = useState<PayuPaymentModeId>(
     initialMode === 'all' ? 'upi_gpay' : initialMode,
   )
@@ -167,10 +181,28 @@ export function CheckoutPayuPanel({
   const authActive = Boolean(acsHtml || intentUri)
   const controlsLocked = authActive || busy || awaitingVerify
   const paidOnceRef = useRef(false)
-  const disabledSections = useMemo(
-    () => new Set(disabledMethodSections),
-    [disabledMethodSections],
+  const [methodSections, setMethodSections] = useState<PayuCheckoutSection[]>(() =>
+    buildFallbackPayuCheckoutSections(),
   )
+
+  useEffect(() => {
+    if (!amount || amount <= 0) {
+      setMethodSections(buildFallbackPayuCheckoutSections())
+      return
+    }
+    let active = true
+    void fetchPayuCheckoutDetails(amount).then(({ data, error }) => {
+      if (!active) return
+      if (error || !data) {
+        setMethodSections(buildFallbackPayuCheckoutSections())
+        return
+      }
+      setMethodSections(buildPayuCheckoutSections(data))
+    })
+    return () => {
+      active = false
+    }
+  }, [amount])
 
   const cardFieldsNode = useMemo(() => {
     if (lockedCard) return null
@@ -425,17 +457,23 @@ export function CheckoutPayuPanel({
 
   async function handlePay() {
     onSelectOnline?.()
-    if (disabledSections.has(pickerSectionForMode(mode))) {
-      setError('This payment method is not available yet. Choose UPI or card.')
-      return
-    }
     if (modeMeta.needsVpa && !vpa.trim()) {
       setError('Enter your UPI ID (e.g. name@oksbi)')
       return
     }
-    // `netbanking` deliberately carries no bankcode — PayU picks the bank.
-    if (mode === 'wallets' && !modeMeta.bankcode) {
+    if (
+      (String(mode).startsWith('wallet_') || mode === 'wallets') &&
+      !modeMeta.bankcode
+    ) {
       setError('Select a wallet')
+      return
+    }
+    if (
+      (String(mode).startsWith('nb_') || mode === 'netbanking') &&
+      mode !== 'netbanking' &&
+      !modeMeta.bankcode
+    ) {
+      setError('Select a bank')
       return
     }
 
@@ -525,7 +563,11 @@ export function CheckoutPayuPanel({
           })
         : await createShepayPayuSession(activeSession.paymentStepId ?? '', {
             payuMode: chargeMode,
-            extraFields: Object.keys(extras).length ? extras : null,
+            payuPg: modeMeta.pg ?? null,
+            payuBankcode: modeMeta.bankcode ?? null,
+            extraFields: Object.keys(extras).length
+              ? { ...extras, ...(modeMeta.extraFields ?? {}) }
+              : modeMeta.extraFields ?? null,
             checkoutStyle: 's2s',
             seamless: true,
             inline: true,
@@ -770,6 +812,8 @@ export function CheckoutPayuPanel({
           textColor={ui.text}
           mode={mode}
           collapsed={collapsed}
+          sections={methodSections}
+          cod={cod}
           onModeChange={(next) => {
             if (controlsLocked) return
             onSelectOnline?.()
@@ -782,7 +826,6 @@ export function CheckoutPayuPanel({
           vpa={vpa}
           onVpaChange={setVpa}
           cardFields={cardFieldsNode}
-          disabledSectionIds={disabledMethodSections}
         />
       ) : null}
 
@@ -899,12 +942,18 @@ export function CheckoutPayuPanel({
             borderWidth={1}
             borderColor={borderColor}
           >
-            <QRCode
-              value={intentUri}
-              size={showQrForMode ? 260 : 200}
-              backgroundColor="#ffffff"
-              color="#111111"
-            />
+            {QRCode ? (
+              <QRCode
+                value={intentUri}
+                size={showQrForMode ? 260 : 200}
+                backgroundColor="#ffffff"
+                color="#111111"
+              />
+            ) : (
+              <Text fontSize={12} color={secondaryColor} textAlign="center">
+                QR unavailable — open your UPI app from the button below.
+              </Text>
+            )}
           </YStack>
 
           <Text fontSize={12} color={secondaryColor} textAlign="center" lineHeight={18}>

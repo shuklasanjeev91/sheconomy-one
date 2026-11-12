@@ -18,6 +18,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection, StickyRail } from '~/components/layout'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useStorefrontCartItems } from '~/commerce/hooks/useStorefrontCartItems'
@@ -1082,7 +1083,8 @@ export function CheckoutScreen() {
         Pay below to place your order
       </Text>
       <Text fontSize={12} color={c.secondary} lineHeight={17}>
-        Choose UPI, card or net banking in the payment section. Your order is confirmed after successful payment.
+        Expand a payment option, enter details if needed, then tap Pay. Your order is confirmed after
+        successful payment.
       </Text>
     </YStack>
   ) : (
@@ -1097,7 +1099,7 @@ export function CheckoutScreen() {
           borderColor={ui.error}
           backgroundColor={ui.roseSurface}
         >
-          <Icons.Info size={14} color={ui.error} />
+          <SafeIcon icon={Icons.Info} size={14} color={ui.error} />
           <Text fontSize={12} color={ui.error} fontWeight="600" flex={1}>
             {deliveryAddressNotice}
           </Text>
@@ -1199,7 +1201,7 @@ export function CheckoutScreen() {
           paddingBottom={showMobileBar ? checkoutBarHeight + mobileTabBarOffset + 24 : undefined}
         >
           <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
-            <Icons.Lock size={16} color={c.brand} />
+            <SafeIcon icon={Icons.Lock} size={16} color={c.brand} />
             <Text fontSize={22} fontWeight="600" color={c.text}>
               Secure checkout
             </Text>
@@ -1226,7 +1228,7 @@ export function CheckoutScreen() {
                 <SectionCard step={2} title="Delivery address">
                   {addresses.length === 0 ? (
                     <XStack alignItems="center" gap="$2">
-                      <Icons.Info size={14} color={ui.badgeAccentText} />
+                      <SafeIcon icon={Icons.Info} size={14} color={ui.badgeAccentText} />
                       <Text fontSize={13} color={ui.badgeAccentText} fontWeight="600" flex={1}>
                         Add a delivery address to ship this order.
                       </Text>
@@ -1391,7 +1393,7 @@ export function CheckoutScreen() {
                   />
                   {deliveryAddressNotice ? (
                     <XStack alignItems="center" gap="$2" paddingTop="$1">
-                      <Icons.Info size={14} color={ui.error} />
+                      <SafeIcon icon={Icons.Info} size={14} color={ui.error} />
                       <Text fontSize={12} color={ui.error} fontWeight="600" flex={1}>
                         {deliveryAddressNotice}
                       </Text>
@@ -1407,10 +1409,7 @@ export function CheckoutScreen() {
                 </SectionCard>
               )}
 
-              <SectionCard
-                step={needsShipping ? 3 : 2}
-                title={usesInlinePayu ? 'Pay with PayU' : 'Payment'}
-              >
+              <SectionCard step={needsShipping ? 3 : 2} title="Payment method">
                 <YStack gap="$3" width="100%" flexShrink={0}>
                   <CheckoutPayuPanel
                     embedded
@@ -1420,13 +1419,31 @@ export function CheckoutScreen() {
                     chipColor={c.chip}
                     secondaryColor={c.secondary}
                     initialMode="upi_intent"
+                    amount={displayTotals.orderTotal}
                     amountLabel={formatCheckoutMoney(displayTotals.orderTotal)}
-                    disabledMethodSections={['more']}
                     session={payuPanelSession}
                     onEnsureSession={ensureShepayPayuSession}
                     onAuthActiveChange={setPayuAuthActive}
                     collapsed={paymentMethod === 'cod'}
                     onSelectOnline={() => setPaymentMethod('online')}
+                    cod={
+                      needsShipping
+                        ? {
+                            selected: paymentMethod === 'cod',
+                            title: 'Cash on delivery / Pay on delivery',
+                            subtitle: 'Pay with cash, UPI or card when your order arrives',
+                            onSelect: () => {
+                              void (async () => {
+                                if (payuCheckoutMeta?.checkoutGroupId) {
+                                  await cancelCheckoutPayment(payuCheckoutMeta.checkoutGroupId)
+                                }
+                                clearPayuCheckoutState()
+                                setPaymentMethod('cod')
+                              })()
+                            },
+                          }
+                        : null
+                    }
                     onPaid={() => {
                       const meta = payuCheckoutMetaRef.current
                       trackCommerceEvent('purchase', {
@@ -1467,24 +1484,6 @@ export function CheckoutScreen() {
                       })
                     }}
                   />
-
-                  {needsShipping ? (
-                    <PaymentOption
-                      selected={paymentMethod === 'cod'}
-                      disabled={payuAuthActive}
-                      title="Cash on delivery / Pay on delivery"
-                      subtitle="Pay with cash, UPI or card when your order arrives"
-                      onPress={() => {
-                        void (async () => {
-                          if (payuCheckoutMeta?.checkoutGroupId) {
-                            await cancelCheckoutPayment(payuCheckoutMeta.checkoutGroupId)
-                          }
-                          clearPayuCheckoutState()
-                          setPaymentMethod('cod')
-                        })()
-                      }}
-                    />
-                  ) : null}
                 </YStack>
               </SectionCard>
 
@@ -1513,14 +1512,14 @@ export function CheckoutScreen() {
                       borderTopColor={c.divider}
                     >
                       <XStack alignItems="center" gap="$2">
-                        <Icons.Store size={14} color={c.secondary} />
+                        <SafeIcon icon={Icons.Store} size={14} color={c.secondary} />
                         <Text fontSize={13} color={c.text} fontWeight="600">
                           {shop.shopName}
                         </Text>
                       </XStack>
                       <ShopRatingBadge info={shopHeaders.get(shop.shopId)} />
                       <XStack alignItems="center" gap="$1.5" flexWrap="wrap">
-                        <Icons.Truck size={13} color={c.inStock} />
+                        <SafeIcon icon={Icons.Truck} size={13} color={c.inStock} />
                         <Text fontSize={12} color={c.inStock} fontWeight="600">
                           {deliveryEstimateLabel()}
                           {' · '}
@@ -1766,11 +1765,11 @@ function GiftToggle({ active, onToggle }: { active: boolean; onToggle: () => voi
       cursor="pointer"
       onPress={onToggle}
     >
-      <Icons.Gift size={15} color={active ? c.brand : c.secondary} />
+      <SafeIcon icon={Icons.Gift} size={15} color={active ? c.brand : c.secondary} />
       <Text fontSize={13} fontWeight="600" color={active ? c.brand : c.text}>
         This is a gift
       </Text>
-      {active ? <Icons.Check size={15} color={c.brand} /> : null}
+      {active ? <SafeIcon icon={Icons.Check} size={15} color={c.brand} /> : null}
     </XStack>
   )
 }

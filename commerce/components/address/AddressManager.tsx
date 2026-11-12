@@ -6,6 +6,7 @@ import { AddressFormDrawer } from '~/commerce/components/address/AddressFormDraw
 import { AddressList } from '~/commerce/components/address/AddressList'
 import { AddressStatsPanel } from '~/commerce/components/address/AddressStats'
 import { Button, Icons, Spinner, Tabs, TabsList, TabsTrigger, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
@@ -140,7 +141,7 @@ export function AddressManager({
           size="$4"
           borderRadius={999}
           disabled={isLoading || isSaving}
-          icon={<Icons.Plus size={18} />}
+          icon={<SafeIcon icon={Icons.Plus} size={18} />}
           onPress={openCreate}
           testID={QA.addressAdd}
           accessibilityLabel="Add address"
@@ -165,7 +166,7 @@ export function AddressManager({
             alignItems="center"
             justifyContent="center"
           >
-            <Icons.MapPin size={28} color={ui.brand} />
+            <SafeIcon icon={Icons.MapPin} size={28} color={ui.brand} />
           </YStack>
           <Text fontWeight="700" fontSize={18} color={ui.text}>
             No addresses yet
@@ -173,7 +174,7 @@ export function AddressManager({
           <Text color={ui.textSecondary} fontSize={14} textAlign="center" maxWidth={420}>
             Add your first address to speed up checkout and keep shipping details organised.
           </Text>
-          <Button tone="primary" size="$4" borderRadius={999} icon={<Icons.Plus size={18} />} onPress={openCreate}>
+          <Button tone="primary" size="$4" borderRadius={999} icon={<SafeIcon icon={Icons.Plus} size={18} />} onPress={openCreate}>
             Add your first address
           </Button>
         </CommercePanel>

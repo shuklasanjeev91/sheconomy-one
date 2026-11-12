@@ -182,7 +182,9 @@ export function payuModeNeedsS2s(modeId?: string | null): boolean {
     id === 'wallets' ||
     id === 'wallet_picker' ||
     id === 'emi' ||
+    id.startsWith('emi_') ||
     id === 'bnpl' ||
+    id.startsWith('bnpl_') ||
     id === 'paypal' ||
     id === 'pluxee' ||
     id === 'neft'

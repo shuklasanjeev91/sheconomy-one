@@ -19,6 +19,7 @@ type Props = {
 type State = {
   error: Error | null
   supportRef: string | null
+  componentStack: string | null
   /** Bumps to remount children after a recoverable DOM mutation error. */
   remountKey: number
 }
@@ -49,6 +50,7 @@ function isMissingThemeError(error: Error) {
  */
 function FatalErrorFallback({
   message,
+  detailExtra,
   supportRef,
   showDetail,
   onRetry,
@@ -56,6 +58,7 @@ function FatalErrorFallback({
   onCopyRef,
 }: {
   message: string
+  detailExtra?: string | null
   supportRef: string
   showDetail: boolean
   onRetry: () => void
@@ -69,6 +72,7 @@ function FatalErrorFallback({
         We hit an unexpected problem. Your work is safe — try again, or head home and continue.
       </RNText>
       {showDetail ? <RNText style={styles.detail}>{message}</RNText> : null}
+      {showDetail && detailExtra ? <RNText style={styles.detail}>{detailExtra}</RNText> : null}
       <View style={styles.refBox}>
         <RNText style={styles.refLabel}>Support reference</RNText>
         <Pressable onPress={onCopyRef} accessibilityRole="button">
@@ -167,11 +171,11 @@ const styles = StyleSheet.create({
 })
 
 export class AppErrorBoundary extends Component<Props, State> {
-  state: State = { error: null, supportRef: null, remountKey: 0 }
+  state: State = { error: null, supportRef: null, componentStack: null, remountKey: 0 }
 
   static getDerivedStateFromError(error: Error): Partial<State> | null {
     if (Platform.OS === 'web' && isBenignDomMutationError(error)) {
-      return { error: null, supportRef: null, remountKey: Date.now() }
+      return { error: null, supportRef: null, componentStack: null, remountKey: Date.now() }
     }
     return { error, supportRef: buildSupportRef('APP') }
   }
@@ -189,9 +193,11 @@ export class AppErrorBoundary extends Component<Props, State> {
 
     // Prefer the boundary scope over the generic APP stamp from getDerivedStateFromError.
     const supportRef = buildSupportRef(this.props.scope)
-    if (supportRef !== this.state.supportRef) {
-      this.setState({ supportRef })
-    }
+    const componentStack = info.componentStack?.trim() || null
+    this.setState({
+      supportRef,
+      componentStack,
+    })
     logger.error('Unhandled render error', {
       scope: this.props.scope,
       supportRef,
@@ -204,12 +210,12 @@ export class AppErrorBoundary extends Component<Props, State> {
 
   private handleRetry = () => {
     this.props.onDismiss?.()
-    this.setState({ error: null, supportRef: null, remountKey: Date.now() })
+    this.setState({ error: null, supportRef: null, componentStack: null, remountKey: Date.now() })
   }
 
   private handleGoHome = () => {
     this.props.onDismiss?.()
-    this.setState({ error: null, supportRef: null, remountKey: Date.now() })
+    this.setState({ error: null, supportRef: null, componentStack: null, remountKey: Date.now() })
     try {
       replaceApp(appRoutes.home)
     } catch {
@@ -239,9 +245,19 @@ export class AppErrorBoundary extends Component<Props, State> {
     const showErrorDetail =
       isDev || !!this.props.alwaysShowError || isMissingThemeError(this.state.error)
 
+    const stackHint = this.state.componentStack
+      ? this.state.componentStack
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .slice(0, 6)
+          .join(' ← ')
+      : null
+
     return (
       <FatalErrorFallback
         message={this.state.error.message}
+        detailExtra={stackHint}
         supportRef={supportRef}
         showDetail={showErrorDetail}
         onRetry={this.handleRetry}

@@ -18,6 +18,7 @@ import {
   XStack,
   YStack,
 } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import { LocationFields, addressGeoFromInput, patchAddressFromGeo } from '~/components/geo'
 import {
   AddressAutocompleteField,
@@ -136,7 +137,7 @@ export function AddressFormDrawer({
             flex={1}
             disabled={submitting}
             onPress={handleSubmit}
-            icon={submitting ? <Spinner size="small" color="white" /> : <Icons.Check size={16} />}
+            icon={submitting ? <Spinner size="small" color="white" /> : <SafeIcon icon={Icons.Check} size={16} />}
           >
             {submitting ? 'Saving…' : editingAddress ? 'Save changes' : 'Add address'}
           </Button>
@@ -160,7 +161,7 @@ export function AddressFormDrawer({
             value={formData.address_type}
             onValueChange={(value) => patch({ address_type: value as AddressType })}
           >
-            <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={16} />}>
+            <SelectTrigger width="100%" iconAfter={<SafeIcon icon={Icons.ChevronDown} size={16} />}>
               <Select.Value placeholder="Select type" />
             </SelectTrigger>
             <SelectContent zIndex={300000}>

@@ -7,6 +7,7 @@ import {
   XStack,
   YStack,
 } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import { radius } from '~/config/tokens'
 import type { Address } from '~/lib/address/address.type'
 import { formatAddressString, getAddressTypeLabel } from '~/lib/address/address.utils'
@@ -50,7 +51,7 @@ export function AddressDeleteDrawer({
             flex={1}
             disabled={submitting || !address}
             onPress={onConfirm}
-            icon={submitting ? <Spinner size="small" color="white" /> : <Icons.Trash2 size={16} />}
+            icon={submitting ? <Spinner size="small" color="white" /> : <SafeIcon icon={Icons.Trash2} size={16} />}
           >
             {submitting ? 'Deleting…' : 'Delete'}
           </Button>
@@ -68,7 +69,7 @@ export function AddressDeleteDrawer({
             justifyContent="center"
             alignSelf="center"
           >
-            <Icons.AlertTriangle size={26} color={ui.brand} />
+            <SafeIcon icon={Icons.AlertTriangle} size={26} color={ui.brand} />
           </YStack>
 
           <Text fontSize={14} color={ui.textSecondary} textAlign="center" lineHeight={20}>

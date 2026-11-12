@@ -241,16 +241,18 @@ Deno.serve(async (request) => {
       )
     }
 
-    const platformCredit = await getAccountCredit(config)
-    if (platformCredit.availableBalance + 1e-9 < shipmentCharge) {
+    // Carrier labels are funded only from the seller shipping wallet (0% platform commission).
+    // Shared Easyship MOR balance is ops plumbing; never block with "platform retained DDP".
+    const platformCredit = await getAccountCredit(config).catch(() => null)
+    if (
+      platformCredit &&
+      platformCredit.availableBalance + 1e-9 < shipmentCharge
+    ) {
       return jsonResponse(
-        {
-          error:
-            'Platform Easyship account credit is too low to buy this label. Ops must top up Easyship payments.',
-          code: 'platform_easyship_credit_low',
-          availableBalance: platformCredit.availableBalance,
-        },
-        503,
+        insufficientShippingCreditResponse(
+          `Carrier wallet cannot cover freight ${shipmentCharge.toFixed(2)}. Top up shipping credit and retry.`,
+        ),
+        402,
       )
     }
 

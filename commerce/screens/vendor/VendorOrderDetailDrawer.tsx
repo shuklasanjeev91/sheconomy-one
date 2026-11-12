@@ -857,7 +857,7 @@ function DrawerBody({
             {!affordable && canProcessEasyship ? (
               <YStack gap="$2" marginTop="$1">
                 <Text fontSize={12} color={ui.danger} lineHeight={18}>
-                  Shipping credit is below this order&apos;s freight. Top up before buying a
+                  Fund your shipping wallet before buying a
                   shipping label.
                 </Text>
                 <AppLink href={vendorRoutes.wallet}>

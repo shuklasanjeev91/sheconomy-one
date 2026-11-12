@@ -1,32 +1,33 @@
-import type { ReactNode } from 'react'
 import { Text, XStack, YStack } from '~/components/ui'
-import { Icons } from '~/components/ui'
 import type { PayuPaymentModeId } from '~/commerce/lib/payu-payment-modes'
 
 type Badge = {
   bg: string
   fg: string
   label: string
-  /** Optional Lucide icon instead of text mark */
-  icon?: 'card' | 'phone' | 'qr' | 'bank' | 'wallet' | 'paypal' | 'emi' | 'bnpl'
 }
 
+/**
+ * Text-only badges — never Lucide/`Icons.*`.
+ * Missing tree-shaken icons previously crashed checkout with
+ * "Element type is invalid" (support refs CHECKOUT-*).
+ */
 const METHOD_BADGES: Partial<Record<PayuPaymentModeId, Badge>> = {
   upi_collect: { bg: '#E8F5E9', fg: '#1B5E20', label: 'UPI' },
   upi_gpay: { bg: '#E8F0FE', fg: '#1A73E8', label: 'GPay' },
   upi_phonepe: { bg: '#F3E5F5', fg: '#5F259F', label: 'PhonePe' },
   upi_paytm: { bg: '#E1F5FE', fg: '#00A9E0', label: 'Paytm' },
-  upi_intent: { bg: '#E8F5E9', fg: '#097939', label: 'UPI', icon: 'phone' },
-  upi_qr: { bg: '#FFF3E0', fg: '#E65100', label: 'QR', icon: 'qr' },
-  cards: { bg: '#E3F2FD', fg: '#0D47A1', label: 'Card', icon: 'card' },
+  upi_intent: { bg: '#E8F5E9', fg: '#097939', label: 'UPI' },
+  upi_qr: { bg: '#FFF3E0', fg: '#E65100', label: 'QR' },
+  cards: { bg: '#E3F2FD', fg: '#0D47A1', label: 'Card' },
   netbanking: { bg: '#E3F2FD', fg: '#0D47A1', label: 'Bank' },
   wallet_mobikwik: { bg: '#E8EAF6', fg: '#3F51B5', label: 'MK' },
   wallet_olamoney: { bg: '#E8F5E9', fg: '#1B8E3C', label: 'Ola' },
-  emi: { bg: '#F3E5F5', fg: '#6A1B9A', label: 'EMI', icon: 'emi' },
-  bnpl: { bg: '#E0F7FA', fg: '#006064', label: 'BNPL', icon: 'bnpl' },
-  paypal: { bg: '#E3F2FD', fg: '#003087', label: 'PayPal', icon: 'paypal' },
+  emi: { bg: '#F3E5F5', fg: '#6A1B9A', label: 'EMI' },
+  bnpl: { bg: '#E0F7FA', fg: '#006064', label: 'BNPL' },
+  paypal: { bg: '#E3F2FD', fg: '#003087', label: 'PayPal' },
   pluxee: { bg: '#FFF3E0', fg: '#EF6C00', label: 'Pluxee' },
-  neft: { bg: '#ECEFF1', fg: '#37474F', label: 'NEFT', icon: 'bank' },
+  neft: { bg: '#ECEFF1', fg: '#37474F', label: 'NEFT' },
 }
 
 const SECTION_BADGES: Record<string, Badge[]> = {
@@ -55,20 +56,14 @@ const SECTION_BADGES: Record<string, Badge[]> = {
     { bg: '#E3F2FD', fg: '#003087', label: 'PP' },
     { bg: '#F3E5F5', fg: '#6A1B9A', label: 'EMI' },
   ],
+  emi: [{ bg: '#F3E5F5', fg: '#6A1B9A', label: 'EMI' }],
+  bnpl: [{ bg: '#E0F7FA', fg: '#006064', label: 'BNPL' }],
+  paypal: [{ bg: '#E3F2FD', fg: '#003087', label: 'PP' }],
+  pluxee: [{ bg: '#FFF3E0', fg: '#EF6C00', label: 'Pluxee' }],
+  neft: [{ bg: '#ECEFF1', fg: '#37474F', label: 'NEFT' }],
 }
 
 function BadgeMark({ badge, size }: { badge: Badge; size: number }) {
-  const iconSize = Math.round(size * 0.42)
-  let icon: ReactNode = null
-  if (badge.icon === 'card') icon = <Icons.CreditCard size={iconSize} color={badge.fg} />
-  if (badge.icon === 'phone') icon = <Icons.Smartphone size={iconSize} color={badge.fg} />
-  if (badge.icon === 'qr') icon = <Icons.Barcode size={iconSize} color={badge.fg} />
-  if (badge.icon === 'bank') icon = <Icons.Building2 size={iconSize} color={badge.fg} />
-  if (badge.icon === 'wallet') icon = <Icons.Wallet size={iconSize} color={badge.fg} />
-  if (badge.icon === 'paypal') icon = <Icons.Wallet size={iconSize} color={badge.fg} />
-  if (badge.icon === 'emi') icon = <Icons.Banknote size={iconSize} color={badge.fg} />
-  if (badge.icon === 'bnpl') icon = <Icons.IndianRupee size={iconSize} color={badge.fg} />
-
   return (
     <YStack
       width={size}
@@ -81,17 +76,15 @@ function BadgeMark({ badge, size }: { badge: Badge; size: number }) {
       borderColor={`${badge.fg}18`}
       flexShrink={0}
     >
-      {icon ?? (
-        <Text
-          fontSize={size <= 28 ? 8 : size <= 36 ? 9 : 11}
-          fontWeight="800"
-          color={badge.fg}
-          numberOfLines={1}
-          letterSpacing={-0.3}
-        >
-          {badge.label}
-        </Text>
-      )}
+      <Text
+        fontSize={size <= 28 ? 8 : size <= 36 ? 9 : 11}
+        fontWeight="800"
+        color={badge.fg}
+        numberOfLines={1}
+        letterSpacing={-0.3}
+      >
+        {badge.label}
+      </Text>
     </YStack>
   )
 }
@@ -108,7 +101,6 @@ export function CheckoutPayuMethodIcon({
     bg: '#F5F5F5',
     fg: '#424242',
     label: 'Pay',
-    icon: 'wallet' as const,
   }
   return <BadgeMark badge={badge} size={size} />
 }

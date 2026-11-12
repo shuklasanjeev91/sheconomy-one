@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { Icons, Text, XStack } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import { touchSlop } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -147,7 +148,7 @@ export function CommerceCheckbox({
       hoverStyle={{ borderColor: ui.brand }}
       pressStyle={onPress ? { borderColor: ui.brand, opacity: 0.7 } : undefined}
     >
-      {checked ? <Icons.Check size={size - 5} color={ui.onBrand} strokeWidth={3} /> : null}
+      {checked ? <SafeIcon icon={Icons.Check} size={size - 5} color={ui.onBrand} strokeWidth={3} /> : null}
     </XStack>
   )
 }

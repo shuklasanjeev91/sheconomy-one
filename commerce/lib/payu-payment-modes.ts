@@ -316,7 +316,59 @@ export const PAYU_ALLOWED_PG = new Set([
 
 export function resolvePayuPaymentMode(id: string | null | undefined): PayuPaymentMode {
   if (!id) return PAYU_CHECKOUT_MODES[0]
-  return MODE_BY_ID.get(id as PayuPaymentModeId) ?? PAYU_CHECKOUT_MODES[0]
+  const known = MODE_BY_ID.get(id as PayuPaymentModeId)
+  if (known) return known
+
+  const raw = String(id).trim()
+  const lower = raw.toLowerCase()
+
+  // Live instruments from get_checkout_details: nb_AXIB, wallet_PAYTM, emi_AXISD03, bnpl_LAZYPAY
+  if (lower.startsWith('nb_')) {
+    const bankcode = raw.slice(3).toUpperCase()
+    return {
+      id: raw as PayuPaymentModeId,
+      label: bankcode,
+      shortLabel: bankcode,
+      pg: 'NB',
+      bankcode,
+      seamlessS2s: false,
+    }
+  }
+  if (lower.startsWith('wallet_')) {
+    const bankcode = raw.slice(7).toUpperCase()
+    return {
+      id: raw as PayuPaymentModeId,
+      label: bankcode,
+      shortLabel: bankcode,
+      pg: 'CASH',
+      bankcode,
+      seamlessS2s: false,
+    }
+  }
+  if (lower.startsWith('emi_')) {
+    const bankcode = raw.slice(4).toUpperCase()
+    return {
+      id: raw as PayuPaymentModeId,
+      label: bankcode,
+      shortLabel: bankcode,
+      pg: 'EMI',
+      bankcode,
+      seamlessS2s: false,
+    }
+  }
+  if (lower.startsWith('bnpl_')) {
+    const bankcode = raw.slice(5).toUpperCase()
+    return {
+      id: raw as PayuPaymentModeId,
+      label: bankcode,
+      shortLabel: bankcode,
+      pg: 'BNPL',
+      bankcode,
+      seamlessS2s: false,
+    }
+  }
+
+  return PAYU_CHECKOUT_MODES[0]
 }
 
 export function resolvePayuMethodGroup(id: string | null | undefined): PayuMethodGroup {
@@ -324,27 +376,28 @@ export function resolvePayuMethodGroup(id: string | null | undefined): PayuMetho
   return GROUP_BY_ID.get(id as PayuMethodGroupId) ?? PAYU_METHOD_GROUPS[0]
 }
 
-export function payuGroupIdForMode(modeId: PayuPaymentModeId): PayuMethodGroupId {
-  if (modeId === 'all') return 'all'
-  if (modeId.startsWith('upi') || modeId === 'qr') return 'upi'
-  if (modeId.startsWith('nb_') || modeId === 'netbanking' || modeId === 'nb_picker') {
+export function payuGroupIdForMode(modeId: PayuPaymentModeId | string): PayuMethodGroupId {
+  const id = String(modeId)
+  if (id === 'all') return 'all'
+  if (id.startsWith('upi') || id === 'qr') return 'upi'
+  if (id.startsWith('nb_') || id === 'netbanking' || id === 'nb_picker') {
     return 'netbanking'
   }
-  if (modeId.startsWith('wallet_') || modeId === 'wallets' || modeId === 'wallet_picker') {
+  if (id.startsWith('wallet_') || id === 'wallets' || id === 'wallet_picker') {
     return 'wallets'
   }
-  if (modeId === 'cards') return 'cards'
-  if (modeId === 'emi') return 'emi'
-  if (modeId === 'bnpl') return 'bnpl'
-  if (modeId === 'paypal') return 'paypal'
-  if (modeId === 'pluxee') return 'pluxee'
-  if (modeId === 'neft') return 'neft'
+  if (id === 'cards') return 'cards'
+  if (id === 'emi' || id.startsWith('emi_')) return 'emi'
+  if (id === 'bnpl' || id.startsWith('bnpl_')) return 'bnpl'
+  if (id === 'paypal') return 'paypal'
+  if (id === 'pluxee') return 'pluxee'
+  if (id === 'neft') return 'neft'
   return 'all'
 }
 
 export function payuModeNeedsS2s(modeId: string | null | undefined): boolean {
   const id = String(modeId ?? '').toLowerCase()
-  // NB / wallets: classic Merchant Hosted form-POST (no txn_s2s_flow).
+  // NB / wallets / EMI / BNPL: classic Merchant Hosted form-POST (no txn_s2s_flow).
   if (
     id.startsWith('nb_') ||
     id === 'netbanking' ||
@@ -353,7 +406,9 @@ export function payuModeNeedsS2s(modeId: string | null | undefined): boolean {
     id === 'wallets' ||
     id === 'wallet_picker' ||
     id === 'emi' ||
+    id.startsWith('emi_') ||
     id === 'bnpl' ||
+    id.startsWith('bnpl_') ||
     id === 'paypal' ||
     id === 'pluxee' ||
     id === 'neft'

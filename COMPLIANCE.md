@@ -4,27 +4,28 @@ This document is the ops source of truth for money movement and shipping credent
 
 ## Shipping credit (Easyship)
 
-Buyer checkout shipping is **Easyship DDP** landed cost (shipping + tax + duty + handling). Cash from that remittance stays on the **platform PayU (SHEPay) account** to fund carriers/customs.
+**0% commission / seller-direct charges.** SHEconomy does not retain buyer freight or take a cut of item price. Every logistics charge is the seller’s responsibility and is auto-debited from the seller shipping wallet.
 
-Separately, each shop has an **Easyship shipping credit ledger** (`easyship_shipping_credits`):
+Buyer checkout shipping is **Easyship DDP** landed cost (shipping + tax + duty + handling). That amount is included in the shop’s PayU absolute split to the seller child MID (same as item subtotal).
 
-- When an order becomes **paid**, buyer-paid freight (`shipment_charge` / `shipping_amount`) is **auto-credited** to the shop ledger.
-- Buying an Easyship label **debits** that ledger. Insufficient credit returns HTTP **402** with recharge CTA (`/vendor/wallet`).
-- Platform `GET /account` available balance must also cover the label; ops tops up the shared Easyship payment method from retained DDP.
+Each shop has an **Easyship shipping credit ledger** (`easyship_shipping_credits`):
+
+- Sellers **self-fund** the wallet (top-up). Buyer remittance is **not** auto-credited to the ledger.
+- Buying an outbound or return Easyship label **debits** that ledger. Insufficient credit returns HTTP **402** with recharge CTA (`/vendor/wallet`).
+- Shared Easyship merchant-of-record balance is plumbing only; it must stay funded from seller collections — SHEconomy does not keep DDP as platform revenue.
 - India origin requires linking **FedEx** or **UPS** own courier accounts on Easyship (no prepaid DHL from IN).
 
 SHEconomy does **not** operate seller Shiprocket connect, wallet mirrors, Shiprocket AWB purchase, platform SheDelivery, or manual AWB fulfill. Outbound and return labels are **Easyship only**.
 
 ## SHEPay (PayU) split payouts (commerce checkout)
 
-Marketplace buyer online payments are collected through the platform **PayU (SHEPay)** account.
+Marketplace buyer online payments are collected through the platform **PayU (SHEPay)** account, then passed through — SHEconomy fee is **0%**.
 
 1. PayU success webhook → mark orders paid via the checkout payment webhook (`shepay-payu-webhook`).
-2. Each shop's item subtotal is split to the seller's PayU child merchant. Platform fee on item price is **0%**.
-3. Shipping + import tax + duty (DDP) stay on the platform account to fund Easyship/customs.
-4. Held settlements (`shepay_pending_settlements`) release only after delivery + return window + no open dispute (`shepay-release-settlement`).
-5. Paid orders also credit `easyship_shipping_credits` (triggers on `order_payments` / leaving `awaiting_payment`).
-6. Marketplace refunds go through PayU refunds (`process-refund`).
+2. Each shop’s **full amount** (item subtotal + shipping/DDP) is absolute-split to the seller’s PayU child merchant. `platform_fee_amount: 0`.
+3. Held settlements (`shepay_pending_settlements`) release only after delivery + return window + no open dispute (`shepay-release-settlement`).
+4. Label / RTO / return freight is debited from the seller’s `easyship_shipping_credits` wallet (seller-funded).
+5. Marketplace refunds go through PayU refunds (`process-refund`).
 
 See `doc/payment/payu/README.md`.
 

@@ -1,4 +1,5 @@
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import { getShadowStyle, radius } from '~/config/tokens'
 import type { Address } from '~/lib/address/address.type'
 import {
@@ -49,7 +50,7 @@ export function AddressList({
           alignItems="center"
           justifyContent="center"
         >
-          <Icons.MapPin size={26} color={ui.brand} />
+          <SafeIcon icon={Icons.MapPin} size={26} color={ui.brand} />
         </YStack>
         <Text fontSize={14} color={ui.textSecondary} textAlign="center">
           {emptyMessage}
@@ -128,7 +129,7 @@ function AddressRow({
                 alignItems="center"
                 gap={4}
               >
-                <Icons.Star size={11} color={ui.brand} />
+                <SafeIcon icon={Icons.Star} size={11} color={ui.brand} />
                 <Text fontSize={10} fontWeight="700" color={ui.brand}>
                   Default
                 </Text>

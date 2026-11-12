@@ -1,4 +1,5 @@
 import { Icons, Text, XStack } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import type { ShopHeaderInfo } from '~/commerce/hooks/useShopHeaders'
 import { formatRating } from '~/lib/format'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -26,7 +27,7 @@ export function ShopRatingBadge({ info }: { info?: ShopHeaderInfo }) {
       ) : null}
       {info.verified ? (
         <XStack alignItems="center" gap={2}>
-          <Icons.BadgeCheck size={13} color={ui.brand} />
+          <SafeIcon icon={Icons.BadgeCheck} size={13} color={ui.brand} />
           <Text fontSize={11} color={ui.brand} fontWeight="600">
             Verified
           </Text>

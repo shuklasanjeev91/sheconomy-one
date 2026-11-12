@@ -2,7 +2,7 @@
 
 Vendor delivery (`/vendor/delivery`) — **Easyship only** labels funded by per-shop shipping credit.
 
-> **TL;DR** — Checkout quotes DDP via `easyship-ddp-rates`. Paid orders auto-credit `easyship_shipping_credits`. Vendors buy every label (outbound + return) with `easyship-process-shipment` (402 if short). Manual AWB, custom courier partners, Shiprocket, and SheDelivery are not used for marketplace fulfill.
+> **TL;DR** — 0% commission. Checkout quotes DDP via `easyship-ddp-rates`; buyer pay (items + shipping) absolute-splits to the seller. Sellers self-fund `easyship_shipping_credits`; every label (outbound + return) debits that wallet via `easyship-process-shipment` (402 if short). SHEconomy does not retain freight. Manual AWB / Shiprocket / SheDelivery are not used.
 
 ## Easyship shipping credit
 
@@ -11,11 +11,11 @@ Vendor delivery (`/vendor/delivery`) — **Easyship only** labels funded by per-
 | Checkout DDP rates | `easyship-ddp-rates` |
 | Credit balance + ledger | `easyship-shipping-credit` |
 | Process label (re-rate, gate, buy, debit) | `easyship-process-shipment` |
-| Credit on paid order | `easyship_credit_shipping_from_order` / payment + order triggers / PayU (SHEPay) webhook |
 | Debit on label | `easyship_debit_shipping_for_label` |
-| Manual top-up | `easyship_topup_shipping_credit` |
+| Seller top-up | `easyship_topup_shipping_credit` |
+| Tracking / RTO status | `easyship-webhook` |
 
-**Policy:** Buyer DDP cash stays on the platform PayU (SHEPay) account. Seller ledger is a prepaid gate for labels. See [`COMPLIANCE.md`](../../COMPLIANCE.md).
+**Policy:** Seller-direct charges only. See [`COMPLIANCE.md`](../../COMPLIANCE.md).
 
 **UI:** `/vendor/wallet` (Shipping credit), order drawer **Process via Easyship**.
 

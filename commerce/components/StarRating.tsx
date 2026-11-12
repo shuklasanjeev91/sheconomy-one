@@ -1,4 +1,5 @@
 import { Icons, XStack, YStack } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type StarRatingProps = {
@@ -28,7 +29,7 @@ function RatingStar({
     return (
       <XStack width={size} height={size} position="relative" alignItems="center" justifyContent="center">
         <YStack position="absolute" left={0} top={0}>
-          <Icons.Star size={size} color={ui.starEmpty} fill="transparent" opacity={0.28} />
+          <SafeIcon icon={Icons.Star} size={size} color={ui.starEmpty} fill="transparent" opacity={0.28} />
         </YStack>
         <YStack
           position="absolute"
@@ -38,14 +39,14 @@ function RatingStar({
           height={size}
           overflow="hidden"
         >
-          <Icons.Star size={size} color={ui.starFill} fill={ui.starFill} />
+          <SafeIcon icon={Icons.Star} size={size} color={ui.starFill} fill={ui.starFill} />
         </YStack>
       </XStack>
     )
   }
 
   return (
-    <Icons.Star
+    <SafeIcon icon={Icons.Star}
       size={size}
       color={filled ? ui.starFill : ui.starEmpty}
       fill={filled ? ui.starFill : 'transparent'}

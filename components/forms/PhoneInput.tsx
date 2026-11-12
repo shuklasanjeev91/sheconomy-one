@@ -3,7 +3,7 @@ import { View } from 'react-native'
 
 import { CountryCodeSheet } from '~/components/forms/CountryCodeSheet'
 import { AppTextField } from '~/components/forms/AppTextField'
-import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { Icons, SafeIcon, Text, XStack, YStack } from '~/components/ui'
 import { AUTH_LAYOUT } from '~/components/auth/auth-layout'
 import {
   DEFAULT_COUNTRY,
@@ -208,7 +208,7 @@ export const PhoneInput = forwardRef<PhoneInputHandle, PhoneInputProps>(function
           </Text>
           {!disabled ? (
             <YStack pointerEvents="none">
-              <Icons.ChevronDown size={14} color={ui.textMuted} />
+              <SafeIcon icon={Icons.ChevronDown} size={14} color={ui.textMuted} />
             </YStack>
           ) : null}
         </XStack>

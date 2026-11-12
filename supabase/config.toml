@@ -480,6 +480,10 @@ verify_jwt = true
 [functions.shepay-payu-bin]
 verify_jwt = true
 
+# Authenticated PayU get_checkout_details (live accordion instruments).
+[functions.shepay-payu-checkout-details]
+verify_jwt = true
+
 # Authenticated: auto-fetch PayU child key/MID and activate SHEPay.
 [functions.shepay-sync-child]
 verify_jwt = true
@@ -559,3 +563,7 @@ verify_jwt = true
 # Vendor JWT: re-rate + buy Easyship label (gates on shipping credit).
 [functions.easyship-process-shipment]
 verify_jwt = true
+
+# Easyship server webhooks (label + tracking / RTO) — signature checked in-function.
+[functions.easyship-webhook]
+verify_jwt = false

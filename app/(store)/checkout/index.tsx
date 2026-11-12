@@ -5,7 +5,7 @@ import { CheckoutScreen } from '~/commerce/screens/CheckoutScreen'
 export default function CheckoutRoute() {
   return (
     <RequireAuth redirectTo="/checkout">
-      <AppErrorBoundary scope="Checkout">
+      <AppErrorBoundary scope="Checkout" alwaysShowError>
         <CheckoutScreen />
       </AppErrorBoundary>
     </RequireAuth>

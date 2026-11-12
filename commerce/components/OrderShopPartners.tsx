@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import { radius } from '~/config/tokens'
 import { CommercePanel } from '~/commerce/components/CommercePanel'
 import {
@@ -77,7 +78,7 @@ export function OrderShopPartners({
               borderTopColor={ui.borderSubtle}
             >
               <XStack alignItems="center" gap="$2">
-                <Icons.Store size={15} color={ui.brand} />
+                <SafeIcon icon={Icons.Store} size={15} color={ui.brand} />
                 <Text fontWeight="600" fontSize={14} color={ui.text} numberOfLines={1} flex={1}>
                   {shop.shopName}
                 </Text>
@@ -98,11 +99,11 @@ export function ShopPartnerChips(_props: { info?: ShopPartnerInfo }) {
   return (
     <XStack gap="$2" flexWrap="wrap">
       <PartnerChip
-        icon={<Icons.Truck size={13} color={ui.textSecondary} />}
+        icon={<SafeIcon icon={Icons.Truck} size={13} color={ui.textSecondary} />}
         label="Tracked shipping"
       />
       <PartnerChip
-        icon={<Icons.CreditCard size={13} color={ui.textSecondary} />}
+        icon={<SafeIcon icon={Icons.CreditCard} size={13} color={ui.textSecondary} />}
         label="Secure online payment"
       />
     </XStack>

@@ -15,6 +15,7 @@ import {
 import { useProfile } from '~/hooks/useProfile'
 import { isCompleteOtp, normalizeOtpDigits } from '~/features/auth/validation'
 import { Button, Field, Icons, Input, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { SafeIcon } from '~/commerce/components/SafeIcon'
 import {
   CHECKOUT_OTP_AUTO_SEND_DEBOUNCE_MS,
   EMPTY_CHECKOUT_OTP_SESSION,
@@ -97,7 +98,7 @@ function ReadOnlyContactRow({
         </Text>
         {verified ? (
           <XStack alignItems="center" gap={4}>
-            <Icons.BadgeCheck size={14} color={ui.success} />
+            <SafeIcon icon={Icons.BadgeCheck} size={14} color={ui.success} />
             <Text fontSize={11} color={ui.success} fontWeight="700">
               Verified
             </Text>
@@ -440,7 +441,7 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
           </Text>
           {phoneOtpExpired ? (
             <XStack alignItems="center" gap="$2" flexWrap="wrap">
-              <Icons.Info size={14} color={ui.error} />
+              <SafeIcon icon={Icons.Info} size={14} color={ui.error} />
               <Text fontSize={12} color={ui.error} fontWeight="600">
                 This code has expired. Send a new code to continue.
               </Text>
@@ -542,7 +543,7 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
 
       {!contact.checkoutReady ? (
         <XStack alignItems="center" gap="$2" paddingTop="$1">
-          <Icons.Info size={14} color={ui.badgeAccentText} />
+          <SafeIcon icon={Icons.Info} size={14} color={ui.badgeAccentText} />
           <Text fontSize={12} color={ui.badgeAccentText} fontWeight="600">
             Verify your mobile to continue checkout.
           </Text>

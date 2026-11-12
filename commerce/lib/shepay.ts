@@ -152,6 +152,54 @@ export type PayuBinInfo = {
   is_domestic: boolean
 }
 
+export type PayuCheckoutDetailsResult = {
+  upi?: { enabled?: boolean; isDown?: boolean }
+  cards?: { enabled?: boolean }
+  netbanking?: Array<{
+    bankcode: string
+    title: string
+    shortName?: string | null
+    isDown?: boolean
+  }>
+  wallets?: Array<{
+    bankcode: string
+    title: string
+    shortName?: string | null
+    isDown?: boolean
+  }>
+  emi?: Array<{
+    bankcode: string
+    title: string
+    shortName?: string | null
+    tenure?: number | null
+    monthlyEmi?: number | null
+    isDown?: boolean
+  }>
+  bnpl?: Array<{
+    bankcode: string
+    title: string
+    shortName?: string | null
+    isDown?: boolean
+  }>
+  paypal?: boolean
+  pluxee?: boolean
+  neft?: boolean
+}
+
+/** Live PayU instruments for the checkout accordion (get_checkout_details). */
+export async function fetchPayuCheckoutDetails(amount: number): Promise<{
+  data: PayuCheckoutDetailsResult | null
+  error: string | null
+}> {
+  const { data, error } = await supabase.functions.invoke('shepay-payu-checkout-details', {
+    body: { amount },
+  })
+  if (error) return { data: null, error: await edgeInvokeErrorMessage(error as never, data) }
+  const payload = data as PayuCheckoutDetailsResult & { error?: string }
+  if (payload?.error) return { data: null, error: payload.error }
+  return { data: payload, error: null }
+}
+
 /** Step 1 — validate card BIN via PayU getBinInfo. */
 export async function fetchPayuBinInfo(bin: string): Promise<{
   data: PayuBinInfo | null

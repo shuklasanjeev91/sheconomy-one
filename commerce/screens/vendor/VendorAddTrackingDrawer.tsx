@@ -224,7 +224,7 @@ function EasyshipOnlyForm({
           <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
             {mode === 'return'
               ? 'Create a reverse pickup label. Tracking syncs automatically after the label is purchased.'
-              : 'Buy a shipping label with your shipping credit. The customer gets tracking when the label is ready.'}
+              : 'Buy a shipping label — freight is auto-debited from your shipping wallet (0% platform commission).'}
           </Text>
           {easyshipCreditBalance != null ? (
             <Text fontSize={12} color={ui.textMuted}>

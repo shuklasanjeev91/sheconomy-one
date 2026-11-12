@@ -5,19 +5,14 @@ import {
   CheckoutPayuMethodIcon,
   CheckoutPayuSectionIcons,
 } from '~/commerce/components/CheckoutPayuMethodIcon'
-import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
 import {
-  PAYU_CARD_OPTIONS,
-  PAYU_NB_OPTIONS,
-  PAYU_UPI_OPTIONS,
-  PAYU_WALLET_OPTIONS,
-  payuGroupIdForMode,
-  type PayuMethodGroupId,
-  type PayuPaymentMode,
-  type PayuPaymentModeId,
-} from '~/commerce/lib/payu-payment-modes'
-
-type SectionId = Section['id']
+  buildFallbackPayuCheckoutSections,
+  sectionIdForPayuMode,
+  type PayuCheckoutSection,
+  type PayuCheckoutSectionId,
+} from '~/commerce/lib/payu-checkout-details'
+import type { PayuPaymentModeId } from '~/commerce/lib/payu-payment-modes'
+import { Input, ScrollView, Text, XStack, YStack } from '~/components/ui'
 
 type CheckoutPayuMethodPickerProps = {
   brandColor: string
@@ -31,10 +26,10 @@ type CheckoutPayuMethodPickerProps = {
   onVpaChange: (value: string) => void
   /** Optional card form rendered under Cards when selected */
   cardFields?: ReactNode
-  /** Shown but not expandable / selectable (e.g. net banking coming later). */
-  disabledSectionIds?: SectionId[]
   /** Collapse accordion and clear selection (e.g. COD is selected). */
   collapsed?: boolean
+  /** Live / fallback accordion sections from PayU get_checkout_details. */
+  sections?: PayuCheckoutSection[]
   /** When set, COD appears in the same Amazon-style list */
   cod?: {
     selected: boolean
@@ -44,102 +39,17 @@ type CheckoutPayuMethodPickerProps = {
   } | null
 }
 
-type Section = {
-  id: PayuMethodGroupId | 'more'
-  title: string
-  hint: string
-  options: PayuPaymentMode[]
-}
-
-const MORE_OPTIONS: PayuPaymentMode[] = [
-  { id: 'emi', label: 'EMI', shortLabel: 'EMI', pg: 'EMI', bankcode: 'EMI', seamlessS2s: true },
-  { id: 'bnpl', label: 'Buy Now Pay Later', shortLabel: 'BNPL', pg: 'BNPL', bankcode: 'LAZYPAY', seamlessS2s: true },
-  { id: 'paypal', label: 'PayPal', shortLabel: 'PayPal', pg: 'PAYPAL', bankcode: 'PAYPAL', seamlessS2s: true },
-  {
-    id: 'pluxee',
-    label: 'Pluxee (Sodexo)',
-    shortLabel: 'Pluxee',
-    pg: 'MC',
-    bankcode: 'SODEXO',
-    seamlessS2s: true,
-  },
-  {
-    id: 'neft',
-    label: 'NEFT / RTGS',
-    shortLabel: 'NEFT',
-    pg: 'NEFTRTGS',
-    bankcode: 'EFTAXTPV',
-    extraFields: { api_version: '6' },
-    seamlessS2s: true,
-  },
-]
-
-/** Popular UPI first — matches how shoppers scan Amazon’s list. */
-const UPI_OPTIONS_ORDERED: PayuPaymentMode[] = [
-  ...PAYU_UPI_OPTIONS.filter((o) => o.id === 'upi_gpay'),
-  ...PAYU_UPI_OPTIONS.filter((o) => o.id === 'upi_phonepe'),
-  ...PAYU_UPI_OPTIONS.filter((o) => o.id === 'upi_paytm'),
-  ...PAYU_UPI_OPTIONS.filter((o) => o.id === 'upi_qr'),
-  ...PAYU_UPI_OPTIONS.filter((o) => o.id === 'upi_collect'),
-  ...PAYU_UPI_OPTIONS.filter((o) => o.id === 'upi_intent'),
-]
-
-const SECTIONS: Section[] = [
-  {
-    id: 'upi',
-    title: 'UPI',
-    hint: 'Google Pay, PhonePe, Paytm & more',
-    options: UPI_OPTIONS_ORDERED,
-  },
-  {
-    id: 'cards',
-    title: 'Credit or debit card',
-    hint: 'Visa, Mastercard, RuPay & more',
-    options: PAYU_CARD_OPTIONS,
-  },
-  {
-    id: 'netbanking',
-    title: 'Net banking',
-    hint: 'Pick your bank on the PayU page',
-    options: PAYU_NB_OPTIONS,
-  },
-  {
-    id: 'wallets',
-    title: 'Wallets',
-    hint: 'MobiKwik, Ola Money',
-    options: PAYU_WALLET_OPTIONS,
-  },
-  {
-    id: 'more',
-    title: 'Other payment options',
-    hint: 'EMI, BNPL, PayPal, NEFT',
-    options: MORE_OPTIONS,
-  },
-]
-
-function sectionContainsMode(section: Section, mode: PayuPaymentModeId): boolean {
-  return section.options.some((o) => o.id === mode)
-}
-
-function selectedLabel(mode: PayuPaymentModeId): string {
-  for (const section of SECTIONS) {
+function selectedLabel(mode: PayuPaymentModeId, sections: PayuCheckoutSection[]): string {
+  for (const section of sections) {
     const hit = section.options.find((o) => o.id === mode)
     if (hit) return hit.label
   }
   return 'Selected'
 }
 
-function sectionIdForMode(mode: PayuPaymentModeId): Section['id'] {
-  const group = payuGroupIdForMode(mode)
-  if (['emi', 'bnpl', 'paypal', 'pluxee', 'neft'].includes(mode)) return 'more'
-  if (group === 'cards' || group === 'upi' || group === 'netbanking' || group === 'wallets') {
-    return group
-  }
-  return 'upi'
-}
-
 /**
  * Amazon-style payment method list — one frame, radio rows, inline expansion.
+ * Sections come from PayU get_checkout_details (with static fallback).
  */
 export function CheckoutPayuMethodPicker({
   brandColor,
@@ -152,14 +62,17 @@ export function CheckoutPayuMethodPicker({
   vpa,
   onVpaChange,
   cardFields,
-  disabledSectionIds = [],
   collapsed = false,
+  sections: sectionsProp,
   cod = null,
 }: CheckoutPayuMethodPickerProps) {
-  const disabledSections = useMemo(() => new Set(disabledSectionIds), [disabledSectionIds])
+  const sections = useMemo(
+    () => (sectionsProp?.length ? sectionsProp : buildFallbackPayuCheckoutSections()),
+    [sectionsProp],
+  )
 
-  const [openId, setOpenId] = useState<Section['id'] | 'cod' | null>(() =>
-    cod?.selected || collapsed ? null : sectionIdForMode(mode),
+  const [openId, setOpenId] = useState<PayuCheckoutSectionId | 'cod' | null>(() =>
+    cod?.selected || collapsed ? null : sectionIdForPayuMode(mode, sections),
   )
 
   useEffect(() => {
@@ -167,20 +80,14 @@ export function CheckoutPayuMethodPicker({
       setOpenId(null)
       return
     }
-    const nextOpen = sectionIdForMode(mode)
-    if (disabledSections.has(nextOpen)) {
-      setOpenId('upi')
-      if (mode !== 'upi_gpay' && mode !== 'upi_intent') onModeChange('upi_gpay')
-      return
-    }
-    setOpenId(nextOpen)
-  }, [collapsed, cod?.selected, disabledSections, mode])
+    setOpenId(sectionIdForPayuMode(mode, sections))
+  }, [collapsed, cod?.selected, mode, sections])
 
-  function selectSection(section: Section) {
-    if (disabledSections.has(section.id)) return
+  function selectSection(section: PayuCheckoutSection) {
     setOpenId(section.id)
-    if (!sectionContainsMode(section, mode)) {
-      onModeChange(section.options[0]?.id ?? 'upi_gpay')
+    const stillInSection = section.options.some((o) => o.id === mode)
+    if (!stillInSection) {
+      onModeChange((section.options[0]?.id ?? 'upi_gpay') as PayuPaymentModeId)
       return
     }
     // Re-select same mode so parent can clear COD / reopen online.
@@ -197,19 +104,19 @@ export function CheckoutPayuMethodPicker({
       backgroundColor="transparent"
       flexShrink={0}
     >
-      {SECTIONS.map((section, sectionIndex) => {
-        const disabled = disabledSections.has(section.id)
-        const open = !collapsed && !disabled && openId === section.id && !cod?.selected
+      {sections.map((section, sectionIndex) => {
+        const open = !collapsed && openId === section.id && !cod?.selected
         const hasSelection =
-          !collapsed && !disabled && sectionContainsMode(section, mode) && !cod?.selected
-        const isLastOnline = sectionIndex === SECTIONS.length - 1 && !cod
+          !collapsed &&
+          section.options.some((o) => o.id === mode) &&
+          !cod?.selected
+        const isLastOnline = sectionIndex === sections.length - 1 && !cod
 
         return (
           <YStack
             key={section.id}
             borderBottomWidth={isLastOnline ? 0 : 1}
             borderBottomColor={borderColor}
-            opacity={disabled ? 0.48 : 1}
           >
             <XStack
               alignItems="flex-start"
@@ -217,11 +124,11 @@ export function CheckoutPayuMethodPicker({
               paddingHorizontal="$3.5"
               paddingVertical="$3.5"
               backgroundColor={open || hasSelection ? chipColor : 'transparent'}
-              onPress={disabled ? undefined : () => selectSection(section)}
-              cursor={disabled ? 'not-allowed' : 'pointer'}
-              pressStyle={disabled ? undefined : { opacity: 0.92 }}
+              onPress={() => selectSection(section)}
+              cursor="pointer"
+              pressStyle={{ opacity: 0.92 }}
               accessibilityRole="radio"
-              accessibilityState={{ selected: open || hasSelection, disabled }}
+              accessibilityState={{ selected: open || hasSelection }}
             >
               <YStack paddingTop={2}>
                 <CommerceRadio selected={open || hasSelection} />
@@ -239,11 +146,7 @@ export function CheckoutPayuMethodPicker({
                         color={hasSelection ? brandColor : secondaryColor}
                         numberOfLines={1}
                       >
-                        {disabled
-                          ? 'Currently unavailable'
-                          : hasSelection
-                            ? selectedLabel(mode)
-                            : section.hint}
+                        {hasSelection ? selectedLabel(mode, sections) : section.hint}
                       </Text>
                     ) : (
                       <Text fontSize={12} color={secondaryColor} numberOfLines={1}>
@@ -258,7 +161,9 @@ export function CheckoutPayuMethodPicker({
                       <CheckoutPayuSectionIcons sectionId={section.id} size={22} />
                     )
                   ) : (
-                    <Icons.ChevronUp size={18} color={secondaryColor} />
+                    <Text fontSize={16} color={secondaryColor} fontWeight="700">
+                      ⌃
+                    </Text>
                   )}
                 </XStack>
 
@@ -267,11 +172,20 @@ export function CheckoutPayuMethodPicker({
                     gap="$2"
                     paddingTop="$2"
                     onPress={(e) => {
-                      // Keep nested taps from collapsing/re-selecting the parent row.
                       e?.stopPropagation?.()
                     }}
                   >
-                    {section.id === 'upi' || section.id === 'wallets' || section.id === 'more' ? (
+                    {section.id === 'cards' ? (
+                      <XStack alignItems="center" gap="$2">
+                        <CheckoutPayuSectionIcons sectionId="cards" size={24} />
+                        <Text fontSize={12} color={secondaryColor}>
+                          Enter card details below
+                        </Text>
+                      </XStack>
+                    ) : section.id === 'upi' ||
+                      section.id === 'wallets' ||
+                      section.id === 'emi' ||
+                      section.id === 'bnpl' ? (
                       <XStack gap="$2" flexWrap="wrap">
                         {section.options.map((option) => {
                           const active = mode === option.id
@@ -286,13 +200,16 @@ export function CheckoutPayuMethodPicker({
                               borderWidth={1.5}
                               borderColor={active ? brandColor : borderColor}
                               backgroundColor={active ? `${brandColor}14` : 'transparent'}
-                              onPress={() => onModeChange(option.id)}
+                              onPress={() => onModeChange(option.id as PayuPaymentModeId)}
                               cursor="pointer"
                               pressStyle={{ opacity: 0.9 }}
                               accessibilityRole="radio"
                               accessibilityState={{ selected: active }}
                             >
-                              <CheckoutPayuMethodIcon modeId={option.id} size={28} />
+                              <CheckoutPayuMethodIcon
+                                modeId={option.id as PayuPaymentModeId}
+                                size={28}
+                              />
                               <Text
                                 fontSize={13}
                                 fontWeight={active ? '700' : '500'}
@@ -304,53 +221,51 @@ export function CheckoutPayuMethodPicker({
                           )
                         })}
                       </XStack>
-                    ) : section.id === 'netbanking' ? (
-                      <YStack gap="$1.5">
-                        {section.options.map((option) => {
-                          const active = mode === option.id
-                          return (
-                            <XStack
-                              key={option.id}
-                              alignItems="center"
-                              gap="$3"
-                              paddingVertical="$2.5"
-                              paddingHorizontal="$2.5"
-                              borderRadius={10}
-                              borderWidth={1}
-                              borderColor={active ? brandColor : borderColor}
-                              backgroundColor={active ? `${brandColor}12` : 'transparent'}
-                              onPress={() => onModeChange(option.id)}
-                              cursor="pointer"
-                              pressStyle={{ opacity: 0.9 }}
-                              accessibilityRole="radio"
-                              accessibilityState={{ selected: active }}
-                            >
-                              <CommerceRadio selected={active} size={18} />
-                              <CheckoutPayuMethodIcon modeId={option.id} size={30} />
-                              <Text
-                                flex={1}
-                                fontSize={14}
-                                fontWeight={active ? '700' : '500'}
-                                color={active ? brandColor : textColor}
-                              >
-                                {option.label}
-                              </Text>
-                            </XStack>
-                          )
-                        })}
-                      </YStack>
                     ) : (
-                      <XStack alignItems="center" gap="$2">
-                        <CheckoutPayuSectionIcons sectionId="cards" size={24} />
-                        <Text fontSize={12} color={secondaryColor}>
-                          Enter card details below
-                        </Text>
-                      </XStack>
+                      <ScrollView maxHeight={280} nestedScrollEnabled>
+                        <YStack gap="$1.5">
+                          {section.options.map((option) => {
+                            const active = mode === option.id
+                            return (
+                              <XStack
+                                key={option.id}
+                                alignItems="center"
+                                gap="$3"
+                                paddingVertical="$2.5"
+                                paddingHorizontal="$2.5"
+                                borderRadius={10}
+                                borderWidth={1}
+                                borderColor={active ? brandColor : borderColor}
+                                backgroundColor={active ? `${brandColor}12` : 'transparent'}
+                                onPress={() => onModeChange(option.id as PayuPaymentModeId)}
+                                cursor="pointer"
+                                pressStyle={{ opacity: 0.9 }}
+                                accessibilityRole="radio"
+                                accessibilityState={{ selected: active }}
+                              >
+                                <CommerceRadio selected={active} size={18} />
+                                <CheckoutPayuMethodIcon
+                                  modeId={option.id as PayuPaymentModeId}
+                                  size={30}
+                                />
+                                <Text
+                                  flex={1}
+                                  fontSize={14}
+                                  fontWeight={active ? '700' : '500'}
+                                  color={active ? brandColor : textColor}
+                                >
+                                  {option.label}
+                                </Text>
+                              </XStack>
+                            )
+                          })}
+                        </YStack>
+                      </ScrollView>
                     )}
 
                     {section.id === 'upi' && mode === 'upi_qr' ? (
                       <Text fontSize={12} color={secondaryColor} lineHeight={17}>
-                        After you place the order, a QR opens here — scan with any UPI app.
+                        After you tap Pay, a QR opens here — scan with any UPI app.
                       </Text>
                     ) : null}
 
@@ -414,7 +329,21 @@ export function CheckoutPayuMethodPicker({
               {cod.subtitle ?? 'Pay with cash, UPI or card when your order arrives'}
             </Text>
           </YStack>
-          <Icons.Banknote size={22} color={secondaryColor} />
+          <YStack
+            width={36}
+            height={36}
+            borderRadius={8}
+            alignItems="center"
+            justifyContent="center"
+            backgroundColor="#E8F5E9"
+            borderWidth={1}
+            borderColor="#1B5E2018"
+            flexShrink={0}
+          >
+            <Text fontSize={10} fontWeight="800" color="#1B5E20">
+              COD
+            </Text>
+          </YStack>
         </XStack>
       ) : null}
     </YStack>

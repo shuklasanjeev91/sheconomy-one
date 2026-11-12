@@ -100,6 +100,9 @@ export { FocusScope } from '@tamagui/focus-scope'
 // `Badge`, `Menu`, etc. that would otherwise collide with our components.
 // Usage: <Icons.Check /> <Icons.ChevronDown />
 // Curated subset — full @tamagui/lucide-icons re-export OOMs Hermes on device (~39MB).
-export * as Icons from '~/components/ui/icons'
+// Concrete object + Proxy (see icons-namespace.ts) — `export * as` was tree-shaken
+// across chunks and left Icons.* undefined (React #130 on checkout).
+export { Icons } from '~/components/ui/icons-namespace'
+export { SafeIcon } from '~/components/ui/SafeIcon'
 
 export { BRAND_THEME, gradients, radius, shadows, getShadowStyle } from '~/config/tokens'
