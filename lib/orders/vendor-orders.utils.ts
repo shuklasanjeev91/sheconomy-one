@@ -121,11 +121,11 @@ export function transformVendorOrderItems(items: VendorOrderItem[] | null | unde
 
 // 'awaiting_payment' is intentionally excluded: online payment orders in that
 // state have not been paid yet and should not be visible/actionable by vendors.
-// The webhook handler promotes them to 'confirmed' once payment is received.
+// Paid marketplace orders auto-accept into processing; COD stays pending until Accept.
 const PENDING_STATUSES: OrderStatus[] = [
   ORDER_STATUS.PENDING,    // COD orders — payment on delivery, actionable immediately
-  ORDER_STATUS.CONFIRMED,  // Online orders after payment webhook confirmed
-  ORDER_STATUS.PROCESSING, // Vendor is packing
+  ORDER_STATUS.CONFIRMED,  // Legacy online path
+  ORDER_STATUS.PROCESSING, // Paid marketplace — ready to create shipping label
 ]
 
 export function getVendorOrdersByStatus(

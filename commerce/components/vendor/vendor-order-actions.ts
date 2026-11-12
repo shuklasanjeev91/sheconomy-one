@@ -25,7 +25,7 @@ export type VendorOrderAction = {
 /** Human copy for advancing an item to a given status. */
 const ADVANCE_LABELS: Partial<Record<OrderStatus, string>> = {
   [ORDER_STATUS.CONFIRMED]: 'Accept',
-  [ORDER_STATUS.PROCESSING]: 'Start Processing',
+  [ORDER_STATUS.PROCESSING]: 'Create shipping label',
   [ORDER_STATUS.SHIPPED]: 'Add tracking',
   [ORDER_STATUS.IN_TRANSIT]: 'In transit',
   [ORDER_STATUS.OUT_FOR_DELIVERY]: 'Out for delivery',
@@ -50,10 +50,11 @@ function primaryForwardStatus(current: OrderStatus): OrderStatus | null {
     case ORDER_STATUS.AWAITING_PAYMENT:
       return ORDER_STATUS.CONFIRMED
     case ORDER_STATUS.CONFIRMED:
+      // Paid marketplace orders auto-accept into processing; confirmed is rare (legacy/COD).
       return ORDER_STATUS.PROCESSING
     case ORDER_STATUS.PROCESSING:
     case ORDER_STATUS.PARTIALLY_SHIPPED:
-      // Opens Add Tracking drawer — status then advances from courier APIs only.
+      // Opens label / tracking flow — carrier webhooks advance after ship.
       return ORDER_STATUS.SHIPPED
     case ORDER_STATUS.DELIVERED:
       return ORDER_STATUS.COMPLETED

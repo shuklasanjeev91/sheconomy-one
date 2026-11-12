@@ -62,11 +62,23 @@ function mapEasyshipDeliveryState(raw: string | null | undefined): DeliveryStatu
   const s = (raw ?? '').toLowerCase()
   if (!s) return 'shipped'
   if (s.includes('delivered')) return 'delivered'
-  if (s.includes('out_for_delivery')) return 'out_for_delivery'
+  if (s.includes('out_for_delivery') || s.includes('out for delivery')) {
+    return 'out_for_delivery'
+  }
   if (s.includes('returned') || s.includes('rto')) return 'returned_to_sender'
   if (s.includes('exception') || s.includes('fail')) return 'failed_delivery'
   if (s.includes('cancel')) return 'cancelled'
-  if (s.includes('in_transit') || s.includes('transit')) return 'in_transit'
+  // Pickup / dispatched / collected → in_transit so customers get a progress ping.
+  if (
+    s.includes('pickup') ||
+    s.includes('picked') ||
+    s.includes('collected') ||
+    s.includes('dispatch') ||
+    s.includes('in_transit') ||
+    s.includes('transit')
+  ) {
+    return 'in_transit'
+  }
   return mapCarrierStatus(raw)
 }
 
@@ -168,6 +180,7 @@ Deno.serve(async (request) => {
       delivery_metadata: {
         ...meta,
         courier_slug: meta.courier_slug || 'easyship',
+        notify_customer: meta.notify_customer !== false,
         easyship_shipment_id: easyshipShipmentId || meta.easyship_shipment_id || null,
         easyship_event_type: eventType,
         easyship_delivery_state: deliveryState,
@@ -175,9 +188,16 @@ Deno.serve(async (request) => {
       },
       updated_at: now,
     }
-    if (trackingNumber) patch.tracking_number = trackingNumber
+    if (trackingNumber) {
+      patch.tracking_number = trackingNumber
+      patch.awb_code = trackingNumber
+    }
     if (nextStatus === 'delivered') patch.delivered_at = now
-    if (nextStatus === 'shipped' || nextStatus === 'in_transit') {
+    if (
+      nextStatus === 'shipped' ||
+      nextStatus === 'in_transit' ||
+      nextStatus === 'out_for_delivery'
+    ) {
       patch.shipped_at = row.shipped_at || now
     }
 

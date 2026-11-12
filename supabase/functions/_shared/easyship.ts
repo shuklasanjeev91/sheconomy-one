@@ -225,6 +225,7 @@ export type EasyshipShipmentResult = {
   easyshipShipmentId: string
   trackingNumber: string | null
   labelUrl: string | null
+  invoiceUrl: string | null
   labelState: string | null
   courierName: string | null
   totalCharge: number | null
@@ -278,11 +279,20 @@ export async function createShipment(
     | Record<string, unknown>
     | null
   let labelUrl: string | null = null
+  let invoiceUrl: string | null = null
   if (Array.isArray(docs)) {
-    const labelDoc = docs.find((d) => String(d.type || d.category || '').toLowerCase().includes('label'))
-    labelUrl = String(labelDoc?.url || labelDoc?.label_url || docs[0]?.url || '') || null
+    const labelDoc = docs.find((d) =>
+      String(d.type || d.category || '').toLowerCase().includes('label'),
+    )
+    const invoiceDoc = docs.find((d) =>
+      String(d.type || d.category || '').toLowerCase().includes('invoice'),
+    )
+    labelUrl = String(labelDoc?.url || labelDoc?.label_url || docs[0]?.url || '') ||
+      null
+    invoiceUrl = String(invoiceDoc?.url || invoiceDoc?.invoice_url || '') || null
   } else if (docs && typeof docs === 'object') {
     labelUrl = String(docs.url || docs.label_url || '') || null
+    invoiceUrl = String(docs.invoice_url || '') || null
   }
 
   const easyshipShipmentId = String(
@@ -300,6 +310,7 @@ export async function createShipment(
         ? String(shipment.track_number)
         : null,
     labelUrl,
+    invoiceUrl,
     labelState: shipment.label_state ? String(shipment.label_state) : null,
     courierName: String(courier.name || courier.umbrella_name || '') || null,
     totalCharge: Number.isFinite(Number(shipment.total_charge))

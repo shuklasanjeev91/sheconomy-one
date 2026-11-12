@@ -297,12 +297,18 @@ Deno.serve(async (request) => {
     }
 
     const now = new Date().toISOString()
+    const carrierName =
+      created.courierName || best.courier_service?.name || 'Easyship'
     const deliveryPayload = {
       order_id: body.orderId,
-      courier_name: created.courierName || best.courier_service?.name || 'Easyship',
+      delivery_status: 'shipped',
+      carrier_name: carrierName,
+      courier_service_name: carrierName,
       tracking_number: created.trackingNumber,
-      tracking_url: created.labelUrl,
-      shipping_status: 'shipped',
+      awb_code: created.trackingNumber,
+      carrier_tracking_url: created.labelUrl,
+      label_url: created.labelUrl,
+      invoice_url: created.invoiceUrl,
       shipping_cost: debitAmount,
       shipped_at: now,
       delivery_metadata: {
@@ -311,6 +317,8 @@ Deno.serve(async (request) => {
         easyship_shipment_id: created.easyshipShipmentId,
         label_state: created.labelState,
         label_url: created.labelUrl,
+        invoice_url: created.invoiceUrl,
+        auto_tracking: true,
       },
       updated_at: now,
     }
@@ -319,14 +327,23 @@ Deno.serve(async (request) => {
     for (const item of items) {
       const { data: existing } = await admin
         .from('order_delivery')
-        .select('id')
+        .select('id, delivery_metadata')
         .eq('order_item_id', item.id)
         .maybeSingle()
 
       if (existing?.id) {
+        const prevMeta =
+          existing.delivery_metadata &&
+            typeof existing.delivery_metadata === 'object' &&
+            !Array.isArray(existing.delivery_metadata)
+            ? existing.delivery_metadata as Record<string, unknown>
+            : {}
         const { data: updated } = await admin
           .from('order_delivery')
-          .update(deliveryPayload)
+          .update({
+            ...deliveryPayload,
+            delivery_metadata: { ...prevMeta, ...deliveryPayload.delivery_metadata },
+          })
           .eq('id', existing.id)
           .select('id')
           .maybeSingle()
@@ -339,13 +356,27 @@ Deno.serve(async (request) => {
           .maybeSingle()
         if (inserted) deliveryRows.push(inserted)
       }
+
+      // Advance item into shipped; delivery trigger also syncs, but do it eagerly.
+      await admin
+        .from('order_items')
+        .update({ item_status: 'shipped', updated_at: now })
+        .eq('id', item.id)
+        .not('item_status', 'in', '("cancelled","refunded","delivered")')
     }
+
+    await admin
+      .from('orders')
+      .update({ order_status: 'shipped', updated_at: now })
+      .eq('id', body.orderId)
+      .not('order_status', 'in', '("cancelled","refunded","delivered")')
 
     return jsonResponse({
       success: true,
       easyshipShipmentId: created.easyshipShipmentId,
       trackingNumber: created.trackingNumber,
       labelUrl: created.labelUrl,
+      invoiceUrl: created.invoiceUrl,
       courierName: created.courierName,
       freight: debitAmount,
       debit: debitJson,

@@ -951,7 +951,7 @@ function DrawerBody({
         ) : null}
         <XStack gap="$2">
           <Button tone="outline" size="$3" borderRadius={999} flex={1} icon={<Icons.Download size={15} />} onPress={onDownload}>
-            Download PDF
+            Download invoice
           </Button>
           <Button tone="outline" size="$3" borderRadius={999} flex={1} icon={<Icons.MessageSquare size={15} />} onPress={onContact}>
             Contact

@@ -874,16 +874,18 @@ DECLARE
   v_was_paid boolean;
   v_refunded boolean;
   v_shop uuid;
+  v_new text := lower(coalesce(NEW.order_status::text, ''));
+  v_old text := lower(coalesce(OLD.order_status::text, ''));
 BEGIN
-  v_paid := lower(coalesce(NEW.order_status, '')) IN (
-    'paid', 'processing', 'shipped', 'delivered', 'completed', 'awaiting_fulfillment'
+  v_paid := v_new IN (
+    'paid', 'processing', 'shipped', 'delivered', 'completed', 'awaiting_fulfillment',
+    'confirmed', 'in_transit', 'out_for_delivery', 'partially_shipped'
   );
-  v_was_paid := lower(coalesce(OLD.order_status, '')) IN (
-    'paid', 'processing', 'shipped', 'delivered', 'completed', 'awaiting_fulfillment'
+  v_was_paid := v_old IN (
+    'paid', 'processing', 'shipped', 'delivered', 'completed', 'awaiting_fulfillment',
+    'confirmed', 'in_transit', 'out_for_delivery', 'partially_shipped'
   );
-  v_refunded := lower(coalesce(NEW.order_status, '')) IN (
-    'refunded', 'cancelled', 'canceled'
-  );
+  v_refunded := v_new IN ('refunded', 'cancelled', 'canceled');
 
   IF v_paid AND NOT v_was_paid THEN
     PERFORM public.referral_try_credit_buyer_first_order(NEW.id);

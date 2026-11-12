@@ -315,8 +315,8 @@ export function VendorOrdersScreen() {
       toast.show('Shipment created', {
         tone: 'success',
         message: result.trackingNumber
-          ? `Tracking ${result.trackingNumber} — freight debited from wallet.`
-          : 'Shipping label purchased.',
+          ? `Tracking ${result.trackingNumber} added. Download the label/invoice from the order. Customer is notified automatically.`
+          : 'Shipping label purchased. Customer is notified automatically.',
       })
       setTrackingItem(null)
       loadPage()
