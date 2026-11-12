@@ -27,7 +27,12 @@ import {
 import { helpHref } from '~/lib/help/types'
 import { productQuestionChips } from '~/lib/listing/product-questions'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { useAiAssist } from '~/providers/AiAssistProvider'
+import {
+  useAiAssistOptional,
+  type AiAssistContextValue,
+  type OpenAssistOptions,
+} from '~/providers/ai-assist-context'
+import type { AiRouteContext } from '~/lib/ai'
 import { navigateApp } from '~/lib/platform/navigate'
 
 function newLocalId() {
@@ -60,6 +65,10 @@ function RelatedListingCards({ ids }: { ids: string[] }) {
  */
 export function AiAssistSheet() {
   const ui = useAppUi()
+  const assist = useAiAssistOptional()
+  // Avoid blanking the whole app if the provider is missing (e.g. Fast Refresh desync).
+  if (!assist) return null
+
   const {
     open,
     closeAssist,
@@ -68,8 +77,41 @@ export function AiAssistSheet() {
     draftPrompt,
     autoSendPrompt,
     clearDraft,
-  } = useAiAssist()
+  } = assist
 
+  return (
+    <AiAssistSheetBody
+      ui={ui}
+      open={open}
+      closeAssist={closeAssist}
+      routeContext={routeContext}
+      override={override}
+      draftPrompt={draftPrompt}
+      autoSendPrompt={autoSendPrompt}
+      clearDraft={clearDraft}
+    />
+  )
+}
+
+function AiAssistSheetBody({
+  ui,
+  open,
+  closeAssist,
+  routeContext,
+  override,
+  draftPrompt,
+  autoSendPrompt,
+  clearDraft,
+}: {
+  ui: ReturnType<typeof useAppUi>
+  open: boolean
+  closeAssist: AiAssistContextValue['closeAssist']
+  routeContext: AiRouteContext
+  override: OpenAssistOptions | null
+  draftPrompt: string | null
+  autoSendPrompt: boolean
+  clearDraft: AiAssistContextValue['clearDraft']
+}) {
   const product: AiProduct = override?.product ?? routeContext.product
   const contextPage = override?.contextPage ?? routeContext.contextPage
   const context = { ...routeContext.context, ...(override?.context ?? {}) }

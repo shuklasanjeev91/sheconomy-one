@@ -1,20 +1,33 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
 
-import { CommercePageHeader, CommercePanel } from '~/commerce/components'
+import {
+  CommercePageHeader,
+  CommercePanel,
+  MarketplaceEmptyState,
+  MarketplacePage,
+  MarketplacePrimaryButton,
+} from '~/commerce/components'
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import {
   fetchCustomerOrderHistory,
   type CustomerOrderHistoryRow,
 } from '~/commerce/lib/buyer-account'
+import {
+  buyerGroupOverallStatusLabel,
+  fetchBuyerCheckoutGroupList,
+  type BuyerCheckoutGroupListRow,
+  type BuyerGroupOverallStatus,
+} from '~/commerce/lib/buyer-checkout-groups'
 import { resumeOrderOnlinePayment } from '~/commerce/lib/resume-order-payment'
 import { cancelCustomerOrder } from '~/commerce/lib/customer-orders'
 import { getCustomerOrderActionEligibility } from '~/commerce/lib/customer-order-lifecycle'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
+import { FullWidthLayout, HorizontalScrollRow, LAYOUT_STRETCH, PageSection } from '~/components/layout'
 import { formatCurrency } from '~/lib/format'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { commerceRoutes } from '~/lib/routes'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { getOrderStatusDisplay } from '~/lib/orders/order.utils'
@@ -40,8 +53,12 @@ function matchesStatusFilter(status: string | null, filter: OrderStatusFilter) {
       normalized.includes('paid') ||
       normalized.includes('confirm') ||
       normalized.includes('awaiting') ||
-      normalized.includes('hold')
+      normalized.includes('hold') ||
+      normalized === 'partially_refunded'
     )
+  }
+  if (filter === 'delivered') {
+    return normalized.includes('delivered') || normalized === 'partially_delivered'
   }
   return normalized.includes(filter)
 }
@@ -62,15 +79,25 @@ function formatOrderDate(value: string | null) {
 
 export function OrderHistoryScreen() {
   const ui = useAppUi()
+  const { hasSideRails } = useAppLayout()
   const toast = useAppToast()
   const { user } = useProfile()
-  const [orders, setOrders] = useState<CustomerOrderHistoryRow[]>([])
+  const [groups, setGroups] = useState<BuyerCheckoutGroupListRow[]>([])
+  const [orphanOrders, setOrphanOrders] = useState<CustomerOrderHistoryRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all')
-  const visibleOrders = orders.filter((order) => matchesStatusFilter(order.order_status, statusFilter))
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null)
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null)
+
+  const visibleGroups = groups.filter((g) =>
+    matchesStatusFilter(g.overall_status, statusFilter),
+  )
+  const visibleOrphans = orphanOrders.filter((order) =>
+    matchesStatusFilter(order.order_status, statusFilter),
+  )
+  const isEmpty = groups.length === 0 && orphanOrders.length === 0
+  const visibleEmpty = visibleGroups.length === 0 && visibleOrphans.length === 0
 
   async function handleCopyOrder(order: CustomerOrderHistoryRow) {
     const label = order.order_number ? `Order #${order.order_number}` : 'Order'
@@ -87,6 +114,21 @@ export function OrderHistoryScreen() {
       .join(' · ')
     const copied = await copyToClipboard(summary)
     toast.show(copied ? 'Order details copied' : 'Could not copy order', {
+      tone: copied ? 'success' : 'danger',
+    })
+  }
+
+  async function handleCopyGroup(group: BuyerCheckoutGroupListRow) {
+    const summary = [
+      `Checkout ${group.id.slice(0, 8)}`,
+      group.shop_names,
+      buyerGroupOverallStatusLabel(group.overall_status),
+      formatOrderDate(group.created_at),
+      formatCurrency(group.total_amount, group.currency || 'INR'),
+      `${group.shop_count} sellers`,
+    ].join(' · ')
+    const copied = await copyToClipboard(summary)
+    toast.show(copied ? 'Checkout details copied' : 'Could not copy', {
       tone: copied ? 'success' : 'danger',
     })
   }
@@ -122,15 +164,26 @@ export function OrderHistoryScreen() {
 
   const load = useCallback(async () => {
     if (!user?.id) {
-      setOrders([])
+      setGroups([])
+      setOrphanOrders([])
       setIsLoading(false)
       return
     }
 
     setIsLoading(true)
-    const result = await fetchCustomerOrderHistory(user.id)
-    setOrders(result.orders)
-    setError(result.error)
+    const [groupResult, historyResult] = await Promise.all([
+      fetchBuyerCheckoutGroupList(user.id),
+      fetchCustomerOrderHistory(user.id),
+    ])
+
+    const groupedOrderIds = new Set(
+      groupResult.groups.flatMap((g) => g.order_ids).filter(Boolean),
+    )
+    const orphans = historyResult.orders.filter((o) => !groupedOrderIds.has(o.order_id))
+
+    setGroups(groupResult.groups)
+    setOrphanOrders(orphans)
+    setError(groupResult.error ?? historyResult.error)
     setIsLoading(false)
   }, [user?.id])
 
@@ -140,11 +193,11 @@ export function OrderHistoryScreen() {
 
   return (
     <FullWidthLayout scroll onRefresh={load}>
-      <PageSection paddingVertical="$6">
-        <YStack gap="$5" width="100%">
+      <PageSection paddingVertical="$5" {...LAYOUT_STRETCH}>
+        <MarketplacePage hasSideRails={hasSideRails}>
           <CommercePageHeader
-            title="Order history"
-            subtitle="Track purchases, delivery status, and payments"
+            title="Purchases"
+            subtitle="Track multi-seller checkouts, delivery, and payments"
           />
 
           <HorizontalScrollRow gap="$2">
@@ -158,7 +211,7 @@ export function OrderHistoryScreen() {
                   borderRadius={999}
                   borderWidth={1}
                   borderColor={active ? ui.brand : ui.borderSubtle}
-                  backgroundColor={active ? ui.surfaceMuted : ui.surface}
+                  backgroundColor={active ? ui.chip : ui.surface}
                   cursor="pointer"
                   onPress={() => setStatusFilter(filter.id)}
                   accessibilityRole="button"
@@ -176,36 +229,94 @@ export function OrderHistoryScreen() {
             <YStack alignItems="center" paddingVertical="$8">
               <Spinner size="large" />
             </YStack>
-          ) : error ? (
+          ) : error && isEmpty ? (
             <Text color={ui.danger} fontSize={14}>
               {error}
             </Text>
-          ) : orders.length === 0 ? (
-            <CommercePanel padding="$6" alignItems="center" gap="$3">
-              <Text fontWeight="600" fontSize={16} color={ui.text}>
-                No orders yet
-              </Text>
-              <Text color={ui.textSecondary} fontSize={14} textAlign="center">
-                When you buy from a shop, your orders will show up here.
-              </Text>
-              <AppLink href={commerceRoutes.home} asChild>
-                <Button tone="primary" size="$3" borderRadius={999}>
-                  Start shopping
-                </Button>
-              </AppLink>
-            </CommercePanel>
-          ) : visibleOrders.length === 0 ? (
-            <CommercePanel padding="$6" alignItems="center" gap="$2">
-              <Text fontWeight="600" fontSize={16} color={ui.text}>
-                No {statusFilter} orders
-              </Text>
-              <Text color={ui.textSecondary} fontSize={14} textAlign="center">
-                Try another status filter or refresh.
-              </Text>
-            </CommercePanel>
+          ) : isEmpty ? (
+            <MarketplaceEmptyState
+              hasSideRails={hasSideRails}
+              icon={<Icons.Package size={48} color={ui.brand} />}
+              title="No purchases yet"
+              subtitle="When you buy from a shop, your orders will show up here."
+              action={
+                <YStack width={hasSideRails ? 280 : '100%'}>
+                  <MarketplacePrimaryButton onPress={() => navigateApp(commerceRoutes.home)}>
+                    Start shopping
+                  </MarketplacePrimaryButton>
+                </YStack>
+              }
+            />
+          ) : visibleEmpty ? (
+            <MarketplaceEmptyState
+              hasSideRails={hasSideRails}
+              icon={<Icons.Search size={40} color={ui.textMuted} />}
+              title={`No ${statusFilter} orders`}
+              subtitle="Try another status filter or refresh."
+            />
           ) : (
             <YStack gap="$3" width="100%">
-              {visibleOrders.map((order) => (
+              {visibleGroups.map((group) => (
+                <CommercePanel key={group.id} padding="$4" gap="$3">
+                  <XStack justifyContent="space-between" alignItems="flex-start" gap="$3">
+                    <YStack flex={1} gap={4}>
+                      <Text fontWeight="700" fontSize={15} color={ui.text}>
+                        {group.shop_count > 1
+                          ? `Checkout · ${group.shop_count} sellers`
+                          : group.shop_names || 'Checkout'}
+                      </Text>
+                      <Text fontSize={13} color={ui.textSecondary} numberOfLines={2}>
+                        {group.shop_count > 1 ? group.shop_names : null}
+                        {group.shop_count > 1 && group.item_count ? ' · ' : null}
+                        {group.item_count
+                          ? `${group.item_count} item${group.item_count === 1 ? '' : 's'}`
+                          : group.shop_count > 1
+                            ? null
+                            : 'Single-seller checkout'}
+                      </Text>
+                      <Text fontSize={11} color={ui.textMuted}>
+                        {buyerGroupOverallStatusLabel(
+                          group.overall_status as BuyerGroupOverallStatus,
+                        )}
+                      </Text>
+                    </YStack>
+                    <Text fontWeight="800" fontSize={15} color={ui.text}>
+                      {formatCurrency(group.total_amount, group.currency || 'INR')}
+                    </Text>
+                  </XStack>
+                  <XStack justifyContent="space-between" alignItems="center" gap="$2" flexWrap="wrap">
+                    <OrderStatusBadge status={group.overall_status} size="sm" />
+                    <Text fontSize={12} color={ui.textMuted}>
+                      {formatOrderDate(group.created_at)}
+                    </Text>
+                  </XStack>
+                  <XStack gap="$2" flexWrap="wrap">
+                    <AppLink href={commerceRoutes.checkoutGroup(group.id)} asChild>
+                      <Button tone="primary" size="$3" borderRadius={999}>
+                        Track sellers
+                      </Button>
+                    </AppLink>
+                    {group.order_ids.length === 1 ? (
+                      <AppLink href={commerceRoutes.order(group.order_ids[0])} asChild>
+                        <Button tone="outline" size="$3" borderRadius={999}>
+                          Order details
+                        </Button>
+                      </AppLink>
+                    ) : null}
+                    <Button
+                      tone="outline"
+                      size="$3"
+                      borderRadius={999}
+                      icon={<Icons.Copy size={13} />}
+                      onPress={() => void handleCopyGroup(group)}
+                    >
+                      Copy
+                    </Button>
+                  </XStack>
+                </CommercePanel>
+              ))}
+
+              {visibleOrphans.map((order) => (
                 <CommercePanel key={order.order_id} padding="$4" gap="$3">
                   <XStack justifyContent="space-between" alignItems="flex-start" gap="$3">
                     <YStack flex={1} gap={4}>
@@ -270,7 +381,6 @@ export function OrderHistoryScreen() {
                         {cancellingOrderId === order.order_id ? 'Cancelling…' : 'Cancel'}
                       </Button>
                     ) : cancelEligibility(order).canRequestCancel ? (
-                      // Requests need a reason — the detail screen owns that sheet.
                       <Button
                         tone="outline"
                         size="$3"
@@ -280,14 +390,6 @@ export function OrderHistoryScreen() {
                         Request cancellation
                       </Button>
                     ) : null}
-                    <Button
-                      tone="outline"
-                      size="$3"
-                      borderRadius={999}
-                      onPress={() => navigateApp(commerceRoutes.order(order.order_id))}
-                    >
-                      Details
-                    </Button>
                     <Button
                       tone="outline"
                       size="$3"
@@ -302,7 +404,7 @@ export function OrderHistoryScreen() {
               ))}
             </YStack>
           )}
-        </YStack>
+        </MarketplacePage>
       </PageSection>
     </FullWidthLayout>
   )

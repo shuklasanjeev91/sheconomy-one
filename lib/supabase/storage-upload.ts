@@ -557,17 +557,46 @@ export async function uploadShopGstDocument(
  */
 const KYC_DOC_BUCKET = 'shop-kyc-documents'
 
+export type ShopKycDocumentKind =
+  | 'pan'
+  | 'bank'
+  | 'gst'
+  | 'schedule_c'
+  | 'incorporation'
+  | 'id_front'
+  | 'id_back'
+  | 'ownership'
+
 /** Private payout KYC file. Path: {userId}/shops/{shopId}/kyc/{kind}-{timestamp}.{ext} */
 export async function uploadShopKycDocument(
   userId: string,
   shopId: string,
-  kind: 'pan' | 'bank' | 'gst',
+  kind: ShopKycDocumentKind,
   file: { blob: Blob; mimeType: string; fileName?: string },
+  options?: { personId?: string },
 ): Promise<{ data: UploadResult | null; error: string | null }> {
   const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
-  const path = `${userId}/shops/${shopId}/kyc/${kind}-${Date.now()}-${randomSuffix()}.${ext}`
+  const personPart = options?.personId ? `person-${options.personId}-` : ''
+  const path = `${userId}/shops/${shopId}/kyc/${personPart}${kind}-${Date.now()}-${randomSuffix()}.${ext}`
   if (file.blob.size <= 0) return { data: null, error: 'Document file is empty.' }
-  if (file.blob.size > 10 * 1024 * 1024) return { data: null, error: 'Document must be 10 MB or smaller.' }
+  // PayU KYC forward caps at 5 MB for identity & bank proofs.
+  const fiveMbKinds: ShopKycDocumentKind[] = [
+    'schedule_c',
+    'pan',
+    'bank',
+    'id_front',
+    'id_back',
+  ]
+  const maxBytes = fiveMbKinds.includes(kind) ? 5 * 1024 * 1024 : 10 * 1024 * 1024
+  if (file.blob.size > maxBytes) {
+    return {
+      data: null,
+      error:
+        maxBytes <= 5 * 1024 * 1024
+          ? 'Document must be 5 MB or smaller for payout verification.'
+          : 'Document must be 10 MB or smaller.',
+    }
+  }
 
   const { error } = await uploadBlobWithProgress(KYC_DOC_BUCKET, path, file.blob, file.mimeType, {
     upsert: true,

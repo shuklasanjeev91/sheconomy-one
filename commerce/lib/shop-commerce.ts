@@ -21,73 +21,19 @@ type CommerceSettingsRow = {
   shipping_connected: boolean | null
 }
 
-const PAYMENT_LABELS: Record<string, string> = {
-  shepay: 'SHEPay',
-  razorpay: 'Razorpay',
-  stripe: 'Stripe',
-  payu: 'SHEPay',
-  cashfree: 'Cashfree',
-  breeze: 'Breeze',
-  paytm: 'Paytm',
-  phonepe: 'PhonePe',
-}
-
-const SHIPPING_LABELS: Record<string, string> = {
-  shedelivery: 'Seller ships',
-  shiprocket: 'Shiprocket',
-  pickrr: 'Pickrr',
-  delhivery: 'Delhivery',
-  bluedart: 'BlueDart',
-  dtdc: 'DTDC',
-  xpressbees: 'Xpressbees',
-  own: 'Seller ships',
-  self: 'Seller ships',
-  partner: 'Seller ships',
-}
-
-function titleCase(value: string): string {
-  return value
-    .replace(/[_-]+/g, ' ')
-    .split(' ')
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}
-
-function labelFor(map: Record<string, string>, key: string | null | undefined): string | null {
-  if (!key) return null
-  const normalized = key.trim().toLowerCase()
-  if (!normalized) return null
-  return map[normalized] ?? titleCase(normalized)
-}
-
-/** Platform defaults when a shop hasn't connected its own partners. */
+/** Buyer/seller display labels — never surface provider brand names. */
 const DEFAULT_PARTNERS = {
-  paymentLabel: 'SHEPay',
-  shippingLabel: 'Seller ships',
+  paymentLabel: 'Secure online payment',
+  shippingLabel: 'Tracked shipping',
 }
 
 function resolvePartner(row: CommerceSettingsRow): ShopPartnerInfo {
-  const paymentConnected = !!row.payment_connected && !!row.payment_gateway
-  const paymentLabel = paymentConnected
-    ? labelFor(PAYMENT_LABELS, row.payment_gateway) ??
-      row.payment_account_label ??
-      DEFAULT_PARTNERS.paymentLabel
-    : labelFor(PAYMENT_LABELS, row.payment_mode) ?? DEFAULT_PARTNERS.paymentLabel
-
-  const shippingConnected = !!row.shipping_connected && !!row.shipping_partner
-  const shippingLabel = shippingConnected
-    ? labelFor(SHIPPING_LABELS, row.shipping_partner) ??
-      row.shipping_account_label ??
-      DEFAULT_PARTNERS.shippingLabel
-    : labelFor(SHIPPING_LABELS, row.shipping_mode) ?? DEFAULT_PARTNERS.shippingLabel
-
   return {
     shopId: row.shop_id,
-    paymentLabel,
-    paymentConnected,
-    shippingLabel,
-    shippingConnected,
+    paymentLabel: DEFAULT_PARTNERS.paymentLabel,
+    paymentConnected: false,
+    shippingLabel: DEFAULT_PARTNERS.shippingLabel,
+    shippingConnected: true,
   }
 }
 
@@ -98,8 +44,7 @@ export function partnerComboKey(info: ShopPartnerInfo): string {
 
 /**
  * Who collects the buyer's payment for a shop.
- * Marketplace checkout always uses SHEPay (platform collect + Automate split).
- * Own-gateway / direct routing has been removed.
+ * Marketplace checkout always uses SHEPay (platform collect + PayU split).
  */
 export type PaymentCollection = 'direct' | 'shepay'
 
@@ -107,7 +52,7 @@ export function paymentCollectionFor(_info: ShopPartnerInfo | undefined): Paymen
   return 'shepay'
 }
 
-/** True when a shop has a connected PayU/SHEPay child merchant for Automate splits. */
+/** True when a shop has a connected PayU/SHEPay child merchant or verified PayU KYC. */
 export async function fetchShepayReadyShopIds(shopIds: string[]): Promise<{
   ready: Set<string>
   missing: string[]
@@ -134,8 +79,18 @@ export async function fetchShepayReadyShopIds(shopIds: string[]): Promise<{
         ? meta.merchant_key.trim()
         : '')
     const childMid = typeof meta.child_mid === 'string' && meta.child_mid.trim()
-    // Child key + MID required so Automate split + release_settlement can run after capture.
     if (childKey && childMid && row.shop_id) ready.add(String(row.shop_id))
+  }
+
+  // Also treat shops with PayU-verified KYC as ready.
+  const { data: kycRows } = await supabase
+    .from('shop_payu_kyc' as never)
+    .select('shop_id, status')
+    .in('shop_id' as never, unique)
+    .eq('status' as never, 'payu_verified')
+
+  for (const row of (kycRows as Array<{ shop_id?: string }> | null) ?? []) {
+    if (row.shop_id) ready.add(String(row.shop_id))
   }
 
   return {
@@ -155,9 +110,8 @@ export function arePartnersUniform(partners: Iterable<ShopPartnerInfo>): boolean
 }
 
 /**
- * Fetch each shop's payment gateway and shipping partner (shop-wise). Shops
- * without an explicit setting fall back to the platform defaults (SHEPay /
- * Seller ships). Only non-sensitive display fields are read.
+ * Fetch each shop's payment gateway and shipping partner (shop-wise).
+ * Commerce surfaces SHEPay + platform shipping labels.
  */
 export async function fetchShopCommerceSettings(
   shopIds: string[],
@@ -179,7 +133,6 @@ export async function fetchShopCommerceSettings(
     }
   }
 
-  // Fill defaults for any shop without a settings row (or on read failure).
   for (const shopId of unique) {
     if (!result.has(shopId)) {
       result.set(shopId, {
@@ -187,7 +140,7 @@ export async function fetchShopCommerceSettings(
         paymentLabel: DEFAULT_PARTNERS.paymentLabel,
         paymentConnected: false,
         shippingLabel: DEFAULT_PARTNERS.shippingLabel,
-        shippingConnected: false,
+        shippingConnected: true,
       })
     }
   }

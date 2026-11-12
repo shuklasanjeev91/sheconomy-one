@@ -20,7 +20,6 @@ import { SearchHitRow } from '~/components/search/SearchHitRow'
 import { AppLink } from '~/components/navigation/AppLink'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
 import { Avatar, Button, EmptyState, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { countActiveFilters, hasActiveFilters } from '~/commerce/lib/filters'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
@@ -649,25 +648,6 @@ export function UnifiedSearchScreen({
               )
             })}
           </HorizontalScrollRow>
-          {scope === 'listings' && hasActiveFilters(filters) ? (
-            <XStack alignItems="center" justifyContent="space-between" gap="$2">
-              <Text fontSize={13} color={ui.textMuted}>
-                {countActiveFilters(filters)} active filter
-                {countActiveFilters(filters) === 1 ? '' : 's'}
-              </Text>
-              <Button
-                size="$3"
-                tone="ghost"
-                borderRadius={999}
-                minHeight={44}
-                onPress={() => updateFilters({})}
-                accessibilityLabel="Clear filters"
-                testID="clear-search-filters"
-              >
-                Clear filters
-              </Button>
-            </XStack>
-          ) : null}
         </YStack>
 
         {gated ? (
@@ -752,16 +732,21 @@ export function UnifiedSearchScreen({
         ) : null}
 
         {!gated && query && listingsBrowseEnabled ? (
-          <ListingFiltersShell filters={filters} onApply={updateFilters}>
+          <ListingFiltersShell
+            filters={filters}
+            onApply={updateFilters}
+            sortInToolbar
+            resultCount={
+              listingsFeed.isLoading && listingsFeed.items.length === 0
+                ? null
+                : listingsFeed.items.length
+            }
+            resultsLabel="Show results"
+          >
             <ListingBrowseView
               key={filterKey}
+              hideHeader
               title="Listing results"
-              subtitle={
-                !listingsFeed.isLoading &&
-                listingsFeed.items.length > 0
-                  ? `${listingsFeed.items.length}${listingsFeed.hasMore ? '+' : ''} listings`
-                  : undefined
-              }
               items={listingsFeed.items}
               isLoading={listingsFeed.isLoading && listingsFeed.items.length === 0}
               isLoadingMore={listingsFeed.isLoadingMore}

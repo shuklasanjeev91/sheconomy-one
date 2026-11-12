@@ -9,39 +9,64 @@ import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function useShopFollow(shopId?: string | null) {
   const { user, isLoading: authLoading } = useSupabase()
+  const userId = user?.id ?? null
   const [isFollowing, setIsFollowing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isToggling, setIsToggling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const reload = useCallback(async (showLoading = true) => {
-    if (!shopId || !user) {
-      setIsFollowing(false)
-      setIsLoading(false)
-      return
-    }
+  const reload = useCallback(
+    async (showLoading = true) => {
+      if (!shopId || !userId) {
+        setIsFollowing(false)
+        setIsLoading(false)
+        return
+      }
 
-    if (showLoading) setIsLoading(true)
-    const result = await fetchShopFollowState(user.id, shopId)
-    setIsFollowing(result.isFollowing)
-    setError(result.error)
-    setIsLoading(false)
-  }, [shopId, user])
+      if (showLoading) setIsLoading(true)
+      const result = await fetchShopFollowState(userId, shopId)
+      setIsFollowing(result.isFollowing)
+      setError(result.error)
+      setIsLoading(false)
+    },
+    [shopId, userId],
+  )
 
   useEffect(() => {
     if (authLoading) return
-    reload()
-  }, [authLoading, reload])
+    let cancelled = false
+
+    void (async () => {
+      if (!shopId || !userId) {
+        if (!cancelled) {
+          setIsFollowing(false)
+          setIsLoading(false)
+        }
+        return
+      }
+
+      setIsLoading(true)
+      const result = await fetchShopFollowState(userId, shopId)
+      if (cancelled) return
+      setIsFollowing(result.isFollowing)
+      setError(result.error)
+      setIsLoading(false)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, shopId, userId])
 
   const toggleFollow = useCallback(async () => {
-    if (!user || !shopId) return { error: 'Sign in to follow shops' }
+    if (!userId || !shopId) return { error: 'Sign in to follow shops' }
 
     setIsToggling(true)
     setError(null)
 
     const result = isFollowing
-      ? await unfollowShop(user.id, shopId)
-      : await followShop(user.id, shopId)
+      ? await unfollowShop(userId, shopId)
+      : await followShop(userId, shopId)
 
     if (!result.error) {
       // Keep the existing button mounted while confirming the new state.
@@ -54,11 +79,11 @@ export function useShopFollow(shopId?: string | null) {
 
     setIsToggling(false)
     return result
-  }, [isFollowing, reload, shopId, user])
+  }, [isFollowing, reload, shopId, userId])
 
   return {
     user,
-    isAuthenticated: !!user,
+    isAuthenticated: !!userId,
     isFollowing,
     isLoading: authLoading || isLoading,
     isToggling,

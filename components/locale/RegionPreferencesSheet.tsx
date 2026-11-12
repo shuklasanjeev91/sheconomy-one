@@ -61,7 +61,7 @@ function OptionRow({ label, selected, onPress, meta }: OptionRowProps) {
 }
 
 /**
- * Etsy-style country / language / currency picker.
+ * Country / language / currency picker.
  * Changing country updates the suggested currency (buyer can still override).
  */
 export function RegionPreferencesSheet({ open, onOpenChange }: RegionPreferencesSheetProps) {

@@ -71,7 +71,7 @@ OpenAPI: `GET /functions/v1/rest-gateway/openapi.json`
 - Home / browse / search → `commerce/lib/commerce.ts`, `lib/search/*`
 - Listing detail → `commerce/lib/*`, listing RPCs
 - Cart / checkout → cart/checkout RPCs; PayU → `shepay-payu-create` / webhooks
-- Orders / delivery → `lib/orders/*`; shipping → `shedelivery-create-shipment`
+- Orders / delivery → `lib/orders/*`; shipping labels → `easyship-process-shipment`
 
 ### Community
 - Feed / posts → `community/lib/community.ts`
@@ -96,7 +96,7 @@ OpenAPI: `GET /functions/v1/rest-gateway/openapi.json`
 - Sale events → `sale_events`
 
 ### Existing edge functions (not replaced)
-`ai-assist`, `cleanup-expired-stories`, `commerce-payment-webhook`, `dispatch-notifications`, `exchange-rates`, `link-preview`, `mediasoup-recording`, `mediasoup-token`, `meeting-invite`, `meeting-recording-share`, `network-invite`, `places`, `qr-login-redeem`, `shedelivery-*`, `shepay-*`, `visual-commerce`, **`rest-gateway`**
+`ai-assist`, `cleanup-expired-stories`, `commerce-payment-webhook`, `dispatch-notifications`, `exchange-rates`, `link-preview`, `mediasoup-recording`, `mediasoup-token`, `meeting-invite`, `meeting-recording-share`, `network-invite`, `places`, `qr-login-redeem`, `easyship-*`, `shepay-*`, `visual-commerce`, **`rest-gateway`**
 
 ---
 

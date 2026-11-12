@@ -1,8 +1,10 @@
 import {
+  Button,
   Checkbox,
   Field,
   Icons,
   Input,
+  Switch,
   Text,
   TextArea,
   XStack,
@@ -14,6 +16,8 @@ import type { AppUiTokens } from '~/lib/theme/app-ui'
 import { ListingPublishCard, ListingPublishFieldError, ListingPublishTip } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
 import { LISTING_METADATA_KEYS, LISTING_PUBLISH_COPY } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import { readMetadataBoolean, readMetadataString } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
+
+const GST_PRESETS = ['0', '5', '12', '18', '28'] as const
 
 type PricingStepProps = {
   ui: AppUiTokens
@@ -40,7 +44,7 @@ export function PricingStep({
     <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
       <YStack flex={1} minWidth={280} gap="$4">
         <ListingPublishCard ui={ui} title="Core Pricing">
-          <Field label={`Price (${currencySymbol})`} error={errors.price}>
+          <Field label={`Selling price (${currencySymbol})`} error={errors.price}>
             <XStack alignItems="center" gap="$2">
               <Text fontSize={16} fontWeight="700" color={ui.textMuted}>
                 {currencySymbol}
@@ -55,10 +59,62 @@ export function PricingStep({
               />
             </XStack>
           </Field>
-          <Text fontSize={11} color={ui.textMuted}>
-            Customer will see total after taxes.
-          </Text>
           <ListingPublishFieldError ui={ui} message={errors.price} />
+
+          <Field label={`MRP (${currencySymbol})`} error={errors.mrp}>
+            <XStack alignItems="center" gap="$2">
+              <Text fontSize={16} fontWeight="700" color={ui.textMuted}>
+                {currencySymbol}
+              </Text>
+              <Input
+                flex={1}
+                value={formData.mrp != null && formData.mrp !== '' ? String(formData.mrp) : ''}
+                onChangeText={(value) => onUpdate('mrp', value)}
+                placeholder="Optional — shown struck through when higher"
+                keyboardType="decimal-pad"
+              />
+            </XStack>
+          </Field>
+          <Text fontSize={11} color={ui.textMuted}>
+            Leave blank if MRP equals selling price.
+          </Text>
+
+          <XStack alignItems="center" justifyContent="space-between" gap="$3" paddingVertical="$1">
+            <YStack flex={1} gap="$0.5">
+              <Text fontSize={13} fontWeight="700" color={ui.text}>
+                Price inclusive of all taxes
+              </Text>
+              <Text fontSize={12} color={ui.textSecondary}>
+                Shown on the product page under the price.
+              </Text>
+            </YStack>
+            <Switch
+              checked={formData.price_includes_tax ?? true}
+              onCheckedChange={(checked) => onUpdate('price_includes_tax', !!checked)}
+            />
+          </XStack>
+
+          <Field label="GST / tax %">
+            <XStack gap="$2" flexWrap="wrap" marginBottom="$2">
+              {GST_PRESETS.map((preset) => (
+                <Button
+                  key={preset}
+                  tone={String(formData.tax_percent ?? '') === preset ? 'primary' : 'outline'}
+                  size="$2"
+                  borderRadius={999}
+                  onPress={() => onUpdate('tax_percent', preset)}
+                >
+                  {preset}%
+                </Button>
+              ))}
+            </XStack>
+            <Input
+              value={formData.tax_percent != null ? String(formData.tax_percent) : ''}
+              onChangeText={(value) => onUpdate('tax_percent', value)}
+              keyboardType="decimal-pad"
+              placeholder="18"
+            />
+          </Field>
 
           <Field label="Quantity Available">
             <Input

@@ -4,12 +4,13 @@ export { LowStockHint } from '~/commerce/components/LowStockHint'
 export { SaleEventBanner } from '~/commerce/components/SaleEventBanner'
 export { ShopAnnouncementBanner, shopAnnouncementFromMetadata } from '~/commerce/components/ShopAnnouncementBanner'
 export { CartRecoveryNudge } from '~/commerce/components/CartRecoveryNudge'
-export { ListingPersonalizationNote } from '~/commerce/components/ListingPersonalizationNote'
 export { GetItByChip } from '~/commerce/components/GetItByChip'
+export { ShipsToYouWidget } from '~/commerce/components/ShipsToYouWidget'
 export { ListingTrustStrip } from '~/commerce/components/ListingTrustStrip'
 export { ListingReturnPolicyCard } from '~/commerce/components/ListingReturnPolicyCard'
 export { ListingShopPolicies } from '~/commerce/components/ListingShopPolicies'
 export { ListingQuantityStepper } from '~/commerce/components/ListingQuantityStepper'
+export { ListingCartAction } from '~/commerce/components/ListingCartAction'
 export { StockNotifyButton } from '~/commerce/components/StockNotifyButton'
 export { CartFreeShippingBar } from '~/commerce/components/CartFreeShippingBar'
 export { AvailableOffersCard } from '~/commerce/components/AvailableOffersCard'
@@ -21,6 +22,25 @@ export {
   CommerceCheckbox,
   CommerceRadio,
 } from '~/commerce/components/commerce-ui'
+export {
+  useMarketplaceShellPalette,
+  MarketplacePage,
+  MarketplaceCard,
+  MarketplacePageTitle,
+  MarketplaceSectionTitle,
+  MarketplaceShopHeader,
+  MarketplaceSummaryCard,
+  MarketplaceStepCard,
+  MarketplaceCheckoutProgress,
+  MarketplacePrimaryButton,
+  MarketplaceSecondaryButton,
+  MarketplaceTrustNote,
+  MarketplaceEmptyState,
+  MarketplacePdpShopLink,
+  MarketplacePdpTitle,
+  MarketplaceBuyBox,
+  MarketplacePdpSection,
+} from '~/commerce/components/marketplace-shell'
 export { CheckoutContactSection } from '~/commerce/components/CheckoutContactSection'
 export { CheckoutPayuPanel } from '~/commerce/components/CheckoutPayuPanel'
 export { CheckoutPayuMethodPicker } from '~/commerce/components/CheckoutPayuMethodPicker'
@@ -29,7 +49,17 @@ export {
   CommerceMobileCheckoutBar,
   COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT,
 } from '~/commerce/components/CommerceMobileCheckoutBar'
-export { CategoryChip } from '~/commerce/components/CategoryChip'
+export {
+  CategoryChip,
+  CategoryPillChip,
+  CategoryPillChipSkeleton,
+  CategoryPillRailSkeleton,
+  CategoryChipSkeleton,
+  CategoryRailSkeleton,
+} from '~/commerce/components/CategoryChip'
+export { ShopByCategorySection } from '~/commerce/components/ShopByCategorySection'
+export { HomeDiscoverySearch } from '~/commerce/components/HomeDiscoverySearch'
+export { ListingActiveFilterChips } from '~/commerce/components/ListingActiveFilterChips'
 export { CommerceSection } from '~/commerce/components/CommerceSection'
 export { CommercePageHeader } from '~/commerce/components/CommercePageHeader'
 export { CommercePanel } from '~/commerce/components/CommercePanel'

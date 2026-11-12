@@ -24,7 +24,8 @@ import { useProfile } from '~/hooks/useProfile'
 import { isValidPhone } from '~/lib/phone/phone'
 import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { createShop } from '~/lib/shop/shop.store'
-import { COMMON_SHOP_CATEGORIES, type Shop } from '~/lib/shop/shop.type'
+import type { Shop } from '~/lib/shop/shop.type'
+import { useShopCategoryOptions } from '~/lib/shop/useShopCategoryOptions'
 import { generateShopSlug } from '~/lib/shop/shop.utils'
 import { shopNameValidator } from '~/lib/shop/shop.validation'
 import { useAppDispatch } from '~/lib/store/hooks'
@@ -237,6 +238,7 @@ export function SellerApplicationForm() {
   const [shopNameSlug, setShopNameSlug] = useState('')
   const shopNameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false)
+  const { categories: shopCategories, loading: shopCategoriesLoading } = useShopCategoryOptions()
 
   // ── OTP input refs for focus chaining ─────────────────────────────────────
   const otpRefs = useRef<Array<TextInput | null>>([null, null, null, null, null, null])
@@ -1402,7 +1404,20 @@ export function SellerApplicationForm() {
                     onOpenChange={setIsCategorySheetOpen}
                     title="Shop Category"
                   >
-                    {COMMON_SHOP_CATEGORIES.map((cat) => {
+                    {shopCategoriesLoading ? (
+                      <XStack alignItems="center" gap="$2" padding="$3">
+                        <Spinner size="small" color={ui.brand} />
+                        <Text fontSize={13} color={ui.textMuted}>
+                          Loading categories…
+                        </Text>
+                      </XStack>
+                    ) : null}
+                    {!shopCategoriesLoading && shopCategories.length === 0 ? (
+                      <Text fontSize={13} color={ui.textMuted} padding="$3">
+                        No categories available yet.
+                      </Text>
+                    ) : null}
+                    {shopCategories.map((cat) => {
                       const isSelected = formData.category === cat
                       return (
                         <XStack

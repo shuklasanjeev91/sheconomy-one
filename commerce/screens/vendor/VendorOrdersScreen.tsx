@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AppLink } from '~/components/navigation/AppLink'
 
 import {
   Avatar,
@@ -13,13 +12,24 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { AppLink } from '~/components/navigation/AppLink'
 import { ScreenSearchField } from '~/components/search'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
+import { vendorRoutes } from '~/lib/routes'
+
 import { createTracking, selectDeliveryLoading } from '~/lib/orders/delivery.store'
+import { subscribeVendorOrderItemChanges } from '~/lib/orders/vendor-orders.service'
+import { VENDOR_SHIPPING_UI_COPY } from '~/lib/vendor-shipping/vendor-shipping-ui.copy'
+import {
+  canAffordEasyshipShip,
+  fetchEasyshipShippingCredit,
+  processEasyshipShipment,
+  type EasyshipShippingCreditStatus,
+} from '~/lib/vendor-shipping/easyship-shipping-credit'
 import { assignReturnTracking } from '~/commerce/lib/customer-order-trust'
 import { getIssuesByOrder } from '~/lib/orders/order-issue.service'
 import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
@@ -127,6 +137,24 @@ export function VendorOrdersScreen() {
   const [trackingMode, setTrackingMode] = useState<'outbound' | 'return'>('outbound')
   const [orderIssues, setOrderIssues] = useState<EnrichedOrderIssue[]>([])
   const [returnTrackingSubmitting, setReturnTrackingSubmitting] = useState(false)
+  const [easyshipSubmitting, setEasyshipSubmitting] = useState(false)
+  const [easyshipCredit, setEasyshipCredit] = useState<EasyshipShippingCreditStatus | null>(null)
+
+
+  const refreshEasyshipCredit = useCallback(async () => {
+    if (!shopId) {
+      setEasyshipCredit(null)
+      return
+    }
+    const next = await fetchEasyshipShippingCredit(shopId)
+    setEasyshipCredit(next)
+  }, [shopId])
+
+  useEffect(() => {
+    void refreshEasyshipCredit()
+  }, [refreshEasyshipCredit])
+
+  const creditLow = Boolean(easyshipCredit?.lowBalance)
 
   const isSearchMode = searchTerm.trim().length > 0
   const orders = isSearchMode ? searchResults : listOrders
@@ -168,6 +196,22 @@ export function VendorOrdersScreen() {
   useEffect(() => {
     loadPage()
   }, [loadPage])
+
+  useEffect(() => {
+    if (!shopId) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const unsubscribe = subscribeVendorOrderItemChanges(shopId, () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        loadPage()
+        if (selectedItemId) void dispatch(loadVendorOrderItem({ orderItemId: selectedItemId }))
+      }, 300)
+    })
+    return () => {
+      if (timer) clearTimeout(timer)
+      unsubscribe()
+    }
+  }, [dispatch, loadPage, selectedItemId, shopId])
 
   useEffect(() => {
     if (error) {
@@ -235,6 +279,42 @@ export function VendorOrdersScreen() {
         tone: 'danger',
         message: typeof err === 'string' ? err : 'Please try again.',
       })
+    }
+  }
+
+
+  const handleShipWithEasyship = async (item?: VendorOrderItem | null) => {
+    const target = item ?? trackingItem
+    if (!target || !shopId) return
+    setEasyshipSubmitting(true)
+    try {
+      const result = await processEasyshipShipment({
+        shopId,
+        orderId: target.order_id,
+        orderItemIds: [target.id],
+      })
+      if (!result.success) {
+        toast.show('Could not create shipping label', {
+          tone: 'danger',
+          message: result.error ?? 'Check shipping credit and try again.',
+        })
+        if (result.code === 'insufficient_shipping_credit') {
+          void refreshEasyshipCredit()
+        }
+        return
+      }
+      toast.show('Shipment created', {
+        tone: 'success',
+        message: result.trackingNumber
+          ? `Tracking ${result.trackingNumber} — freight debited from shipping credit.`
+          : 'Shipping label purchased.',
+      })
+      setTrackingItem(null)
+      loadPage()
+      if (selectedItemId) void dispatch(loadVendorOrderItem({ orderItemId: selectedItemId }))
+      void refreshEasyshipCredit()
+    } finally {
+      setEasyshipSubmitting(false)
     }
   }
 
@@ -342,39 +422,74 @@ export function VendorOrdersScreen() {
     return <NoShopState ui={ui} />
   }
 
+  const custodyBanner = creditLow ? (
+    <YStack
+      gap="$2"
+      padding="$3"
+      borderRadius={radius.card}
+      borderWidth={1}
+      borderColor={ui.danger}
+      backgroundColor={ui.roseSurface}
+    >
+      <Text fontSize={13} fontWeight="700" color={ui.text}>
+        Shipping credit is low
+      </Text>
+      <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+        Recharge before buying shipping labels
+        {easyshipCredit
+          ? ` (${easyshipCredit.currency} ${easyshipCredit.balance.toFixed(2)} available).`
+          : '.'}
+      </Text>
+      <AppLink href={vendorRoutes.wallet}>
+        <Button size="sm" tone="primary">
+          Open shipping credit
+        </Button>
+      </AppLink>
+    </YStack>
+  ) : null
+
   if (activeSection === 'issues') {
     return (
-      <VendorOrderIssuesPanel
-        ui={ui}
-        isDesktop={isDesktop}
-        shopId={shop.id}
-        shopName={shop.shop_name ?? 'Orders'}
-        tabs={sectionTabs}
-      />
+      <YStack flex={1} gap="$3" paddingHorizontal={isDesktop ? '$6' : '$4'} paddingTop="$4">
+        {custodyBanner}
+        <VendorOrderIssuesPanel
+          ui={ui}
+          isDesktop={isDesktop}
+          shopId={shop.id}
+          shopName={shop.shop_name ?? 'Orders'}
+          tabs={sectionTabs}
+        />
+      </YStack>
     )
   }
 
   if (activeSection === 'inbox') {
     return (
-      <VendorSlaInboxPanel
-        ui={ui}
-        isDesktop={isDesktop}
-        shopId={shop.id}
-        shopName={shop.shop_name ?? 'Orders'}
-        tabs={sectionTabs}
-      />
+      <YStack flex={1} gap="$3" paddingHorizontal={isDesktop ? '$6' : '$4'} paddingTop="$4">
+        {custodyBanner}
+        <VendorSlaInboxPanel
+          ui={ui}
+          isDesktop={isDesktop}
+          shopId={shop.id}
+          shopName={shop.shop_name ?? 'Orders'}
+          tabs={sectionTabs}
+        />
+      </YStack>
     )
   }
 
   if (activeSection === 'fulfillments') {
     return (
-      <VendorFulfillmentsPanel
-        ui={ui}
-        isDesktop={isDesktop}
-        shopId={shop.id}
-        shopName={shop.shop_name ?? 'Orders'}
-        tabs={sectionTabs}
-      />
+      <YStack flex={1} gap="$3" paddingHorizontal={isDesktop ? '$6' : '$4'} paddingTop="$4">
+        {custodyBanner}
+        <VendorFulfillmentsPanel
+          ui={ui}
+          isDesktop={isDesktop}
+          shopId={shop.id}
+          shopName={shop.shop_name ?? 'Orders'}
+          tabs={sectionTabs}
+        />
+      </YStack>
     )
   }
 
@@ -428,6 +543,8 @@ export function VendorOrdersScreen() {
         </XStack>
 
         {sectionTabs}
+
+        {custodyBanner}
 
         {/* Toolbar */}
         <YStack
@@ -567,8 +684,19 @@ export function VendorOrdersScreen() {
         payments={payments}
         issues={orderIssues}
         role={role}
-        onClose={closeDetail}
+        shopId={shop.id}
+                easyshipCreditBalance={easyshipCredit?.balance ?? null}
+        easyshipCreditCurrency={easyshipCredit?.currency ?? 'INR'}
+        easyshipCanAfford={canAffordEasyshipShip(
+          easyshipCredit?.balance,
+          drawerItem?.orders?.shipping_amount != null
+            ? Number(drawerItem.orders.shipping_amount)
+            : null,
+        )}
+        easyshipSubmitting={easyshipSubmitting}
+                onClose={closeDetail}
         onAdvance={handleAdvance}
+                onProcessEasyship={(item) => void handleShipWithEasyship(item)}
         onRequestTracking={(item, mode) => {
           setTrackingMode(mode)
           setTrackingItem(item)
@@ -586,8 +714,13 @@ export function VendorOrdersScreen() {
         item={trackingItem}
         submitting={deliveryLoading.creating || returnTrackingSubmitting}
         mode={trackingMode}
-        onClose={() => setTrackingItem(null)}
+        shopId={shop.id}
+                easyshipCreditBalance={easyshipCredit?.balance ?? null}
+        easyshipCanAfford={canAffordEasyshipShip(easyshipCredit?.balance, null)}
+        easyshipSubmitting={easyshipSubmitting}
+                onClose={() => setTrackingItem(null)}
         onSubmit={handleSubmitTracking}
+                onShipWithEasyship={() => void handleShipWithEasyship()}
       />
     </>
   )

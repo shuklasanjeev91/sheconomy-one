@@ -12955,169 +12955,6 @@ export type Database = {
           },
         ]
       }
-      shiprocket_config: {
-        Row: {
-          api_token: string | null
-          auto_ship_enabled: boolean | null
-          channel_id: number | null
-          company_id: number | null
-          created_at: string | null
-          email: string
-          id: string
-          is_connected: boolean | null
-          last_sync_at: string | null
-          password_encrypted: string | null
-          pickup_location_id: number | null
-          shop_id: string
-          token_expiry: string | null
-          updated_at: string | null
-          webhook_configured: boolean | null
-        }
-        Insert: {
-          api_token?: string | null
-          auto_ship_enabled?: boolean | null
-          channel_id?: number | null
-          company_id?: number | null
-          created_at?: string | null
-          email: string
-          id?: string
-          is_connected?: boolean | null
-          last_sync_at?: string | null
-          password_encrypted?: string | null
-          pickup_location_id?: number | null
-          shop_id: string
-          token_expiry?: string | null
-          updated_at?: string | null
-          webhook_configured?: boolean | null
-        }
-        Update: {
-          api_token?: string | null
-          auto_ship_enabled?: boolean | null
-          channel_id?: number | null
-          company_id?: number | null
-          created_at?: string | null
-          email?: string
-          id?: string
-          is_connected?: boolean | null
-          last_sync_at?: string | null
-          password_encrypted?: string | null
-          pickup_location_id?: number | null
-          shop_id?: string
-          token_expiry?: string | null
-          updated_at?: string | null
-          webhook_configured?: boolean | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shiprocket_config_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: true
-            referencedRelation: "active_listings_view"
-            referencedColumns: ["shop_id"]
-          },
-          {
-            foreignKeyName: "shiprocket_config_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: true
-            referencedRelation: "payment_analytics"
-            referencedColumns: ["shop_id"]
-          },
-          {
-            foreignKeyName: "shiprocket_config_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: true
-            referencedRelation: "shop_listings_summary"
-            referencedColumns: ["shop_id"]
-          },
-          {
-            foreignKeyName: "shiprocket_config_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: true
-            referencedRelation: "shops"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      shiprocket_webhook_events: {
-        Row: {
-          created_at: string
-          event_type: string
-          id: string
-          order_id: string | null
-          payload: Json
-          processed: boolean
-          shop_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          event_type: string
-          id?: string
-          order_id?: string | null
-          payload?: Json
-          processed?: boolean
-          shop_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          event_type?: string
-          id?: string
-          order_id?: string | null
-          payload?: Json
-          processed?: boolean
-          shop_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shiprocket_webhook_events_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "customer_order_history_view"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "shiprocket_webhook_events_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "customer_orders_view"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "shiprocket_webhook_events_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shiprocket_webhook_events_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: false
-            referencedRelation: "active_listings_view"
-            referencedColumns: ["shop_id"]
-          },
-          {
-            foreignKeyName: "shiprocket_webhook_events_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: false
-            referencedRelation: "payment_analytics"
-            referencedColumns: ["shop_id"]
-          },
-          {
-            foreignKeyName: "shiprocket_webhook_events_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: false
-            referencedRelation: "shop_listings_summary"
-            referencedColumns: ["shop_id"]
-          },
-          {
-            foreignKeyName: "shiprocket_webhook_events_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: false
-            referencedRelation: "shops"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       shop_commerce_settings: {
         Row: {
           breeze_auth_token: string | null
@@ -13528,6 +13365,7 @@ export type Database = {
           payu_product_account_uuid: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          schedule_c_document_path: string | null
           shop_id: string
           status: string
           updated_at: string
@@ -13562,6 +13400,7 @@ export type Database = {
           payu_product_account_uuid?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          schedule_c_document_path?: string | null
           shop_id: string
           status?: string
           updated_at?: string
@@ -13596,6 +13435,7 @@ export type Database = {
           payu_product_account_uuid?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          schedule_c_document_path?: string | null
           shop_id?: string
           status?: string
           updated_at?: string
@@ -13605,6 +13445,59 @@ export type Database = {
             foreignKeyName: "shop_payu_kyc_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: true
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shop_kyc_documents: {
+        Row: {
+          created_at: string
+          file_size: number | null
+          id: string
+          kind: string
+          mime_type: string | null
+          payu_document_status: string | null
+          payu_document_uuid: string | null
+          rejection_reason: string | null
+          shop_id: string
+          storage_path: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          kind: string
+          mime_type?: string | null
+          payu_document_status?: string | null
+          payu_document_uuid?: string | null
+          rejection_reason?: string | null
+          shop_id: string
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          kind?: string
+          mime_type?: string | null
+          payu_document_status?: string | null
+          payu_document_uuid?: string | null
+          rejection_reason?: string | null
+          shop_id?: string
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_kyc_documents_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
             referencedRelation: "shops"
             referencedColumns: ["id"]
           },
@@ -20871,6 +20764,7 @@ export const Constants = {
         "razorpay",
         "paypal",
         "stripe",
+        "airwallex",
         "payu",
         "cashfree",
         "phonepe",

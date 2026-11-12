@@ -30,6 +30,7 @@ const valid: PayuKycInput = {
   panDocumentPath: 'user/shops/shop/kyc/pan.pdf',
   bankDocumentPath: 'user/shops/shop/kyc/bank.pdf',
   gstDocumentPath: 'user/shops/shop/kyc/gst.pdf',
+  scheduleCDocumentPath: 'user/shops/shop/kyc/schedule_c.pdf',
 }
 
 describe('vendor PayU KYC', () => {
@@ -92,6 +93,11 @@ describe('vendor PayU KYC', () => {
     expect(kycAllowsStorefront('submitted')).toBe(false)
     expect(kycAllowsStorefront('payu_pending')).toBe(false)
     expect(kycAllowsStorefront('payu_verified')).toBe(true)
+  })
+
+  it('requires a signed Schedule C upload', () => {
+    const errors = validatePayuKycInput({ ...valid, scheduleCDocumentPath: '' })
+    expect(errors.scheduleCDocumentPath).toBeTruthy()
   })
 
   it('reads the PAN from a GSTIN and rejects a mismatched or inactive registry result', () => {

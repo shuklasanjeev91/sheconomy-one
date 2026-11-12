@@ -73,11 +73,12 @@ function MetadataCell({ ui, label, value }: { ui: AppUiTokens; label: string; va
   )
 }
 
-function isShepayProvider(provider: PaymentProviderConfig): boolean {
+function isPlatformCollectProvider(provider: PaymentProviderConfig): boolean {
   return (
     provider.id === PAYMENT_PROVIDERS.PAYU ||
     String(provider.id).toLowerCase() === 'payu' ||
-    provider.name === 'SHEPay'
+    provider.name === 'SHEPay' ||
+    provider.name === 'Online payouts'
   )
 }
 
@@ -90,8 +91,8 @@ export function PaymentConnectForm({
   onClose,
   onConnected,
 }: PaymentConnectFormProps) {
-  // SHEPay must never show the old credential/webhook form.
-  if (isShepayProvider(provider)) {
+  // SHEPay / platform collect uses in-app PayU KYC (not raw credentials).
+  if (isPlatformCollectProvider(provider)) {
     return (
       <YStack flex={1} minHeight={0}>
         <ScrollView

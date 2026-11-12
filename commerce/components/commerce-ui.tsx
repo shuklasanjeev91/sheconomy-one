@@ -70,7 +70,7 @@ export function CommerceButton({
       backgroundColor={styles.bg}
       borderColor={styles.border}
       borderWidth={1}
-      borderRadius={100}
+      borderRadius={8}
       height={height}
       width={width as never}
       paddingHorizontal="$4"

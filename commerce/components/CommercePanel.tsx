@@ -1,12 +1,11 @@
 import type { GetProps } from 'tamagui'
 
 import { YStack } from '~/components/ui'
-import { radius } from '~/config/tokens'
 import { motion } from '~/lib/theme/motion'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-/** Elevated surface panel for cart, checkout, and detail sections. */
+/** Elevated marketplace surface for listing buy boxes, orders, and detail sections. */
 export function CommercePanel({ children, ...props }: GetProps<typeof YStack>) {
   const ui = useAppUi()
   const shadow = useThemedShadowStyle('sm')
@@ -15,7 +14,7 @@ export function CommercePanel({ children, ...props }: GetProps<typeof YStack>) {
     <YStack
       gap="$3.5"
       padding="$5"
-      borderRadius={radius.card}
+      borderRadius={16}
       borderWidth={1}
       borderColor={ui.borderSubtle}
       backgroundColor={ui.surface}

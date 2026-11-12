@@ -48,7 +48,7 @@ export function FollowedShopsRail({ inset }: FollowedShopsRailProps) {
           </Text>
         </AppLink>
       </XStack>
-      {/* Single horizontal row — matches "Shops you'll love" / recently viewed rails. */}
+      {/* Single horizontal row — matches shops / recently viewed rails. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

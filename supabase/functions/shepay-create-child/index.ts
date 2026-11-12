@@ -2,8 +2,8 @@
  * POST /functions/v1/shepay-create-child
  *
  * Admin-only. After a vendor payout application is approved, create the PayU
- * child merchant, save the bank account, store the child key + MID, mark the
- * shop verified, and release held settlements.
+ * child merchant, save the bank account, upload KYC documents, store the
+ * child key + MID, and leave status as payu_pending until KYC sync activates.
  *
  * Body: { shopId }
  */
@@ -17,6 +17,7 @@ import {
   getPayuHubToken,
   resolvePayuHubConfig,
   updatePayuChildBank,
+  uploadPayuKycDocument,
 } from '../_shared/payu-hub.ts'
 
 type KycRow = {
@@ -35,14 +36,26 @@ type KycRow = {
   ifsc: string
   status: string
   payu_product_account_uuid: string | null
+  pan_document_path: string | null
+  bank_document_path: string | null
+  gst_document_path: string | null
+  schedule_c_document_path: string | null
 }
+
+type DocKind = 'pan' | 'bank' | 'schedule_c' | 'gst'
 
 const CATEGORY_ID = 16
 const SUB_CATEGORY_ID = 128
+const KYC_BUCKET = 'shop-kyc-documents'
 
 function digitsMobile(value: string): string {
   const digits = value.replace(/\D/g, '')
   return digits.length > 10 ? digits.slice(-10) : digits
+}
+
+function fileNameFromPath(path: string, kind: string): string {
+  const base = path.split('/').pop() || `${kind}.pdf`
+  return base.includes('.') ? base : `${base}.pdf`
 }
 
 Deno.serve(async (request) => {
@@ -94,7 +107,7 @@ Deno.serve(async (request) => {
   const { data: kyc } = await admin
     .from('shop_payu_kyc')
     .select(
-      'shop_id, legal_name, mobile, email, pan_number, pan_name, gst_number, business_name, business_entity_id, monthly_expected_volume, bank_account_number, bank_holder_name, ifsc, status, payu_product_account_uuid',
+      'shop_id, legal_name, mobile, email, pan_number, pan_name, gst_number, business_name, business_entity_id, monthly_expected_volume, bank_account_number, bank_holder_name, ifsc, status, payu_product_account_uuid, pan_document_path, bank_document_path, gst_document_path, schedule_c_document_path',
     )
     .eq('shop_id', shopId)
     .maybeSingle()
@@ -169,6 +182,80 @@ Deno.serve(async (request) => {
     kycStatus = bank.kycStatus ?? kycStatus
     createdMid = bank.mid || createdMid
 
+    const { data: metaDocs } = await admin
+      .from('shop_kyc_documents')
+      .select('kind, storage_path, mime_type')
+      .eq('shop_id', shopId)
+
+    const pathByKind = new Map<DocKind, { path: string; mime: string }>()
+    for (const doc of metaDocs ?? []) {
+      const kind = doc.kind as DocKind
+      if (doc.storage_path) {
+        pathByKind.set(kind, {
+          path: doc.storage_path,
+          mime: (doc.mime_type as string) || 'application/pdf',
+        })
+      }
+    }
+    const legacy: Array<[DocKind, string | null]> = [
+      ['pan', row.pan_document_path],
+      ['bank', row.bank_document_path],
+      ['schedule_c', row.schedule_c_document_path],
+      ['gst', row.gst_document_path],
+    ]
+    for (const [kind, path] of legacy) {
+      if (path && !pathByKind.has(kind)) {
+        pathByKind.set(kind, { path, mime: 'application/pdf' })
+      }
+    }
+
+    const midForDocs = createdMid
+    const docErrors: string[] = []
+    if (midForDocs) {
+      for (const kind of ['pan', 'bank', 'schedule_c', 'gst'] as DocKind[]) {
+        const entry = pathByKind.get(kind)
+        if (!entry) {
+          if (kind === 'gst') continue
+          docErrors.push(`Missing ${kind} document`)
+          continue
+        }
+        const { data: blob, error: downloadError } = await admin.storage
+          .from(KYC_BUCKET)
+          .download(entry.path)
+        if (downloadError || !blob) {
+          docErrors.push(`${kind}: ${downloadError?.message || 'download failed'}`)
+          continue
+        }
+        const bytes = new Uint8Array(await blob.arrayBuffer())
+        const uploaded = await uploadPayuKycDocument(hub, token, {
+          mid: midForDocs,
+          productAccountUuid: uuid,
+          kind,
+          fileName: fileNameFromPath(entry.path, kind),
+          mimeType: entry.mime || blob.type || 'application/pdf',
+          bytes,
+        })
+        if (uploaded.error) {
+          docErrors.push(`${kind}: ${uploaded.error}`)
+          continue
+        }
+        await admin.from('shop_kyc_documents').upsert(
+          {
+            shop_id: shopId,
+            kind,
+            storage_path: entry.path,
+            mime_type: entry.mime,
+            payu_document_uuid: uploaded.uuid,
+            payu_document_status: uploaded.status,
+            rejection_reason: null,
+          },
+          { onConflict: 'shop_id,kind' },
+        )
+      }
+    } else {
+      docErrors.push('Child MID not available yet for document upload')
+    }
+
     const listToken = await getPayuHubToken(hub, 'fetch_child_merchants')
     const child = await findPayuChildForShop(hub, listToken, {
       shopId,
@@ -176,110 +263,86 @@ Deno.serve(async (request) => {
       phone: row.mobile,
     })
 
-    if (!child?.merchantKey || !(child.mid || createdMid)) {
-      await admin
-        .from('shop_payu_kyc')
-        .update({
-          status: 'payu_pending',
-          payu_mid: createdMid || null,
-          payu_onboarding_status: onboardingStatus,
-          payu_document_status: documentStatus,
-          payu_kyc_status: kycStatus,
-          payu_error: 'Child merchant was created. The merchant key is not ready yet — retry.',
-        })
-        .eq('shop_id', shopId)
-      return jsonResponse(
-        { ok: false, error: 'Child merchant created, but the merchant key is not ready yet.' },
-        502,
+    const now = new Date().toISOString()
+    const mid = child?.mid || createdMid
+    const merchantKey = child?.merchantKey || null
+
+    if (merchantKey && mid) {
+      const { error: upsertError } = await admin.from('shop_payment_accounts').upsert(
+        {
+          shop_id: shopId,
+          provider: 'payu',
+          merchant_id: merchantKey,
+          access_token: null,
+          refresh_token: null,
+          token_expiry: null,
+          status: 'pending',
+          connected_at: null,
+          updated_at: now,
+          metadata: {
+            connection_type: 'credential',
+            mode: 'live',
+            onboarded_via: 'sheconomy',
+            auto_synced: true,
+            child_merchant_key: merchantKey,
+            merchant_key: merchantKey,
+            child_mid: mid,
+            child_uuid: child?.uuid ?? uuid,
+            credentials: JSON.stringify({
+              merchant_key: merchantKey,
+              child_mid: mid,
+              salt_key: 'platform',
+              onboarded_via: 'sheconomy',
+            }),
+            configured_at: now,
+          },
+        },
+        { onConflict: 'shop_id,provider', ignoreDuplicates: false },
+      )
+      if (upsertError) throw new Error(upsertError.message)
+
+      await admin.from('shop_commerce_settings').upsert(
+        {
+          shop_id: shopId,
+          payment_mode: 'shepay',
+          payment_gateway: 'payu',
+          payment_connected: false,
+          payment_account_label: merchantKey,
+          updated_at: now,
+        },
+        { onConflict: 'shop_id' },
       )
     }
 
-    const now = new Date().toISOString()
-    const mid = child.mid || createdMid
-    const { error: upsertError } = await admin.from('shop_payment_accounts').upsert(
-      {
-        shop_id: shopId,
-        provider: 'payu',
-        merchant_id: child.merchantKey,
-        access_token: null,
-        refresh_token: null,
-        token_expiry: null,
-        status: 'connected',
-        connected_at: now,
-        updated_at: now,
-        metadata: {
-          connection_type: 'credential',
-          mode: 'live',
-          onboarded_via: 'sheconomy',
-          auto_synced: true,
-          child_merchant_key: child.merchantKey,
-          merchant_key: child.merchantKey,
-          child_mid: mid,
-          child_uuid: child.uuid ?? uuid,
-          credentials: JSON.stringify({
-            merchant_key: child.merchantKey,
-            child_mid: mid,
-            salt_key: 'platform',
-            onboarded_via: 'sheconomy',
-          }),
-          configured_at: now,
-        },
-      },
-      { onConflict: 'shop_id,provider', ignoreDuplicates: false },
-    )
-    if (upsertError) throw new Error(upsertError.message)
-
-    await admin.from('shop_commerce_settings').upsert(
-      {
-        shop_id: shopId,
-        payment_mode: 'shepay',
-        payment_gateway: 'payu',
-        payment_connected: true,
-        payment_account_label: child.merchantKey,
-        updated_at: now,
-      },
-      { onConflict: 'shop_id' },
-    )
-
-    await admin
-      .from('shops')
-      .update({ verified: true, updated_at: now })
-      .eq('id', shopId)
+    const payuError =
+      docErrors.length > 0
+        ? `Docs: ${docErrors.join('; ').slice(0, 1800)}`
+        : !merchantKey
+          ? 'Child merchant was created. The merchant key is not ready yet — sync will retry.'
+          : null
 
     await admin
       .from('shop_payu_kyc')
       .update({
-        status: 'payu_verified',
-        payu_mid: mid,
-        payu_merchant_key: child.merchantKey,
+        status: 'payu_pending',
+        payu_mid: mid || null,
+        payu_merchant_key: merchantKey,
         payu_product_account_uuid: uuid,
         payu_onboarding_status: onboardingStatus,
         payu_document_status: documentStatus,
         payu_kyc_status: kycStatus,
-        payu_error: null,
+        payu_error: payuError,
       })
       .eq('shop_id', shopId)
 
-    try {
-      await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/shepay-release-pending`, {
-        method: 'POST',
-        headers: {
-          Authorization: authHeader,
-          apikey: anonKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ shopId }),
-      })
-    } catch {
-      // Held release is best-effort; the child merchant is already saved.
-    }
-
     return jsonResponse({
       ok: true,
-      status: 'payu_verified',
-      childMid: mid,
+      status: 'payu_pending',
+      childMid: mid || null,
+      merchantKeyReady: Boolean(merchantKey),
       onboardingStatus,
       documentStatus,
+      documentErrors: docErrors,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not create the child merchant'

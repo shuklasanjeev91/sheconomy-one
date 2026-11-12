@@ -9,6 +9,7 @@ import { useCategoryListings } from '~/commerce/hooks/useCategoryListings'
 import type { CategoryLoaderResult } from '~/commerce/lib/category-loader'
 import {
   buildFilterSearchParams,
+  hasActiveFilters,
   type ListingBrowseFilters,
 } from '~/commerce/lib/filters'
 import { fetchCategoryBySlug, getCategorySlug, type CategorySummary } from '~/lib/supabase/commerce'
@@ -70,6 +71,7 @@ export function CategoryScreen({
   const { facets, isLoading: facetsLoading } = useCategoryFilterFacets(category?.category_id)
 
   const filterKey = useMemo(() => JSON.stringify(filters), [filters])
+  const filtersActive = hasActiveFilters(filters)
 
   usePageSeo(
     useMemo(() => {
@@ -116,16 +118,22 @@ export function CategoryScreen({
     )
   }
 
-  const itemCount = category.product_count ?? listingsFeed.items.length
+  const catalogCount = category.product_count ?? null
+  const loadedCount = listingsFeed.items.length
+  const resultCount = filtersActive
+    ? loadedCount
+    : catalogCount ?? loadedCount
+  const headerSubtitle = filtersActive
+    ? listingsFeed.isLoading && loadedCount === 0
+      ? 'Updating results…'
+      : `${loadedCount.toLocaleString('en-IN')}${listingsFeed.hasMore ? '+' : ''} matching ${loadedCount === 1 ? 'item' : 'items'}`
+    : `${(catalogCount ?? loadedCount).toLocaleString('en-IN')} ${(catalogCount ?? loadedCount) === 1 ? 'item' : 'items'}`
 
   return (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$6">
         <YStack gap="$4" width="100%">
-          <CommercePageHeader
-            title={category.category}
-            subtitle={`${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
-          />
+          <CommercePageHeader title={category.category} subtitle={headerSubtitle} />
           <ListingFiltersShell
             filters={filters}
             onApply={updateFilters}
@@ -133,6 +141,9 @@ export function CategoryScreen({
             facetsLoading={facetsLoading}
             inventoryDriven
             sortInToolbar
+            resultCount={
+              listingsFeed.isLoading && loadedCount === 0 ? null : resultCount
+            }
             showTypeFilter={false}
           >
             <ListingBrowseView

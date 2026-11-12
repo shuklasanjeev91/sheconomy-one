@@ -147,7 +147,7 @@ export function buildListingSpecifications(input: {
   }
 
   if (input.listingType) {
-    add('Listing type', input.listingType === 'digital' ? 'Instant delivery' : 'Ships to you')
+    add('Listing type', input.listingType === 'digital' ? 'Instant delivery' : 'Physical goods')
   }
 
   if (input.tags?.length) {

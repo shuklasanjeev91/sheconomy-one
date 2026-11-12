@@ -24,8 +24,9 @@ export function ListingPriceBlock({
   const ui = useAppUi()
   const display = resolveListingPrice(input)
 
-  const priceSize = size === 'lg' ? 28 : size === 'md' ? 20 : 17
+  const priceSize = size === 'lg' ? 30 : size === 'md' ? 20 : 16
   const mrpSize = size === 'lg' ? 15 : size === 'md' ? 13 : 12
+  const onSale = Boolean(display.discountLabel)
 
   return (
     <YStack gap={size === 'sm' ? 2 : '$1.5'} width="100%">
@@ -33,8 +34,8 @@ export function ListingPriceBlock({
         <Text
           fontWeight="800"
           fontSize={priceSize}
-          color={ui.text}
-          letterSpacing={-0.5}
+          color={onSale ? ui.brand : ui.text}
+          letterSpacing={-0.55}
           lineHeight={priceSize + 6}
         >
           {display.priceLabel}
@@ -46,18 +47,18 @@ export function ListingPriceBlock({
             textDecorationLine="line-through"
             fontWeight="500"
           >
-            MRP {display.mrpLabel}
+            {display.mrpLabel}
           </Text>
         ) : null}
         {display.discountLabel ? (
-          <Text fontSize={mrpSize} color={ui.success} fontWeight="700">
+          <Text fontSize={mrpSize} color={ui.success} fontWeight="800">
             {display.discountLabel}
           </Text>
         ) : null}
       </XStack>
 
       {display.saveLabel && size !== 'sm' ? (
-        <Text fontSize={13} color={ui.success} fontWeight="600">
+        <Text fontSize={13} color={ui.success} fontWeight="700">
           {display.saveLabel}
         </Text>
       ) : null}

@@ -15,7 +15,9 @@ describe('parseAtomicCheckoutPayload', () => {
       order_numbers: ['100', '101'],
       subtotal_amount: 50,
       discount_amount: 5,
-      total_amount: 45,
+      shipping_amount: 10,
+      platform_fee_amount: 0,
+      total_amount: 55,
       payment_steps: [
         {
           id: 'ps1',
@@ -45,7 +47,25 @@ describe('parseAtomicCheckoutPayload', () => {
     expect(result.data?.orderIds).toEqual(['o1', 'o2'])
     expect(result.data?.paymentSteps).toHaveLength(2)
     expect(result.data?.paymentSteps[0]?.checkoutUrl).toBe('https://pay.example/1')
-    expect(result.data?.totalAmount).toBe(45)
+    expect(result.data?.shippingAmount).toBe(10)
+    expect(result.data?.platformFeeAmount).toBe(0)
+    expect(result.data?.totalAmount).toBe(55)
+  })
+
+  it('defaults shipping and platform fee to zero when omitted', () => {
+    const result = parseAtomicCheckoutPayload({
+      success: true,
+      checkout_group_id: 'grp-2',
+      status: 'awaiting_payment',
+      order_ids: ['o1'],
+      order_numbers: ['200'],
+      subtotal_amount: 20,
+      total_amount: 20,
+      payment_steps: [],
+    })
+    expect(result.error).toBeNull()
+    expect(result.data?.shippingAmount).toBe(0)
+    expect(result.data?.platformFeeAmount).toBe(0)
   })
 
   it('rejects failed or incomplete payloads', () => {

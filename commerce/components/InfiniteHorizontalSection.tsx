@@ -10,6 +10,8 @@ type InfiniteHorizontalSectionProps = {
   onLoadMore: () => void
   /** Custom placeholders shown while loading the next page. */
   loadMorePlaceholder?: ReactNode
+  /** Spacing between items (Tamagui space token). Defaults to `$3`. */
+  gap?: `$${number}` | number
 }
 
 /** Horizontal row that loads the next page when scrolled near the end. */
@@ -19,6 +21,7 @@ export function InfiniteHorizontalSection({
   isLoadingMore,
   onLoadMore,
   loadMorePlaceholder,
+  gap = '$3',
 }: InfiniteHorizontalSectionProps) {
   function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
     if (!hasMore || isLoadingMore) return
@@ -39,7 +42,7 @@ export function InfiniteHorizontalSection({
       style={{ flexGrow: 0 }}
       contentContainerStyle={{ flexGrow: 0, alignItems: 'flex-start' }}
     >
-      <XStack gap="$3" paddingRight="$5" alignItems="flex-start">
+      <XStack gap={gap} paddingRight="$5" alignItems="flex-start">
         {children}
         {isLoadingMore
           ? (loadMorePlaceholder ?? (

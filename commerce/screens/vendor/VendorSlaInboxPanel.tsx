@@ -19,7 +19,6 @@ import {
   saveVendorInboxContextEntry,
 } from '~/commerce/lib/vendor-inbox-notes'
 import { assignReturnTracking, confirmOrderReturnReceived, resolveOrderIssueRequest } from '~/commerce/lib/customer-order-trust'
-import { autoBookReturnPickup } from '~/commerce/lib/vendor-return-pickup'
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import {
   VendorEmptyState,
@@ -345,20 +344,13 @@ export function VendorSlaInboxPanel({
 
         const isReturnOrExchange =
           isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)
-        if (action.decision === 'accept' && isReturnOrExchange && issue.order_item_id) {
-          const pickup = await autoBookReturnPickup(issue.order_item_id)
-          toast.show('Request approved', {
-            tone: 'success',
-            message:
-              pickup.status === 'booked'
-                ? `Reverse pickup booked automatically — AWB ${pickup.awb}.`
-                : 'Approved. Auto-pickup was unavailable, so arrange the return pickup manually.',
-          })
-        } else {
-          toast.show(action.decision === 'accept' ? 'Request approved' : 'Request declined', {
-            tone: 'success',
-          })
-        }
+        toast.show(action.decision === 'accept' ? 'Request approved' : 'Request declined', {
+          tone: 'success',
+          message:
+            action.decision === 'accept' && isReturnOrExchange
+              ? 'Arrange return pickup with your courier, then paste the AWB.'
+              : undefined,
+        })
       } else if (action.kind === 'return-received') {
         if (!issue.order_item_id) throw new Error('This request is not linked to an item.')
         const result = await confirmOrderReturnReceived({ orderItemId: issue.order_item_id, note })

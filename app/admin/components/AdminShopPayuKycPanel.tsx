@@ -93,7 +93,7 @@ export function AdminShopPayuKycPanel({
       await load()
       return
     }
-    toast.show('Vendor is PayU verified and can sell', { tone: 'success' })
+    toast.show('Sent to PayU — pending verification', { tone: 'success' })
     await load()
   }
 
@@ -138,6 +138,9 @@ export function AdminShopPayuKycPanel({
         </Button>
         <Button size="$2" tone="outline" onPress={() => void openDoc(row.bank_document_path)}>
           Bank proof
+        </Button>
+        <Button size="$2" tone="outline" onPress={() => void openDoc(row.schedule_c_document_path)}>
+          Schedule C
         </Button>
         {row.gst_document_path ? (
           <Button size="$2" tone="outline" onPress={() => void openDoc(row.gst_document_path)}>

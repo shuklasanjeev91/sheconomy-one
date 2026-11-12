@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'one'
 
 import {
@@ -26,12 +26,12 @@ import {
   validateForm,
 } from '~/lib/shop/shop.store'
 import {
-  COMMON_SHOP_CATEGORIES,
   DEFAULT_SHOP_CURRENCY,
   SUPPORTED_CURRENCIES,
   type ShopFormData,
   type ShopUpdate,
 } from '~/lib/shop/shop.type'
+import { useShopCategoryOptions } from '~/lib/shop/useShopCategoryOptions'
 import { shopToFormData } from '~/lib/shop/shop.utils'
 import { validateShopData, validateShopField } from '~/lib/shop/shop.validation'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
@@ -51,6 +51,11 @@ export function VendorEditShopScreen() {
   const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
   const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
   const [liveErrors, setLiveErrors] = useState<Record<string, string>>({})
+  const { categories: fetchedCategories, loading: categoriesLoading } = useShopCategoryOptions()
+  const categoryOptions = useMemo(
+    () => Array.from(new Set([...(form.shop_categories ?? []), ...fetchedCategories])),
+    [fetchedCategories, form.shop_categories],
+  )
 
   useEffect(() => {
     // Always refresh when shops have not been loaded this session, even if a
@@ -283,8 +288,16 @@ export function VendorEditShopScreen() {
         <Text fontSize={15} fontWeight="800" color={ui.text}>
           Categories
         </Text>
+        {categoriesLoading ? (
+          <XStack alignItems="center" gap="$2">
+            <Spinner size="small" color={ui.brand} />
+            <Text fontSize={13} color={ui.textMuted}>
+              Loading categories…
+            </Text>
+          </XStack>
+        ) : null}
         <XStack gap="$2" flexWrap="wrap">
-          {COMMON_SHOP_CATEGORIES.map((category) => {
+          {categoryOptions.map((category) => {
             const active = (form.shop_categories ?? []).includes(category)
             return (
               <XStack

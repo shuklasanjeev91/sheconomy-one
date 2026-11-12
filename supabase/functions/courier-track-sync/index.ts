@@ -151,6 +151,10 @@ Deno.serve(async (request) => {
       continue
     }
 
+    if (shouldUpdate && nextStatus === 'delivered' && row.order_id) {
+      await admin.rpc('schedule_shepay_release_on_delivery', { p_order_id: row.order_id })
+    }
+
     results.push({
       id: row.id,
       updated: shouldUpdate,

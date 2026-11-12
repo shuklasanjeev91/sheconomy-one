@@ -1,6 +1,5 @@
 import type { Json, Tables } from '~/lib/supabase'
 
-export type ShiprocketConfigRow = Tables<'shiprocket_config'>
 export type ShippingProviderRow = Tables<'shipping_providers'>
 export type CustomShippingPartnerRow = Tables<'custom_shipping_partners'>
 
@@ -11,24 +10,6 @@ export type PickupAddress = {
   state?: string
   pincode?: string
   country?: string
-}
-
-export type ShiprocketPublicConfig = {
-  id: string
-  email: string
-  is_connected: boolean | null
-  company_id: number | null
-  channel_id: number | null
-  pickup_location_id: number | null
-  auto_ship_enabled: boolean | null
-  last_sync_at: string | null
-}
-
-export type ShiprocketStatus = {
-  connected: boolean
-  expired?: boolean
-  message?: string
-  config?: ShiprocketPublicConfig | null
 }
 
 export type CustomShippingPartner = CustomShippingPartnerRow & {
@@ -60,27 +41,6 @@ export type VendorShippingServiceResponse<T> = {
   data: T | null
   error: string | null
   message?: string | null
-}
-
-export type ConnectShiprocketInput = {
-  shopId: string
-  email: string
-  password: string
-  accessContext?: VendorShippingAccessContext
-}
-
-export type ShiprocketEdgeAction = 'status' | 'connect' | 'disconnect'
-
-export type ShiprocketEdgeRequest = {
-  action: ShiprocketEdgeAction
-  shopId: string
-  email?: string
-  password?: string
-}
-
-export type ShiprocketEdgeResponse = ShiprocketStatus & {
-  success?: boolean
-  message?: string
 }
 
 export type CustomPartnerFormInput = {

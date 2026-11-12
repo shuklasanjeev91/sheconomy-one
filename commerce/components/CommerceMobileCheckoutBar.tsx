@@ -95,7 +95,7 @@ export function CommerceMobileCheckoutBar({
           tone="primary"
           size="$4"
           minWidth={168}
-          borderRadius={999}
+          borderRadius={8}
           disabled={disabled || isLoading}
           onPress={onPress}
           icon={isLoading ? <Spinner size="small" color="white" /> : undefined}

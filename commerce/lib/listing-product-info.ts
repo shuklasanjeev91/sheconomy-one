@@ -14,6 +14,10 @@ export type ListingProductInfo = {
   careInstructions: string | null
   shelfLife: string | null
   warranty: string | null
+  /** ISO date `YYYY-MM-DD` when the product was manufactured. */
+  manufacturingDate: string | null
+  /** ISO date `YYYY-MM-DD` best before / expiry. */
+  expiryDate: string | null
 }
 
 const EMPTY_PRODUCT_INFO: ListingProductInfo = {
@@ -32,6 +36,8 @@ const EMPTY_PRODUCT_INFO: ListingProductInfo = {
   careInstructions: null,
   shelfLife: null,
   warranty: null,
+  manufacturingDate: null,
+  expiryDate: null,
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -43,6 +49,31 @@ function str(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length ? trimmed : null
+}
+
+/** Normalize to `YYYY-MM-DD` or null. */
+export function normalizeProductInfoDate(value: unknown): string | null {
+  const raw = str(value)
+  if (!raw) return null
+  // Accept already-ISO dates or Date-parseable strings; store calendar date only.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return null
+  const year = parsed.getFullYear()
+  const month = String(parsed.getMonth() + 1).padStart(2, '0')
+  const day = String(parsed.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatProductInfoDateLabel(iso: string | null): string | null {
+  if (!iso) return null
+  const parsed = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return iso
+  return parsed.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 /** Parse `product_info` jsonb (+ legacy listing_metadata.product_info). */
@@ -73,6 +104,10 @@ export function parseListingProductInfo(
     careInstructions: str(source.care_instructions ?? source.careInstructions),
     shelfLife: str(source.shelf_life ?? source.shelfLife),
     warranty: str(source.warranty),
+    manufacturingDate: normalizeProductInfoDate(
+      source.manufacturing_date ?? source.manufacturingDate,
+    ),
+    expiryDate: normalizeProductInfoDate(source.expiry_date ?? source.expiryDate),
   }
 }
 
@@ -97,10 +132,18 @@ export function serializeListingProductInfo(
     ['careInstructions', 'care_instructions'],
     ['shelfLife', 'shelf_life'],
     ['warranty', 'warranty'],
+    ['manufacturingDate', 'manufacturing_date'],
+    ['expiryDate', 'expiry_date'],
   ]
 
   for (const [key, snake] of pairs) {
-    const value = info[key]?.trim()
+    const raw = info[key]
+    if (key === 'manufacturingDate' || key === 'expiryDate') {
+      const normalized = normalizeProductInfoDate(raw)
+      if (normalized) out[snake] = normalized
+      continue
+    }
+    const value = typeof raw === 'string' ? raw.trim() : ''
     if (value) out[snake] = value
   }
   return out
@@ -111,7 +154,7 @@ export type ListingSpecification = {
   value: string
 }
 
-/** marketplace/marketplace manufacturing & legal rows for the PDP details table. */
+/** Manufacturing & legal rows for the PDP details table. */
 export function buildManufacturingSpecifications(
   info: ListingProductInfo,
 ): ListingSpecification[] {
@@ -124,6 +167,8 @@ export function buildManufacturingSpecifications(
     ['Packer address', info.packerAddress],
     ['Importer', info.importerName],
     ['Country of origin', info.countryOfOrigin],
+    ['Manufactured on', formatProductInfoDateLabel(info.manufacturingDate)],
+    ['Best before', formatProductInfoDateLabel(info.expiryDate)],
     ['Net quantity', info.netQuantity],
     ['HSN code', info.hsnCode],
     ['Model / item no.', info.modelNumber],
@@ -141,3 +186,5 @@ export function buildManufacturingSpecifications(
 export function hasListingProductInfo(info: ListingProductInfo): boolean {
   return Object.values(info).some((value) => !!value)
 }
+
+export { EMPTY_PRODUCT_INFO }

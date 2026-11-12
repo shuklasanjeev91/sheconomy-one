@@ -3,7 +3,14 @@ import { AppLink } from '~/components/navigation/AppLink'
 
 import { Share } from 'react-native'
 
-import { ListingBrowseView, RecentlyViewedRail } from '~/commerce/components'
+import {
+  ListingBrowseView,
+  MarketplaceEmptyState,
+  MarketplacePage,
+  MarketplacePageTitle,
+  MarketplacePrimaryButton,
+  RecentlyViewedRail,
+} from '~/commerce/components'
 import { WishlistReactivationSection } from '~/commerce/components/WishlistReactivationSection'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
@@ -31,18 +38,20 @@ import {
 } from '~/commerce/lib/stock-alerts'
 import { WishlistMoveSheet } from '~/commerce/components/WishlistMoveSheet'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { FullWidthLayout, PageSection } from '~/components/layout'
+import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
 import { BRAND_NAME } from '~/config/brand'
 import { formatCurrency } from '~/lib/format'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { fetchListingsByIds, type ListingSummary } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function FavoritesScreen() {
   const ui = useAppUi()
+  const { hasSideRails } = useAppLayout()
   const toast = useAppToast()
   const { user } = useSupabase()
   const { favoriteIds, isLoading: isFavoritesLoading, toggleFavorite } = useFavorites()
@@ -303,24 +312,26 @@ export function FavoritesScreen() {
 
   return (
     <FullWidthLayout scroll>
-      <PageSection paddingVertical="$6" gap="$4">
-        <XStack alignItems="center" justifyContent="space-between" gap="$2" flexWrap="wrap">
-          <YStack gap={4} flex={1} minWidth={200}>
-            <Text fontSize={22} fontWeight="800" color={ui.text}>
-              Your wishlist
-            </Text>
-            <Text fontSize={14} color={ui.textSecondary}>
-              {reactivation.counts.total > 0
-                ? `${reactivation.counts.total} saved ${reactivation.counts.total === 1 ? 'item' : 'items'} · ${reactivation.counts.readyToBuy} ready to revisit`
-                : 'Tap the heart on any listing to save it here'}
-            </Text>
+      <PageSection paddingVertical="$5" {...LAYOUT_STRETCH}>
+        <MarketplacePage hasSideRails={hasSideRails}>
+        <XStack alignItems="flex-start" justifyContent="space-between" gap="$3" flexWrap="wrap">
+          <YStack flex={1} minWidth={200}>
+            <MarketplacePageTitle
+              title="Favorites"
+              subtitle={
+                reactivation.counts.total > 0
+                  ? `${reactivation.counts.total} saved ${reactivation.counts.total === 1 ? 'item' : 'items'} · ${reactivation.counts.readyToBuy} ready to revisit`
+                  : 'Tap the heart on any listing to save it here'
+              }
+              hasSideRails={hasSideRails}
+            />
           </YStack>
-          <XStack alignItems="center" gap="$2">
+          <XStack alignItems="center" gap="$2" paddingTop={hasSideRails ? 8 : 4}>
             {items.length > 0 ? (
               <Button
                 size="$3"
                 tone="outline"
-                borderRadius={999}
+                borderRadius={8}
                 icon={<Icons.Share2 size={15} />}
                 onPress={() => void handleShareWishlist()}
               >
@@ -474,20 +485,28 @@ export function FavoritesScreen() {
         />
 
         {!isLoading && items.length === 0 ? (
-          <YStack gap="$3">
-            <XStack gap="$2" flexWrap="wrap">
-              <AppLink href={commerceRoutes.home} asChild>
-                <Button tone="primary" size="$3" borderRadius={999} alignSelf="flex-start">
-                  Discover products
-                </Button>
-              </AppLink>
+          <YStack gap="$4">
+            <MarketplaceEmptyState
+              hasSideRails={hasSideRails}
+              icon={<Icons.Heart size={48} color={ui.brand} />}
+              title="No favorites yet"
+              subtitle="Save items you love with the heart icon, then come back anytime to buy or share them."
+              action={
+                <YStack width={hasSideRails ? 280 : '100%'} gap="$2">
+                  <MarketplacePrimaryButton onPress={() => navigateApp(commerceRoutes.home)}>
+                    Discover today&apos;s finds
+                  </MarketplacePrimaryButton>
+                </YStack>
+              }
+            />
+            <XStack gap="$2" flexWrap="wrap" justifyContent="center">
               <AppLink href={commerceRoutes.cart} asChild>
-                <Button tone="outline" size="$3" borderRadius={999} alignSelf="flex-start">
+                <Button tone="outline" size="$3" borderRadius={8}>
                   View cart
                 </Button>
               </AppLink>
               <AppLink href={commerceRoutes.following} asChild>
-                <Button tone="outline" size="$3" borderRadius={999} alignSelf="flex-start">
+                <Button tone="outline" size="$3" borderRadius={8}>
                   Shops you follow
                 </Button>
               </AppLink>
@@ -495,6 +514,7 @@ export function FavoritesScreen() {
             <RecentlyViewedRail />
           </YStack>
         ) : null}
+        </MarketplacePage>
       </PageSection>
     </FullWidthLayout>
   )

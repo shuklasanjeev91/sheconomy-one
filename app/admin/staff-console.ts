@@ -15,9 +15,14 @@ export type StaffNavId =
   | 'dashboard'
   | 'users'
   | 'shops'
+  | 'sellers-ops'
+  | 'payu-kyc'
   | 'products'
   | 'orders'
+  | 'ops-orders'
+  | 'disputes'
   | 'payments'
+  | 'reconciliation'
   | 'cart'
   | 'categories'
   | 'sale-events'
@@ -43,9 +48,14 @@ const STAFF_PATH_PREFIXES: ReadonlyArray<readonly [prefix: string, navId: StaffN
   ['/admin/company-pages', 'company-pages'],
   ['/admin/sponsored-ads', 'sponsored-ads'],
   ['/admin/sale-events', 'sale-events'],
+  ['/admin/reconciliation', 'reconciliation'],
+  ['/admin/sellers-ops', 'sellers-ops'],
+  ['/admin/ops-orders', 'ops-orders'],
+  ['/admin/disputes', 'disputes'],
   ['/admin/categories', 'categories'],
   ['/admin/analytics', 'analytics'],
   ['/admin/payments', 'payments'],
+  ['/admin/payu-kyc', 'payu-kyc'],
   ['/admin/products', 'products'],
   ['/admin/settings', 'settings'],
   ['/admin/orders', 'orders'],
@@ -63,9 +73,27 @@ const ALL_NAV_IDS: readonly StaffNavId[] = STAFF_PATH_PREFIXES.map(([, id]) => i
 
 const ROLE_NAV: Record<UserRole, 'all' | readonly StaffNavId[]> = {
   [USER_ROLES.ADMIN]: 'all',
-  [USER_ROLES.FINANCE]: ['dashboard', 'orders', 'payments', 'analytics'],
-  [USER_ROLES.SELLER]: ['dashboard', 'shops', 'products', 'orders', 'sale-events'],
-  [USER_ROLES.LOGISTICS]: ['dashboard', 'orders', 'shops'],
+  [USER_ROLES.FINANCE]: [
+    'dashboard',
+    'orders',
+    'ops-orders',
+    'payments',
+    'payu-kyc',
+    'reconciliation',
+    'disputes',
+    'analytics',
+  ],
+  [USER_ROLES.SELLER]: [
+    'dashboard',
+    'shops',
+    'sellers-ops',
+    'payu-kyc',
+    'products',
+    'orders',
+    'disputes',
+    'sale-events',
+  ],
+  [USER_ROLES.LOGISTICS]: ['dashboard', 'orders', 'ops-orders', 'disputes', 'shops'],
   [USER_ROLES.VENDOR]: [],
   [USER_ROLES.USER]: [],
 }

@@ -3,6 +3,7 @@ import { recordAppSearchTerm } from '~/lib/search/history'
 import type { SearchScope } from '~/lib/search/types'
 import { appRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
+import { marketplaceSearchFieldStyle } from '~/lib/theme/surfaces'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ScreenSearchFieldProps = {
@@ -42,6 +43,7 @@ export function ScreenSearchField({
   }
 
   const isPlain = variant === 'plain'
+  const shellStyle = isPlain ? undefined : marketplaceSearchFieldStyle(ui)
 
   return (
     <XStack
@@ -52,10 +54,11 @@ export function ScreenSearchField({
       height={isPlain ? undefined : 42}
       minHeight={isPlain ? undefined : 42}
       borderRadius={isPlain ? 0 : 999}
-      borderWidth={isPlain ? 0 : 1}
-      borderColor={ui.borderSubtle}
+      borderWidth={isPlain ? 0 : 2}
+      borderColor={isPlain ? undefined : ui.inputBorder}
       backgroundColor={isPlain ? 'transparent' : ui.surface}
       width="100%"
+      style={shellStyle}
     >
       <Icons.Search size={isPlain ? 18 : 16} color={ui.textMuted} flexShrink={0} />
 

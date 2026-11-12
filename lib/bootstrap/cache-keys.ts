@@ -1,7 +1,7 @@
 /** Shared cache keys for prefetch, SSR loaders, and client feed hooks. */
 export const CACHE_KEYS = {
   home: 'route:home',
-  categories: 'feed:categories:subs-with-products-v1',
+  categories: 'feed:categories:shop-by-v5',
   shops: 'feed:shops',
   listingFeed: (kind: string) => `feed:listings:${kind}`,
   categoryListings: (categoryId: string) => `feed:category:${categoryId}`,

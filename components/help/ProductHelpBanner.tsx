@@ -5,7 +5,7 @@ import { radius } from '~/config/tokens'
 import { helpHref, helpProductLabel, type HelpProduct } from '~/lib/help/types'
 import type { AiProduct } from '~/lib/ai'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { useAiAssistOptional } from '~/providers/AiAssistProvider'
+import { useAiAssistOptional } from '~/providers/ai-assist-context'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 type ProductHelpBannerProps = {

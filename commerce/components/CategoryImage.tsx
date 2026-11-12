@@ -5,6 +5,8 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 type CategoryImageProps = {
   src?: string | null
+  /** Extra URLs to try if `src` fails to load (403 / broken CDN). */
+  fallbackSrcs?: Array<string | null | undefined>
   /** Emoji glyph shown when there is no photo — most categories ship icon-only. */
   icon?: string | null
   width: number
@@ -13,15 +15,27 @@ type CategoryImageProps = {
 }
 
 /** Category tile artwork with graceful fallback when CDN URLs fail on native. */
-export function CategoryImage({ src, icon, width, height, alt }: CategoryImageProps) {
+export function CategoryImage({
+  src,
+  fallbackSrcs,
+  icon,
+  width,
+  height,
+  alt,
+}: CategoryImageProps) {
   const ui = useAppUi()
-  const [failed, setFailed] = useState(false)
+  const candidates = [src, ...(fallbackSrcs ?? [])]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+  const uniqueCandidates = [...new Set(candidates)]
+  const [activeIndex, setActiveIndex] = useState(0)
+  const activeSrc = uniqueCandidates[activeIndex] ?? null
 
   useEffect(() => {
-    setFailed(false)
-  }, [src])
+    setActiveIndex(0)
+  }, [src, uniqueCandidates.join('|')])
 
-  if (!src || failed) {
+  if (!activeSrc) {
     const glyph = icon?.trim()
     const scale = Math.min(width, height)
     return (
@@ -45,12 +59,17 @@ export function CategoryImage({ src, icon, width, height, alt }: CategoryImagePr
 
   return (
     <Image
-      src={src}
+      src={activeSrc}
       alt={alt}
       width={width}
       height={height}
       objectFit="cover"
-      onError={() => setFailed(true)}
+      onError={() => {
+        setActiveIndex((current) => {
+          if (current + 1 < uniqueCandidates.length) return current + 1
+          return uniqueCandidates.length
+        })
+      }}
     />
   )
 }

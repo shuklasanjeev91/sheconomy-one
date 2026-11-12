@@ -14,6 +14,8 @@ type ReviewsSectionProps = {
   reviews: PublicReview[]
   isLoading?: boolean
   error?: string | null
+  /** When the parent already renders a section heading (e.g. marketplace PDP card). */
+  hideTitle?: boolean
 }
 
 export function ReviewsSection({
@@ -22,8 +24,10 @@ export function ReviewsSection({
   reviews,
   isLoading,
   error,
+  hideTitle = false,
 }: ReviewsSectionProps) {
   const ui = useAppUi()
+  const heading = hideTitle ? null : <SectionTitle title={title} />
 
   // Keep rating summary visible while review rows hydrate — never blank the
   // bottom of PDP behind a large spinner.
@@ -32,7 +36,7 @@ export function ReviewsSection({
   } else if (isLoading && !reviews.length) {
     return (
       <YStack gap="$3" paddingTop="$2">
-        <SectionTitle title={title} />
+        {heading}
         <RatingSummary summary={summary} size="sm" />
       </YStack>
     )
@@ -41,7 +45,7 @@ export function ReviewsSection({
   if (!isLoading && !hasVisibleReviews(summary) && !reviews.length) {
     return (
       <YStack gap="$3" paddingTop="$2">
-        <SectionTitle title={title} />
+        {heading}
         <Paragraph color={ui.textSecondary} fontSize={14} lineHeight={22} fontWeight="500">
           No reviews yet. Be the first to share your experience after purchase.
         </Paragraph>
@@ -51,7 +55,7 @@ export function ReviewsSection({
 
   return (
     <YStack gap="$5" width="100%" paddingTop="$2">
-      <SectionTitle title={title} />
+      {heading}
 
       {error ? (
         <Text color={ui.starFill} fontSize={13}>

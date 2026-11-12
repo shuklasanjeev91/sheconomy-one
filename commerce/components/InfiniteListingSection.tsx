@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import type { LayoutChangeEvent } from 'react-native'
 import type { Href } from 'one'
 
 import { Spinner, Text, YStack } from '~/components/ui'
@@ -7,6 +8,7 @@ import { PageSection } from '~/components/layout'
 import type { ListingFeedKind } from '~/lib/supabase/commerce'
 import { useListingFeed } from '~/commerce/hooks/useListingFeed'
 import { useSponsoredCommerce } from '~/commerce/hooks/useSponsoredCommerce'
+import { listingGridColumnsForWidth } from '~/lib/layout/listing-grid-columns'
 
 import { CommerceSection } from '~/commerce/components/CommerceSection'
 import { ListingGrid } from '~/commerce/components/ListingGrid'
@@ -25,6 +27,8 @@ type InfiniteListingSectionProps = {
   inset?: boolean
   /** Defaults on for public browse grids and off for embedded/storefront grids. */
   sponsored?: boolean
+  /** When true, render the grid without the section title chrome (page header owns it). */
+  hideHeader?: boolean
 }
 
 export function InfiniteListingSection({
@@ -37,9 +41,12 @@ export function InfiniteListingSection({
   enabled = true,
   inset = false,
   sponsored = !inset && !shopId,
+  hideHeader = false,
 }: InfiniteListingSectionProps) {
   const ui = useAppUi()
-  const { listingGridColumns: gridColumns } = useAppLayout()
+  const { listingGridColumns: fallbackColumns } = useAppLayout()
+  const [measuredColumns, setMeasuredColumns] = useState<number | null>(null)
+  const gridColumns = (measuredColumns ?? fallbackColumns) as 2 | 3 | 4 | 5 | 6
   const { items, isLoading, isLoadingMore, hasMore, error, loadMore } = useListingFeed({
     kind,
     shopId,
@@ -51,6 +58,13 @@ export function InfiniteListingSection({
     enabled: enabled && sponsored && !shopId,
     limit: 2,
   })
+
+  function handleLayout(event: LayoutChangeEvent) {
+    const nextWidth = event.nativeEvent.layout.width
+    if (nextWidth <= 0) return
+    const nextColumns = listingGridColumnsForWidth(nextWidth)
+    setMeasuredColumns((current) => (current === nextColumns ? current : nextColumns))
+  }
 
   function wrap(node: ReactNode) {
     return inset ? <PageSection>{node}</PageSection> : node
@@ -64,17 +78,43 @@ export function InfiniteListingSection({
     )
   }
 
-  if (error) {
-    return wrap(
-      <CommerceSection title={title} subtitle={subtitle}>
+  const grid = (
+    <YStack gap="$4" width="100%" onLayout={handleLayout}>
+      {error ? (
         <Text color={ui.textSecondary} fontSize={14}>
           {error}
         </Text>
+      ) : (
+        <>
+          <ListingGrid
+            listings={items}
+            columns={gridColumns}
+            sponsoredItems={sponsoredCommerce.items}
+            onSponsoredEvent={(item, event) => void sponsoredCommerce.track(item, event)}
+          />
+          <LoadMoreSentinel
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={loadMore}
+          />
+          {!hasMore ? <LoadMoreEnd /> : null}
+        </>
+      )}
+    </YStack>
+  )
+
+  if (error) {
+    if (hideHeader) return wrap(grid)
+    return wrap(
+      <CommerceSection title={title} subtitle={subtitle}>
+        {grid}
       </CommerceSection>,
     )
   }
 
   if (!items.length) return null
+
+  if (hideHeader) return wrap(grid)
 
   return wrap(
     <CommerceSection
@@ -83,20 +123,7 @@ export function InfiniteListingSection({
       actionLabel={actionLabel}
       actionHref={actionHref}
     >
-      <YStack gap="$4" width="100%">
-        <ListingGrid
-          listings={items}
-          columns={gridColumns}
-          sponsoredItems={sponsoredCommerce.items}
-          onSponsoredEvent={(item, event) => void sponsoredCommerce.track(item, event)}
-        />
-        <LoadMoreSentinel
-          hasMore={hasMore}
-          isLoadingMore={isLoadingMore}
-          onLoadMore={loadMore}
-        />
-        {!hasMore ? <LoadMoreEnd /> : null}
-      </YStack>
+      {grid}
     </CommerceSection>,
   )
 }

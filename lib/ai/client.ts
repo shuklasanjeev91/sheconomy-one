@@ -1,3 +1,4 @@
+import { AI_NAME } from '~/config/brand'
 import { invokeOwnedAssist } from '~/lib/ai/owned-service'
 
 import type {
@@ -32,9 +33,17 @@ export type {
 async function invokeAiAssist<T>(body: Record<string, unknown>): Promise<T> {
   const owned = await invokeOwnedAssist<T>(body)
   if (!owned) {
-    throw new Error('SHERPA is unavailable right now.')
+    throw new Error(`${AI_NAME} is unavailable right now.`)
   }
   return owned
+}
+
+/** Reject server-side template replies — the product always uses live SHERPA. */
+function requireSherpaDraft<T extends { usedFallback?: boolean }>(result: T): T {
+  if (result.usedFallback) {
+    throw new Error(`${AI_NAME} could not generate a response. Try again in a moment.`)
+  }
+  return result
 }
 
 export async function fetchAiSuggestions(
@@ -145,7 +154,7 @@ export async function draftMeetingWithAi(
     },
   })
 
-  return {
+  const draft = {
     title: String(result.title ?? '').trim(),
     description: String(result.description ?? '').trim(),
     scheduledAt: typeof result.scheduledAt === 'string' ? result.scheduledAt : null,
@@ -158,62 +167,44 @@ export async function draftMeetingWithAi(
       : [],
     usedFallback: Boolean(result.usedFallback),
   }
+  requireSherpaDraft(draft)
+  if (!draft.title.trim()) {
+    throw new Error(`${AI_NAME} could not draft this meeting. Try again.`)
+  }
+  return { ...draft, usedFallback: false }
 }
 
-/** Shop name + description ideas for seller onboarding. */
+/** Shop name + description ideas for seller onboarding — live SHERPA only. */
 export async function draftShopWithAi(params: ShopDraftParams = {}): Promise<ShopDraftResult> {
-  try {
-    const result = await invokeAiAssist<ShopDraftResult>({
-      action: 'shop_draft',
-      product: 'shop',
-      message:
-        params.prompt?.trim() ||
-        'Suggest shop names and a short description for a women-owned storefront',
-      context: {
-        categories: Array.isArray(params.categories) ? params.categories : [],
-        current_name: params.currentName?.trim() || null,
-        current_description: params.currentDescription?.trim() || null,
-      },
-    })
+  const result = await invokeAiAssist<ShopDraftResult>({
+    action: 'shop_draft',
+    product: 'shop',
+    message:
+      params.prompt?.trim() ||
+      'Suggest shop names and a short description for a women-owned storefront',
+    context: {
+      categories: Array.isArray(params.categories) ? params.categories : [],
+      current_name: params.currentName?.trim() || null,
+      current_description: params.currentDescription?.trim() || null,
+    },
+  })
 
-    const names = Array.isArray(result.names)
-      ? result.names
-          .map((name) => String(name).trim())
-          .filter((name) => name.length >= 2 && name.length <= 200)
-      : []
+  requireSherpaDraft(result)
 
-    if (names.length > 0) {
-      return {
-        names: names.slice(0, 6),
-        description: String(result.description ?? '').trim().slice(0, 1000),
-        usedFallback: Boolean(result.usedFallback),
-      }
-    }
-  } catch {
-    // Edge function missing / offline — use local ideas so the UI still works.
+  const names = Array.isArray(result.names)
+    ? result.names
+        .map((name) => String(name).trim())
+        .filter((name) => name.length >= 2 && name.length <= 200)
+    : []
+
+  if (!names.length) {
+    throw new Error(`${AI_NAME} could not suggest shop ideas. Try again in a moment.`)
   }
 
-  return localShopDraftFallback(params)
-}
-
-function localShopDraftFallback(params: ShopDraftParams): ShopDraftResult {
-  const category = params.categories?.[0] || 'handmade goods'
-  const seed =
-    params.currentName?.trim() ||
-    params.prompt?.trim().slice(0, 28) ||
-    'Studio'
-  const base = seed.replace(/[^a-zA-Z0-9\s&'-]/g, '').trim() || 'Velvet'
   return {
-    names: [
-      `${base} Collective`,
-      `The ${base} Shop`,
-      `${base} & Co.`,
-      `Maison ${base}`,
-      `${base} Atelier`,
-      `Little ${base}`,
-    ].map((name) => name.slice(0, 40)),
-    description: `A women-owned shop for ${category.toLowerCase()}. Thoughtfully made pieces, honest details, and a warm welcome for every shopper.`,
-    usedFallback: true,
+    names: names.slice(0, 6),
+    description: String(result.description ?? '').trim().slice(0, 1000),
+    usedFallback: false,
   }
 }
 
@@ -231,11 +222,16 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
     },
   })
 
-  return {
+  const draft = {
     title: typeof result.title === 'string' && result.title.trim() ? result.title.trim() : null,
     content: String(result.content ?? '').trim(),
     usedFallback: Boolean(result.usedFallback),
   }
+  requireSherpaDraft(draft)
+  if (!draft.content.trim()) {
+    throw new Error(`${AI_NAME} could not draft this post. Try again.`)
+  }
+  return { ...draft, usedFallback: false }
 }
 
 /** Short original post starters for the composer. Empty when SHERPA has none. */

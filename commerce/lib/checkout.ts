@@ -112,10 +112,12 @@ export async function createAtomicMarketplaceCheckout(input: {
     }
   >
   /**
-   * Platform PayU (and similar) charge outside SHEPay — skip bundle finalize.
+   * Platform PayU charge outside SHEPay — skip bundle finalize.
    * Calling finalize without SHEPay shop steps fails and leaves the cart emptied.
    */
   skipShepayFinalize?: boolean
+  /** Easyship DDP quote snapshot keyed by shop_id (p_easyship_by_shop). */
+  easyshipByShop?: Record<string, Record<string, number | string | null>>
 }): Promise<{ data: AtomicCheckoutResult | null; error: string | null }> {
   if (!input.cartId?.trim()) return { data: null, error: 'Cart is missing. Refresh and try again.' }
   if (!input.shippingAddressId?.trim()) {
@@ -128,81 +130,53 @@ export async function createAtomicMarketplaceCheckout(input: {
     return { data: null, error: 'Checkout session expired. Refresh and try again.' }
   }
 
-  const { data, error } = await supabase.rpc('atomic_marketplace_checkout' as never, {
-    p_cart_id: input.cartId,
-    p_cart_item_ids: input.cartItemIds,
-    p_shipping_address_id: input.shippingAddressId,
-    p_billing_address_id: input.billingAddressId ?? input.shippingAddressId,
-    p_payment_mode: input.paymentMode,
-    p_idempotency_key: input.idempotencyKey,
-    p_notes_by_shop: input.notesByShop ?? {},
-    p_gift_shop_ids: input.giftShopIds ?? [],
-    p_customer_currency: input.customerCurrency ?? null,
-    p_customer_amounts_by_shop: input.customerAmountsByShop ?? {},
-  } as never)
+  const { data, error } = await supabase.functions.invoke('commerce-create-checkout', {
+    body: {
+      cart_id: input.cartId,
+      cart_item_ids: input.cartItemIds,
+      shipping_address_id: input.shippingAddressId,
+      billing_address_id: input.billingAddressId ?? input.shippingAddressId,
+      payment_mode: input.paymentMode,
+      idempotency_key: input.idempotencyKey,
+      notes_by_shop: input.notesByShop ?? {},
+      gift_shop_ids: input.giftShopIds ?? [],
+      customer_currency: input.customerCurrency ?? null,
+      customer_amounts_by_shop: input.customerAmountsByShop ?? {},
+      easyship_by_shop: input.easyshipByShop ?? {},
+      // Platform PayU skips SHEPay bundle finalize.
+      finalize_shepay: input.paymentMode === 'online' && !input.skipShepayFinalize,
+    },
+  })
 
   if (error) {
-    const details =
-      typeof (error as { details?: string }).details === 'string'
-        ? (error as { details: string }).details
-        : ''
-    const hint =
-      typeof (error as { hint?: string }).hint === 'string' ? (error as { hint: string }).hint : ''
-    const message = [error.message, details, hint].filter(Boolean).join(' — ')
-    return { data: null, error: message || 'Checkout failed' }
+    const context = error as { context?: Response; message?: string }
+    let message = context.message || 'Checkout failed'
+    try {
+      if (context.context) {
+        const body = (await context.context.json()) as { message?: string; error?: string }
+        message = body.message || body.error || message
+      }
+    } catch {
+      // keep message from invoke error
+    }
+    return { data: null, error: message }
   }
-  const parsed = parseAtomicCheckoutPayload(data as Record<string, unknown> | null)
+
+  const payload = (data ?? {}) as Record<string, unknown>
+  if (payload.success === false) {
+    return {
+      data: null,
+      error: typeof payload.message === 'string' ? payload.message : 'Checkout failed',
+    }
+  }
+
+  const parsed = parseAtomicCheckoutPayload(payload)
   if (parsed.error || !parsed.data) return parsed
 
   if (parsed.data.status === 'cancelled') {
     return {
       data: null,
       error: 'Previous checkout was cancelled. Try paying again.',
-    }
-  }
-
-  // Online SHEPay: collapse per-shop steps into one cart-level charge step.
-  // Platform PayU skips this — it charges via order_payments + platform-payu-charge.
-  if (input.paymentMode === 'online' && !input.skipShepayFinalize) {
-    const { data: bundle, error: bundleError } = await supabase.rpc(
-      'finalize_shepay_bundle_charge' as never,
-      { p_checkout_group_id: parsed.data.checkoutGroupId } as never,
-    )
-    if (bundleError) {
-      return { data: null, error: bundleError.message }
-    }
-    const bundleRow = bundle as Record<string, unknown> | null
-    if (bundleRow && bundleRow.success === false) {
-      return {
-        data: null,
-        error: typeof bundleRow.message === 'string' ? bundleRow.message : 'Could not prepare SHEPay charge',
-      }
-    }
-
-    // Reload steps so the client sees the single charge row.
-    const { data: steps } = await supabase
-      .from('commerce_checkout_payment_steps' as never)
-      .select('id, order_id, shop_id, collection, provider, status, amount, checkout_url')
-      .eq('checkout_group_id' as never, parsed.data.checkoutGroupId)
-      .order('created_at' as never, { ascending: true })
-
-    if (Array.isArray(steps) && steps.length) {
-      parsed.data.paymentSteps = steps.map((step) => {
-        const row = step as Record<string, unknown>
-        return {
-          id: String(row.id ?? ''),
-          orderId: String(row.order_id ?? ''),
-          shopId: String(row.shop_id ?? ''),
-          collection: String(row.collection ?? 'shepay') as
-            | 'direct'
-            | 'shepay'
-            | 'cod',
-          provider: typeof row.provider === 'string' ? row.provider : null,
-          status: String(row.status ?? 'pending'),
-          amount: Number(row.amount ?? 0),
-          checkoutUrl: typeof row.checkout_url === 'string' ? row.checkout_url : null,
-        }
-      })
     }
   }
 

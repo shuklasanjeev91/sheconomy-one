@@ -19,7 +19,6 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { chromeSurfaceStyle } from '~/lib/theme/surfaces'
 
 import { AppCenterNavTabs } from '~/components/navigation/app/AppCenterNavTabs'
-import { AppMenuButton } from '~/components/navigation/app/AppMenuSheet'
 import { getAppColors } from '~/components/navigation/app/config'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -93,7 +92,6 @@ export function AppDesktopHeader() {
         >
           {isAuthenticated ? (
             <>
-              <AppMenuButton mode="popover" size={40} />
               {canManageShops && !showCreateShop ? (
                 <UtilityButton
                   href={sellerHubHref}

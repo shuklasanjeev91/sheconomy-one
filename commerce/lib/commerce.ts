@@ -475,7 +475,7 @@ export const BROWSE_FEED_KINDS = [
 export type BrowseFeedKind = (typeof BROWSE_FEED_KINDS)[number]
 
 export const BROWSE_FEED_LABELS: Record<BrowseFeedKind, { title: string; subtitle?: string }> = {
-  physical: { title: 'Ships to you', subtitle: 'Physical items ready to ship' },
+  physical: { title: 'Physical goods', subtitle: 'Physical items ready to ship' },
   digital: { title: 'Instant delivery', subtitle: 'Digital downloads & services' },
   latest: { title: 'New arrivals', subtitle: 'Fresh listings from sellers' },
   featured: { title: 'Recommended for you', subtitle: 'Ranked by your activity, location, and demand' },
@@ -488,8 +488,8 @@ export function isBrowseFeedKind(value: string): value is BrowseFeedKind {
 
 export const COMMERCE_PAGE_SIZE = 24
 export const COMMERCE_HORIZONTAL_PAGE_SIZE = 12
-/** Home category rail page size (categories + subcategories mixed). */
-export const CATEGORY_RAIL_PAGE_SIZE = 20
+/** Home category rail page size (top-level browse chips). */
+export const CATEGORY_RAIL_PAGE_SIZE = 16
 
 /** Enough IDs for ~4 feed pages without pulling the entire catalog ranking. */
 const FEED_RANKING_ID_LIMIT = 96
@@ -884,14 +884,206 @@ export async function fetchShopsPage(
 }
 
 /**
- * Only curated artwork from the `categories_media` bucket is a category image.
- * A backfill seeded `categories.category_image_url` from listing photos whose
- * title matched the category name, so every other host is a product photo and
- * has to fall back to the category icon.
+ * Cover image for a category tile.
+ * Prefer curated `categories_media` artwork; also accept any stored URL
+ * (including listing-photo backfills) so the home rail shows real product art.
+ *
+ * Legacy CS-Cart CloudFront `/images/product/` paths often 403 in the browser —
+ * treat those as unusable so tiles do not fall through to the sparkle icon.
  */
 function categoryArtworkUrl(url: string | null | undefined): string | null {
-  if (!url) return null
-  return url.includes('/categories_media/') ? url : null
+  const trimmed = url?.trim()
+  if (!trimmed) return null
+  if (!(trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/'))) {
+    return null
+  }
+  if (/cloudfront\.net\/images\/product\//i.test(trimmed)) return null
+  return trimmed
+}
+
+function coverUrlScore(url: string): number {
+  if (url.includes('/categories_media/')) return 100
+  if (url.includes('supabase.co') && url.includes('listing-images')) return 90
+  if (url.includes('supabase.co')) return 80
+  if (/cloudfront\.net\/images\/detailed\//i.test(url)) return 60
+  if (/cloudfront\.net\/images\/product\//i.test(url)) return 0
+  return 40
+}
+
+type ListingCoverImage = {
+  image_url?: string | null
+  is_primary?: boolean | null
+  display_order?: number | null
+}
+
+function pickListingCoverUrl(images: ListingCoverImage[] | null | undefined): string | null {
+  if (!images?.length) return null
+  const ranked = images
+    .map((image) => {
+      const normalized = normalizeListingImageUrl(image.image_url)
+      return {
+        url: categoryArtworkUrl(normalized) ?? categoryArtworkUrl(image.image_url),
+        primary: Boolean(image.is_primary),
+        order: image.display_order ?? 0,
+      }
+    })
+    .filter((image): image is { url: string; primary: boolean; order: number } => Boolean(image.url))
+    .sort((a, b) => {
+      const scoreDelta = coverUrlScore(b.url) - coverUrlScore(a.url)
+      if (scoreDelta) return scoreDelta
+      if (a.primary !== b.primary) return a.primary ? -1 : 1
+      return a.order - b.order
+    })
+  return ranked[0]?.url ?? null
+}
+
+/** One usable listing photo per category when the category row has no cover URL. */
+async function fetchListingCoversForCategories(
+  categoryIds: string[],
+): Promise<Map<string, string>> {
+  const covers = new Map<string, string>()
+  if (!categoryIds.length) return covers
+
+  const CONCURRENCY = 8
+  let cursor = 0
+
+  async function resolveOne(categoryId: string) {
+    const { data: assignments } = await supabase
+      .from('category_assignments')
+      .select('listing_id')
+      .eq('category_id', categoryId)
+      .limit(16)
+
+    const listingIds = [...new Set((assignments ?? []).map((row) => row.listing_id).filter(Boolean))]
+    if (!listingIds.length) return
+
+    const { data: images } = await supabase
+      .from('listing_images')
+      .select('listing_id, image_url, is_primary, display_order')
+      .in('listing_id', listingIds)
+
+    const imagesByListing = new Map<string, ListingCoverImage[]>()
+    for (const image of images ?? []) {
+      if (!image.listing_id) continue
+      const list = imagesByListing.get(image.listing_id) ?? []
+      list.push(image)
+      imagesByListing.set(image.listing_id, list)
+    }
+
+    // Prefer the best URL across all candidate listings, not just the first.
+    const candidates: string[] = []
+    for (const listingId of listingIds) {
+      const url = pickListingCoverUrl(imagesByListing.get(listingId))
+      if (url) candidates.push(url)
+    }
+    candidates.sort((a, b) => coverUrlScore(b) - coverUrlScore(a))
+    if (candidates[0]) covers.set(categoryId, candidates[0])
+  }
+
+  async function worker() {
+    while (cursor < categoryIds.length) {
+      const index = cursor
+      cursor += 1
+      const categoryId = categoryIds[index]
+      if (categoryId) await resolveOne(categoryId)
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, categoryIds.length) }, () => worker()),
+  )
+
+  return covers
+}
+
+/**
+ * Cover for a parent aisle: listings are assigned to leaves, so walk the tree
+ * and pick the best storefront photo under this category.
+ */
+async function fetchTreeListingCover(categoryId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('listings')
+    .select(
+      `
+      id,
+      listing_images(image_url, is_primary, display_order),
+      shops!inner(id),
+      category_assignments!inner(categories!inner(id_path))
+    `,
+    )
+    .or(categoryTreeFilter(categoryId), { referencedTable: 'category_assignments.categories' })
+    .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+    .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+    .eq('shops.is_active', true)
+    .eq('shops.verified', true)
+    .limit(12)
+
+  if (error || !data?.length) return null
+
+  const candidates: string[] = []
+  for (const listing of data) {
+    const url = pickListingCoverUrl(
+      (listing.listing_images as ListingCoverImage[] | null | undefined) ?? null,
+    )
+    if (url) candidates.push(url)
+  }
+  candidates.sort((a, b) => coverUrlScore(b) - coverUrlScore(a))
+  return candidates[0] ?? null
+}
+
+async function fetchTreeListingCoversForCategories(
+  categoryIds: string[],
+): Promise<Map<string, string>> {
+  const covers = new Map<string, string>()
+  if (!categoryIds.length) return covers
+
+  const CONCURRENCY = 6
+  let cursor = 0
+
+  async function worker() {
+    while (cursor < categoryIds.length) {
+      const index = cursor
+      cursor += 1
+      const categoryId = categoryIds[index]
+      if (!categoryId) continue
+      const url = await fetchTreeListingCover(categoryId)
+      if (url) covers.set(categoryId, url)
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, categoryIds.length) }, () => worker()),
+  )
+  return covers
+}
+
+/** Category ids under `rootId` (including root) that have direct product assignments. */
+function descendantIdsWithDirectProducts(
+  rootId: string,
+  byId: Map<string, CategoryRailRow>,
+  countById: Map<string, number>,
+  limit = 16,
+): string[] {
+  const scored: Array<{ id: string; count: number }> = []
+  for (const row of byId.values()) {
+    const direct = countById.get(row.category_id) ?? 0
+    if (direct <= 0) continue
+
+    let underRoot = row.category_id === rootId
+    let parentId = row.parent_id?.trim() || null
+    while (parentId && !underRoot) {
+      if (parentId === rootId) {
+        underRoot = true
+        break
+      }
+      parentId = byId.get(parentId)?.parent_id?.trim() || null
+    }
+    if (!underRoot) continue
+    scored.push({ id: row.category_id, count: direct })
+  }
+
+  scored.sort((a, b) => b.count - a.count)
+  return scored.slice(0, limit).map((row) => row.id)
 }
 
 /**
@@ -918,7 +1110,13 @@ async function countCategoryTreeListings(categoryId: string): Promise<number> {
 }
 
 const STOREFRONT_CATEGORY_TTL_MS = 5 * 60 * 1000
-let storefrontCategoryCache: { items: CategorySummary[]; expiresAt: number } | null = null
+/** v5: parent aisle covers resolve from descendant / tree listing photos. */
+const STOREFRONT_CATEGORY_CACHE_VERSION = 5
+let storefrontCategoryCache: {
+  version: number
+  items: CategorySummary[]
+  expiresAt: number
+} | null = null
 
 type CategoryRailRow = {
   category_id: string
@@ -934,12 +1132,13 @@ type CategoryRailRow = {
 function toCategorySummary(
   row: CategoryRailRow,
   parentName: string | null,
+  coverUrl?: string | null,
 ): CategorySummary {
   return {
     id: row.category_id,
     category_id: row.category_id,
     category: row.category,
-    category_image_url: categoryArtworkUrl(row.category_image_url),
+    category_image_url: coverUrl ?? categoryArtworkUrl(row.category_image_url),
     category_icon: row.category_icon,
     product_count: row.product_count ?? 0,
     seo_name: row.seo_name,
@@ -948,12 +1147,111 @@ function toCategorySummary(
   }
 }
 
+/** Own listing count + every descendant’s — parents store 0 until children roll up. */
+function rollupCategoryProductCounts(
+  byId: Map<string, CategoryRailRow>,
+  countById: Map<string, number>,
+): Map<string, number> {
+  const rolled = new Map<string, number>()
+  for (const id of byId.keys()) {
+    rolled.set(id, countById.get(id) ?? 0)
+  }
+  for (const row of byId.values()) {
+    const own = countById.get(row.category_id) ?? 0
+    if (!own) continue
+    let parentId = row.parent_id?.trim() || null
+    while (parentId) {
+      rolled.set(parentId, (rolled.get(parentId) ?? 0) + own)
+      parentId = byId.get(parentId)?.parent_id?.trim() || null
+    }
+  }
+  return rolled
+}
+
+function sortCategoryRailRows(a: CategoryRailRow, b: CategoryRailRow) {
+  const countDelta = (b.product_count ?? 0) - (a.product_count ?? 0)
+  if (countDelta) return countDelta
+  const positionDelta = (a.position ?? 0) - (b.position ?? 0)
+  if (positionDelta) return positionDelta
+  return a.category.localeCompare(b.category)
+}
+
 /**
- * Mix root categories with their subcategories for the home rail.
- * Roots need curated artwork; subcategories also need at least one product.
+ * Storefront browse chips: top-level categories when the tree has enough roots.
+ * If the catalog hangs under 1–3 mega-roots, use their direct children instead
+ * so the rail shows broad aisles rather than leaf SKUs.
+ */
+function pickShopByCategoryRows(
+  byId: Map<string, CategoryRailRow>,
+  rolledCounts: Map<string, number>,
+): CategoryRailRow[] {
+  const withCount = (row: CategoryRailRow): CategoryRailRow => ({
+    ...row,
+    product_count: rolledCounts.get(row.category_id) ?? 0,
+  })
+
+  const roots = [...byId.values()]
+    .filter((row) => !row.parent_id?.trim())
+    .map(withCount)
+    .filter((row) => (row.product_count ?? 0) > 0)
+    .sort(sortCategoryRailRows)
+
+  if (roots.length >= 4) return roots
+
+  const parentIds = new Set(
+    (roots.length ? roots : [...byId.values()].filter((row) => !row.parent_id?.trim())).map(
+      (row) => row.category_id,
+    ),
+  )
+
+  const depthOne = [...byId.values()]
+    .filter((row) => {
+      const parentId = row.parent_id?.trim()
+      return Boolean(parentId && parentIds.has(parentId))
+    })
+    .map(withCount)
+    .filter((row) => (row.product_count ?? 0) > 0)
+    .sort(sortCategoryRailRows)
+
+  return depthOne.length >= 4 ? depthOne : roots.length ? roots : depthOne
+}
+
+function bestCoverFromDescendants(
+  rootId: string,
+  byId: Map<string, CategoryRailRow>,
+  listingCovers: Map<string, string>,
+): string | null {
+  const candidates: string[] = []
+  for (const row of byId.values()) {
+    let parentId = row.parent_id?.trim() || null
+    let underRoot = row.category_id === rootId
+    while (parentId && !underRoot) {
+      if (parentId === rootId) {
+        underRoot = true
+        break
+      }
+      parentId = byId.get(parentId)?.parent_id?.trim() || null
+    }
+    if (!underRoot) continue
+    const stored = categoryArtworkUrl(row.category_image_url)
+    if (stored) candidates.push(stored)
+    const listing = listingCovers.get(row.category_id)
+    if (listing) candidates.push(listing)
+  }
+  candidates.sort((a, b) => coverUrlScore(b) - coverUrlScore(a))
+  return candidates[0] ?? null
+}
+
+/**
+ * Home “Shop by category” rail: top-level (or depth-1) categories with products
+ * in their tree, richest cover (curated → child → listing photo), inventory sort.
  */
 async function loadStorefrontCategories(): Promise<{ items: CategorySummary[]; error: string | null }> {
-  if (storefrontCategoryCache && storefrontCategoryCache.expiresAt > Date.now()) {
+  if (
+    storefrontCategoryCache &&
+    storefrontCategoryCache.version === STOREFRONT_CATEGORY_CACHE_VERSION &&
+    storefrontCategoryCache.expiresAt > Date.now()
+  ) {
     return { items: storefrontCategoryCache.items, error: null }
   }
 
@@ -977,81 +1275,96 @@ async function loadStorefrontCategories(): Promise<{ items: CategorySummary[]; e
     (countRows ?? []).map((row) => [row.category_id ?? '', row.product_count ?? 0]),
   )
 
-  const rows = (categoryRows ?? [])
-    .filter((row) =>
-      isStorefrontCategoryVisible({ category_id: row.category_id, category: row.category }),
-    )
-    .map(
-      (row): CategoryRailRow => ({
-        category_id: row.category_id,
-        category: row.category,
-        category_image_url: row.category_image_url,
-        category_icon: row.category_icon,
-        seo_name: row.seo_name,
-        parent_id: row.parent_id,
-        position: row.position,
-        product_count: countById.get(row.category_id) ?? 0,
-      }),
-    )
+  const byId = new Map<string, CategoryRailRow>()
 
-  const rowsWithImage = rows.filter((row) => {
-    if (!categoryArtworkUrl(row.category_image_url)) return false
-    const isSubcategory = Boolean(row.parent_id?.trim())
-    if (isSubcategory && (row.product_count ?? 0) <= 0) return false
-    return true
-  })
-  const imageIds = new Set(rowsWithImage.map((row) => row.category_id))
-
-  const byId = new Map(rows.map((row) => [row.category_id, row]))
-  const childrenByParent = new Map<string, CategoryRailRow[]>()
-  const roots: CategoryRailRow[] = []
-
-  for (const row of rowsWithImage) {
-    const parentId = row.parent_id?.trim() || null
-    // Treat as a rail root when it has no parent, or parent isn't image-backed.
-    if (!parentId || !imageIds.has(parentId)) {
-      roots.push(row)
+  for (const row of categoryRows ?? []) {
+    if (!isStorefrontCategoryVisible({ category_id: row.category_id, category: row.category })) {
       continue
     }
-    const list = childrenByParent.get(parentId) ?? []
-    list.push(row)
-    childrenByParent.set(parentId, list)
+    const mapped: CategoryRailRow = {
+      category_id: row.category_id,
+      category: row.category,
+      category_image_url: row.category_image_url,
+      category_icon: row.category_icon,
+      seo_name: row.seo_name,
+      parent_id: row.parent_id,
+      position: row.position,
+      product_count: countById.get(row.category_id) ?? 0,
+    }
+    byId.set(mapped.category_id, mapped)
   }
 
-  const items: CategorySummary[] = []
-  const seen = new Set<string>()
+  const rolledCounts = rollupCategoryProductCounts(byId, countById)
+  const railRows = pickShopByCategoryRows(byId, rolledCounts)
 
-  function pushRow(row: CategoryRailRow) {
-    if (seen.has(row.category_id)) return
-    if (!categoryArtworkUrl(row.category_image_url)) return
-    if (row.parent_id?.trim() && (row.product_count ?? 0) <= 0) return
-    seen.add(row.category_id)
-    const parentId = row.parent_id?.trim() || null
-    const parentName = parentId ? byId.get(parentId)?.category ?? null : null
-    items.push(toCategorySummary(row, parentName))
+  // Collapse duplicate display names (legacy + marketplace trees).
+  const dedupedByName = new Map<string, CategoryRailRow>()
+  for (const row of railRows) {
+    const key = row.category.trim().toLowerCase()
+    const existing = dedupedByName.get(key)
+    if (!existing) {
+      dedupedByName.set(key, row)
+      continue
+    }
+    const existingScore =
+      (existing.product_count ?? 0) * 10 + (categoryArtworkUrl(existing.category_image_url) ? 3 : 0)
+    const nextScore =
+      (row.product_count ?? 0) * 10 + (categoryArtworkUrl(row.category_image_url) ? 3 : 0)
+    if (nextScore > existingScore) dedupedByName.set(key, row)
   }
+  const deduped = [...dedupedByName.values()].sort(sortCategoryRailRows)
 
-  function walk(row: CategoryRailRow) {
-    pushRow(row)
-    for (const child of childrenByParent.get(row.category_id) ?? []) {
-      walk(child)
+  // Parent aisles rarely have direct assignments — seed covers from the richest
+  // descendant leaves that actually have listing photos.
+  const coverSeedIds = new Set<string>()
+  for (const row of deduped) {
+    coverSeedIds.add(row.category_id)
+    if (categoryArtworkUrl(row.category_image_url)) continue
+    for (const descendantId of descendantIdsWithDirectProducts(
+      row.category_id,
+      byId,
+      countById,
+      16,
+    )) {
+      coverSeedIds.add(descendantId)
     }
   }
+  const listingCovers = await fetchListingCoversForCategories([...coverSeedIds])
 
-  // Parent → nested children (any depth), then orphans whose parent is missing/hidden.
-  for (const root of roots) {
-    walk(root)
+  const needsTreeCover = deduped
+    .filter((row) => {
+      if (categoryArtworkUrl(row.category_image_url)) return false
+      if (listingCovers.get(row.category_id)) return false
+      if (bestCoverFromDescendants(row.category_id, byId, listingCovers)) return false
+      return true
+    })
+    .map((row) => row.category_id)
+
+  const treeCovers = await fetchTreeListingCoversForCategories(needsTreeCover)
+
+  const items = deduped.map((row) => {
+    const parentId = row.parent_id?.trim() || null
+    const parentName = parentId ? byId.get(parentId)?.category ?? null : null
+    const coverCandidates = [
+      categoryArtworkUrl(row.category_image_url),
+      listingCovers.get(row.category_id) ?? null,
+      bestCoverFromDescendants(row.category_id, byId, listingCovers),
+      treeCovers.get(row.category_id) ?? null,
+    ]
+      .filter((value): value is string => Boolean(value))
+      .sort((a, b) => coverUrlScore(b) - coverUrlScore(a))
+    return toCategorySummary(row, parentName, coverCandidates[0] ?? null)
+  })
+
+  storefrontCategoryCache = {
+    version: STOREFRONT_CATEGORY_CACHE_VERSION,
+    items,
+    expiresAt: Date.now() + STOREFRONT_CATEGORY_TTL_MS,
   }
-
-  for (const row of rowsWithImage) {
-    if (!seen.has(row.category_id)) pushRow(row)
-  }
-
-  storefrontCategoryCache = { items, expiresAt: Date.now() + STOREFRONT_CATEGORY_TTL_MS }
   return { items, error: null }
 }
 
-/** Home category rail — mixed parents + subcategories, load-more paginated. */
+/** Home category rail — top-level browse chips, load-more paginated. */
 export async function fetchCategoriesPage(
   page: number,
   pageSize = CATEGORY_RAIL_PAGE_SIZE,
@@ -1072,6 +1385,14 @@ export async function fetchCategoriesPage(
     hasMore: from + items.length < categories.length,
     error: null,
   }
+}
+
+/** Full storefront browse aisle list (same source as home Shop by category). */
+export async function fetchStorefrontCategories(): Promise<{
+  items: CategorySummary[]
+  error: string | null
+}> {
+  return loadStorefrontCategories()
 }
 
 function listingImageUrls(items: ListingSummary[], limit = 6): string[] {

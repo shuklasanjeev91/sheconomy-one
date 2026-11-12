@@ -7,7 +7,6 @@ import { isProviderConnected } from '~/lib/payment/payment.utils'
 import type { ConnectedProviderSummary, PaymentProviderConfig, ShopPaymentAccount } from '~/lib/payment/payment.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { ShepayEasyConnect } from '~/commerce/components/vendor/payment/ShepayEasyConnect'
 import { PaymentConnectForm } from '~/commerce/components/vendor/payment/PaymentConnectForm'
 
 const PANEL_WIDTH = 560
@@ -26,11 +25,12 @@ type VendorPaymentConnectDrawerProps = {
   onConnected?: () => void
 }
 
-function isShepay(provider: PaymentProviderConfig): boolean {
+function isPlatformCollect(provider: PaymentProviderConfig): boolean {
   return (
     provider.id === PAYMENT_PROVIDERS.PAYU ||
     String(provider.id).toLowerCase() === 'payu' ||
-    provider.name === 'SHEPay'
+    provider.name === 'SHEPay' ||
+    provider.name === 'Online payouts'
   )
 }
 
@@ -52,10 +52,10 @@ export function VendorPaymentConnectDrawer({
   if (!open || !provider) return null
 
   const connected = isProviderConnected(provider.id, accounts, connectedProviders)
-  const shepay = isShepay(provider)
-  const drawerTitle = shepay
+  const platformCollect = isPlatformCollect(provider)
+  const drawerTitle = platformCollect
     ? connected
-      ? 'Your PayU details'
+      ? 'Your payout details'
       : 'Get paid'
     : connected
       ? `Configure ${provider.name}`
@@ -131,25 +131,15 @@ export function VendorPaymentConnectDrawer({
           paddingTop="$4"
           paddingBottom={16 + safeBottom}
         >
-          {shepay ? (
-            <ShepayEasyConnect
-              ui={ui}
-              shopId={shopId}
-              connected={connected}
-              onClose={onClose}
-              onConnected={onConnected}
-            />
-          ) : (
-            <PaymentConnectForm
-              ui={ui}
-              shopId={shopId}
-              provider={provider}
-              connected={connected}
-              initialWebhookUrl={webhookUrl}
-              onClose={onClose}
-              onConnected={onConnected}
-            />
-          )}
+          <PaymentConnectForm
+            ui={ui}
+            shopId={shopId}
+            provider={provider}
+            connected={connected}
+            initialWebhookUrl={webhookUrl}
+            onClose={onClose}
+            onConnected={onConnected}
+          />
         </YStack>
       </YStack>
     </ViewportOverlay>

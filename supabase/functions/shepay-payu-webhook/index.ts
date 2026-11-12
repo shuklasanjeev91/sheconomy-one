@@ -2,11 +2,11 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
+import { timingSafeEqual } from '../_shared/crypto-safe.ts'
 import { payUResponseHash, resolvePayuCredentials, type PayuCredentials } from '../_shared/payu.ts'
 import { childFromAccountMetadata } from '../_shared/payu-child.ts'
 import {
   createAbsolutePaymentSplit,
-  releaseAllPayuSettlements,
   type PayuSplitChild,
 } from '../_shared/payu-split.ts'
 
@@ -105,7 +105,7 @@ Deno.serve(async (request) => {
       },
       cred.salt,
     )
-    if (expected.toLowerCase() === hash.toLowerCase()) {
+    if (timingSafeEqual(expected, hash)) {
       matched = cred
       break
     }
@@ -128,8 +128,7 @@ Deno.serve(async (request) => {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  const shopIdForRpc =
-    udf2 && udf2 !== 'bundle' ? udf2 : null
+  const shopIdForRpc = udf2 && udf2 !== 'bundle' ? udf2 : null
 
   const { data, error } = await admin.rpc('process_checkout_payment_webhook', {
     p_payment_step_id: udf1,
@@ -144,8 +143,17 @@ Deno.serve(async (request) => {
 
   if (error) return jsonResponse({ error: error.message }, 500)
 
-  // Multi-vendor Automate split: ready shops get immediate split+release;
-  // shops without a child merchant get a held pending row (auto-release on connect).
+  const rpcResult = (data ?? {}) as Record<string, unknown>
+  if (rpcResult.duplicate === true) {
+    return jsonResponse({
+      ok: true,
+      result: data,
+      payu_env: matched.mode,
+      split: { skipped: true, reason: 'duplicate_webhook' },
+    })
+  }
+
+  // Paid: absolute split when child exists; always create pending hold rows. Never release here.
   let splitResult: unknown = null
   if (mappedStatus === 'paid' && mihpayid && udf1) {
     try {
@@ -161,7 +169,7 @@ Deno.serve(async (request) => {
           : {}
       const allocations = Array.isArray(meta.allocations) ? meta.allocations : null
 
-      type ShopAlloc = { shopId: string; amount: number }
+      type ShopAlloc = { shopId: string; orderId: string | null; amount: number }
       const shopAllocs: ShopAlloc[] = []
 
       if (allocations && allocations.length) {
@@ -169,26 +177,23 @@ Deno.serve(async (request) => {
           const alloc = raw as Record<string, unknown>
           const shopId = String(alloc.shop_id ?? '')
           if (!shopId) continue
-          shopAllocs.push({ shopId, amount: Number(alloc.amount ?? 0) })
+          shopAllocs.push({
+            shopId,
+            orderId: alloc.order_id ? String(alloc.order_id) : null,
+            amount: Number(alloc.amount ?? 0),
+          })
         }
       } else if (step?.shop_id) {
         shopAllocs.push({
           shopId: String(step.shop_id),
+          orderId: null,
           amount: Number(amount || step.amount || 0),
         })
       }
 
       const children: PayuSplitChild[] = []
-      const pendingRows: Array<{
-        shop_id: string
-        checkout_group_id: string | null
-        payment_step_id: string
-        payu_id: string
-        txnid: string
-        amount: number
-        currency: string
-        status: string
-      }> = []
+      const childByShop = new Map<string, PayuSplitChild>()
+      const pendingRows: Array<Record<string, unknown>> = []
 
       for (const alloc of shopAllocs) {
         if (!(alloc.amount > 0)) continue
@@ -204,16 +209,20 @@ Deno.serve(async (request) => {
             ? (account.metadata as Record<string, unknown>)
             : {}
         const child = childFromAccountMetadata(accountMeta)
+        const subTxnId = `sub_${alloc.shopId.replace(/-/g, '').slice(0, 12)}_${Date.now().toString(36)}`
+
         if (child && child.merchantKey !== matched.key) {
-          children.push({
+          const splitChild: PayuSplitChild = {
             merchantKey: child.merchantKey,
             childMid: child.childMid,
-            subTxnId: `sub_${alloc.shopId.replace(/-/g, '').slice(0, 12)}_${Date.now().toString(36)}`,
+            subTxnId,
             amount: formatAmount(alloc.amount),
-          })
-        } else {
+          }
+          children.push(splitChild)
+          childByShop.set(alloc.shopId, splitChild)
           pendingRows.push({
             shop_id: alloc.shopId,
+            order_id: alloc.orderId,
             checkout_group_id: step?.checkout_group_id ?? (udf3 || null),
             payment_step_id: udf1,
             payu_id: mihpayid,
@@ -221,83 +230,97 @@ Deno.serve(async (request) => {
             amount: Number(formatAmount(alloc.amount)),
             currency: 'INR',
             status: 'pending',
+            hold_reason: 'awaiting_release_window',
+            split_status: 'not_split',
+            child_merchant_key: child.merchantKey,
+            child_mid: child.childMid,
+            sub_txn_id: subTxnId,
           })
+        } else {
+          pendingRows.push({
+            shop_id: alloc.shopId,
+            order_id: alloc.orderId,
+            checkout_group_id: step?.checkout_group_id ?? (udf3 || null),
+            payment_step_id: udf1,
+            payu_id: mihpayid,
+            txnid,
+            amount: Number(formatAmount(alloc.amount)),
+            currency: 'INR',
+            status: 'pending',
+            hold_reason: 'awaiting_child',
+            split_status: 'not_split',
+          })
+        }
+      }
+
+      let splitOk = true
+      let splitBody: unknown = null
+      if (children.length) {
+        const split = await createAbsolutePaymentSplit(matched, mihpayid, children)
+        splitOk = split.ok
+        splitBody = { ok: split.ok, error: split.error, json: split.json, body: split.body }
+        const now = new Date().toISOString()
+        for (const row of pendingRows) {
+          const shopId = String(row.shop_id)
+          if (!childByShop.has(shopId)) continue
+          row.split_status = split.ok ? 'split' : 'split_failed'
+          row.split_at = split.ok ? now : null
+          row.split_payload = splitBody
+          if (!split.ok) {
+            row.error_message = split.error ?? 'payment_split failed'
+          }
         }
       }
 
       if (pendingRows.length) {
         await admin.from('shepay_pending_settlements').upsert(pendingRows, {
           onConflict: 'shop_id,payu_id',
-          ignoreDuplicates: true,
+          ignoreDuplicates: false,
         })
         for (const row of pendingRows) {
           await admin.from('payment_logs').insert({
             shop_id: row.shop_id,
             event_type: 'settlement',
-            status: 'pending',
+            status: row.split_status === 'split_failed' ? 'failed' : 'pending',
             provider: 'payu',
             transaction_id: mihpayid,
             amount: row.amount,
             currency: row.currency,
             payload: {
               held: true,
-              reason: 'child_merchant_not_connected',
+              platform_fee_amount: 0,
+              hold_reason: row.hold_reason,
+              split_status: row.split_status,
+              sub_txn_id: row.sub_txn_id ?? null,
               payuId: mihpayid,
               txnid,
+              order_id: row.order_id ?? null,
               checkout_group_id: row.checkout_group_id,
+              split: splitBody,
             },
           })
         }
       }
 
-      if (children.length) {
-        const split = await createAbsolutePaymentSplit(matched, mihpayid, children)
-        const release = split.ok
-          ? await releaseAllPayuSettlements(matched, mihpayid, children)
-          : { ok: false, results: [] as Array<{ childMid: string; ok: boolean; error?: string }> }
-        splitResult = {
-          split,
-          release,
-          held: pendingRows.map((r) => ({ shop_id: r.shop_id, amount: r.amount })),
-          children: children.map((c) => ({
-            merchantKey: c.merchantKey,
-            childMid: c.childMid,
-            amount: c.amount,
-            subTxnId: c.subTxnId,
-          })),
-        }
-
-        const logShopId = children.length
-          ? shopAllocs.find((a) =>
-              children.some((c) => c.amount === formatAmount(a.amount)),
-            )?.shopId ??
-            shopAllocs[0]?.shopId ??
-            null
-          : null
-
-        // One summary log for the immediate split (per first ready shop / group).
-        await admin.from('payment_logs').insert({
-          shop_id: logShopId,
-          event_type: 'settlement',
-          status: split.ok && release.ok ? 'completed' : 'failed',
-          provider: 'payu',
-          transaction_id: mihpayid,
-          payload: {
-            payuId: mihpayid,
-            txnid,
-            checkout_group_id: step?.checkout_group_id ?? udf3,
-            splitResult,
-          },
-        })
-      } else {
-        splitResult = {
-          skipped_immediate_split: true,
-          reason: pendingRows.length ? 'all_held_pending_child' : 'no_allocations',
-          held: pendingRows.map((r) => ({ shop_id: r.shop_id, amount: r.amount })),
-        }
+      splitResult = {
+        split_ok: splitOk,
+        children: children.map((c) => ({
+          merchantKey: c.merchantKey,
+          childMid: c.childMid,
+          amount: c.amount,
+          subTxnId: c.subTxnId,
+        })),
+        held: pendingRows.map((r) => ({
+          shop_id: r.shop_id,
+          order_id: r.order_id,
+          amount: r.amount,
+          hold_reason: r.hold_reason,
+          split_status: r.split_status,
+        })),
+        release: { skipped: true, reason: 'phase3_hold_until_delivery_window' },
       }
     } catch (splitError) {
-      console.error('payu split settle failed', splitError)
+      console.error('payu split hold failed', splitError)
       splitResult = {
         error: splitError instanceof Error ? splitError.message : 'split_failed',
       }

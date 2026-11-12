@@ -30,7 +30,7 @@ export function AppearanceSettingsPanel() {
           </Text>
         </XStack>
         <Text color={ui.textMuted} fontSize={13} lineHeight={19}>
-          Auto-detected from your device. Change anytime — like Etsy&apos;s region settings.
+          Auto-detected from your device. Change anytime — in Region preferences.
         </Text>
         <Text color={ui.text} fontSize={14} fontWeight="600">
           {region?.ready ? region.summaryLabel : 'Detecting…'}

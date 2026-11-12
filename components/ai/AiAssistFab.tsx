@@ -15,7 +15,7 @@ import {
 import { useInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { useGlobalSession } from '~/lib/session/global-session'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { useAiAssist } from '~/providers/AiAssistProvider'
+import { useAiAssistOptional } from '~/providers/ai-assist-context'
 
 /** Space to clear ChatListPane’s “new message” FAB (58px) + gap. */
 const CHAT_COMPOSE_FAB_CLEARANCE = 72
@@ -29,7 +29,7 @@ const CHAT_COMPOSE_FAB_CLEARANCE = 72
 export function AiAssistFab() {
   const ui = useAppUi()
   const pathname = usePathname()
-  const { openAssist, open } = useAiAssist()
+  const assist = useAiAssistOptional()
   const { open: composerOpen } = useComposerState()
   const { isDesktop, mobileTabBarOffset, safeRight, safeBottom } = useAppLayout()
   const instantMeeting = useInstantMeetingSession()
@@ -40,7 +40,8 @@ export function AiAssistFab() {
     globalSession?.presentation !== 'pip'
 
   if (
-    open ||
+    !assist ||
+    assist.open ||
     composerOpen ||
     isCreatePostPath(pathname ?? '') ||
     isCoWorkMeetingRoomPath(pathname ?? '') ||
@@ -48,6 +49,8 @@ export function AiAssistFab() {
   ) {
     return null
   }
+
+  const { openAssist } = assist
 
   // Mobile chat list also shows the PenSquare compose FAB at the same corner.
   const stackAboveChatCompose =

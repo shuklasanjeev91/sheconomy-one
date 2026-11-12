@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { resolveCountryCode, validatePostalCode } from '~/lib/geo'
+import { isValidPhone } from '~/lib/phone/phone'
 import type { CustomPartnerFormInput, CustomPartnerInput } from '~/lib/vendor-shipping/vendor-shipping.type'
 
 const pickupAddressSchema = z.object({
@@ -9,11 +11,6 @@ const pickupAddressSchema = z.object({
   state: z.string().optional(),
   pincode: z.string().optional(),
   country: z.string().optional(),
-})
-
-export const connectShiprocketSchema = z.object({
-  email: z.string().trim().email('Enter a valid Shiprocket email.'),
-  password: z.string().min(1, 'Password is required.'),
 })
 
 export const customPartnerSchema = z.object({
@@ -27,23 +24,28 @@ export const customPartnerSchema = z.object({
   service_areas: z.array(z.string()).optional(),
 })
 
-export function validateConnectShiprocket(data: { email: string; password: string }) {
-  const result = connectShiprocketSchema.safeParse(data)
-  if (result.success) return { isValid: true as const, errors: [] as string[] }
-  return {
-    isValid: false as const,
-    errors: result.error.issues.map((issue) => issue.message),
-  }
-}
-
 export function validateCustomPartnerInput(data: CustomPartnerFormInput | CustomPartnerInput) {
   const result = customPartnerSchema.safeParse(data)
-  if (result.success) return { isValid: true as const, errors: [] as string[], data: result.data }
-  return {
-    isValid: false as const,
-    errors: result.error.issues.map((issue) => issue.message),
-    data: null,
+  const errors: string[] = result.success
+    ? []
+    : result.error.issues.map((issue) => issue.message)
+
+  const phone = (data.phone ?? '').trim()
+  if (phone && !isValidPhone(phone)) {
+    errors.push('Enter a valid mobile number.')
   }
+
+  const pickup = data.pickup_address
+  if (pickup?.pincode?.trim()) {
+    const country = resolveCountryCode(pickup.country || 'IN')
+    const postalError = validatePostalCode(country, pickup.pincode)
+    if (postalError) errors.push(postalError)
+  }
+
+  if (errors.length) {
+    return { isValid: false as const, errors, data: null }
+  }
+  return { isValid: true as const, errors: [] as string[], data: result.success ? result.data : null }
 }
 
 export function formToCustomPartnerInput(form: CustomPartnerFormInput): CustomPartnerInput {

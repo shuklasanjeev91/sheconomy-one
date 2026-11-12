@@ -25,6 +25,7 @@ import {
 } from '~/commerce/lib/shop-follows'
 import { fetchShopDashboard, type ShopDashboardData } from '~/commerce/lib/seller-dashboard'
 import { slugifyTitle } from '~/commerce/lib/seo-urls'
+import { fetchStorefrontCategories } from '~/lib/supabase/commerce'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase'
 import { blockedContentMessage } from '~/lib/safety/content-screen'
@@ -1344,6 +1345,53 @@ function sanitizeAdminShopUpdates(updates: ShopUpdate): ShopUpdate {
     if (payload[key] === undefined) delete payload[key]
   }
   return payload
+}
+
+/**
+ * Browse-level category names for shop onboarding / settings.
+ * Same aisle list as home “Shop by category” (live `categories` rows).
+ */
+export async function fetchShopCategoryOptions(): Promise<ShopServiceResponse<string[]>> {
+  try {
+    const { items, error } = await fetchStorefrontCategories()
+    if (error) return fail(error)
+
+    const names = [
+      ...new Set(
+        items
+          .map((row) => row.category.trim())
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b)),
+      ),
+    ]
+
+    // Fallback: if the storefront rail is empty (no products yet), show all
+    // active top-level category names so sellers can still classify a shop.
+    if (names.length === 0) {
+      const { data, error: rootsError } = await supabase
+        .from('categories')
+        .select('category')
+        .eq('status', 'A')
+        .is('parent_id', null)
+        .order('position', { ascending: true })
+        .order('category', { ascending: true })
+
+      if (rootsError) return fail(rootsError)
+      return ok(
+        [
+          ...new Set(
+            (data ?? [])
+              .map((row) => String(row.category ?? '').trim())
+              .filter(Boolean),
+          ),
+        ],
+      )
+    }
+
+    return ok(names)
+  } catch (error) {
+    return fail(error)
+  }
 }
 
 /** Admin dashboard: platform-wide shop counts. */

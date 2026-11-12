@@ -87,6 +87,13 @@ export type ListingFormData = {
   tags?: string[]
   listing_metadata?: Record<string, unknown>
 
+  // Pricing disclosure (buyer PDP)
+  mrp?: number | string | null
+  price_includes_tax?: boolean
+  tax_percent?: number | string | null
+  /** Manufacturing / legal bag stored on `listings.product_info`. */
+  product_info?: Record<string, unknown>
+
   // Physical
   stock?: number | string
   sku?: string
@@ -368,6 +375,10 @@ export function getDefaultListingFormData(
     listing_type: listingType,
     price: '',
     quantity: 1,
+    mrp: '',
+    price_includes_tax: true,
+    tax_percent: '18',
+    product_info: {},
     is_featured: false,
     is_active: true,
     listing_status: LISTING_STATUS.DRAFT,

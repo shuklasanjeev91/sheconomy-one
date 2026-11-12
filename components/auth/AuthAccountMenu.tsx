@@ -22,7 +22,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { useAiAssistOptional } from '~/providers/AiAssistProvider'
+import { useAiAssistOptional } from '~/providers/ai-assist-context'
 import { QA } from '~/lib/qa/test-ids'
 
 import { BRAND_NAME } from '~/config/brand'

@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { toInAppPayUHref } from '~/commerce/lib/checkout-payment-route'
+import { isAppPayUBridgeUrl, toInAppPayUHref } from '~/commerce/lib/checkout-payment-route'
 
-describe('resume order payment bridge href', () => {
-  it('keeps in-app PayU bridge paths relative for live PayU actions', () => {
-    expect(
-      toInAppPayUHref(
-        'https://sheconomy.in/orders/payu?action=https%3A%2F%2Fsecure.payu.in%2F_payment',
-      ),
-    ).toBe('/orders/payu?action=https%3A%2F%2Fsecure.payu.in%2F_payment')
+describe('resume order payment', () => {
+  it('resumes through the in-app PayU bridge path', () => {
+    const href = toInAppPayUHref('https://sheconomy.in/orders/payu?action=x&payload=%7B%7D')
+    expect(href).toBe('/orders/payu?action=x&payload=%7B%7D')
+    expect(isAppPayUBridgeUrl(href)).toBe(true)
   })
 })

@@ -29,9 +29,9 @@ type ShopHeroProps = {
 }
 
 /**
- * Amazon-style storefront header.
+ * Maker storefront header.
  * Logo overlap uses reserved padding so layout height never collapses
- * (avoids Follow / ratings painting over tabs + Results).
+ * (avoids Follow / ratings painting over tabs + product grid).
  */
 export function ShopHero({
   shopId,
@@ -133,12 +133,17 @@ export function ShopHero({
           left={isDesktop ? 24 : 16}
           width={logoSize}
           height={logoSize}
-          borderRadius={6}
+          borderRadius={16}
           overflow="hidden"
-          borderWidth={2}
+          borderWidth={3}
           borderColor={ui.surface}
           backgroundColor={ui.surface}
           zIndex={2}
+          style={
+            Platform.OS === 'web'
+              ? { boxShadow: '0 4px 14px rgba(16, 12, 14, 0.12)' }
+              : undefined
+          }
         >
           {logoUrl ? (
             <Image src={logoUrl} width="100%" height="100%" objectFit="cover" />
@@ -158,11 +163,11 @@ export function ShopHero({
         >
           <XStack gap="$2" alignItems="center" flexWrap="wrap">
             <Text
-              fontWeight="700"
-              fontSize={isDesktop ? 26 : 22}
+              fontWeight="800"
+              fontSize={isDesktop ? 28 : 24}
               color={ui.text}
-              letterSpacing={-0.3}
-              lineHeight={isDesktop ? 32 : 28}
+              letterSpacing={-0.5}
+              lineHeight={isDesktop ? 34 : 30}
               flexShrink={1}
             >
               {shopName}

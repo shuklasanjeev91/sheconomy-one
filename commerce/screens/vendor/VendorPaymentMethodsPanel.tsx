@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { PaymentErrorBoundary } from '~/commerce/components/PaymentErrorBoundary'
 import { VendorPayuKycForm } from '~/commerce/components/vendor/payment/VendorPayuKycForm'
-import { fetchShepayHeldTotal } from '~/commerce/lib/shepay-held'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
+import type { PayuKycStatus, ShopPayuKycRow } from '~/lib/payment/payu-kyc'
 import { PAYMENT_UI_COPY } from '~/lib/payment/payment-ui.copy'
-
 import { toFriendlyPaymentError } from '~/lib/payment/payment.errors'
 import {
   checkPaymentSetupStatus,
@@ -14,17 +13,13 @@ import {
   loadPaymentAccounts,
   loadPaymentLogs,
   loadPaymentSettings,
-  selectConnectedProviders,
-  selectVendorPaymentAccounts,
   selectVendorPaymentError,
   selectVendorPaymentLoading,
   selectVendorPaymentLogs,
   setVendorPaymentShopId,
 } from '~/lib/payment/payment.store'
-import { PAYMENT_ACCOUNT_STATUS, PAYMENT_PROVIDERS } from '~/lib/payment/payment.constants'
-import type { ShopPaymentAccount } from '~/lib/payment/payment.type'
-import { isProviderConnected } from '~/lib/payment/payment.utils'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
+import { supabase } from '~/lib/supabase'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 type VendorPaymentMethodsPanelProps = {
@@ -34,31 +29,20 @@ type VendorPaymentMethodsPanelProps = {
   safeBottom: number
 }
 
-type ShepayStatus = 'ready' | 'incomplete' | 'needed'
-
-function readAccountMeta(account: ShopPaymentAccount | undefined): Record<string, unknown> {
-  if (!account?.metadata || typeof account.metadata !== 'object') return {}
-  return account.metadata as Record<string, unknown>
+const PAYU_STATUS_LABEL: Record<PayuKycStatus, string> = {
+  draft: 'Not submitted',
+  submitted: 'Under review',
+  changes_requested: 'Changes requested',
+  payu_pending: 'Verification in progress',
+  payu_verified: 'Verified',
+  rejected: 'Not approved',
 }
 
-function resolveShepayStatus(
-  accounts: ShopPaymentAccount[],
-  connected: boolean,
-): ShepayStatus {
-  if (!connected) return 'needed'
-  const account = accounts.find(
-    (row) =>
-      String(row.provider) === PAYMENT_PROVIDERS.PAYU &&
-      row.status === PAYMENT_ACCOUNT_STATUS.CONNECTED,
-  )
-  const meta = readAccountMeta(account)
-  const childKey =
-    (typeof meta.child_merchant_key === 'string' && meta.child_merchant_key.trim()) ||
-    (meta.onboarded_via === 'sheconomy' && typeof meta.merchant_key === 'string'
-      ? meta.merchant_key.trim()
-      : '')
-  const childMid = typeof meta.child_mid === 'string' && meta.child_mid.trim()
-  if (childKey && childMid) return 'ready'
+type PayoutStatus = 'ready' | 'incomplete' | 'needed'
+
+function resolvePayuStatus(row: ShopPayuKycRow | null): PayoutStatus {
+  if (!row || row.status === 'draft') return 'needed'
+  if (row.status === 'payu_verified') return 'ready'
   return 'incomplete'
 }
 
@@ -70,24 +54,40 @@ export function VendorPaymentMethodsPanel({
   const dispatch = useAppDispatch()
   const toast = useAppToast()
 
-  const accounts = useAppSelector(selectVendorPaymentAccounts)
-  const connectedProviders = useAppSelector(selectConnectedProviders)
   const loading = useAppSelector(selectVendorPaymentLoading)
   const storeError = useAppSelector(selectVendorPaymentError)
 
   const [initializedShopId, setInitializedShopId] = useState<string | null>(null)
-  const [heldTotal, setHeldTotal] = useState(0)
+  const [kycRow, setKycRow] = useState<ShopPayuKycRow | null>(null)
+  const [kycLoading, setKycLoading] = useState(true)
   const [showUpdateForm, setShowUpdateForm] = useState(false)
+
+  const loadKyc = useCallback(async () => {
+    setKycLoading(true)
+    const { data, error } = await supabase
+      .from('shop_payu_kyc')
+      .select('*')
+      .eq('shop_id', shopId)
+      .maybeSingle()
+    setKycLoading(false)
+    if (error) {
+      toast.show(PAYMENT_UI_COPY.loadError, {
+        tone: 'danger',
+        message: toFriendlyPaymentError(error),
+      })
+      return
+    }
+    setKycRow((data as ShopPayuKycRow | null) ?? null)
+  }, [shopId, toast])
 
   const refreshPaymentState = useCallback(async () => {
     await Promise.all([
       dispatch(loadPaymentAccounts({ shopId })),
       dispatch(loadPaymentSettings({ shopId })),
       dispatch(checkPaymentSetupStatus({ shopId })),
+      loadKyc(),
     ])
-    const held = await fetchShepayHeldTotal(shopId)
-    setHeldTotal(held)
-  }, [dispatch, shopId])
+  }, [dispatch, loadKyc, shopId])
 
   useEffect(() => {
     if (!shopId) return
@@ -99,9 +99,8 @@ export function VendorPaymentMethodsPanel({
         if (initializedShopId !== shopId) {
           await dispatch(initializePaymentSetup({ shopId })).unwrap()
           if (active) setInitializedShopId(shopId)
-        } else {
-          await refreshPaymentState()
         }
+        if (active) await refreshPaymentState()
       } catch (error) {
         if (active) {
           toast.show(PAYMENT_UI_COPY.loadError, {
@@ -117,13 +116,13 @@ export function VendorPaymentMethodsPanel({
     }
   }, [dispatch, initializedShopId, refreshPaymentState, shopId, toast])
 
-  const connected = isProviderConnected(PAYMENT_PROVIDERS.PAYU, accounts, connectedProviders)
-  const status = resolveShepayStatus(accounts, connected)
+  const status = resolvePayuStatus(kycRow)
+  const isReady = status === 'ready'
 
   const isInitialLoading =
-    loading.accounts && loading.settings && accounts.length === 0 && !storeError
+    (loading.accounts && loading.settings && !storeError) || (kycLoading && !kycRow && !storeError)
 
-  if (isInitialLoading) {
+  if (isInitialLoading && initializedShopId !== shopId) {
     return (
       <XStack alignItems="center" gap="$2" paddingVertical="$6">
         <Spinner size="small" />
@@ -134,8 +133,6 @@ export function VendorPaymentMethodsPanel({
     )
   }
 
-  const isReady = status === 'ready'
-
   return (
     <PaymentErrorBoundary
       scope="VendorPaymentMethods"
@@ -143,7 +140,6 @@ export function VendorPaymentMethodsPanel({
       onReset={() => void refreshPaymentState()}
     >
       <YStack gap="$4" width="100%" maxWidth={560} alignSelf="flex-start">
-        {/* Status */}
         <YStack
           gap="$2"
           padding={isDesktop ? '$5' : '$4'}
@@ -171,7 +167,11 @@ export function VendorPaymentMethodsPanel({
                 {isReady
                   ? PAYMENT_UI_COPY.statusReadyBody
                   : status === 'incomplete'
-                    ? PAYMENT_UI_COPY.statusIncompleteBody
+                    ? `${PAYMENT_UI_COPY.statusIncompleteBody}${
+                        kycRow?.status
+                          ? ` Current status: ${PAYU_STATUS_LABEL[kycRow.status]}.`
+                          : ''
+                      }`
                     : PAYMENT_UI_COPY.statusNeededBody}
               </Text>
             </YStack>
@@ -187,33 +187,8 @@ export function VendorPaymentMethodsPanel({
               </Text>
             ))}
           </YStack>
-
-          {heldTotal > 0 ? (
-            <YStack
-              gap="$1"
-              marginTop="$2"
-              padding="$3"
-              borderRadius={radius.card}
-              backgroundColor={isReady ? '#FFFBEB' : ui.roseSurface}
-            >
-              <Text fontSize={12} fontWeight="700" color={ui.text}>
-                {PAYMENT_UI_COPY.heldTitle}
-              </Text>
-              <Text fontSize={22} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
-                ₹
-                {heldTotal.toLocaleString('en-IN', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </Text>
-              <Text fontSize={12} color={ui.textMuted} lineHeight={17}>
-                {isReady ? PAYMENT_UI_COPY.settlementsHint : PAYMENT_UI_COPY.heldHint}
-              </Text>
-            </YStack>
-          ) : null}
         </YStack>
 
-        {/* Connect / update — inline, no drawer */}
         {!isReady || showUpdateForm ? (
           <YStack
             gap="$3"
@@ -259,7 +234,7 @@ export function VendorPaymentMethodsPanel({
               <Text fontSize={15} fontWeight="700" color={ui.text}>
                 {PAYMENT_UI_COPY.settlementsTitle}
               </Text>
-              <ShepaySettlementsStrip ui={ui} shopId={shopId} />
+              <SettlementsStrip ui={ui} shopId={shopId} />
             </YStack>
           </YStack>
         )}
@@ -268,7 +243,7 @@ export function VendorPaymentMethodsPanel({
   )
 }
 
-function ShepaySettlementsStrip({ ui, shopId }: { ui: AppUiTokens; shopId: string }) {
+function SettlementsStrip({ ui, shopId }: { ui: AppUiTokens; shopId: string }) {
   const dispatch = useAppDispatch()
   const logs = useAppSelector(selectVendorPaymentLogs)
   const loading = useAppSelector(selectVendorPaymentLoading)

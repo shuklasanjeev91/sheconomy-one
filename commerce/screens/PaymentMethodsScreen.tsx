@@ -19,7 +19,11 @@ import {
   validateCardInput,
   validateUpiId,
 } from '~/commerce/lib/payment-methods'
-import { CommercePageHeader, CommercePanel } from '~/commerce/components'
+import {
+  CommercePageHeader,
+  CommercePanel,
+  MarketplacePage,
+} from '~/commerce/components'
 import {
   Button,
   Field,
@@ -32,8 +36,9 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { FullWidthLayout, PageSection } from '~/components/layout'
+import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
 import { radius } from '~/config/tokens'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { QA } from '~/lib/qa/test-ids'
@@ -43,6 +48,7 @@ type AddMode = 'card' | 'upi' | null
 
 export function PaymentMethodsScreen() {
   const ui = useAppUi()
+  const { hasSideRails } = useAppLayout()
   const toast = useAppToast()
   const { user } = useProfile()
   const [methods, setMethods] = useState<ParsedPaymentMethod[]>([])
@@ -196,8 +202,8 @@ export function PaymentMethodsScreen() {
 
   return (
     <FullWidthLayout scroll>
-      <PageSection paddingVertical="$6">
-        <YStack gap="$5" width="100%" maxWidth="100%" alignSelf="stretch">
+      <PageSection paddingVertical="$5" {...LAYOUT_STRETCH}>
+        <MarketplacePage hasSideRails={hasSideRails}>
           <CommercePageHeader
             title="Payment methods"
             subtitle="Save debit cards, credit cards, and UPI IDs for faster checkout"
@@ -375,7 +381,7 @@ export function PaymentMethodsScreen() {
               </CommercePanel>
             </>
           )}
-        </YStack>
+        </MarketplacePage>
       </PageSection>
     </FullWidthLayout>
   )

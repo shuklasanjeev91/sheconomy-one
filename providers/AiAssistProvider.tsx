@@ -1,40 +1,17 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { usePathname } from 'one'
 
 import { AiAssistSheet } from '~/components/ai/AiAssistSheet'
 import { YStack } from '~/components/ui'
 import { resolveAiRouteContext } from '~/lib/ai'
-import type { AiContext, AiProduct, AiRouteContext } from '~/lib/ai'
 
-type OpenAssistOptions = {
-  product?: AiProduct
-  contextPage?: string
-  context?: AiContext
-  /** Pre-fill composer and optionally auto-send. */
-  prompt?: string
-  autoSend?: boolean
-}
+import {
+  AiAssistContext,
+  type AiAssistContextValue,
+  type OpenAssistOptions,
+} from '~/providers/ai-assist-context'
 
-type AiAssistContextValue = {
-  open: boolean
-  routeContext: AiRouteContext
-  openAssist: (options?: OpenAssistOptions) => void
-  closeAssist: () => void
-  draftPrompt: string | null
-  autoSendPrompt: boolean
-  override: OpenAssistOptions | null
-  clearDraft: () => void
-}
-
-const AiAssistContext = createContext<AiAssistContextValue | null>(null)
-
+/** App-wide SHERPA assistant host. Hooks live in `ai-assist-context` for Fast Refresh. */
 export function AiAssistProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '/'
   const routeContext = useMemo(() => resolveAiRouteContext(pathname), [pathname])
@@ -92,17 +69,4 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
       </YStack>
     </AiAssistContext.Provider>
   )
-}
-
-export function useAiAssist() {
-  const ctx = useContext(AiAssistContext)
-  if (!ctx) {
-    throw new Error('useAiAssist must be used within AiAssistProvider')
-  }
-  return ctx
-}
-
-/** Safe optional access when a tree might render outside the provider. */
-export function useAiAssistOptional() {
-  return useContext(AiAssistContext)
 }

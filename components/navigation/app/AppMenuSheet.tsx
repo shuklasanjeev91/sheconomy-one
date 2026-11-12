@@ -14,7 +14,7 @@ import {
 import { useAccess } from '~/hooks/useAccess'
 import { useProfile } from '~/hooks/useProfile'
 import { navigateApp } from '~/lib/platform/navigate'
-import { useAiAssistOptional } from '~/providers/AiAssistProvider'
+import { useAiAssistOptional } from '~/providers/ai-assist-context'
 import { blogRoutes, commerceRoutes, communityRoutes, routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 

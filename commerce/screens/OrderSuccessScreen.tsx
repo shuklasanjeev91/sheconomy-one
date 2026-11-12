@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Platform } from 'react-native'
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 
@@ -15,6 +14,7 @@ import {
 } from '~/commerce/lib/checkout-payment-route'
 import { firstCheckoutUrlFromSteps } from '~/commerce/lib/checkout-utils'
 import { parsePayuBridgeParams, savePayuBridgeSession } from '~/commerce/lib/payu-bridge'
+import { resumeOrderOnlinePayment } from '~/commerce/lib/resume-order-payment'
 import {
   clearPendingOrderSuccess,
   fetchCustomerOrdersByIds,
@@ -164,7 +164,7 @@ export function OrderSuccessScreen() {
   )
 
   async function openPaymentUrl(url: string) {
-    // PayU bridge: SPA navigation within the app
+    // PayU bridge: SPA navigation within the app (/orders/payu).
     if (isAppPayUBridgeUrl(url) || /\/orders\/payu(\?|$)/.test(url)) {
       try {
         const parsed = new URL(url, 'https://sheconomy.local')
@@ -181,20 +181,36 @@ export function OrderSuccessScreen() {
       router.push(url as never)
       return true
     }
-    // Razorpay Payment Link: same-tab redirect so razorpay-return handles the callback
-    // and the payment confirmation polling works correctly
-    if (Platform.OS === 'web' && /rzp\.io/.test(url) && typeof window !== 'undefined') {
-      window.location.href = url
-      return true
-    }
     return openExternalUrl(url)
   }
 
   async function handleResumePayment() {
-    if (!checkoutGroupId || paymentBusy) return
+    if (paymentBusy) return
+    const orderId = orders[0]?.id
+    if (!orderId && !checkoutGroupId) return
     setPaymentBusy(true)
     try {
-      const { data, error: resumeError } = await resumeCheckoutPayment(checkoutGroupId)
+      if (orderId) {
+        const resumed = await resumeOrderOnlinePayment(orderId)
+        if (resumed.ok) {
+          setCheckoutUrl(resumed.href)
+          const pending = await loadPendingOrderSuccess()
+          if (pending) {
+            await savePendingOrderSuccess({
+              ...pending,
+              checkoutUrl: resumed.href,
+              awaitingExternalPayment: true,
+            })
+          }
+          router.push(resumed.href as never)
+          return
+        }
+        toast.show('Could not resume payment', { tone: 'danger', message: resumed.error })
+        return
+      }
+      if (!checkoutGroupId) return
+
+      const { data, error: resumeError } = await resumeCheckoutPayment(checkoutGroupId!)
       if (resumeError) {
         toast.show('Could not resume payment', { tone: 'danger', message: resumeError.message })
         return
@@ -208,7 +224,11 @@ export function OrderSuccessScreen() {
         setCheckoutUrl(nextUrl)
         const pending = await loadPendingOrderSuccess()
         if (pending) {
-          await savePendingOrderSuccess({ ...pending, checkoutUrl: nextUrl, awaitingExternalPayment: true })
+          await savePendingOrderSuccess({
+            ...pending,
+            checkoutUrl: nextUrl,
+            awaitingExternalPayment: true,
+          })
         }
         const opened = await openPaymentUrl(nextUrl)
         if (!opened) {
@@ -217,12 +237,12 @@ export function OrderSuccessScreen() {
             message: 'Allow pop-ups, or open the payment link from your email.',
           })
         }
-      } else {
-        toast.show('Payment link not ready', {
-          tone: 'info',
-          message: 'Your order is reserved. Try again in a moment.',
-        })
+        return
       }
+      toast.show('Payment link not ready', {
+        tone: 'info',
+        message: 'Your order is reserved. Try again in a moment.',
+      })
     } finally {
       setPaymentBusy(false)
     }
@@ -253,13 +273,7 @@ export function OrderSuccessScreen() {
   const bottomPad = isDesktopWeb ? '$12' : '$8'
 
   return (
-    <PageContent
-      maxWidth={760}
-      centered
-      paddingVertical="$6"
-      paddingBottom={bottomPad}
-      gap="$5"
-    >
+    <PageContent paddingVertical="$6" paddingBottom={bottomPad} gap="$5">
       <YStack gap="$5" width="100%" flexShrink={0}>
         <YStack gap="$3" alignItems="flex-start">
           <XStack

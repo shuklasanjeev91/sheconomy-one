@@ -67,15 +67,15 @@ const DECISION_COPY: Record<
     rejectHint: 'Keeps the order active — tell the customer why.',
   },
   [ORDER_ISSUE_TYPE.RETURN_REQUEST]: {
-    accept: 'Approve + book pickup',
+    accept: 'Approve return',
     reject: 'Decline return',
-    acceptHint: 'Auto-books the reverse pickup and refunds once it is delivered back.',
+    acceptHint: 'Approves the return — create the reverse label, then refund after delivery.',
     rejectHint: 'Rejects the return — pick a reason so the customer understands.',
   },
   [ORDER_ISSUE_TYPE.EXCHANGE_REQUEST]: {
-    accept: 'Approve + book pickup',
+    accept: 'Approve exchange',
     reject: 'Decline exchange',
-    acceptHint: 'Auto-books the reverse pickup; ship the replacement once it is delivered back.',
+    acceptHint: 'Approves the exchange — create the reverse label, then ship the replacement.',
     rejectHint: 'Rejects the exchange — pick a reason so the customer understands.',
   },
   [ORDER_ISSUE_TYPE.REFUND_REQUEST]: {

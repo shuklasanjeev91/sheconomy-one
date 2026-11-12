@@ -16,6 +16,9 @@ export type AtomicCheckoutResult = {
   orderNumbers: string[]
   subtotalAmount: number
   discountAmount: number
+  shippingAmount: number
+  /** Always 0 — SHEconomy takes no platform fee on checkout. */
+  platformFeeAmount: number
   totalAmount: number
   paymentSteps: CheckoutPaymentStep[]
 }
@@ -56,6 +59,8 @@ export function parseAtomicCheckoutPayload(
       orderNumbers: Array.isArray(payload.order_numbers) ? payload.order_numbers.map(String) : [],
       subtotalAmount: Number(payload.subtotal_amount ?? 0),
       discountAmount: Number(payload.discount_amount ?? 0),
+      shippingAmount: Number(payload.shipping_amount ?? 0),
+      platformFeeAmount: Number(payload.platform_fee_amount ?? 0),
       totalAmount: Number(payload.total_amount ?? 0),
       paymentSteps: steps,
     },

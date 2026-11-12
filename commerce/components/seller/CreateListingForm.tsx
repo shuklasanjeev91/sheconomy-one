@@ -5,6 +5,7 @@ import { UploadProgressBar } from '~/components/media/UploadProgressBar'
 import { CommercePanel } from '~/commerce/components'
 import { createSellerListing } from '~/commerce/lib/seller-listings'
 import { serializeListingProductInfo } from '~/commerce/lib/listing-product-info'
+import { GeoSelectField } from '~/components/geo/GeoSelectField'
 import type { Database } from '~/lib/supabase'
 import { uploadListingImages, uploadListingVideos } from '~/lib/supabase/storage-upload'
 import type { PickedImage } from '~/lib/media/pick-image'
@@ -22,6 +23,12 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import {
+  countryToOption,
+  getAllGeoCountries,
+  getCountryName,
+  resolveCountryCode,
+} from '~/lib/geo'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ListingType = Database['public']['Enums']['listing_type_enum']
@@ -61,7 +68,9 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
   const [brand, setBrand] = useState('')
   const [manufacturerName, setManufacturerName] = useState('')
   const [manufacturerAddress, setManufacturerAddress] = useState('')
-  const [countryOfOrigin, setCountryOfOrigin] = useState('India')
+  const [countryOfOriginCode, setCountryOfOriginCode] = useState('IN')
+  const countryOptions = useMemo(() => getAllGeoCountries().map(countryToOption), [])
+  const countryOfOrigin = getCountryName(countryOfOriginCode) || countryOfOriginCode
   const [netQuantity, setNetQuantity] = useState('')
   const [hsnCode, setHsnCode] = useState('')
   const [materialComposition, setMaterialComposition] = useState('')
@@ -302,9 +311,18 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
             minHeight={72}
           />
         </Field>
-        <Field label="Country of origin">
-          <Input value={countryOfOrigin} onChangeText={setCountryOfOrigin} placeholder="India" />
-        </Field>
+        <GeoSelectField
+          label="Country of origin"
+          value={resolveCountryCode(countryOfOriginCode)}
+          displayValue={countryOfOrigin}
+          placeholder="Select country"
+          options={countryOptions}
+          onChange={setCountryOfOriginCode}
+          sheetTitle="Select country of origin"
+          searchPlaceholder="Search countries"
+          showFlags
+          required
+        />
         <Field label="Net quantity">
           <Input value={netQuantity} onChangeText={setNetQuantity} placeholder="e.g. 1 piece, 250 g, 500 ml" />
         </Field>

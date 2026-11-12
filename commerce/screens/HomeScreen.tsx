@@ -3,13 +3,12 @@ import { Platform } from 'react-native'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { AvailableOffersCard } from '~/commerce/components/AvailableOffersCard'
-import { CategoryChip, CategoryChipSkeleton, CategoryRailSkeleton } from '~/commerce/components/CategoryChip'
 import { CommerceSection } from '~/commerce/components/CommerceSection'
 import { FollowedShopDigestEntryCard } from '~/commerce/components/FollowedShopDigestEntryCard'
 import { FollowedShopsRail } from '~/commerce/components/FollowedShopsRail'
 import { HomeHeroSlider, buildHomeHeroSlides } from '~/commerce/components/HomeHeroSlider'
-import { HomeVisitorActions } from '~/commerce/components/HomeVisitorActions'
 import { InfiniteHorizontalSection } from '~/commerce/components/InfiniteHorizontalSection'
+import { ShopByCategorySection } from '~/commerce/components/ShopByCategorySection'
 import { InfiniteListingSection } from '~/commerce/components/InfiniteListingSection'
 import { BuyerInTransitHomeStrip } from '~/commerce/components/BuyerInTransitHomeStrip'
 import { BuyerPendingPaymentHomeStrip } from '~/commerce/components/BuyerPendingPaymentHomeStrip'
@@ -33,7 +32,6 @@ import { VendorIssuesHomeStrip } from '~/commerce/components/VendorIssuesHomeStr
 import { VendorFulfillmentHomeStrip } from '~/commerce/components/VendorFulfillmentHomeStrip'
 import { VendorSlaHomeStrip } from '~/commerce/components/VendorSlaHomeStrip'
 import { WishlistPriceDropHomeStrip } from '~/commerce/components/WishlistPriceDropHomeStrip'
-import { PriceWatchHomeStrip } from '~/commerce/components/PriceWatchHomeStrip'
 import { RecentlyViewedRail } from '~/commerce/components/RecentlyViewedRail'
 import { ForYouHomeRail } from '~/commerce/components/ForYouHomeRail'
 import { SaleEventBanner } from '~/commerce/components/SaleEventBanner'
@@ -150,6 +148,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
   const heroImages = data?.heroImages ?? EMPTY_HERO_IMAGES
   const heroSlides = buildHomeHeroSlides(stats, {
     includeSellerSlide: canManageShops,
+    includeAppSlide: Platform.OS === 'web',
     images: heroImages,
   })
 
@@ -173,31 +172,15 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           <HomeHeroSlider slides={heroSlides} />
         </PageSection>
 
-        <HomeVisitorActions />
-
-        {categoriesFeed.items.length > 0 ? (
-          <PageSection paddingTop="$2" gap="$3">
-            <InfiniteHorizontalSection
+        {categoriesFeed.items.length > 0 || categoriesFeed.isLoading ? (
+          <PageSection paddingTop="$2">
+            <ShopByCategorySection
+              categories={categoriesFeed.items}
               hasMore={categoriesFeed.hasMore}
+              isLoading={categoriesFeed.isLoading}
               isLoadingMore={categoriesFeed.isLoadingMore}
               onLoadMore={categoriesFeed.loadMore}
-              loadMorePlaceholder={
-                <>
-                  <CategoryChipSkeleton />
-                  <CategoryChipSkeleton />
-                  <CategoryChipSkeleton />
-                  <CategoryChipSkeleton />
-                </>
-              }
-            >
-              {categoriesFeed.items.map((category) => (
-                <CategoryChip key={category.category_id} category={category} />
-              ))}
-            </InfiniteHorizontalSection>
-          </PageSection>
-        ) : categoriesFeed.isLoading && categoriesFeed.items.length === 0 ? (
-          <PageSection paddingTop="$2">
-            <CategoryRailSkeleton count={6} />
+            />
           </PageSection>
         ) : null}
 
@@ -214,7 +197,6 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           />
           <ExpiringOffersHomeStrip inset />
           <RecentlyViewedRail inset />
-          <PriceWatchHomeStrip inset />
           <ForYouHomeRail inset />
           <SponsoredListingsRail placement="commerce_home" limit={2} inset />
           <CartHomeStrip inset />
@@ -245,7 +227,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
 
         <InfiniteListingSection
           kind="physical"
-          title="Ships to you"
+          title="Physical goods"
           subtitle={`${formatCount(stats.physical_listings)} active listings`}
           actionLabel="See more"
           actionHref={commerceRoutes.browse('physical')}
@@ -281,7 +263,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
 
           {shopsFeed.items.length > 0 ? (
             <PageSection>
-              <CommerceSection title="Shops you'll love" actionLabel="See more" actionHref={commerceRoutes.shops}>
+              <CommerceSection title="Shops to explore" actionLabel="See more" actionHref={commerceRoutes.shops}>
                 <InfiniteHorizontalSection
                   hasMore={shopsFeed.hasMore}
                   isLoadingMore={shopsFeed.isLoadingMore}

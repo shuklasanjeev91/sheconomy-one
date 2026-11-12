@@ -1,6 +1,6 @@
 # Unified app search
 
-Cross-platform omnibox (web, iOS, Android) with Amazon/Etsy-style typeahead and a federated `/search` results page.
+Cross-platform omnibox (web, iOS, Android) with marketplace-style typeahead and a federated `/search` results page.
 
 ## Screen search bars
 

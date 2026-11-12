@@ -361,8 +361,6 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
 
   return (
     <PageContent
-      maxWidth={760}
-      centered
       paddingVertical="$6"
       paddingBottom={bottomPad}
       refreshing={refreshing}
@@ -823,7 +821,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                   icon={<Icons.MessageCircle size={14} />}
                   onPress={() => setSupportOpen(true)}
                 >
-                  Get help
+                  Raise Issue
                 </Button>
               ) : null}
             </XStack>

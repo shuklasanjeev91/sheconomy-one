@@ -362,7 +362,7 @@ export async function fetchCategoryFilterFacets(categoryId: string): Promise<{
     ].filter((bucket) => bucket.count > 0)
 
     const listingTypes = [
-      { type: 'physical' as const, label: 'Ships to you', count: listingTypeCounts.physical },
+      { type: 'physical' as const, label: 'Physical goods', count: listingTypeCounts.physical },
       { type: 'digital' as const, label: 'Instant delivery', count: listingTypeCounts.digital },
     ].filter((row) => row.count > 0)
 

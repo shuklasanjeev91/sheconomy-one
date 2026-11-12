@@ -6,38 +6,44 @@ type ListingQuantityStepperProps = {
   quantity: number
   disabled?: boolean
   maxQuantity?: number | null
-  size?: 'sm' | 'md'
+  size?: 'sm' | 'md' | 'lg'
+  /** Stretch across the parent (PDP buy box, sticky bar, listing cards). */
+  fullWidth?: boolean
   onDecrease: () => void
   onIncrease: () => void
 }
 
-/** Compact − / qty / + control used on listing PDP when the item is already in cart. */
+/** − / qty / + control — compact by default, or full-width when item is in cart. */
 export function ListingQuantityStepper({
   quantity,
   disabled,
   maxQuantity,
   size = 'md',
+  fullWidth = false,
   onDecrease,
   onIncrease,
 }: ListingQuantityStepperProps) {
   const ui = useAppUi()
   const atMax = typeof maxQuantity === 'number' && quantity >= maxQuantity
-  const btnSize = size === 'sm' ? 34 : 40
-  const fontSize = size === 'sm' ? 15 : 17
+  const btnSize = size === 'sm' ? 34 : size === 'lg' ? 48 : 40
+  const fontSize = size === 'sm' ? 15 : size === 'lg' ? 20 : 17
+  const qtyFontSize = size === 'sm' ? 14 : size === 'lg' ? 16 : 15
 
   return (
     <XStack
       alignItems="center"
+      width={fullWidth ? '100%' : undefined}
       backgroundColor={ui.surfaceMuted}
       borderColor={ui.borderSubtle}
       borderWidth={1}
-      borderRadius={radius.chip}
+      borderRadius={fullWidth ? 8 : radius.chip}
       overflow="hidden"
       opacity={disabled ? 0.55 : 1}
     >
       <StepperButton
         label="−"
-        width={btnSize}
+        width={fullWidth ? undefined : btnSize}
+        flex={fullWidth ? 1 : undefined}
         height={btnSize}
         fontSize={fontSize}
         disabled={disabled}
@@ -45,21 +51,26 @@ export function ListingQuantityStepper({
         accessibilityLabel="Decrease quantity"
       />
       <YStack
-        minWidth={size === 'sm' ? 36 : 44}
+        minWidth={fullWidth ? 56 : size === 'sm' ? 36 : 44}
+        width={fullWidth ? undefined : undefined}
+        flex={fullWidth ? 0 : undefined}
+        paddingHorizontal={fullWidth ? '$3' : undefined}
         height={btnSize}
         alignItems="center"
         justifyContent="center"
         borderLeftWidth={1}
         borderRightWidth={1}
         borderColor={ui.borderSubtle}
+        backgroundColor={ui.surface}
       >
-        <Text fontSize={size === 'sm' ? 14 : 15} fontWeight="700" color={ui.text}>
+        <Text fontSize={qtyFontSize} fontWeight="700" color={ui.text}>
           {quantity}
         </Text>
       </YStack>
       <StepperButton
         label="+"
-        width={btnSize}
+        width={fullWidth ? undefined : btnSize}
+        flex={fullWidth ? 1 : undefined}
         height={btnSize}
         fontSize={fontSize}
         disabled={disabled || atMax}
@@ -73,6 +84,7 @@ export function ListingQuantityStepper({
 function StepperButton({
   label,
   width,
+  flex,
   height,
   fontSize,
   disabled,
@@ -80,7 +92,8 @@ function StepperButton({
   accessibilityLabel,
 }: {
   label: string
-  width: number
+  width?: number
+  flex?: number
   height: number
   fontSize: number
   disabled?: boolean
@@ -92,6 +105,7 @@ function StepperButton({
   return (
     <Text
       width={width}
+      flex={flex}
       height={height}
       textAlign="center"
       lineHeight={height}
@@ -101,7 +115,6 @@ function StepperButton({
       cursor={disabled ? 'not-allowed' : 'pointer'}
       opacity={disabled ? 0.45 : 1}
       onPress={disabled ? undefined : onPress}
-      // Drawn at 34/40px to stay compact on the buy bar and cart rows.
       hitSlop={touchSlop(height)}
       hoverStyle={disabled ? undefined : { backgroundColor: ui.surfaceHover }}
       pressStyle={disabled ? undefined : { backgroundColor: ui.surfaceHover, opacity: 0.6 }}

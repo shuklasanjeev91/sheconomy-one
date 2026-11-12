@@ -44,7 +44,7 @@ import {
 } from '~/lib/shop/shop.store'
 import { AdminShopPayuKycPanel } from '~/app/admin/components/AdminShopPayuKycPanel'
 import type { Shop, ShopFormData, ShopUpdate } from '~/lib/shop/shop.type'
-import { COMMON_SHOP_CATEGORIES } from '~/lib/shop/shop.type'
+import { useShopCategoryOptions } from '~/lib/shop/useShopCategoryOptions'
 import {
   formatShopHours,
   getCurrencySymbol,
@@ -529,9 +529,10 @@ function AdminShopFilters({
     { value: 'verified', label: 'Verified shops' },
     { value: 'pending', label: 'Pending verification' },
   ]
+  const { categories: shopCategories } = useShopCategoryOptions()
   const categoryOptions = [
     { value: 'all', label: 'All categories' },
-    ...COMMON_SHOP_CATEGORIES.map((category) => ({ value: category, label: category })),
+    ...shopCategories.map((category) => ({ value: category, label: category })),
   ]
 
   function resetFilters() {

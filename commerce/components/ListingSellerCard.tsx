@@ -85,7 +85,7 @@ export function ListingSellerCard({
       <XStack alignItems="center" gap="$1.5">
         <Icons.Store size={15} color={ui.brand} />
         <Text fontSize={13} fontWeight="700" color={ui.textSecondary} letterSpacing={0.2}>
-          Sold by
+          Meet your seller
         </Text>
       </XStack>
 
@@ -121,13 +121,15 @@ export function ListingSellerCard({
         totalReviews={reviewSummary?.totalReviews}
       />
 
-      <XStack gap="$2" flexWrap="wrap" alignItems="center">
-        <ShopActionButtons shopId={shopId} ownerUserId={ownerUserId} />
+      <XStack gap="$2" width="100%" alignItems="stretch">
+        <ShopActionButtons shopId={shopId} ownerUserId={ownerUserId} fullWidth borderRadius={8} />
         {ownerUserId && user?.id !== ownerUserId ? (
           <Button
             tone="outline"
             size="$3"
-            borderRadius={999}
+            flex={1}
+            width="100%"
+            borderRadius={8}
             icon={messaging ? <Spinner size="small" /> : <Icons.MessageCircle size={15} />}
             disabled={messaging}
             onPress={() => void handleMessageSeller()}

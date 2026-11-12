@@ -192,35 +192,11 @@ export const CURRENCY_SYMBOLS: Record<string, string> = {
   PHP: '₱',
 }
 
-/** Curated list of shop categories offered during onboarding. */
-export const COMMON_SHOP_CATEGORIES: readonly string[] = [
-  'Fashion & Clothing',
-  'Beauty & Cosmetics',
-  'Jewelry & Accessories',
-  'Home & Garden',
-  'Health & Wellness',
-  'Arts & Crafts',
-  'Food & Beverages',
-  'Electronics & Gadgets',
-  'Books & Education',
-  'Baby & Kids',
-  'Sports & Fitness',
-  'Travel & Tourism',
-  'Services & Consulting',
-  'Digital Products',
-  'Photography',
-  'Event Planning',
-  'Pet Care & Supplies',
-  'Automotive',
-  'Music & Entertainment',
-  'Handmade & Artisan',
-  'Wedding & Party Supplies',
-  'Office Supplies',
-  'Toys & Games',
-  'Furniture & Decor',
-  'Vintage & Antiques',
-  'Other',
-]
+/**
+ * @deprecated Prefer `fetchShopCategoryOptions` / `useShopCategoryOptions`.
+ * Kept empty so accidental imports no longer surface mock labels.
+ */
+export const COMMON_SHOP_CATEGORIES: readonly string[] = []
 
 export type ShopCreationStep = {
   id: 'basicInfo' | 'contact' | 'categories' | 'currency' | 'socialMedia' | 'gstCompliance'

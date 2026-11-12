@@ -49,6 +49,7 @@ declare module 'one' {
         | `/admin/components/AdminCmsManager`
         | `/admin/components/AdminCompanyPagesManager`
         | `/admin/components/AdminGroupsManager`
+        | `/admin/components/AdminPayuKycQueue`
         | `/admin/components/AdminSaleEventsManager`
         | `/admin/components/AdminSettingsManager`
         | `/admin/components/AdminShopPayuKycPanel`
@@ -68,12 +69,17 @@ declare module 'one' {
         | `/admin/components/cms/CmsSeoFields`
         | `/admin/components/cms/CmsTagsInput`
         | `/admin/components/cms/cmsNav`
+        | `/admin/disputes`
         | `/admin/groups`
         | `/admin/layout`
+        | `/admin/ops-orders`
         | `/admin/orders`
         | `/admin/payments`
+        | `/admin/payu-kyc`
         | `/admin/products`
+        | `/admin/reconciliation`
         | `/admin/sale-events`
+        | `/admin/sellers-ops`
         | `/admin/settings`
         | `/admin/shops`
         | `/admin/sponsored-ads`
@@ -195,11 +201,13 @@ declare module 'one' {
         | `/vendor/products`
         | `/vendor/reviews`
         | `/vendor/settings`
+        | `/vendor/wallet`
       DynamicRoutes:
         | `/(store)/browse/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/category/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/listing/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/orders/${OneRouter.SingleRoutePart<T>}`
+        | `/(store)/orders/group/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}/privacy`
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}/refunds`
@@ -236,6 +244,7 @@ declare module 'one' {
         | `/invite/${OneRouter.SingleRoutePart<T>}`
         | `/listing/${OneRouter.SingleRoutePart<T>}`
         | `/orders/${OneRouter.SingleRoutePart<T>}`
+        | `/orders/group/${OneRouter.SingleRoutePart<T>}`
         | `/profile/${OneRouter.SingleRoutePart<T>}`
         | `/profile/${OneRouter.SingleRoutePart<T>}/connections`
         | `/profile/${OneRouter.SingleRoutePart<T>}/followers`
@@ -254,6 +263,7 @@ declare module 'one' {
         | `/(store)/category/[slug]`
         | `/(store)/listing/[slug]`
         | `/(store)/orders/[id]`
+        | `/(store)/orders/group/[id]`
         | `/(store)/shop/[slug]`
         | `/(store)/shop/[slug]/privacy`
         | `/(store)/shop/[slug]/refunds`
@@ -290,6 +300,7 @@ declare module 'one' {
         | `/invite/[code]`
         | `/listing/[slug]`
         | `/orders/[id]`
+        | `/orders/group/[id]`
         | `/profile/[username]`
         | `/profile/[username]/connections`
         | `/profile/[username]/followers`
@@ -309,6 +320,7 @@ declare module 'one' {
         '/(store)/category/[slug]': RouteInfo<{ slug: string }>
         '/(store)/listing/[slug]': RouteInfo<{ slug: string }>
         '/(store)/orders/[id]': RouteInfo<{ id: string }>
+        '/(store)/orders/group/[id]': RouteInfo<{ id: string }>
         '/(store)/shop/[slug]': RouteInfo<{ slug: string }>
         '/(store)/shop/[slug]/privacy': RouteInfo<{ slug: string }>
         '/(store)/shop/[slug]/refunds': RouteInfo<{ slug: string }>
@@ -345,6 +357,7 @@ declare module 'one' {
         '/invite/[code]': RouteInfo<{ code: string }>
         '/listing/[slug]': RouteInfo<{ slug: string }>
         '/orders/[id]': RouteInfo<{ id: string }>
+        '/orders/group/[id]': RouteInfo<{ id: string }>
         '/profile/[username]': RouteInfo<{ username: string }>
         '/profile/[username]/connections': RouteInfo<{ username: string }>
         '/profile/[username]/followers': RouteInfo<{ username: string }>

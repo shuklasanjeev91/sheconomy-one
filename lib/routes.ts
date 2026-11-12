@@ -73,6 +73,7 @@ export const commerceRoutes = {
   sharedWishlist: (token: string) => `/w/${encodeURIComponent(token)}` as Href,
   orders: '/orders' as Href,
   order: (id: string) => `/orders/${encodeURIComponent(id)}` as Href,
+  checkoutGroup: (id: string) => `/orders/group/${encodeURIComponent(id)}` as Href,
   orderSuccess: (orderIds?: string[]) => {
     if (!orderIds?.length) return '/orders/success' as Href
     const params = new URLSearchParams()
@@ -122,6 +123,7 @@ export const vendorRoutes = {
   analytics: '/vendor/analytics' as Href,
   customers: '/vendor/customers' as Href,
   delivery: '/vendor/delivery' as Href,
+  wallet: '/vendor/wallet' as Href,
   ads: '/vendor/ads' as Href,
   bundles: '/vendor/bundles' as Href,
   createDiscount: '/vendor/ads/create' as Href,

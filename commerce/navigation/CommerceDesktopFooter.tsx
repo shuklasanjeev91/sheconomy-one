@@ -13,7 +13,7 @@ import { openExternalUrl } from '~/lib/platform/openUrl'
 
 import { COMMERCE_FOOTER_COLUMNS, COMMERCE_FOOTER_LEGAL } from '~/commerce/navigation/config'
 
-/** Etsy-like marketplace footer: link columns + dark locale/legal bar. */
+/** Marketplace footer: link columns + dark locale/legal bar. */
 export function CommerceDesktopFooter() {
   const ui = useAppUi()
   const isDark = useIsDarkTheme()

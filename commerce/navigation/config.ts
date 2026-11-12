@@ -17,7 +17,7 @@ export type NavLinkItem = {
   label: string
 }
 
-/** Etsy-style footer columns — every href must resolve to a real in-app route. */
+/** Marketplace footer columns — every href must resolve to a real in-app route. */
 export const COMMERCE_FOOTER_COLUMNS: { title: string; links: NavLinkItem[] }[] = [
   {
     title: 'Shop',

@@ -18,7 +18,7 @@ import {
   getNativeAppVersion,
   getNativeBuildNumber,
 } from '~/lib/updates/native-app-version'
-import { useAiAssistOptional } from '~/providers/AiAssistProvider'
+import { useAiAssistOptional } from '~/providers/ai-assist-context'
 
 /** Short id — full update ids are unreadable on a settings row. */
 function shortId(id: string | null) {

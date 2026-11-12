@@ -86,7 +86,7 @@ Status changes notify **customer and vendor** via `notify_delivery_status_change
 
 **Model:** vendors book and dispatch themselves (no managed SHEDelivery). SHEPay uses PayU split — **0% SHEconomy commission**.
 
-Optional direct secrets: `DELHIVERY_API_TOKEN`, `DTDC_API_KEY`, `XPRESSBEES_TOKEN`, BlueDart / Ecom Express keys, `SHIPROCKET_*` (for tracking Shiprocket AWBs only).
+Optional direct secrets: `DELHIVERY_API_TOKEN`, `DTDC_API_KEY`, `XPRESSBEES_TOKEN`, BlueDart / Ecom Express keys.
 
 If the vendor cancels the drawer without saving, **nothing changes**.
 
@@ -248,7 +248,7 @@ import { DeliveryErrorBoundary } from '~/commerce/components/DeliveryErrorBounda
   SHEDelivery booking.
 - **Payments** — SHEPay = PayU split to vendor child MID; **0% SHEconomy commission**.
 - **Secrets** — set `AFTERSHIP_API_KEY` (recommended) and/or `TRACKINGMORE_API_KEY`;
-  optional per-courier tokens + `SHIPROCKET_*` for tracking those AWBs.
+  optional per-courier tokens (`DELHIVERY_*`, `DTDC_*`, etc.).
 - **Schema folding** — location / notes / failure details live in
   `delivery_metadata` JSON.
 - **Foundation is shared** — delivery reuses `order.constants.ts`,

@@ -58,6 +58,12 @@ export function ListingFulfillmentPanel({ info, compact = false }: ListingFulfil
     )
   }
 
+  // When transit days aren't configured, ZIP estimate lives in ShipsToYouWidget —
+  // keep this panel to static shipping facts only (no duplicate "Enter ZIP" headline).
+  const headline = info.hasDeliveryEstimate
+    ? info.estimatedDeliveryLabel
+    : 'Shipping details'
+
   return (
     <YStack
       gap="$3"
@@ -81,11 +87,11 @@ export function ListingFulfillmentPanel({ info, compact = false }: ListingFulfil
         </YStack>
         <YStack flex={1} gap="$2">
           <Text fontWeight="600" fontSize={15} color={ui.text}>
-            {info.estimatedDeliveryLabel}
+            {headline}
           </Text>
           {info.providerLabel ? (
             <Text fontSize={13} color={ui.textSecondary}>
-              Fulfilled via {info.providerLabel}
+              Tracked shipping
             </Text>
           ) : null}
           <FulfillmentRow icon={<Icons.Clock size={14} color={ui.textSecondary} />} label={info.processingLabel} />
@@ -145,7 +151,7 @@ function ListingFulfillmentCompact({ info }: { info: ListingFulfillmentInfo }) {
       <XStack gap="$2.5" alignItems="center">
         <Icons.Truck size={16} color={ui.text} />
         <Text fontWeight="600" fontSize={14} color={ui.text} flex={1}>
-          {info.estimatedDeliveryLabel}
+          {info.hasDeliveryEstimate ? info.estimatedDeliveryLabel : 'Shipping details'}
         </Text>
       </XStack>
       <Text fontSize={13} color={ui.textSecondary}>

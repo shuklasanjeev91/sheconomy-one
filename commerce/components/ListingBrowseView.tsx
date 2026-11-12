@@ -1,9 +1,11 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import type { LayoutChangeEvent } from 'react-native'
 
 import { Button, CardSkeleton, Spinner, Text, XStack, YStack, Icons } from '~/components/ui'
 import type { ListingSummary } from '~/lib/supabase/commerce'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { listingGridColumnsForWidth } from '~/lib/layout/listing-grid-columns'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { CommercePageHeader } from '~/commerce/components/CommercePageHeader'
@@ -51,11 +53,20 @@ export function ListingBrowseView({
   onSponsoredEvent,
 }: ListingBrowseViewProps) {
   const ui = useAppUi()
-  const { listingGridColumns: gridColumns } = useAppLayout()
+  const { listingGridColumns: fallbackColumns } = useAppLayout()
+  const [measuredColumns, setMeasuredColumns] = useState<number | null>(null)
+  const gridColumns = measuredColumns ?? fallbackColumns
   const hasItems = items.length > 0
 
+  function handleGridLayout(event: LayoutChangeEvent) {
+    const nextWidth = event.nativeEvent.layout.width
+    if (nextWidth <= 0) return
+    const nextColumns = listingGridColumnsForWidth(nextWidth)
+    setMeasuredColumns((current) => (current === nextColumns ? current : nextColumns))
+  }
+
   return (
-    <YStack gap="$4" width="100%">
+    <YStack gap="$4" width="100%" onLayout={handleGridLayout}>
       {hideHeader ? null : header ?? <CommercePageHeader title={title} subtitle={subtitle} />}
 
       {isLoading && !hasItems ? (
@@ -140,7 +151,7 @@ export function ListingBrowseView({
           ) : null}
           <ListingGrid
             listings={items}
-            columns={gridColumns}
+            columns={gridColumns as 2 | 3 | 4 | 5 | 6}
             showQuickAdd={showQuickAdd}
             sponsoredItems={sponsoredItems}
             onSponsoredEvent={onSponsoredEvent}

@@ -1,11 +1,11 @@
 /**
  * POST /functions/v1/shepay-release-pending
  *
- * After a vendor connects SHEPay child merchant credentials, release any amounts
- * that were held on the platform parent from earlier paid checkouts.
+ * After a vendor connects SHEPay child merchant credentials, attach child keys
+ * to awaiting_child holds and attempt eligibility-based release (delivery +
+ * return window + no dispute) via shepay-release-settlement logic.
  *
  * Body: { shopId }
- * Returns: { ok, released, failed, results }
  */
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
@@ -13,17 +13,8 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import { resolvePayuCredentials } from '../_shared/payu.ts'
 import { childFromAccountMetadata } from '../_shared/payu-child.ts'
-import {
-  createAbsolutePaymentSplit,
-  releasePayuSettlement,
-} from '../_shared/payu-split.ts'
 
 type Body = { shopId: string }
-
-function formatAmount(value: number | string): string {
-  const n = typeof value === 'number' ? value : Number(value)
-  return (Math.round((Number.isFinite(n) ? n : 0) * 100) / 100).toFixed(2)
-}
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -40,14 +31,19 @@ Deno.serve(async (request) => {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader) return jsonResponse({ error: 'Unauthorized' }, 401)
 
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-  const {
-    data: { user },
-  } = await userClient.auth.getUser()
-  if (!user) return jsonResponse({ error: 'Unauthorized' }, 401)
+  const isServiceRole = authHeader === `Bearer ${serviceRole}`
+  let userId: string | null = null
+  if (!isServiceRole) {
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const {
+      data: { user },
+    } = await userClient.auth.getUser()
+    if (!user) return jsonResponse({ error: 'Unauthorized' }, 401)
+    userId = user.id
+  }
 
   let body: Body
   try {
@@ -69,13 +65,15 @@ Deno.serve(async (request) => {
     .eq('id', shopId)
     .maybeSingle()
   if (!shop) return jsonResponse({ error: 'Shop not found' }, 404)
-  const { data: caller } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle()
-  if (shop.user_id !== user.id && caller?.role !== 'A') {
-    return jsonResponse({ error: 'Forbidden: shop not found or not owned by you' }, 403)
+  if (!isServiceRole && userId) {
+    const { data: caller } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle()
+    if (shop.user_id !== userId && caller?.role !== 'A') {
+      return jsonResponse({ error: 'Forbidden: shop not found or not owned by you' }, 403)
+    }
   }
 
   const { data: account } = await admin
@@ -92,111 +90,59 @@ Deno.serve(async (request) => {
       : {}
   const child = childFromAccountMetadata(accountMeta)
   if (!child || child.merchantKey === creds.key) {
-    return jsonResponse({
-      ok: false,
-      error: 'Connect a valid SHEPay child merchant key and Child MID first.',
-    }, 400)
+    return jsonResponse(
+      {
+        ok: false,
+        error: 'Connect a valid SHEPay child merchant key and Child MID first.',
+      },
+      400,
+    )
   }
 
-  const { data: pending, error: pendingError } = await admin
+  // Attach child credentials to holds waiting for a child merchant.
+  const { data: awaiting, error: awaitingError } = await admin
     .from('shepay_pending_settlements')
-    .select('id, payu_id, amount, currency, status')
+    .select('id')
     .eq('shop_id', shopId)
     .in('status', ['pending', 'failed'])
-    .order('created_at', { ascending: true })
-    .limit(50)
+    .eq('hold_reason', 'awaiting_child')
+    .limit(100)
 
-  if (pendingError) return jsonResponse({ error: pendingError.message }, 500)
-  if (!pending?.length) {
-    return jsonResponse({ ok: true, released: 0, failed: 0, results: [] })
-  }
+  if (awaitingError) return jsonResponse({ error: awaitingError.message }, 500)
 
-  const results: Array<{ id: string; payuId: string; ok: boolean; error?: string }> = []
-  let released = 0
-  let failed = 0
-
-  for (const row of pending) {
+  if (awaiting?.length) {
     const now = new Date().toISOString()
     await admin
       .from('shepay_pending_settlements')
-      .update({ status: 'releasing', updated_at: now, error_message: null })
-      .eq('id', row.id)
-
-    const amount = formatAmount(row.amount)
-    const subTxnId = `hold_${String(row.id).replace(/-/g, '').slice(0, 16)}_${Date.now().toString(36)}`
-    const split = await createAbsolutePaymentSplit(creds, row.payu_id, [
-      {
-        merchantKey: child.merchantKey,
-        childMid: child.childMid,
-        subTxnId,
-        amount,
-      },
-    ])
-
-    if (!split.ok) {
-      failed += 1
-      const err = split.error ?? 'payment_split failed'
-      results.push({ id: row.id, payuId: row.payu_id, ok: false, error: err })
-      await admin
-        .from('shepay_pending_settlements')
-        .update({
-          status: 'failed',
-          error_message: err,
-          release_payload: { split },
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', row.id)
-      continue
-    }
-
-    const release = await releasePayuSettlement(creds, row.payu_id, child.childMid)
-    if (!release.ok) {
-      failed += 1
-      const err = release.error ?? 'release_settlement failed'
-      results.push({ id: row.id, payuId: row.payu_id, ok: false, error: err })
-      await admin
-        .from('shepay_pending_settlements')
-        .update({
-          status: 'failed',
-          error_message: err,
-          release_payload: { split, release },
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', row.id)
-      continue
-    }
-
-    released += 1
-    results.push({ id: row.id, payuId: row.payu_id, ok: true })
-    await admin
-      .from('shepay_pending_settlements')
       .update({
-        status: 'released',
         child_merchant_key: child.merchantKey,
         child_mid: child.childMid,
-        release_payload: { split, release },
-        released_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        hold_reason: 'awaiting_release_window',
+        updated_at: now,
         error_message: null,
       })
-      .eq('id', row.id)
-
-    await admin.from('payment_logs').insert({
-      shop_id: shopId,
-      event_type: 'settlement',
-      status: 'completed',
-      provider: 'payu',
-      transaction_id: row.payu_id,
-      amount: Number(amount),
-      currency: row.currency ?? 'INR',
-      payload: {
-        released_from_hold: true,
-        payuId: row.payu_id,
-        childMid: child.childMid,
-        amount,
-      },
-    })
+      .eq('shop_id', shopId)
+      .in('status', ['pending', 'failed'])
+      .eq('hold_reason', 'awaiting_child')
   }
 
-  return jsonResponse({ ok: failed === 0, released, failed, results })
+  // Delegate release to eligibility-gated function (does not force immediate payout).
+  const releaseUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/shepay-release-settlement`
+  const releaseRes = await fetch(releaseUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${serviceRole}`,
+    },
+    body: JSON.stringify({ shopId, limit: 50 }),
+  })
+  const releaseJson = (await releaseRes.json().catch(() => ({}))) as Record<string, unknown>
+
+  return jsonResponse({
+    ok: releaseRes.ok,
+    attached_child: awaiting?.length ?? 0,
+    child_merchant_key: child.merchantKey,
+    child_mid: child.childMid,
+    release: releaseJson,
+  }, releaseRes.ok ? 200 : 502)
 })

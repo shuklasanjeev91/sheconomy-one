@@ -211,6 +211,14 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         ready: true,
       },
       {
+        id: 'wallet',
+        label: 'Shipping credit',
+        description: 'Shipping credit, pending freight, and top-ups.',
+        icon: Icons.Wallet,
+        href: vendorRoutes.wallet,
+        ready: true,
+      },
+      {
         id: 'ads',
         label: 'Ads & Promo',
         description: 'Sponsored campaigns, discounts, and promotions.',

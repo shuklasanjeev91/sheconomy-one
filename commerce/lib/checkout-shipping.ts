@@ -13,12 +13,18 @@ export type ShopShippingQuote = {
   shopDiscount: number
   subtotalAfterDiscount: number
   shippingAmount: number
+  /** Easyship DDP breakdown (optional). */
+  shipmentCharge?: number
+  taxAmount?: number
+  dutyAmount?: number
+  handlingFee?: number
   isFreeShipping: boolean
   requiresShipping: boolean
   deliveryProfileId: string | null
   deliveryProfileName: string | null
   estimatedDays: number
   estimatedDeliveryDate: string
+  courierName?: string | null
 }
 
 export type CheckoutShippingQuote = {
@@ -136,3 +142,103 @@ export function computeCheckoutShippingQuote(input: {
     grandTotal: round2(itemsTotal + shippingTotal),
   }
 }
+
+export type EasyshipDdpShopQuote = {
+  shop_id: string
+  shipment_charge: number
+  tax_amount: number
+  duty_amount: number
+  handling_fee: number
+  shipping_amount: number
+  total_charge: number
+  currency: string
+  courier_service_id: string | null
+  courier_name: string | null
+  estimated_days: number
+}
+
+/** Live Easyship DDP landed-cost quotes (edge). Falls back to empty on soft failure. */
+export async function fetchEasyshipDdpQuotes(input: {
+  cartItemIds: string[]
+  shippingAddressId: string
+}): Promise<{ byShop: Record<string, EasyshipDdpShopQuote>; error: string | null }> {
+  if (!input.cartItemIds.length || !input.shippingAddressId) {
+    return { byShop: {}, error: null }
+  }
+  const { data, error } = await supabase.functions.invoke<{
+    ok?: boolean
+    error?: string
+    by_shop?: Record<string, EasyshipDdpShopQuote>
+  }>('easyship-ddp-rates', {
+    body: {
+      cart_item_ids: input.cartItemIds,
+      shipping_address_id: input.shippingAddressId,
+    },
+  })
+  if (error) {
+    return { byShop: {}, error: error.message || 'Could not load DDP shipping rates' }
+  }
+  if (data?.error) return { byShop: {}, error: data.error }
+  return { byShop: data?.by_shop ?? {}, error: null }
+}
+
+/** Merge Easyship DDP totals into the checkout shipping quote shape. */
+export function applyEasyshipDdpToCheckoutQuote(input: {
+  base: CheckoutShippingQuote
+  ddpByShop: Record<string, EasyshipDdpShopQuote>
+}): CheckoutShippingQuote {
+  let shippingTotal = 0
+  const byShop = input.base.byShop.map((shop) => {
+    const ddp = input.ddpByShop[shop.shopId]
+    if (!ddp || !shop.requiresShipping) return shop
+    const total = round2(Number(ddp.total_charge ?? 0))
+    shippingTotal += total
+    return {
+      ...shop,
+      shippingAmount: total,
+      shipmentCharge: round2(Number(ddp.shipment_charge ?? 0)),
+      taxAmount: round2(Number(ddp.tax_amount ?? 0)),
+      dutyAmount: round2(Number(ddp.duty_amount ?? 0)),
+      handlingFee: round2(Number(ddp.handling_fee ?? 0)),
+      isFreeShipping: total <= 0,
+      deliveryProfileId: null,
+      deliveryProfileName: ddp.courier_name || 'International shipping',
+      estimatedDays: Math.max(1, Number(ddp.estimated_days) || shop.estimatedDays),
+      estimatedDeliveryDate: calculateEstimatedDeliveryDate(
+        Math.max(1, Number(ddp.estimated_days) || shop.estimatedDays),
+      )
+        .toISOString()
+        .slice(0, 10),
+      courierName: ddp.courier_name,
+    }
+  })
+  if (!Object.keys(input.ddpByShop).length) return input.base
+  return {
+    byShop,
+    shippingTotal: round2(shippingTotal),
+    itemsTotal: input.base.itemsTotal,
+    grandTotal: round2(input.base.itemsTotal + shippingTotal),
+  }
+}
+
+/** Payload for atomic_marketplace_checkout p_easyship_by_shop. */
+export function easyshipByShopPayload(
+  ddpByShop: Record<string, EasyshipDdpShopQuote>,
+): Record<string, Record<string, number | string | null>> {
+  const out: Record<string, Record<string, number | string | null>> = {}
+  for (const [shopId, q] of Object.entries(ddpByShop)) {
+    out[shopId] = {
+      shipment_charge: round2(Number(q.shipment_charge ?? 0)),
+      tax_amount: round2(Number(q.tax_amount ?? 0)),
+      duty_amount: round2(Number(q.duty_amount ?? 0)),
+      handling_fee: round2(Number(q.handling_fee ?? 0)),
+      shipping_amount: round2(Number(q.shipping_amount ?? q.shipment_charge ?? 0)),
+      total_charge: round2(Number(q.total_charge ?? 0)),
+      estimated_days: Math.max(1, Number(q.estimated_days) || 7),
+      courier_service_id: q.courier_service_id,
+      courier_name: q.courier_name,
+    }
+  }
+  return out
+}
+

@@ -24,7 +24,7 @@ export type ShopShippingAccount = {
   status?: string | null
 }
 
-export type ShippingRail = 'shedelivery' | 'own_account' | 'manual' | 'unknown'
+export type ShippingRail = 'own_account' | 'manual' | 'unknown'
 
 export type ShopShippingSummary = {
   rail: ShippingRail
@@ -82,13 +82,10 @@ function normalizeProviderType(value?: string | null) {
 
 function formatProviderLabel(provider: ShopShippingProvider) {
   const type = normalizeProviderType(provider.provider_type)
-  const name = provider.provider_name?.trim()
-
+  // Never surface courier / 3PL brand names in buyer or seller UI.
   if (type && SHEDELIVERY_TYPES.has(type)) return 'Seller ships'
-  if (type === 'shiprocket' || name?.toLowerCase().includes('shiprocket')) return 'Shiprocket'
-  if (type === 'pickrr' || name?.toLowerCase().includes('pickrr')) return 'Pickrr'
-  if (name) return name
-  if (type) return type.replace(/_/g, ' ')
+  if (type && OWN_ACCOUNT_TYPES.has(type)) return 'Seller ships'
+  if (type || provider.provider_name?.trim()) return 'Tracked shipping'
   return null
 }
 
@@ -195,12 +192,7 @@ export function buildShopShippingSummary(input: {
   } else if (connectedAccounts.length > 0) {
     rail = 'own_account'
     const account = connectedAccounts[0]
-    providerLabel =
-      account.provider === 'shiprocket'
-        ? 'Shiprocket'
-        : account.provider === 'pickrr'
-          ? 'Pickrr'
-          : account.provider
+    providerLabel = 'Tracked shipping'
   } else if (primaryProvider) {
     if (SHEDELIVERY_TYPES.has(primaryType)) {
       rail = 'own_account'
@@ -277,10 +269,6 @@ export function resolveTransitDaysForShop(
   const providerTransit = readProviderTransit(primaryProvider)
   if (providerTransit) return providerTransit
 
-  if (summary.rail === 'shedelivery') {
-    return { min: 3, max: 7 }
-  }
-
   if (summary.rail === 'own_account') {
     return { min: 4, max: 9 }
   }
@@ -290,8 +278,7 @@ export function resolveTransitDaysForShop(
 
 export function getShopCardDeliveryHint(summary: ShopShippingSummary | null | undefined) {
   if (!summary) return null
-  if (summary.rail === 'shedelivery') return 'Seller ships'
-  if (summary.providerLabel) return `Ships via ${summary.providerLabel}`
+  if (summary.providerLabel) return 'Tracked shipping'
   if (summary.shipsFrom) return `Ships from ${summary.shipsFrom}`
   return null
 }

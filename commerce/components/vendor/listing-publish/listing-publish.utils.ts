@@ -17,6 +17,12 @@ import {
   validateListingField,
 } from '~/lib/listing/listing.validation'
 import type { PublishListingData } from '~/lib/listing/listing-publish.orchestrator'
+import {
+  normalizeProductInfoDate,
+  parseListingProductInfo,
+  serializeListingProductInfo,
+  type ListingProductInfo,
+} from '~/commerce/lib/listing-product-info'
 
 import {
   LISTING_METADATA_KEYS,
@@ -107,6 +113,9 @@ export function buildFormFromListingDetails(
   const meta = mergeListingMetadata(
     (listing.listing_metadata as Record<string, unknown> | null) ?? undefined,
   )
+  const productInfo = serializeListingProductInfo(
+    parseListingProductInfo(listing.product_info, listing.listing_metadata),
+  )
 
   return {
     shop_id: listing.shop_id ?? undefined,
@@ -114,6 +123,10 @@ export function buildFormFromListingDetails(
     description: listing.description ?? '',
     listing_type: listing.listing_type ?? LISTING_TYPES.PHYSICAL,
     price: listing.price ?? '',
+    mrp: listing.mrp ?? '',
+    price_includes_tax: listing.price_includes_tax ?? true,
+    tax_percent: listing.tax_percent ?? '18',
+    product_info: productInfo,
     quantity: listing.quantity ?? 1,
     is_featured: listing.is_featured ?? false,
     is_active: listing.is_active ?? true,
@@ -150,17 +163,59 @@ export function buildFormFromListingDetails(
   }
 }
 
+/** Read a single product_info string for the publish form. */
+export function readProductInfoString(
+  productInfo: Record<string, unknown> | undefined,
+  key: string,
+  fallback = '',
+): string {
+  const value = productInfo?.[key]
+  if (value === null || value === undefined) return fallback
+  return String(value)
+}
+
+/** Patch camelCase UI fields into the snake_case `product_info` bag. */
+export function patchListingProductInfo(
+  current: Record<string, unknown> | undefined,
+  patch: Partial<ListingProductInfo>,
+): Record<string, string> {
+  const existing = parseListingProductInfo(current)
+  return serializeListingProductInfo({ ...existing, ...patch })
+}
+
+/** Mirror origin / HSN onto listing_metadata for shipping / customs. */
+export function mirrorProductInfoToListingMetadata(
+  metadata: Record<string, unknown> | undefined,
+  productInfo: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const parsed = parseListingProductInfo(productInfo)
+  const next = mergeListingMetadata(metadata)
+  if (parsed.countryOfOrigin) {
+    next[LISTING_METADATA_KEYS.COUNTRY_OF_ORIGIN] = parsed.countryOfOrigin
+  }
+  if (parsed.hsnCode) {
+    next[LISTING_METADATA_KEYS.HS_CODE] = parsed.hsnCode
+  }
+  return next
+}
+
 export function formDataToPublishPayload(
   formData: ListingFormData,
   shopId: string,
 ): PublishListingData {
   const slug = formData.slug?.trim() || generateListingSlug(formData.title)
+  const productInfo = serializeListingProductInfo(parseListingProductInfo(formData.product_info))
+  const listing_metadata = mirrorProductInfoToListingMetadata(
+    formData.listing_metadata as Record<string, unknown>,
+    productInfo,
+  )
   return {
     ...formData,
     shop_id: shopId,
     slug,
     description: formData.description ?? '',
-    listing_metadata: mergeListingMetadata(formData.listing_metadata as Record<string, unknown>),
+    product_info: productInfo,
+    listing_metadata,
   }
 }
 
@@ -197,6 +252,18 @@ export function validatePublishStep(
         }
         if (formData.stock === '' || formData.stock === null || formData.stock === undefined) {
           errors.stock = 'Stock quantity is required for physical products.'
+        }
+        const productInfo = parseListingProductInfo(formData.product_info)
+        if (!productInfo.manufacturerName) {
+          errors.manufacturer_name = 'Manufacturer name is required for physical products.'
+        }
+        if (!productInfo.countryOfOrigin) {
+          errors.country_of_origin = 'Country of origin is required for physical products.'
+        }
+        const manufactured = normalizeProductInfoDate(productInfo.manufacturingDate)
+        const expiry = normalizeProductInfoDate(productInfo.expiryDate)
+        if (manufactured && expiry && expiry < manufactured) {
+          errors.expiry_date = 'Best before must be on or after the manufacturing date.'
         }
       }
       if (formData.listing_type === LISTING_TYPES.DIGITAL) {
@@ -286,10 +353,16 @@ const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
   stock: LISTING_PUBLISH_STEP_IDS.DETAILS,
   quantity: LISTING_PUBLISH_STEP_IDS.DETAILS,
   weight: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  manufacturer_name: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  country_of_origin: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  expiry_date: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  manufacturing_date: LISTING_PUBLISH_STEP_IDS.DETAILS,
   digital_file_url: LISTING_PUBLISH_STEP_IDS.DETAILS,
   digital_file_type: LISTING_PUBLISH_STEP_IDS.DETAILS,
   booking_duration_minutes: LISTING_PUBLISH_STEP_IDS.DETAILS,
   price: LISTING_PUBLISH_STEP_IDS.PRICING,
+  mrp: LISTING_PUBLISH_STEP_IDS.PRICING,
+  tax_percent: LISTING_PUBLISH_STEP_IDS.PRICING,
   sku: LISTING_PUBLISH_STEP_IDS.PRICING,
   categories: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
   images: LISTING_PUBLISH_STEP_IDS.IMAGES,

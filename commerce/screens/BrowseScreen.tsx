@@ -3,12 +3,15 @@ import { useParams } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { Button, YStack } from '~/components/ui'
 import { InfiniteListingSection, CommercePageHeader } from '~/commerce/components'
+import { MarketplacePage } from '~/commerce/components/marketplace-shell'
 import { BROWSE_FEED_LABELS, isBrowseFeedKind } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
 import { FullWidthLayout, PageSection } from '~/components/layout'
+import { useAppLayout } from '~/hooks/useAppLayout'
 
 export function BrowseScreen() {
   const { kind } = useParams<{ kind: string }>()
+  const { hasSideRails } = useAppLayout()
 
   if (!kind || !isBrowseFeedKind(kind)) {
     return (
@@ -31,12 +34,18 @@ export function BrowseScreen() {
 
   return (
     <FullWidthLayout scroll>
-      <PageSection paddingVertical="$6">
-        <InfiniteListingSection
-          kind={kind}
-          title={meta.title}
-          subtitle={meta.subtitle}
-        />
+      <PageSection paddingVertical="$5" paddingHorizontal={hasSideRails ? '$4' : '$3'}>
+        <MarketplacePage hasSideRails={hasSideRails} flush>
+          <YStack gap="$4" width="100%">
+            <CommercePageHeader title={meta.title} subtitle={meta.subtitle} />
+            <InfiniteListingSection
+              kind={kind}
+              title={meta.title}
+              subtitle={meta.subtitle}
+              hideHeader
+            />
+          </YStack>
+        </MarketplacePage>
       </PageSection>
     </FullWidthLayout>
   )

@@ -5,7 +5,7 @@ import { radius } from '~/config/tokens'
 import { aiProductLabel, type AiProduct } from '~/lib/ai'
 import { productQuickTools } from '~/lib/ai/product-quick-tools'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { useAiAssistOptional } from '~/providers/AiAssistProvider'
+import { useAiAssistOptional } from '~/providers/ai-assist-context'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { navigateApp } from '~/lib/platform/navigate'
 

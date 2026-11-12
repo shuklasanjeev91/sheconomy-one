@@ -11,7 +11,6 @@ import { useShopPartners } from '~/commerce/hooks/useShopPartners'
 import { useShopHeaders } from '~/commerce/hooks/useShopHeaders'
 import {
   CartCoupon,
-  CommerceButton,
   CommerceCheckbox,
   CommerceLink,
   CommerceMobileCheckoutBar,
@@ -19,14 +18,23 @@ import {
   CartRecoveryNudge,
   CartShopOffers,
   CartFreeShippingBar,
+  MarketplaceCard,
+  MarketplacePage,
+  MarketplacePageTitle,
+  MarketplacePrimaryButton,
+  MarketplaceShopHeader,
+  MarketplaceSummaryCard,
+  MarketplaceTrustNote,
   ListingQuantityStepper,
   ListingRecommendationsSections,
   RecentlyViewedRail,
+  ShipsToYouWidget,
   ShopPartnerChips,
   ShopRatingBadge,
   StockNotifyButton,
   useCommercePalette,
 } from '~/commerce/components'
+import { groupCartItemsBySeller } from '~/commerce/lib/cart-sellers'
 import { QA } from '~/lib/qa/test-ids'
 import {
   computeSelectedTotals,
@@ -35,7 +43,6 @@ import {
   useCartSelection,
 } from '~/commerce/lib/cart-selection'
 import type { CartItemRow } from '~/commerce/lib/cart'
-import { paymentCollectionFor } from '~/commerce/lib/shop-commerce'
 import { deliveryEstimateLabel } from '~/commerce/lib/delivery-estimate'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
 import { markWishlistItemSavedFromCart } from '~/commerce/lib/wishlist-reactivation'
@@ -55,7 +62,7 @@ import { navigateApp } from '~/lib/platform/navigate'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-const SUMMARY_WIDTH = 300
+const SUMMARY_WIDTH = 340
 
 export function CartScreen() {
   const c = useCommercePalette()
@@ -107,17 +114,12 @@ export function CartScreen() {
     })
   }, [items, savedItems])
 
-  const groupedByShop = useMemo(() => {
-    const groups = new Map<string, CartItemRow[]>()
-    for (const item of items) {
-      const existing = groups.get(item.shop_id) ?? []
-      existing.push(item)
-      groups.set(item.shop_id, existing)
-    }
-    return [...groups.entries()]
-  }, [items])
+  const sellerGroups = useMemo(() => groupCartItemsBySeller(items), [items])
 
-  const shopIds = useMemo(() => groupedByShop.map(([shopId]) => shopId), [groupedByShop])
+  const shopIds = useMemo(
+    () => sellerGroups.map((group) => group.seller_id),
+    [sellerGroups],
+  )
   const { partners: shopPartners } = useShopPartners(shopIds)
   const shopHeaders = useShopHeaders(shopIds)
 
@@ -385,26 +387,9 @@ export function CartScreen() {
     </Text>
   ) : null
 
-  const protectionNote = (
-    <XStack alignItems="center" gap="$1.5" justifyContent="center">
-      <Icons.ShieldCheck size={13} color={c.secondary} />
-      <Text fontSize={11} color={c.secondary}>
-        SHEconomy Purchase Protection on every order
-      </Text>
-    </XStack>
-  )
-
   /** Desktop sticky summary — full CTA lives here. */
   const desktopBuyBox = (
-    <YStack
-      backgroundColor={c.panel}
-      borderColor={c.border}
-      borderWidth={1}
-      borderRadius={12}
-      padding="$4"
-      gap="$3"
-      width="100%"
-    >
+    <MarketplaceSummaryCard title="Order summary">
       {!noneSelected ? (
         <CartFreeShippingBar
           shippableSubtotal={shippableSubtotal}
@@ -421,17 +406,14 @@ export function CartScreen() {
           Update out-of-stock items or reduce quantities before checkout.
         </Text>
       ) : null}
-      <CommerceButton
-        variant="primary"
-        disabled={checkoutBlocked}
-        onPress={goToCheckout}
-        width="100%"
-      >
-        Proceed to buy ({unitCount} {unitCount === 1 ? 'item' : 'items'})
-      </CommerceButton>
+      <MarketplacePrimaryButton disabled={checkoutBlocked} onPress={goToCheckout}>
+        Proceed to checkout ({unitCount})
+      </MarketplacePrimaryButton>
       {settlementCurrencyNote}
-      {protectionNote}
-    </YStack>
+      <MarketplaceTrustNote>
+        SHEconomy Purchase Protection included on every order.
+      </MarketplaceTrustNote>
+    </MarketplaceSummaryCard>
   )
 
   /**
@@ -439,17 +421,7 @@ export function CartScreen() {
    * Kept after the items panel so rails never collide with cart lines.
    */
   const mobileSummary = (
-    <YStack
-      backgroundColor={c.panel}
-      borderColor={c.border}
-      borderWidth={1}
-      borderRadius={12}
-      padding="$3.5"
-      gap="$3"
-      width="100%"
-      position="relative"
-      zIndex={1}
-    >
+    <MarketplaceSummaryCard title="Order summary">
       {!noneSelected ? (
         <CartFreeShippingBar
           shippableSubtotal={shippableSubtotal}
@@ -467,58 +439,36 @@ export function CartScreen() {
         </Text>
       ) : null}
       {settlementCurrencyNote}
-      {protectionNote}
-    </YStack>
+      <MarketplaceTrustNote>
+        SHEconomy Purchase Protection included on every order.
+      </MarketplaceTrustNote>
+    </MarketplaceSummaryCard>
   )
 
   const cartItemsPanel = (
-    <YStack
-      backgroundColor={c.panel}
-      borderColor={c.border}
-      borderWidth={1}
-      borderRadius={12}
-      padding={hasSideRails ? '$4' : '$3.5'}
-      gap="$3"
-      width="100%"
-      position="relative"
-      zIndex={1}
-      overflow="hidden"
-    >
-      <XStack justifyContent="space-between" alignItems="flex-end">
-        <YStack gap="$1" flex={1} minWidth={0}>
-          <Text
-            fontSize={hasSideRails ? 26 : 22}
-            fontWeight="700"
-            color={c.text}
-            letterSpacing={-0.4}
-          >
-            Shopping cart
-          </Text>
-          <Text fontSize={13} color={c.secondary}>
-            {unitCount} {unitCount === 1 ? 'item' : 'items'} selected
-          </Text>
-        </YStack>
-        {hasSideRails ? (
-          <Text fontSize={13} color={c.secondary}>
-            Price
-          </Text>
-        ) : null}
-      </XStack>
-
-      <XStack alignItems="center" gap="$3" flexWrap="wrap">
-        <CommerceLink onPress={() => setCartItemsSelected(availableIds, !allSelected)}>
-          {allSelected ? 'Deselect all items' : 'Select all items'}
-        </CommerceLink>
-        {!noneSelected ? (
-          <CommerceLink onPress={() => void handleShareCartSummary()}>
-            Share cart summary
+    <YStack gap="$4" width="100%" position="relative" zIndex={1}>
+      <YStack gap="$3" width="100%">
+        <MarketplacePageTitle
+          title="Cart"
+          subtitle={`${unitCount} ${unitCount === 1 ? 'item' : 'items'} selected`}
+          hasSideRails={hasSideRails}
+        />
+        <XStack alignItems="center" gap="$3" flexWrap="wrap">
+          <CommerceLink onPress={() => setCartItemsSelected(availableIds, !allSelected)}>
+            {allSelected ? 'Deselect all items' : 'Select all items'}
           </CommerceLink>
-        ) : null}
-      </XStack>
+          {!noneSelected ? (
+            <CommerceLink onPress={() => void handleShareCartSummary()}>
+              Share cart summary
+            </CommerceLink>
+          ) : null}
+        </XStack>
+        <ShipsToYouWidget compact />
+      </YStack>
 
-      <YStack height={1} backgroundColor={c.divider} marginHorizontal={hasSideRails ? -16 : -14} />
-
-      {groupedByShop.map(([shopId, shopItems], groupIndex) => {
+      {sellerGroups.map((group) => {
+        const shopId = group.seller_id
+        const shopItems = group.items
         const shopSelectedItems = shopItems.filter((item) => isSelected(item.id))
         const shopSelectedSubtotal = shopSelectedItems.reduce(
           (sum, item) => sum + item.unit_price * item.quantity,
@@ -532,91 +482,70 @@ export function CartScreen() {
         )
         const shopCurrency = shopCurrencyFor(shopId, shopCurrencies, settlementCurrency)
         return (
-          <YStack key={shopId} gap="$2.5" paddingTop={groupIndex > 0 ? '$3' : 0}>
-            {groupIndex > 0 ? (
-              <YStack height={1} backgroundColor={c.divider} marginBottom="$1" />
-            ) : null}
-            <XStack alignItems="center" gap="$2" justifyContent="space-between">
-              <XStack alignItems="center" gap="$2" flex={1} minWidth={0}>
-                <Icons.Store size={14} color={c.secondary} />
-                <Text fontSize={13} color={c.secondary} numberOfLines={1}>
-                  Sold by{' '}
-                  <Text fontSize={13} color={c.text} fontWeight="600">
-                    {shopItems[0]?.shop_name}
-                  </Text>
-                </Text>
-              </XStack>
-              <XStack alignItems="center" gap="$1">
-                <Icons.Truck size={13} color={c.inStock} />
-                <Text fontSize={12} color={c.inStock} fontWeight="600">
-                  FREE delivery
-                </Text>
-              </XStack>
-            </XStack>
-            <ShopRatingBadge info={shopHeaders.get(shopId)} />
-            <Text fontSize={12} color={c.secondary}>
-              {deliveryEstimateLabel()}
-            </Text>
-            <ShopPartnerChips info={shopPartners.get(shopId)} />
-            {paymentCollectionFor(shopPartners.get(shopId)) === 'direct' ? (
-              <XStack alignItems="center" gap="$1">
-                <Icons.BadgeCheck size={12} color={c.inStock} />
-                <Text fontSize={11} color={c.inStock}>
-                  Paid directly to the seller · 0% commission
-                </Text>
-              </XStack>
-            ) : null}
+          <MarketplaceCard
+            key={group.seller_id}
+            hasSideRails={hasSideRails}
+            gap="$3"
+          >
+            <YStack gap="$2.5" testID={`cart-seller-group-${group.seller_id}`} width="100%">
+              <MarketplaceShopHeader shopName={group.shop_name} deliveryLabel="FREE delivery" />
+              <ShopRatingBadge info={shopHeaders.get(shopId)} />
+              <Text fontSize={12} color={c.secondary}>
+                {deliveryEstimateLabel()}
+              </Text>
+              <ShopPartnerChips info={shopPartners.get(shopId)} />
 
-            {shopItems.map((item) => {
-              const stock = listingStock.get(item.listing_id)
-              const outOfStock = typeof stock === 'number' && stock <= 0
-              return (
-              <CartRow
-                key={item.id}
-                item={item}
-                selected={isSelected(item.id)}
-                listingHref={listingHref(item.listing_id)}
-                listingType={listingTypes.get(item.listing_id)}
-                maxQuantity={stock ?? null}
-                outOfStock={outOfStock}
-                formatPrice={(amount) => formatCartMoney(amount, item.shop_id)}
-                hasSideRails={hasSideRails}
-                onToggle={() => toggleCartItemSelected(item.id)}
-                onQuantityChange={handleQuantityChange}
-                onRemove={handleRemove}
-                onSaveForLater={handleSaveForLater}
-              />
-              )
-            })}
+              {shopItems.map((item) => {
+                const stock = listingStock.get(item.listing_id)
+                const outOfStock = typeof stock === 'number' && stock <= 0
+                return (
+                  <CartRow
+                    key={item.id}
+                    item={item}
+                    selected={isSelected(item.id)}
+                    listingHref={listingHref(item.listing_id)}
+                    listingType={listingTypes.get(item.listing_id)}
+                    maxQuantity={stock ?? null}
+                    outOfStock={outOfStock}
+                    formatPrice={(amount) => formatCartMoney(amount, item.shop_id)}
+                    hasSideRails={hasSideRails}
+                    onToggle={() => toggleCartItemSelected(item.id)}
+                    onQuantityChange={handleQuantityChange}
+                    onRemove={handleRemove}
+                    onSaveForLater={handleSaveForLater}
+                  />
+                )
+              })}
 
-            <CartShopOffers
-              shopId={shopId}
-              shopName={shopItems[0]?.shop_name}
-              subtotal={shopSelectedSubtotal}
-              currency={shopCurrency}
-              items={shopSelectedItems.map((item) => ({
+              <CartShopOffers
+                shopId={shopId}
+                shopName={group.shop_name}
+                subtotal={shopSelectedSubtotal}
+                currency={shopCurrency}
+                items={shopSelectedItems.map((item) => ({
                   shop_id: item.shop_id,
                   listing_id: item.listing_id,
                   total_price: item.total_price,
-              }))}
-            />
+                }))}
+              />
 
-            {groupedByShop.length > 1 ? (
-              <XStack justifyContent="flex-end" paddingTop="$1">
-                <Text fontSize={12} color={c.secondary}>
-                  Subtotal ({shopItems[0]?.shop_name}):{' '}
-                  <Text fontWeight="700" color={c.text}>
-                    {formatCartMoney(shopDisplaySubtotal)}
+              {sellerGroups.length > 1 ? (
+                <XStack justifyContent="flex-end" paddingTop="$1">
+                  <Text fontSize={13} color={c.secondary}>
+                    Subtotal ({group.shop_name}):{' '}
+                    <Text fontWeight="700" color={c.text}>
+                      {formatCartMoney(shopDisplaySubtotal)}
+                    </Text>
                   </Text>
-                </Text>
-              </XStack>
-            ) : null}
-          </YStack>
+                </XStack>
+              ) : null}
+            </YStack>
+          </MarketplaceCard>
         )
       })}
 
       {hasSideRails ? (
-        <XStack justifyContent="flex-end" paddingTop="$2">
+        <XStack justifyContent="flex-end" paddingTop="$1">
           {subtotalLine}
         </XStack>
       ) : null}
@@ -625,19 +554,9 @@ export function CartScreen() {
 
   const savedForLaterShelf =
     savedItems.length > 0 ? (
-      <YStack
-        backgroundColor={c.panel}
-        borderColor={c.border}
-        borderWidth={1}
-        borderRadius={12}
-        padding={hasSideRails ? '$4' : '$3.5'}
-        gap="$3"
-        width="100%"
-        position="relative"
-        zIndex={1}
-      >
+      <MarketplaceCard hasSideRails={hasSideRails} gap="$3">
         <YStack gap="$1">
-          <Text fontSize={hasSideRails ? 22 : 20} fontWeight="700" color={c.text} letterSpacing={-0.3}>
+          <Text fontSize={hasSideRails ? 22 : 20} fontWeight="800" color={c.text} letterSpacing={-0.3}>
             Saved for later ({savedItems.length})
           </Text>
           <Text fontSize={13} color={c.secondary}>
@@ -648,20 +567,20 @@ export function CartScreen() {
           const stock = listingStock.get(item.listing_id)
           const outOfStock = typeof stock === 'number' && stock <= 0
           return (
-          <SavedForLaterRow
-            key={item.id}
-            item={item}
-            listingHref={listingHref(item.listing_id)}
-            formatPrice={(amount) => formatCartMoney(amount, item.shop_id)}
-            hasSideRails={hasSideRails}
-            outOfStock={outOfStock}
-            onMoveToCart={() => void handleMoveToCart(item.id)}
-            onDelete={() => void handleRemove(item.id)}
-            onMoveToWishlist={() => void handleMoveSavedToWishlist(item.id, item.listing_id)}
-          />
+            <SavedForLaterRow
+              key={item.id}
+              item={item}
+              listingHref={listingHref(item.listing_id)}
+              formatPrice={(amount) => formatCartMoney(amount, item.shop_id)}
+              hasSideRails={hasSideRails}
+              outOfStock={outOfStock}
+              onMoveToCart={() => void handleMoveToCart(item.id)}
+              onDelete={() => void handleRemove(item.id)}
+              onMoveToWishlist={() => void handleMoveSavedToWishlist(item.id, item.listing_id)}
+            />
           )
         })}
-      </YStack>
+      </MarketplaceCard>
     ) : null
 
   const discoveryRails = (
@@ -685,47 +604,38 @@ export function CartScreen() {
   const layout = (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$5" {...LAYOUT_STRETCH}>
-        <YStack
-          gap="$4"
-          width="100%"
-          maxWidth="100%"
-          alignSelf="stretch"
-          backgroundColor={c.page}
-          padding={hasSideRails ? '$4' : '$2'}
-          borderRadius={12}
+        <MarketplacePage
+          hasSideRails={hasSideRails}
           paddingBottom={showMobileBar ? checkoutBarHeight + mobileTabBarOffset + 24 : undefined}
         >
           {items.length === 0 ? (
             <YStack gap="$4" width="100%">
-              <YStack
-                backgroundColor={c.panel}
-                borderColor={c.border}
-                borderWidth={1}
-                borderRadius={12}
-                padding="$8"
-                alignItems="center"
-                gap="$4"
-              >
-                <Icons.ShoppingCart size={44} color={c.brand} />
-                <Text fontSize={20} fontWeight="700" color={c.text}>
-                  {savedItems.length > 0
-                    ? 'No items ready for checkout'
-                    : 'Your SHEconomy cart is empty'}
-                </Text>
-                <Text fontSize={14} color={c.secondary} textAlign="center">
-                  {savedItems.length > 0
-                    ? 'Move items from Saved for later into your cart when you’re ready.'
-                    : 'Browse shops and add something you love.'}
-                </Text>
-                <CommerceButton variant="primary" onPress={() => navigateApp(commerceRoutes.home)}>
-                  Discover today&apos;s finds
-                </CommerceButton>
-                {savedItems.length > 0 ? (
-                  <CommerceLink onPress={() => navigateApp(commerceRoutes.wishlist)}>
-                    Open wishlist
-                  </CommerceLink>
-                ) : null}
-              </YStack>
+              <MarketplacePageTitle title="Cart" hasSideRails={hasSideRails} />
+              <MarketplaceCard hasSideRails={hasSideRails} padding="$8">
+                <YStack alignItems="center" gap="$4" width="100%">
+                  <Icons.ShoppingCart size={48} color={c.brand} />
+                  <Text fontSize={22} fontWeight="800" color={c.text} textAlign="center">
+                    {savedItems.length > 0
+                      ? 'No items ready for checkout'
+                      : 'Your cart is empty'}
+                  </Text>
+                  <Text fontSize={14} color={c.secondary} textAlign="center" maxWidth={420}>
+                    {savedItems.length > 0
+                      ? 'Move items from Saved for later into your cart when you’re ready.'
+                      : `Discover unique finds from ${BRAND_NAME} makers and shops.`}
+                  </Text>
+                  <YStack width={hasSideRails ? 280 : '100%'}>
+                    <MarketplacePrimaryButton onPress={() => navigateApp(commerceRoutes.home)}>
+                      Discover today&apos;s finds
+                    </MarketplacePrimaryButton>
+                  </YStack>
+                  {savedItems.length > 0 ? (
+                    <CommerceLink onPress={() => navigateApp(commerceRoutes.wishlist)}>
+                      Open wishlist
+                    </CommerceLink>
+                  ) : null}
+                </YStack>
+              </MarketplaceCard>
               {savedForLaterShelf}
               {discoveryRails}
             </YStack>
@@ -737,7 +647,7 @@ export function CartScreen() {
                 alignSelf="stretch"
                 flexDirection="row"
                 alignItems="flex-start"
-                gap="$4"
+                gap="$5"
               >
                 <YStack flex={1} minWidth={0} width="100%" gap="$4">
                   {cartItemsPanel}
@@ -777,7 +687,7 @@ export function CartScreen() {
               {discoveryRails}
             </YStack>
           )}
-        </YStack>
+        </MarketplacePage>
       </PageSection>
     </FullWidthLayout>
   )
@@ -796,7 +706,7 @@ export function CartScreen() {
         }
         caption={`Subtotal · ${unitCount} ${unitCount === 1 ? 'item' : 'items'}`}
         savings={discount || null}
-        label="Proceed to buy"
+        label="Proceed to checkout"
         disabled={checkoutBlocked}
         onPress={goToCheckout}
         onHeightChange={setCheckoutBarHeight}

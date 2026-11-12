@@ -1,6 +1,6 @@
 /**
  * Courier tracking adapter.
- * Priority: direct courier API → Shiprocket (vendor AWB) → AfterShip → TrackingMore → public URL.
+ * Priority: direct courier API → AfterShip → TrackingMore → public URL.
  */
 
 export type DeliveryStatusCanonical =
@@ -231,47 +231,6 @@ function okResult(
     provider,
     raw,
   }
-}
-
-async function shiprocketToken(): Promise<string | null> {
-  const email = Deno.env.get('SHIPROCKET_EMAIL')
-  const password = Deno.env.get('SHIPROCKET_PASSWORD')
-  if (!email || !password) return null
-  const res = await fetch('https://apiv2.shiprocket.in/v1/external/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  })
-  if (!res.ok) return null
-  const json = (await res.json()) as { token?: string }
-  return json.token ?? null
-}
-
-async function trackViaShiprocket(awb: string): Promise<TrackResult | null> {
-  const token = await shiprocketToken()
-  if (!token) return null
-  const res = await fetch(`https://apiv2.shiprocket.in/v1/external/courier/track/awb/${awb}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) return null
-  const raw = await res.json()
-  const tracking = (raw as { tracking_data?: Record<string, unknown> }).tracking_data ?? {}
-  const shipment = (tracking.shipment_track as Array<Record<string, unknown>> | undefined)?.[0]
-  const statusRaw = String(
-    shipment?.current_status ?? tracking.shipment_status ?? tracking.track_status ?? '',
-  )
-  if (!statusRaw) return null
-  const activities = tracking.shipment_track_activities as Array<Record<string, unknown>> | undefined
-  const last = activities?.[0]
-  return okResult(
-    'shiprocket',
-    'shiprocket',
-    awb,
-    statusRaw,
-    last ? String(last.activity ?? last.status ?? '') : null,
-    raw,
-    typeof tracking.track_url === 'string' ? tracking.track_url : null,
-  )
 }
 
 async function trackViaDelhivery(awb: string): Promise<TrackResult | null> {
@@ -552,9 +511,6 @@ async function trackViaCourierDirect(
       return trackViaBluedart(awb)
     case 'ecomexpress':
       return trackViaEcomExpress(awb)
-    case 'shiprocket':
-    case 'pickrr':
-      return trackViaShiprocket(awb)
     default:
       return null
   }

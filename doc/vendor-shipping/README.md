@@ -1,33 +1,35 @@
 # Vendor Shipping — Developer Guide
 
-Vendor delivery provider management (`/vendor/delivery`) — Shiprocket integration and custom shipping partners.
+Vendor delivery (`/vendor/delivery`) — **Easyship only** labels funded by per-shop shipping credit.
 
-> **TL;DR** — Dispatch thunks from `~/lib/vendor-shipping/vendor-shipping.store`. Shiprocket connect/status/disconnect runs through the `vendor-shipping-shiprocket` edge function (server-side Shiprocket API). Custom partners use direct Supabase writes with RLS.
+> **TL;DR** — Checkout quotes DDP via `easyship-ddp-rates`. Paid orders auto-credit `easyship_shipping_credits`. Vendors buy every label (outbound + return) with `easyship-process-shipment` (402 if short). Manual AWB, custom courier partners, Shiprocket, and SheDelivery are not used for marketplace fulfill.
 
-## Legacy mapping
+## Easyship shipping credit
 
-| Legacy | New |
-|--------|-----|
-| `app/vendor/delivery/page.js` | `commerce/screens/vendor/VendorDeliveryScreen.tsx` |
-| `components/vendor/delivery/ShiprocketConnection.js` | `commerce/components/vendor/delivery/ShiprocketConnectionPanel.tsx` |
-| `components/vendor/delivery/CustomShippingPartner.js` | `commerce/components/vendor/delivery/CustomShippingPartnerPanel.tsx` |
-| `/api/vendor/shipping/shiprocket/*` | `supabase/functions/vendor-shipping-shiprocket` |
-| `/api/vendor/shipping/custom/*` | `lib/vendor-shipping/vendor-shipping.service.ts` |
+| Capability | Edge / RPC |
+|---|---|
+| Checkout DDP rates | `easyship-ddp-rates` |
+| Credit balance + ledger | `easyship-shipping-credit` |
+| Process label (re-rate, gate, buy, debit) | `easyship-process-shipment` |
+| Credit on paid order | `easyship_credit_shipping_from_order` / payment + order triggers / PayU (SHEPay) webhook |
+| Debit on label | `easyship_debit_shipping_for_label` |
+| Manual top-up | `easyship_topup_shipping_credit` |
 
-Redux key: **`vendorShipping`**.
+**Policy:** Buyer DDP cash stays on the platform PayU (SHEPay) account. Seller ledger is a prepaid gate for labels. See [`COMPLIANCE.md`](../../COMPLIANCE.md).
 
-## Thunks
+**UI:** `/vendor/wallet` (Shipping credit), order drawer **Process via Easyship**.
 
-- `loadShiprocketStatus({ shopId, accessContext })`
-- `connectShiprocketAccount({ shopId, email, password, accessContext })`
-- `disconnectShiprocketAccount({ shopId, accessContext })`
-- `loadCustomShippingPartners({ shopId, accessContext })`
-- `createCustomShippingPartner({ shopId, input, accessContext })`
+## Returns
 
-## Deploy note
+Accepted returns/exchanges use an **Easyship reverse label** from the order drawer — no paste-AWB path.
 
-Shiprocket connect requires the edge function:
+## Deploy
 
 ```bash
-supabase functions deploy vendor-shipping-shiprocket
+supabase functions deploy easyship-ddp-rates
+supabase functions deploy easyship-shipping-credit
+supabase functions deploy easyship-process-shipment
+supabase functions deploy shepay-payu-webhook
+supabase functions deploy admin-ops
+supabase functions deploy courier-track-sync
 ```

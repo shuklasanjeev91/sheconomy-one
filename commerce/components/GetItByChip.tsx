@@ -9,7 +9,14 @@ type GetItByChipProps = {
 export function GetItByChip({ label }: GetItByChipProps) {
   const ui = useAppUi()
   const trimmed = label.trim()
-  if (!trimmed) return null
+  // ZIP/pin prompts belong in ShipsToYouWidget — never as a chip.
+  if (!trimmed || /enter (pin|zip|postal)|after pin code/i.test(trimmed)) return null
+
+  const display = trimmed
+    .replace(/^Estimated delivery /i, 'Get it by ')
+    .replace(/^Est\. arrival /i, 'Get it by ')
+    .replace(/^Est\. delivery /i, 'Get it by ')
+    .replace(/^Get it by Get it by /i, 'Get it by ')
 
   return (
     <XStack
@@ -23,7 +30,7 @@ export function GetItByChip({ label }: GetItByChipProps) {
     >
       <Icons.Truck size={13} color={ui.badgeSuccessText} />
       <Text fontSize={12} fontWeight="700" color={ui.badgeSuccessText}>
-        {trimmed.replace(/^Estimated delivery /i, 'Get it by ').replace(/^Est\. arrival /i, 'Get it by ')}
+        {display}
       </Text>
     </XStack>
   )

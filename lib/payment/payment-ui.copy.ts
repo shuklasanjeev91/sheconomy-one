@@ -1,80 +1,78 @@
-/** User-facing copy for vendor payment gateway UI — centralised, not hardcoded in components. */
+/** User-facing copy for vendor payout UI — white-labeled (no gateway brand names). */
 
 export const PAYMENT_UI_COPY = {
   pageTitle: 'Get paid',
-  pageSubtitle: 'Submit payout details once. After review, money from orders comes to you automatically.',
-  availableProviders: 'Available Providers',
-  connectedProviders: 'Connected Providers',
+  pageSubtitle:
+    'Submit your payout details once. After review, money from orders comes to you automatically.',
+  availableProviders: 'Available options',
+  connectedProviders: 'Connected',
   setupStatus: 'Setup Status',
   secureStatus: 'Secure Status',
   secureStatusValue: 'PCI-DSS Compliant',
-  statusReadyTitle: 'SHEPay is active',
+  statusReadyTitle: 'Payouts are active',
   statusReadyBody:
-    'Buyers can pay online. After each paid order, your share is released to your bank account. Bank credit typically follows T+1.',
+    'Buyers pay online securely. After each paid order, your share settles to your bank (0% platform fee on item price).',
   statusNeededTitle: 'Submit payout details',
   statusNeededBody:
-    'Add your PAN, bank account, and documents. After review, your shop can sell and payouts are set up for you.',
+    'Add your legal entity, contact, and address. After review we create your payout account so settlements can release.',
   statusIncompleteTitle: 'Payout setup is in progress',
   statusIncompleteBody:
-    'Your details are with SHEconomy. You can sell once payout verification is complete.',
+    'Your details are with SHEconomy for verification. You can sell once payout verification is complete.',
   howItWorksTitle: 'How it works',
   howItWorksSteps: [
-    'Submit your name, PAN, bank account, and documents here',
-    'SHEconomy reviews them and sets up payouts',
-    'Once verified, your shop can sell and each paid order settles to your bank',
+    'Submit your legal entity, contact, and address here',
+    'SHEconomy reviews and creates your payout account',
+    'Once verified, each paid order settles to you automatically',
   ] as const,
   withoutConnectionTitle: 'Before you connect',
   withoutConnectionBody:
-    'Orders still go through. Your payout stays on hold with SHEconomy and moves to your child merchant as soon as you connect SHEPay.',
+    'Orders still go through. Complete payout verification so settlements can release to your bank.',
   heldTitle: 'Amount on hold',
   heldEmpty: 'No held payouts right now.',
-  heldHint: 'These paid orders will transfer automatically when SHEPay is connected.',
-  connectCta: 'Connect SHEPay',
+  heldHint:
+    'Payouts stay held until the order is delivered, the return window ends, and there is no open dispute.',
+  connectCta: 'Set up payouts',
   manageCta: 'Manage connection',
   finishSetupCta: 'Finish setup',
-  shepayEasyTitle: 'New to PayU?',
-  shepayEasyBody:
-    'Complete PayU setup once. Then we’ll fetch your merchant key, MID, and webhook for you.',
-  shepayChooseTitle: 'Connect SHEPay',
-  shepayChooseBody: 'Choose the option that matches you. Both ways get you paid the same.',
-  shepayExistingTitle: 'I already have a PayU account',
-  shepayExistingBody:
-    'Enter your PayU merchant key and MID. Webhook is filled automatically.',
-  shepayExistingManageTitle: 'Your PayU account',
-  shepayExistingFormBody:
-    'Use the merchant key and MID from your PayU dashboard. We’ll save them securely and set the webhook for you.',
-  shepayConnectExisting: 'Connect my PayU account',
-  shepaySaveExisting: 'Save PayU details',
-  shepayNewTitle: 'I’m new — set up with PayU',
-  shepayNewBody: 'We’ll guide you through PayU, then fetch your details automatically.',
+  shepayEasyTitle: 'New to payouts?',
+  shepayEasyBody: 'Complete verification once. We handle onboarding and settlement.',
+  shepayChooseTitle: 'Set up payouts',
+  shepayChooseBody: 'Submit verification so buyers can pay and you get paid.',
+  shepayExistingTitle: 'I already have a payout account',
+  shepayExistingBody: 'Contact support to link an existing payout account.',
+  shepayExistingManageTitle: 'Your payout account',
+  shepayExistingFormBody: 'Use the payout verification form on this page.',
+  shepayConnectExisting: 'Connect payout account',
+  shepaySaveExisting: 'Save payout details',
+  shepayNewTitle: 'I’m new — set up payouts',
+  shepayNewBody: 'We’ll guide you through payout verification.',
   shepayBackToChoose: 'Back',
-  shepaySwitchToExisting: 'I already have a PayU account',
-  shepaySwitchToNew: 'I’m new — set up with PayU instead',
-  shepayStep1Title: 'Complete PayU setup',
+  shepaySwitchToExisting: 'I already have a payout account',
+  shepaySwitchToNew: 'I’m new — set up payouts instead',
+  shepayStep1Title: 'Complete payout verification',
   shepayStep2Title: 'Fetch & activate',
-  shepayStep2Body:
-    'When PayU setup is done, tap below. We’ll pull your merchant key, MID, and webhook automatically.',
-  shepayOpenPayu: 'Open PayU setup',
-  shepayFetchActivate: 'Fetch my details & activate',
-  shepayFetching: 'Fetching from PayU…',
-  shepayFetchFailed: 'Could not fetch SHEPay details yet',
+  shepayStep2Body: 'When verification is done, your shop can settle automatically.',
+  shepayOpenPayu: 'Open payout setup',
+  shepayFetchActivate: 'Refresh status',
+  shepayFetching: 'Refreshing…',
+  shepayFetchFailed: 'Could not refresh payout status yet',
   shepayShopCodeLabel: 'Your shop code',
-  shepayShopCodeHint: 'If PayU asks for a shop / partner code, paste this.',
-  shepayHubMissing:
-    'Automatic fetch isn’t enabled yet. Choose “I already have a PayU account” and enter your key and MID, or contact SHEconomy support.',
-  shepayManualLink: 'Enter details manually instead',
-  shepayBackToEasy: 'Back to easy setup',
+  shepayShopCodeHint: 'Share this with support if asked.',
+  shepayHubMissing: 'Contact SHEconomy support to finish payout onboarding.',
+  shepayManualLink: 'Enter details on this page',
+  shepayBackToEasy: 'Back',
   settlementsTitle: 'Recent settlements',
   settlementsEmpty: 'No settlements yet. They appear here after a buyer pays.',
-  settlementsHint: 'Connected shops get an immediate release after payment confirmation.',
+  settlementsHint:
+    'Connected shops settle at payment, then release after delivery + return window with no open dispute (0% platform fee).',
   noProvidersWarning:
-    'SHEPay is not connected yet. Buyers can still purchase — connect to receive held and future payouts.',
+    'Payouts are not connected yet. Buyers can still purchase — finish verification so settlements can release to you.',
   connectDrawerBack: 'Back',
   secureStorageTitle: 'Secure Credential Storage',
   secureStorageBody:
     'Your credentials are encrypted at rest and in transit. We never store them in plain text.',
   apiConfiguration: 'Account details',
-  apiConfigurationHint: 'Enter the details from your payment provider dashboard.',
+  apiConfigurationHint: 'Enter the details from your payout dashboard.',
   testModeWarning:
     'You are in Test Mode. Use your sandbox credentials. Transactions will not be processed with real money.',
   liveModeWarning:
@@ -91,7 +89,7 @@ export const PAYMENT_UI_COPY = {
   connectPrefix: 'Connect',
   configure: 'Configure',
   setupBankDetails: 'Setup Bank Details',
-  connectProvider: 'Connect SHEPay',
+  connectProvider: 'Set up payouts',
   disconnect: 'Disconnect',
   providerConnected: 'Connected',
   providerPending: 'Pending',
@@ -105,13 +103,14 @@ export const PAYMENT_UI_COPY = {
   environment: 'Environment',
   viewDocumentation: 'View documentation',
   loadError: 'Could not load payment settings.',
-  connectSuccess: 'SHEPay connected. Any held payouts will transfer automatically.',
-  connectFailed: 'Could not connect SHEPay.',
-  disconnectSuccess: 'SHEPay disconnected.',
-  disconnectFailed: 'Could not disconnect SHEPay.',
-  searchProviders: 'Search providers',
+  connectSuccess:
+    'Payouts connected. Eligible held payouts (past delivery + return window, no dispute) will release automatically.',
+  connectFailed: 'Could not connect payouts.',
+  disconnectSuccess: 'Payouts disconnected.',
+  disconnectFailed: 'Could not disconnect payouts.',
+  searchProviders: 'Search options',
   searchProvidersPlaceholder: 'Search by name, region, or payment method…',
-  noSearchResults: 'No providers match your search. Try a different name or region.',
+  noSearchResults: 'No options match your search. Try a different name or region.',
 } as const
 
 export const PAYMENT_CONNECTION_TYPE_LABELS = {
@@ -128,11 +127,11 @@ export const PAYMENT_PROVIDER_BADGE_LABELS = {
 
 export function paymentConnectDescription(providerName: string): string {
   if (providerName === 'SHEPay') {
-    return 'Connect an existing PayU account, or set up a new one — we handle the webhook.'
+    return 'Submit payout verification so buyers can pay and you get settled.'
   }
-  return `Enter your ${providerName} API credentials to securely connect your merchant account.`
+  return `Enter your account details to securely connect payouts.`
 }
 
 export function paymentSearchResultsCount(shown: number, total: number): string {
-  return `${shown} of ${total} providers`
+  return `${shown} of ${total} options`
 }

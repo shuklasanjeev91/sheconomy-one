@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Linking } from 'react-native'
 
 import { PhoneInput } from '~/components/forms/PhoneInput'
+import { LocationFields } from '~/components/geo/LocationFields'
 import {
   AppBottomSheet,
   Badge,
@@ -15,6 +16,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { getCountryName, resolveCountryCode, type GeoLocationParts } from '~/lib/geo'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { parsePickupAddress } from '~/lib/vendor-shipping/vendor-shipping.type'
 import { toFriendlyVendorShippingError } from '~/lib/vendor-shipping/vendor-shipping.errors'
@@ -319,34 +321,26 @@ export function CustomShippingPartnerPanel({
               }
             />
           </Field>
-          <XStack gap="$3" flexWrap="wrap">
-            <Field label={copy.city} flex={1} minWidth={120}>
-              <Input
-                value={form.pickup_address.city}
-                onChangeText={(city) => patchForm({ pickup_address: { ...form.pickup_address, city } })}
-              />
-            </Field>
-            <Field label={copy.state} flex={1} minWidth={120}>
-              <Input
-                value={form.pickup_address.state}
-                onChangeText={(state) => patchForm({ pickup_address: { ...form.pickup_address, state } })}
-              />
-            </Field>
-          </XStack>
-          <XStack gap="$3" flexWrap="wrap">
-            <Field label={copy.pincode} flex={1} minWidth={120}>
-              <Input
-                value={form.pickup_address.pincode}
-                onChangeText={(pincode) => patchForm({ pickup_address: { ...form.pickup_address, pincode } })}
-              />
-            </Field>
-            <Field label={copy.country} flex={1} minWidth={120}>
-              <Input
-                value={form.pickup_address.country}
-                onChangeText={(country) => patchForm({ pickup_address: { ...form.pickup_address, country } })}
-              />
-            </Field>
-          </XStack>
+          <LocationFields
+            value={{
+              countryCode: resolveCountryCode(form.pickup_address.country || 'IN'),
+              stateName: form.pickup_address.state || '',
+              city: form.pickup_address.city || '',
+              postalCode: form.pickup_address.pincode || '',
+            }}
+            onChange={(next: GeoLocationParts) =>
+              patchForm({
+                pickup_address: {
+                  ...form.pickup_address,
+                  country: getCountryName(next.countryCode) || next.countryCode,
+                  state: next.stateName,
+                  city: next.city,
+                  pincode: next.postalCode ?? '',
+                },
+              })
+            }
+            postalRequired={false}
+          />
         </YStack>
       </AppBottomSheet>
     </>

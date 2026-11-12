@@ -60,6 +60,7 @@ export type PayuKycInput = {
   panDocumentPath: string
   bankDocumentPath: string
   gstDocumentPath: string
+  scheduleCDocumentPath: string
 }
 
 export function normalizePersonName(value: string): string {
@@ -216,6 +217,9 @@ export function validatePayuKycInput(input: PayuKycInput): Record<string, string
   }
   if (!input.panDocumentPath.trim()) errors.panDocumentPath = 'Upload the PAN card.'
   if (!input.bankDocumentPath.trim()) errors.bankDocumentPath = 'Upload a cancelled cheque or bank proof.'
+  if (!input.scheduleCDocumentPath.trim()) {
+    errors.scheduleCDocumentPath = 'Upload the signed Schedule C document.'
+  }
   return errors
 }
 
@@ -307,6 +311,7 @@ export type ShopPayuKycRow = {
   pan_document_path: string | null
   bank_document_path: string | null
   gst_document_path: string | null
+  schedule_c_document_path: string | null
   gst_legal_name: string | null
   gst_trade_name: string | null
   gst_status: string | null
@@ -321,6 +326,21 @@ export type ShopPayuKycRow = {
   payu_document_status: string | null
   payu_kyc_status: string | null
   payu_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ShopKycDocumentRow = {
+  id: string
+  shop_id: string
+  kind: 'pan' | 'bank' | 'schedule_c' | 'gst'
+  storage_path: string
+  mime_type: string | null
+  file_size: number | null
+  payu_document_uuid: string | null
+  payu_document_status: string | null
+  rejection_reason: string | null
+  uploaded_by: string | null
   created_at: string
   updated_at: string
 }

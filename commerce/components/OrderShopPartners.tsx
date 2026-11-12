@@ -23,7 +23,7 @@ type OrderShopPartnersProps = {
   note?: string
 }
 
-/** Shows the payment gateway and shipping partner for each shop in the order. */
+/** Buyer-facing delivery & payment summary — no gateway or courier brand names. */
 export function OrderShopPartners({
   shops,
   title = 'Delivery & payment',
@@ -92,20 +92,18 @@ export function OrderShopPartners({
   )
 }
 
-/** The "Ships via …" / "Payments by …" chip pair for a single shop. */
-export function ShopPartnerChips({ info }: { info?: ShopPartnerInfo }) {
+/** White-label chips — never show payment gateway or courier partner brand names. */
+export function ShopPartnerChips(_props: { info?: ShopPartnerInfo }) {
   const ui = useAppUi()
   return (
     <XStack gap="$2" flexWrap="wrap">
       <PartnerChip
         icon={<Icons.Truck size={13} color={ui.textSecondary} />}
-        label="Ships via"
-        value={info?.shippingLabel ?? 'Seller ships'}
+        label="Tracked shipping"
       />
       <PartnerChip
         icon={<Icons.CreditCard size={13} color={ui.textSecondary} />}
-        label="Payments by"
-        value={info?.paymentLabel ?? 'SHEPay'}
+        label="Secure online payment"
       />
     </XStack>
   )
@@ -114,11 +112,9 @@ export function ShopPartnerChips({ info }: { info?: ShopPartnerInfo }) {
 function PartnerChip({
   icon,
   label,
-  value,
 }: {
   icon: React.ReactNode
   label: string
-  value: string
 }) {
   const ui = useAppUi()
   return (
@@ -133,11 +129,8 @@ function PartnerChip({
       backgroundColor={ui.surfaceMuted}
     >
       {icon}
-      <Text fontSize={12} color={ui.textMuted}>
+      <Text fontSize={12} fontWeight="600" color={ui.text}>
         {label}
-      </Text>
-      <Text fontSize={12} fontWeight="700" color={ui.text}>
-        {value}
       </Text>
     </XStack>
   )

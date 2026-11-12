@@ -16,6 +16,10 @@ import {
   type ListingType,
   type ListingValidationResult,
 } from '~/lib/listing/listing.type'
+import {
+  normalizeProductInfoDate,
+  parseListingProductInfo,
+} from '~/commerce/lib/listing-product-info'
 import { z } from '~/lib/zod'
 
 // ============= SHARED PRIMITIVES =============
@@ -215,6 +219,33 @@ export const listingSchema = baseListingSchema
           code: 'custom',
           path: ['variations'],
           message: 'At least one product variation is required for physical products.',
+        })
+      }
+
+      const productInfo = parseListingProductInfo(
+        (data as Partial<ListingFormData>).product_info,
+      )
+      if (!productInfo.manufacturerName) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['manufacturer_name'],
+          message: 'Manufacturer name is required for physical products.',
+        })
+      }
+      if (!productInfo.countryOfOrigin) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['country_of_origin'],
+          message: 'Country of origin is required for physical products.',
+        })
+      }
+      const manufactured = normalizeProductInfoDate(productInfo.manufacturingDate)
+      const expiry = normalizeProductInfoDate(productInfo.expiryDate)
+      if (manufactured && expiry && expiry < manufactured) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['expiry_date'],
+          message: 'Best before must be on or after the manufacturing date.',
         })
       }
     }

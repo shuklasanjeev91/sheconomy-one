@@ -3,25 +3,20 @@ import { Alert, Platform } from 'react-native'
 import { useParams } from 'one'
 
 import { AI_NAME } from '~/config/brand'
-import { useAiAssistOptional } from '~/providers/AiAssistProvider'
-import { AppLink } from '~/components/navigation/AppLink'
+import { useAiAssistOptional } from '~/providers/ai-assist-context'
 import {
   Button,
   Icons,
   ScrollView,
-  Separator,
   Spinner,
   Text,
-  Theme,
   XStack,
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { PriceWatchCard } from '~/commerce/components/PriceWatchCard'
 import { MediaLightbox } from '~/components/media/MediaLightbox'
 import {
   AvailableOffersCard,
-  CommercePanel,
   FavoriteButton,
   GetItByChip,
   ListingDetailsPanel,
@@ -30,7 +25,6 @@ import {
   ListingMobileGallery,
   ListingMobileStickyBuyBar,
   LISTING_MOBILE_STICKY_BAR_HEIGHT,
-  ListingPersonalizationNote,
   ListingPriceBlock,
   ListingQuantityStepper,
   ListingRecommendationsSections,
@@ -39,8 +33,19 @@ import {
   ListingShopPolicies,
   ListingVariantPicker,
   LowStockHint,
+  MarketplaceBuyBox,
+  MarketplaceCard,
+  MarketplaceEmptyState,
+  MarketplacePage,
+  MarketplacePdpSection,
+  MarketplacePdpShopLink,
+  MarketplacePdpTitle,
+  MarketplacePrimaryButton,
+  MarketplaceSecondaryButton,
+  MarketplaceTrustNote,
   RatingSummary,
   ReviewsSection,
+  ShipsToYouWidget,
   StockNotifyButton,
   VerifiedBuyerHighlight,
   ListingVisualPreviewButtons,
@@ -61,9 +66,8 @@ import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publ
 import { readMetadataBoolean } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
-import { PageCenter, PageScroll, StickyRail } from '~/components/layout'
-import { DeliveryPinCheck } from '~/components/location'
-import { ShareButton, WhatsAppShareButton } from '~/components/share'
+import { FullWidthLayout, LAYOUT_STRETCH, PageCenter, PageSection, StickyRail } from '~/components/layout'
+import { ShareActionRow, ShareSheet } from '~/components/share'
 import { openComposer } from '~/community/lib/composer-store'
 import { ShareListingSheet } from '~/chat/components/ShareListingSheet'
 import { listingDetailToChatListing } from '~/chat/lib/listing-message'
@@ -71,7 +75,7 @@ import { CommunityAttributionStrip } from '~/community/components/CommunityAttri
 import { PostedAtPriceChip } from '~/community/components/PostedAtPriceChip'
 import { PostSiblingProductsRail } from '~/community/components/PostSiblingProductsRail'
 import { useCommunityListingAttribution } from '~/community/hooks/useCommunityListingAttribution'
-import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
+import { radius } from '~/config/tokens'
 import { useListing } from '~/hooks/useListing'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import type { ListingLoaderResult } from '~/commerce/lib/listing-loader'
@@ -230,9 +234,10 @@ export function ListingScreen({
   const [optimisticInCart, setOptimisticInCart] = useState(false)
   const addingRef = useRef(false)
   const [isUpdatingQuantity, setIsUpdatingQuantity] = useState(false)
-  const [personalizationNote, setPersonalizationNote] = useState('')
+  const [shipsToYouLabel, setShipsToYouLabel] = useState<string | null>(null)
   const [returnPolicy, setReturnPolicy] = useState<ListingReturnPolicy | null>(null)
   const [shareChatOpen, setShareChatOpen] = useState(false)
+  const [shareMenuOpen, setShareMenuOpen] = useState(false)
   const variationGroups = useMemo(() => groupListingVariations(variations), [variations])
   const [variantSelection, setVariantSelection] = useState<Record<string, string>>({})
 
@@ -240,6 +245,7 @@ export function ListingScreen({
     setOptimisticInCart(false)
     addingRef.current = false
     setIsAddingToCart(false)
+    setShipsToYouLabel(null)
   }, [listing?.id])
 
   useEffect(() => {
@@ -311,19 +317,25 @@ export function ListingScreen({
 
   if (error || !listing) {
     return (
-      <PageScroll>
-        <YStack padding="$4" gap="$4" width="100%">
-          <Text fontWeight="500" fontSize={20} color={ui.text}>
-            Listing not found
-          </Text>
-          <Text color={ui.textSecondary}>{error ?? 'This listing could not be loaded.'}</Text>
-          <AppLink href={commerceRoutes.home} asChild>
-            <Button tone="outline" size="$4" alignSelf="flex-start" borderRadius={999}>
-              Browse marketplace
-            </Button>
-          </AppLink>
-        </YStack>
-      </PageScroll>
+      <FullWidthLayout scroll>
+        <PageSection paddingVertical="$8" {...LAYOUT_STRETCH}>
+          <MarketplacePage hasSideRails={hasSideRails}>
+            <MarketplaceEmptyState
+              hasSideRails={hasSideRails}
+              icon={<Icons.Search size={44} color={ui.brand} />}
+              title="Listing not found"
+              subtitle={error ?? 'This listing could not be loaded.'}
+              action={
+                <YStack width={hasSideRails ? 280 : '100%'}>
+                  <MarketplacePrimaryButton onPress={() => navigateApp(commerceRoutes.home)}>
+                    Browse marketplace
+                  </MarketplacePrimaryButton>
+                </YStack>
+              }
+            />
+          </MarketplacePage>
+        </PageSection>
+      </FullWidthLayout>
     )
   }
 
@@ -376,7 +388,6 @@ export function ListingScreen({
         const { error: cartError } = await addToCart(listing.id, {
           quantity: 1,
           variantId: selectedVariantId,
-          personalizationNote: personalizationNote.trim() || null,
         })
 
         if (cartError) {
@@ -389,7 +400,6 @@ export function ListingScreen({
         }
 
         setOptimisticInCart(true)
-        setPersonalizationNote('')
         toast.show('Added to cart', { tone: 'success', duration: 2500 })
         if (goToCheckout) {
           // Guests must sign in before checkout — keep cart (session) and return here after auth.
@@ -492,9 +502,11 @@ export function ListingScreen({
 
   const fulfillmentInfo = buildListingFulfillmentInfo(fulfillmentInput)
   const deliveryProfile = resolveDeliveryProfile(fulfillmentInput)
+  // Return policy is already shown as ListingReturnPolicyCard in the buy box —
+  // omit it here so "Shop Return Policy" does not render twice on the PDP.
   const shopPolicies = buildListingShopPolicies({
     fulfillment: fulfillmentInfo,
-    returnPolicy,
+    returnPolicy: null,
     deliveryProfile,
     currency,
   })
@@ -540,46 +552,54 @@ export function ListingScreen({
     }
     setShareChatOpen(true)
   }
+  const listingSharePayload = {
+    url: getListingShareUrl(listingShareSlug),
+    title: listing.title,
+    text: listing.shops?.shop_name
+      ? `${listing.title} from ${listing.shops.shop_name} on SHEconomy`
+      : `${listing.title} on SHEconomy`,
+  }
+
+  // Single Share control — WhatsApp / copy / social / Community / Chat live in the sheet.
   const listingShareButton = (
-    <XStack gap="$1.5" alignItems="center" flexWrap="wrap">
+    <>
       <Button
         tone="ghost"
         size="$3"
         borderRadius={999}
-        icon={<Icons.Users size={16} />}
-        onPress={handleShareToCommunity}
-        accessibilityLabel="Share to Community"
+        icon={<Icons.Share2 size={18} />}
+        accessibilityLabel="Share listing"
+        onPress={() => setShareMenuOpen(true)}
       />
-      <Button
-        tone="ghost"
-        size="$3"
-        borderRadius={999}
-        icon={<Icons.MessageCircle size={16} />}
-        onPress={handleShareToChat}
-        accessibilityLabel="Share to chat"
-      />
-      <ShareButton
-        variant="icon"
-        label="Share listing"
-        sheetTitle="Share listing"
+      <ShareSheet
+        open={shareMenuOpen}
+        onOpenChange={setShareMenuOpen}
+        payload={listingSharePayload}
+        title="Share this listing"
         copyLabel="Copy listing link"
         copyToastMessage="Listing link copied to clipboard."
-        payload={{
-          url: getListingShareUrl(listingShareSlug),
-          title: listing.title,
-          text: listing.shops?.shop_name ? `From ${listing.shops.shop_name}` : undefined,
-        }}
+        extraActions={
+          <>
+            <ShareActionRow
+              icon={Icons.PenLine}
+              label="Post to Community"
+              onPress={() => {
+                setShareMenuOpen(false)
+                handleShareToCommunity()
+              }}
+            />
+            <ShareActionRow
+              icon={Icons.MessageCircle}
+              label="Send in Chat"
+              onPress={() => {
+                setShareMenuOpen(false)
+                handleShareToChat()
+              }}
+            />
+          </>
+        }
       />
-      <WhatsAppShareButton
-        payload={{
-          url: getListingShareUrl(listingShareSlug),
-          title: listing.title,
-          text: listing.shops?.shop_name
-            ? `${listing.title} from ${listing.shops.shop_name} on SHEconomy`
-            : `${listing.title} on SHEconomy`,
-        }}
-      />
-    </XStack>
+    </>
   )
   const shareListingSheet = (
     <ShareListingSheet
@@ -594,9 +614,13 @@ export function ListingScreen({
   const askSherpaButton = ai ? (
     <Button
       tone="outline"
-      size="$3"
-      borderRadius={999}
-      icon={<Icons.Sparkles size={15} color={ui.brand} />}
+      size="$4"
+      width="100%"
+      borderRadius={8}
+      borderColor={ui.borderSubtle}
+      backgroundColor={ui.surface}
+      hoverStyle={{ backgroundColor: ui.surfaceHover, borderColor: ui.brand }}
+      icon={<Icons.Sparkles size={16} color={ui.brand} />}
       onPress={() => {
         const listingSlug = slug ?? listing.slug ?? listing.id
         ai.openAssist({
@@ -614,7 +638,7 @@ export function ListingScreen({
         })
       }}
     >
-      Ask {AI_NAME}
+      Ask {AI_NAME} about this product
     </Button>
   ) : null
 
@@ -676,11 +700,147 @@ export function ListingScreen({
     isDigital,
   })
 
+  const shopSlug = listing.shops ? getShopSlug(listing.shops) : null
+  const openShop = shopSlug ? () => navigateApp(commerceRoutes.shop(shopSlug)) : undefined
+
+  const followersOnlyBanner = followersOnly ? (
+    <XStack
+      gap="$2"
+      alignItems="flex-start"
+      padding="$3.5"
+      borderRadius={14}
+      backgroundColor={ui.roseSurface}
+      borderWidth={1}
+      borderColor={ui.borderSubtle}
+    >
+      <Icons.Users size={16} color={ui.brand} marginTop={2} />
+      <YStack flex={1} gap="$2">
+        <Text fontSize={13} fontWeight="700" color={ui.text}>
+          Followers-only listing
+        </Text>
+        <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+          {purchaseLocked
+            ? 'Follow this shop to unlock Add to cart and Buy it now.'
+            : 'Thanks for following — you can purchase this perk listing.'}
+        </Text>
+        {purchaseLocked && listing.shops?.id ? (
+          <ShopActionButtons shopId={listing.shops.id} ownerUserId={listing.shops.user_id} />
+        ) : null}
+      </YStack>
+    </XStack>
+  ) : null
+
+  const stockAndExtras = (
+    <YStack gap="$2.5" width="100%">
+      {displayStock != null ? (
+        <Text fontSize={13} color={displayStock > 0 ? ui.success : ui.error} fontWeight="600">
+          {displayStock > 0
+            ? `${displayStock} in stock`
+            : allowPreorder
+              ? 'Pre-order available'
+              : 'Out of stock'}
+        </Text>
+      ) : null}
+      <ListingPreorderNote metadata={listingMeta} />
+      {displayStock != null ? <LowStockHint stock={displayStock} /> : null}
+      <StockNotifyButton listingId={listing.id} outOfStock={outOfStock && !allowPreorder} />
+      <ListingBundleOffer
+        listingId={listing.id}
+        onAddBundle={async (bundleId) => {
+          const { error } = await addBundleToCart(bundleId)
+          if (error) toast.show(error, { tone: 'danger' })
+          else toast.show('Bundle added to cart', { tone: 'success' })
+        }}
+      />
+      <ListingReorderScheduleCard listingId={listing.id} metadata={listingMeta} />
+      {askSherpaButton}
+      {visualPreviewButtons}
+    </YStack>
+  )
+
+  const lowerSections = (
+    <YStack gap="$4" width="100%">
+      {(listing.description?.trim() || specifications.length > 0) ? (
+        <MarketplaceCard hasSideRails={hasSideRails}>
+          <ListingDetailsPanel description={listing.description} specifications={specifications} />
+        </MarketplaceCard>
+      ) : null}
+
+      {shopPolicies ? (
+        <MarketplaceCard hasSideRails={hasSideRails}>
+          <ListingShopPolicies policies={shopPolicies} />
+        </MarketplaceCard>
+      ) : null}
+
+      {trustSnapshot.buyerHighlight ? (
+        <MarketplaceCard hasSideRails={hasSideRails}>
+          <VerifiedBuyerHighlight snapshot={trustSnapshot} />
+        </MarketplaceCard>
+      ) : null}
+
+      <MarketplacePdpSection title="Reviews for this item" hasSideRails={hasSideRails}>
+        <ReviewsSection
+          title="Reviews for this item"
+          summary={reviewSummary}
+          reviews={reviews}
+          isLoading={reviewsLoading}
+          error={reviewsError}
+          hideTitle
+        />
+      </MarketplacePdpSection>
+
+      <ListingRecommendationsSections {...recommendationProps} />
+    </YStack>
+  )
+
+  // Only show the green chip once we have a real date — never the "Enter ZIP…" prompt.
+  const deliveryChipLabel =
+    shipsToYouLabel ||
+    (fulfillmentInfo?.kind === 'physical' && fulfillmentInfo.hasDeliveryEstimate
+      ? fulfillmentInfo.estimatedDeliveryLabel
+      : null)
+
+  // Physical: one ZIP widget (no duplicate "Enter ZIP" fulfillment card).
+  // Digital: download panel only.
+  const deliveryBlock =
+    fulfillmentInfo?.kind === 'digital' ? (
+      <ListingFulfillmentPanel info={fulfillmentInfo} />
+    ) : fulfillmentInfo?.kind === 'physical' ? (
+      <YStack gap="$2" width="100%">
+        <ShipsToYouWidget
+          onEstimate={(estimate) => setShipsToYouLabel(estimate?.label ?? null)}
+        />
+        <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+          {[fulfillmentInfo.processingLabel, fulfillmentInfo.shippingCostLabel]
+            .filter(Boolean)
+            .join(' · ')}
+          {fulfillmentInfo.shipsFromLabel ? ` · ${fulfillmentInfo.shipsFromLabel}` : ''}
+        </Text>
+      </YStack>
+    ) : null
+
+  const deliveryBlockCompact =
+    fulfillmentInfo?.kind === 'digital' ? (
+      <ListingFulfillmentPanel info={fulfillmentInfo} compact />
+    ) : fulfillmentInfo?.kind === 'physical' ? (
+      <YStack gap="$2" width="100%">
+        <ShipsToYouWidget
+          compact
+          onEstimate={(estimate) => setShipsToYouLabel(estimate?.label ?? null)}
+        />
+        <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+          {[fulfillmentInfo.processingLabel, fulfillmentInfo.shippingCostLabel]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
+      </YStack>
+    ) : null
+
   // ─── Mobile layout ──────────────────────────────────────────────────────────
   if (!hasSideRails) {
     return (
-      <YStack flex={1} width="100%" backgroundColor={ui.surface} position="relative">
-        <PageScroll>
+      <YStack flex={1} width="100%" backgroundColor={ui.surfaceMuted} position="relative">
+        <FullWidthLayout scroll>
           <YStack width="100%" paddingBottom={mobileBottomInset}>
             <ListingMobileGallery
               images={sortedImages}
@@ -690,192 +850,77 @@ export function ListingScreen({
               onIndexChange={setActiveImageIndex}
             />
 
-            <YStack paddingHorizontal="$4" gap="$5" paddingTop="$5">
-              {fromCommunityPost && communityPostId ? (
-                <CommunityAttributionStrip postId={communityPostId} />
-              ) : null}
-              {fromCommunityPost && communityPostId && listing?.id ? (
-                <PostSiblingProductsRail postId={communityPostId} listingId={listing.id} />
-              ) : null}
-              <YStack gap="$2.5">
-                <ListingPriceBlock
-                  price={displayPrice}
-                  mrp={listing.mrp}
-                  currency={currency}
-                  priceIncludesTax={listing.price_includes_tax}
-                  taxPercent={listing.tax_percent}
-                  size="lg"
-                />
+            <MarketplacePage hasSideRails={false} paddingBottom={0} flush>
+              <MarketplaceCard hasSideRails={false} gap="$4">
+                {fromCommunityPost && communityPostId ? (
+                  <CommunityAttributionStrip postId={communityPostId} />
+                ) : null}
                 {fromCommunityPost && communityPostId && listing?.id ? (
-                  <PostedAtPriceChip
-                    listingId={listing.id}
-                    postId={communityPostId}
-                    livePrice={displayPrice}
-                    liveCurrency={currency}
-                  />
+                  <PostSiblingProductsRail postId={communityPostId} listingId={listing.id} />
                 ) : null}
-                {fulfillmentInfo?.kind === 'physical' && fulfillmentInfo.estimatedDeliveryLabel ? (
-                  <GetItByChip label={fulfillmentInfo.estimatedDeliveryLabel} />
-                ) : null}
-                <RatingSummary summary={reviewSummary} size="sm" />
-              </YStack>
 
-              <XStack alignItems="flex-start" justifyContent="space-between" gap="$2">
-                <Text fontSize={17} color={ui.text} lineHeight={24} fontWeight="600" letterSpacing={-0.2} flex={1}>
-                  {listing.title}
-                </Text>
-                {listingShareButton}
-              </XStack>
-
-              {listing.shops?.shop_name ? (
-                <Text fontSize={13} color={ui.textMuted} fontWeight="500">
-                  Sold by {listing.shops.shop_name}
-                </Text>
-              ) : null}
-
-              {followersOnly ? (
-                <XStack
-                  gap="$2"
-                  alignItems="flex-start"
-                  padding="$3"
-                  borderRadius={12}
-                  backgroundColor={ui.roseSurface}
-                  borderWidth={1}
-                  borderColor={ui.borderSubtle}
-                >
-                  <Icons.Users size={16} color={ui.brand} marginTop={2} />
-                  <YStack flex={1} gap="$2">
-                    <Text fontSize={13} fontWeight="700" color={ui.text}>
-                      Followers-only listing
-                    </Text>
-                    <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-                      {purchaseLocked
-                        ? 'Follow this shop to unlock Add to cart and Buy now.'
-                        : 'Thanks for following — you can purchase this perk listing.'}
-                    </Text>
-                    {purchaseLocked && listing.shops?.id ? (
-                      <ShopActionButtons
-                        shopId={listing.shops.id}
-                        ownerUserId={listing.shops.user_id}
-                      />
-                    ) : null}
-                  </YStack>
+                <XStack alignItems="center" justifyContent="space-between" gap="$2" width="100%">
+                  {listing.shops?.shop_name ? (
+                    <MarketplacePdpShopLink shopName={listing.shops.shop_name} onPress={openShop} />
+                  ) : (
+                    <YStack flex={1} />
+                  )}
+                  {listingShareButton}
                 </XStack>
-              ) : null}
 
-              {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} compact /> : null}
+                <MarketplacePdpTitle hasSideRails={false}>{listing.title}</MarketplacePdpTitle>
 
-              {fulfillmentInfo?.kind === 'physical' ? (
-                <DeliveryPinCheck
-                  shopId={listing.shop_id}
-                  listingId={listing.id}
-                  listingType={listing.listing_type}
-                  compact
-                />
-              ) : null}
+                <RatingSummary summary={reviewSummary} size="sm" />
 
-              {displayStock != null ? (
                 <YStack gap="$2">
-                  <Text fontSize={13} color={displayStock > 0 ? ui.success : ui.error} fontWeight="500">
-                    {displayStock > 0
-                      ? `${displayStock} in stock`
-                      : readMetadataBoolean(listingMeta, LISTING_METADATA_KEYS.ALLOW_PREORDER, false)
-                        ? 'Pre-order'
-                        : 'Out of stock'}
-                  </Text>
-                  <ListingPreorderNote metadata={listingMeta} />
-                  <LowStockHint stock={displayStock} />
-                  <StockNotifyButton listingId={listing.id} outOfStock={outOfStock && !allowPreorder} />
-                  <PriceWatchCard
-                    listingId={listing.id}
-                    title={listing.title}
+                  <ListingPriceBlock
                     price={displayPrice}
+                    mrp={listing.mrp}
                     currency={currency}
+                    priceIncludesTax={listing.price_includes_tax}
+                    taxPercent={listing.tax_percent}
+                    size="lg"
                   />
-                  <ListingBundleOffer
-                    listingId={listing.id}
-                    onAddBundle={async (bundleId) => {
-                      const { error } = await addBundleToCart(bundleId)
-                      if (error) toast.show(error, { tone: 'danger' })
-                      else toast.show('Bundle added to cart', { tone: 'success' })
-                    }}
-                  />
-                  <ListingReorderScheduleCard listingId={listing.id} metadata={listingMeta} />
-                  <XStack gap="$2" flexWrap="wrap">
-                    {askSherpaButton}
-                  </XStack>
-                  {visualPreviewButtons}
+                  {fromCommunityPost && communityPostId && listing?.id ? (
+                    <PostedAtPriceChip
+                      listingId={listing.id}
+                      postId={communityPostId}
+                      livePrice={displayPrice}
+                      liveCurrency={currency}
+                    />
+                  ) : null}
+                  {deliveryChipLabel ? <GetItByChip label={deliveryChipLabel} /> : null}
                 </YStack>
-              ) : (
-                <YStack gap="$2">
-                  <XStack gap="$2" flexWrap="wrap">
-                    {askSherpaButton}
-                  </XStack>
-                  {visualPreviewButtons}
-                </YStack>
-              )}
 
-              {returnPolicy ? <ListingReturnPolicyCard policy={returnPolicy} /> : null}
+                {followersOnlyBanner}
 
-              <AvailableOffersCard currency={currency} shopId={listing.shop_id} compact />
+                {deliveryBlockCompact}
 
-              <Separator borderColor={ui.panelBorder} />
+                <ListingVariantPicker
+                  groups={variationGroups}
+                  selection={variantSelection}
+                  currency={currency}
+                  basePrice={listing.price}
+                  variant="mobile"
+                  onSelect={(groupName, variationId) =>
+                    setVariantSelection((current) => ({ ...current, [groupName]: variationId }))
+                  }
+                />
 
-              <ListingVariantPicker
-                groups={variationGroups}
-                selection={variantSelection}
-                currency={currency}
-                basePrice={listing.price}
-                variant="mobile"
-                onSelect={(groupName, variationId) =>
-                  setVariantSelection((current) => ({ ...current, [groupName]: variationId }))
-                }
-              />
+                {stockAndExtras}
 
-              <ListingPersonalizationNote
-                value={personalizationNote}
-                onChange={setPersonalizationNote}
-              />
+                {returnPolicy ? <ListingReturnPolicyCard policy={returnPolicy} /> : null}
+                <AvailableOffersCard currency={currency} shopId={listing.shop_id} compact />
+                <MarketplaceTrustNote>
+                  Secure checkout · Buyer protection on eligible orders
+                </MarketplaceTrustNote>
+                {shopCard}
+              </MarketplaceCard>
 
-              {shopCard}
-
-              {(listing.description?.trim() || specifications.length > 0) ? (
-                <YStack gap="$4" paddingTop="$2">
-                  <Separator borderColor={ui.panelBorder} />
-                  <ListingDetailsPanel
-                    description={listing.description}
-                    specifications={specifications}
-                  />
-                </YStack>
-              ) : null}
-
-              {shopPolicies ? (
-                <YStack gap="$4" paddingTop="$2">
-                  <Separator borderColor={ui.panelBorder} />
-                  <ListingShopPolicies policies={shopPolicies} />
-                </YStack>
-              ) : null}
-
-              {trustSnapshot.buyerHighlight ? (
-                <>
-                  <Separator borderColor={ui.panelBorder} />
-                  <VerifiedBuyerHighlight snapshot={trustSnapshot} />
-                </>
-              ) : null}
-              <Separator borderColor={ui.panelBorder} />
-              <ReviewsSection
-                title="Reviews for this item"
-                summary={reviewSummary}
-                reviews={reviews}
-                isLoading={reviewsLoading}
-                error={reviewsError}
-              />
-
-              <Separator borderColor={ui.panelBorder} />
-              <ListingRecommendationsSections {...recommendationProps} />
-            </YStack>
+              {lowerSections}
+            </MarketplacePage>
           </YStack>
-        </PageScroll>
+        </FullWidthLayout>
 
         <ListingMobileStickyBuyBar
           price={displayPrice}
@@ -890,7 +935,7 @@ export function ListingScreen({
           maxQuantity={displayStock}
           isUpdatingQuantity={isUpdatingQuantity}
           label="Add to cart"
-          buyNowLabel={isDigital ? 'Download' : 'Buy now'}
+          buyNowLabel={isDigital ? 'Download' : 'Buy it now'}
           onPress={() => handleAddToCart(false)}
           onBuyNow={() => handleAddToCart(true)}
           onIncreaseQuantity={() => handleQuantityChange((cartItem?.quantity ?? 1) + 1)}
@@ -904,60 +949,75 @@ export function ListingScreen({
 
   // ─── Desktop layout ──────────────────────────────────────────────────────────
 
-  const imageGallery = (
-    <StickyRail flex={1.2} minWidth={0} width="100%" maxWidth="100%">
-      <YStack gap="$3" width="100%">
-        <YStack
-          width="100%"
-          aspectRatio={1}
-          borderRadius={radius.card}
-          overflow="hidden"
-          backgroundColor={ui.imagePlaceholder}
-          position="relative"
-          borderWidth={1}
-          borderColor={ui.borderSubtle}
-          style={getShadowStyle('sm')}
-          cursor={activeGalleryUrls.length > 0 ? 'zoom-in' : undefined}
-          onPress={
-            activeGalleryUrls.length > 0
-              ? () => setGalleryLightboxOpen(true)
-              : undefined
-          }
-        >
-          {activeGalleryUrls.length > 0 ? (
-            <ListingImage
-              imageUrls={activeGalleryUrls}
-              imageType={activeImage?.image_type}
-              alt={activeImage?.alt_text ?? listing.title}
-              width="100%"
-              height="100%"
-              objectFit="cover"
-              placeholderIconSize={48}
-              displaySize={{ width: 1200, height: 1200, quality: 78, resize: 'cover' }}
-            />
-          ) : (
-            <YStack flex={1} alignItems="center" justifyContent="center">
-              <Icons.Image size={48} color={ui.textMuted} />
-            </YStack>
-          )}
-          <FavoriteButton listingId={listing.id} size={20} restockEligible={outOfStock} />
-        </YStack>
+  const addToCartLabel = purchaseLocked
+    ? 'Follow to unlock'
+    : outOfStock && !allowPreorder
+      ? 'Out of stock'
+      : outOfStock
+        ? 'Pre-order'
+        : 'Add to cart'
 
-        {sortedImages.length > 1 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <XStack gap="$2">
-              {sortedImages.map((image, index) => (
-                <ThumbnailImage
-                  key={image.id}
-                  image={image}
-                  title={listing.title}
-                  isActive={activeImageIndex === index}
-                  onPress={() => setActiveImageIndex(index)}
-                />
-              ))}
-            </XStack>
-          </ScrollView>
-        ) : null}
+  const imageGallery = (
+    <StickyRail flex={1.2} minWidth={0} flexShrink={1} maxWidth="100%">
+      <MarketplaceCard hasSideRails padding="$3" gap="$3">
+        <XStack gap="$3" width="100%" alignItems="flex-start" justifyContent="flex-start">
+          {sortedImages.length > 1 ? (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 560, width: 76, flexShrink: 0, flexGrow: 0 }}
+            >
+              <YStack gap="$2" width={72}>
+                {sortedImages.map((image, index) => (
+                  <ThumbnailImage
+                    key={image.id}
+                    image={image}
+                    title={listing.title}
+                    isActive={activeImageIndex === index}
+                    onPress={() => setActiveImageIndex(index)}
+                  />
+                ))}
+              </YStack>
+            </ScrollView>
+          ) : null}
+
+          {/* Outer flex takes remaining width; inner square uses that width (avoid flex+aspectRatio on one node). */}
+          <YStack flex={1} minWidth={0} width="100%" maxWidth="100%">
+            <YStack
+              width="100%"
+              aspectRatio={1}
+              borderRadius={14}
+              overflow="hidden"
+              backgroundColor={ui.imagePlaceholder}
+              position="relative"
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+              cursor={activeGalleryUrls.length > 0 ? 'zoom-in' : undefined}
+              onPress={
+                activeGalleryUrls.length > 0 ? () => setGalleryLightboxOpen(true) : undefined
+              }
+            >
+              <YStack position="absolute" top={0} left={0} right={0} bottom={0}>
+                {activeGalleryUrls.length > 0 ? (
+                  <ListingImage
+                    imageUrls={activeGalleryUrls}
+                    imageType={activeImage?.image_type}
+                    alt={activeImage?.alt_text ?? listing.title}
+                    width="100%"
+                    height="100%"
+                    objectFit="cover"
+                    placeholderIconSize={48}
+                    displaySize={{ width: 1200, height: 1200, quality: 78, resize: 'cover' }}
+                  />
+                ) : (
+                  <YStack flex={1} alignItems="center" justifyContent="center" width="100%" height="100%">
+                    <Icons.Image size={48} color={ui.textMuted} />
+                  </YStack>
+                )}
+              </YStack>
+              <FavoriteButton listingId={listing.id} size={20} restockEligible={outOfStock} />
+            </YStack>
+          </YStack>
+        </XStack>
 
         {sortedImages.length > 0 ? (
           <MediaLightbox
@@ -971,229 +1031,154 @@ export function ListingScreen({
             initialIndex={activeImageIndex}
           />
         ) : null}
-      </YStack>
+      </MarketplaceCard>
     </StickyRail>
   )
 
   const buyPanel = (
-    <CommercePanel flex={1} gap="$4" minWidth={0} padding="$5">
-      {fromCommunityPost && communityPostId ? (
-        <CommunityAttributionStrip postId={communityPostId} />
-      ) : null}
-      {fromCommunityPost && communityPostId && listing?.id ? (
-        <PostSiblingProductsRail postId={communityPostId} listingId={listing.id} />
-      ) : null}
-      <YStack gap="$2">
-        <Text fontSize={13} color={ui.textMuted} fontWeight="600" letterSpacing={0.2} textTransform="uppercase">
-          {listing.shops?.shop_name ?? BRAND_SHOP_LABEL}
-        </Text>
-        <XStack alignItems="flex-start" justifyContent="space-between" gap="$2">
-          <Text fontWeight="700" fontSize={26} color={ui.text} lineHeight={32} letterSpacing={-0.45} flex={1}>
-            {listing.title}
-          </Text>
-          {listingShareButton}
-        </XStack>
-      </YStack>
+    <YStack
+      width="42%"
+      minWidth={320}
+      maxWidth={480}
+      flexGrow={0}
+      flexShrink={0}
+      flexBasis="42%"
+    >
+      <MarketplaceBuyBox>
+        {fromCommunityPost && communityPostId ? (
+          <CommunityAttributionStrip postId={communityPostId} />
+        ) : null}
+        {fromCommunityPost && communityPostId && listing?.id ? (
+          <PostSiblingProductsRail postId={communityPostId} listingId={listing.id} />
+        ) : null}
 
-      <RatingSummary summary={reviewSummary} />
+        <RatingSummary summary={reviewSummary} />
 
-      <ListingPriceBlock
-        price={displayPrice}
-        mrp={listing.mrp}
-        currency={currency}
-        priceIncludesTax={listing.price_includes_tax}
-        taxPercent={listing.tax_percent}
-        size="lg"
-      />
-      {fromCommunityPost && communityPostId && listing?.id ? (
-        <PostedAtPriceChip
-          listingId={listing.id}
-          postId={communityPostId}
-          livePrice={displayPrice}
-          liveCurrency={currency}
-        />
-      ) : null}
-
-      {fulfillmentInfo?.kind === 'physical' && fulfillmentInfo.estimatedDeliveryLabel ? (
-        <GetItByChip label={fulfillmentInfo.estimatedDeliveryLabel} />
-      ) : null}
-
-      {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} /> : null}
-
-      {fulfillmentInfo?.kind === 'physical' ? (
-        <DeliveryPinCheck
-          shopId={listing.shop_id}
-          listingId={listing.id}
-          listingType={listing.listing_type}
-          country={listing.shops ? undefined : 'IN'}
-        />
-      ) : null}
-
-      {displayStock != null ? (
-        <YStack gap="$2">
-          <Text fontSize={13} color={displayStock > 0 ? ui.success : ui.error} fontWeight="500">
-            {displayStock > 0 ? `${displayStock} in stock` : allowPreorder ? 'Pre-order' : 'Out of stock'}
-          </Text>
-          <ListingPreorderNote metadata={listingMeta} />
-          <LowStockHint stock={displayStock} />
-          <StockNotifyButton listingId={listing.id} outOfStock={outOfStock && !allowPreorder} />
-          <PriceWatchCard
-            listingId={listing.id}
-            title={listing.title}
+        <YStack gap="$2" width="100%">
+          <ListingPriceBlock
             price={displayPrice}
+            mrp={listing.mrp}
             currency={currency}
+            priceIncludesTax={listing.price_includes_tax}
+            taxPercent={listing.tax_percent}
+            size="lg"
           />
-          <ListingBundleOffer
-            listingId={listing.id}
-            onAddBundle={async (bundleId) => {
-              const { error } = await addBundleToCart(bundleId)
-              if (error) toast.show(error, { tone: 'danger' })
-              else toast.show('Bundle added to cart', { tone: 'success' })
-            }}
-          />
-          <ListingReorderScheduleCard listingId={listing.id} metadata={listingMeta} />
-          <XStack gap="$2" flexWrap="wrap">
-            {askSherpaButton}
-          </XStack>
-          {visualPreviewButtons}
+          {fromCommunityPost && communityPostId && listing?.id ? (
+            <PostedAtPriceChip
+              listingId={listing.id}
+              postId={communityPostId}
+              livePrice={displayPrice}
+              liveCurrency={currency}
+            />
+          ) : null}
+          {deliveryChipLabel ? <GetItByChip label={deliveryChipLabel} /> : null}
         </YStack>
-      ) : (
-        <YStack gap="$2">
-          <XStack gap="$2" flexWrap="wrap">
-            {askSherpaButton}
-          </XStack>
-          {visualPreviewButtons}
-        </YStack>
-      )}
 
-      {returnPolicy ? <ListingReturnPolicyCard policy={returnPolicy} /> : null}
+        {followersOnlyBanner}
 
-      <AvailableOffersCard currency={currency} shopId={listing.shop_id} />
+        {deliveryBlock}
 
-      <ListingVariantPicker
-        groups={variationGroups}
-        selection={variantSelection}
-        currency={currency}
-        basePrice={listing.price}
-        onSelect={(groupName, variationId) =>
-          setVariantSelection((current) => ({ ...current, [groupName]: variationId }))
-        }
-      />
+        <ListingVariantPicker
+          groups={variationGroups}
+          selection={variantSelection}
+          currency={currency}
+          basePrice={listing.price}
+          onSelect={(groupName, variationId) =>
+            setVariantSelection((current) => ({ ...current, [groupName]: variationId }))
+          }
+        />
 
-      <ListingPersonalizationNote
-        value={personalizationNote}
-        onChange={setPersonalizationNote}
-      />
+        {stockAndExtras}
 
-      {showInCart ? (
-        <XStack gap="$3" flexWrap="wrap" alignItems="center">
-          <ListingQuantityStepper
-            quantity={cartItem?.quantity ?? 1}
-            maxQuantity={displayStock}
-            disabled={isUpdatingQuantity || !cartItem}
-            onDecrease={() => cartItem && handleQuantityChange(cartItem.quantity - 1)}
-            onIncrease={() => cartItem && handleQuantityChange(cartItem.quantity + 1)}
-          />
-          <Theme name={BRAND_THEME}>
-            <Button
-              tone="primary"
-              size="$5"
-              flex={1}
-              minWidth={200}
-              borderRadius={999}
-              onPress={goToCheckout}
-            >
-              Checkout
-            </Button>
-          </Theme>
-        </XStack>
-      ) : (
-        <XStack gap="$3" flexWrap="wrap">
-          <Theme name={BRAND_THEME}>
-            <Button
-              tone="primary"
-              size="$5"
-              flex={1}
-              minWidth={200}
-              borderRadius={999}
+        {returnPolicy ? <ListingReturnPolicyCard policy={returnPolicy} /> : null}
+        <AvailableOffersCard currency={currency} shopId={listing.shop_id} />
+
+        <YStack gap="$2.5" width="100%">
+          {showInCart ? (
+            <ListingQuantityStepper
+              fullWidth
+              size="lg"
+              quantity={cartItem?.quantity ?? 1}
+              maxQuantity={displayStock}
+              disabled={isUpdatingQuantity || !cartItem}
+              onDecrease={() => cartItem && handleQuantityChange(cartItem.quantity - 1)}
+              onIncrease={() => cartItem && handleQuantityChange(cartItem.quantity + 1)}
+            />
+          ) : (
+            <MarketplacePrimaryButton
               disabled={addingRef.current || (outOfStock && !allowPreorder) || purchaseLocked}
               onPress={() => handleAddToCart(false)}
             >
-              {purchaseLocked
-                ? 'Follow to unlock'
-                : outOfStock && !allowPreorder
-                  ? 'Out of stock'
-                  : outOfStock
-                    ? 'Pre-order'
-                    : 'Add to cart'}
-            </Button>
-          </Theme>
-          <Button
-            tone="outline"
-            size="$5"
-            borderRadius={999}
-            flex={1}
-            minWidth={200}
-            disabled={addingRef.current || (outOfStock && !allowPreorder) || purchaseLocked}
-            onPress={() => handleAddToCart(true)}
-          >
-            {purchaseLocked ? 'Followers only' : buyNowLabel}
-          </Button>
-        </XStack>
-      )}
+              {addToCartLabel}
+            </MarketplacePrimaryButton>
+          )}
+          {showInCart ? (
+            <MarketplaceSecondaryButton onPress={goToCheckout}>
+              {`Proceed to checkout · Qty ${cartItem?.quantity ?? 1}`}
+            </MarketplaceSecondaryButton>
+          ) : (
+            <MarketplaceSecondaryButton
+              disabled={addingRef.current || (outOfStock && !allowPreorder) || purchaseLocked}
+              onPress={() => handleAddToCart(true)}
+            >
+              {purchaseLocked ? 'Followers only' : buyNowLabel}
+            </MarketplaceSecondaryButton>
+          )}
+        </YStack>
 
-      {shopCard}
-    </CommercePanel>
+        <MarketplaceTrustNote>
+          Secure checkout · Buyer protection on eligible orders
+        </MarketplaceTrustNote>
+
+        {shopCard}
+      </MarketplaceBuyBox>
+    </YStack>
   )
 
   return (
     <>
-      <PageScroll>
-      <YStack
-        padding="$4"
-        paddingBottom="$2"
-        width="100%"
-        gap="$5"
-      >
-        <XStack gap="$6" alignItems="flex-start">
-          {imageGallery}
-          {buyPanel}
-        </XStack>
+      <FullWidthLayout scroll backgroundColor={ui.surfaceMuted}>
+        <PageSection
+          paddingVertical="$4"
+          paddingHorizontal="$3"
+          {...LAYOUT_STRETCH}
+        >
+          <YStack width="100%" maxWidth="100%" alignSelf="stretch" gap="$4">
+            <YStack width="100%" gap="$2.5">
+              <XStack
+                width="100%"
+                alignItems="center"
+                justifyContent="space-between"
+                gap="$3"
+              >
+                {listing.shops?.shop_name ? (
+                  <MarketplacePdpShopLink shopName={listing.shops.shop_name} onPress={openShop} />
+                ) : (
+                  <Text fontSize={13} color={ui.textMuted} fontWeight="600">
+                    {BRAND_SHOP_LABEL}
+                  </Text>
+                )}
+                <XStack flexShrink={0}>{listingShareButton}</XStack>
+              </XStack>
+              <MarketplacePdpTitle>{listing.title}</MarketplacePdpTitle>
+            </YStack>
 
-        {(listing.description?.trim() || specifications.length > 0) ? (
-          <>
-            <Separator borderColor={ui.panelBorder} />
-            <ListingDetailsPanel description={listing.description} specifications={specifications} />
-          </>
-        ) : null}
+            <XStack
+              width="100%"
+              maxWidth="100%"
+              alignSelf="stretch"
+              gap="$4"
+              alignItems="flex-start"
+            >
+              {imageGallery}
+              {buyPanel}
+            </XStack>
 
-        {shopPolicies ? (
-          <>
-            <Separator borderColor={ui.panelBorder} />
-            <ListingShopPolicies policies={shopPolicies} />
-          </>
-        ) : null}
-
-        {trustSnapshot.buyerHighlight ? (
-          <>
-            <Separator borderColor={ui.panelBorder} />
-            <VerifiedBuyerHighlight snapshot={trustSnapshot} />
-          </>
-        ) : null}
-        <Separator borderColor={ui.panelBorder} />
-        <ReviewsSection
-          title="Reviews for this item"
-          summary={reviewSummary}
-          reviews={reviews}
-          isLoading={reviewsLoading}
-          error={reviewsError}
-        />
-
-        <Separator borderColor={ui.panelBorder} />
-        <ListingRecommendationsSections {...recommendationProps} />
-      </YStack>
-    </PageScroll>
-    {shareListingSheet}
+            {lowerSections}
+          </YStack>
+        </PageSection>
+      </FullWidthLayout>
+      {shareListingSheet}
     </>
   )
 }

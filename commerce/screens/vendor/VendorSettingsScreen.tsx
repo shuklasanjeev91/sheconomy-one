@@ -39,7 +39,6 @@ import {
   getGstInfoFromShop,
 } from '~/lib/shop/shop.store'
 import {
-  COMMON_SHOP_CATEGORIES,
   DEFAULT_SHOP_CURRENCY,
   SHOP_VALIDATION,
   SUPPORTED_CURRENCIES,
@@ -47,6 +46,7 @@ import {
   type ShopFormData,
   type ShopUpdate,
 } from '~/lib/shop/shop.type'
+import { useShopCategoryOptions } from '~/lib/shop/useShopCategoryOptions'
 import { shopToFormData } from '~/lib/shop/shop.utils'
 import { validateShopData, validateGstStep } from '~/lib/shop/shop.validation'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
@@ -1040,9 +1040,10 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
   const categories = form.shop_categories ?? []
   const [customCategory, setCustomCategory] = useState('')
   const [addingCategory, setAddingCategory] = useState(false)
+  const { categories: fetchedCategories, loading: categoriesLoading } = useShopCategoryOptions()
   const categoryOptions = useMemo(
-    () => Array.from(new Set<string>([...categories, ...COMMON_SHOP_CATEGORIES])),
-    [categories],
+    () => Array.from(new Set<string>([...categories, ...fetchedCategories])),
+    [categories, fetchedCategories],
   )
   const hours = form.shop_hours ?? {}
   const hasHours = Object.keys(hours).length > 0
@@ -1313,6 +1314,14 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
         {/* Categories */}
         <Card ui={ui}>
           <SectionTitle ui={ui} icon={Icons.Tags} title="Categories" />
+          {categoriesLoading ? (
+            <XStack alignItems="center" gap="$2">
+              <Spinner size="small" color={ui.brand} />
+              <Text fontSize={13} color={ui.textMuted}>
+                Loading categories…
+              </Text>
+            </XStack>
+          ) : null}
           <XStack gap="$2" flexWrap="wrap">
             {categoryOptions.map((category) => {
               const active = categories.includes(category)

@@ -176,7 +176,7 @@ export type BottomTabSection =
   | 'chat'
   | 'class'
   | 'co-work'
-  /** Seller console — Etsy-style Manage Shop chrome on `/vendor/*`. */
+  /** Seller console — Manage Shop chrome on `/vendor/*`. */
   | 'vendor'
 
 /**
@@ -384,7 +384,7 @@ export const APP_COWORK_MOBILE_TABS: AppMobileTabItem[] = [
 export function getMobileBottomTabSection(pathname: string): BottomTabSection | null {
   if (pathname.startsWith('/auth/') || pathname.startsWith('/ui-kit')) return null
   if (isCoWorkLivePath(pathname)) return null
-  // Manage Shop gets its own Etsy-style tab chrome (not marketplace Home/Shops/You).
+  // Manage Shop gets its own tab chrome (not marketplace Home/Shops/You).
   if (isVendorPath(pathname) || isManageShopPath(pathname)) return 'vendor'
   if (isChatPath(pathname)) return 'chat'
   if (isCommercePath(pathname)) return 'commerce'

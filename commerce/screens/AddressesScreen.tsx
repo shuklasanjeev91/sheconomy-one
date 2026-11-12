@@ -1,12 +1,14 @@
 import { AddressErrorBoundary } from '~/commerce/components/AddressErrorBoundary'
 import { AddressManager } from '~/commerce/components/address/AddressManager'
+import { MarketplacePage } from '~/commerce/components'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
-import { YStack } from '~/components/ui'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { loadAddresses } from '~/lib/address/address.store'
 import { useAppDispatch } from '~/lib/store/hooks'
 
 export function AddressesScreen() {
   const dispatch = useAppDispatch()
+  const { hasSideRails } = useAppLayout()
 
   return (
     <AddressErrorBoundary
@@ -14,13 +16,13 @@ export function AddressesScreen() {
       onReset={() => void dispatch(loadAddresses({ forceRefresh: true }))}
     >
       <FullWidthLayout scroll>
-        <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
-          <YStack gap="$6" width="100%" maxWidth="100%" alignSelf="stretch">
+        <PageSection paddingVertical="$5" {...LAYOUT_STRETCH}>
+          <MarketplacePage hasSideRails={hasSideRails}>
             <AddressManager
-              title="Delivery addresses"
+              title="Addresses"
               subtitle="Add, edit, and manage shipping, billing, and personal addresses."
             />
-          </YStack>
+          </MarketplacePage>
         </PageSection>
       </FullWidthLayout>
     </AddressErrorBoundary>

@@ -3,7 +3,7 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 
 import type { Href } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { Animated, Platform, StyleSheet, useWindowDimensions } from 'react-native'
+import { Animated, Linking, Platform, StyleSheet, useWindowDimensions } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 
 import { brandColors } from '~/config/brand-colors'
@@ -11,6 +11,7 @@ import { BrandGradient, Button, Icons, Image, ScrollView, Text, XStack, YStack }
 import { BRAND_NAME } from '~/config/brand'
 import type { CommerceStats, HomeHeroImageSet } from '~/commerce/lib/commerce'
 import { commerceRoutes } from '~/lib/routes'
+import { ANDROID_PLAY_STORE_URL, IOS_APP_STORE_URL } from '~/lib/platform/open-in-app'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { motion } from '~/lib/theme/motion'
@@ -21,8 +22,14 @@ import type { gradients } from '~/config/tokens'
 
 const isWeb = Platform.OS === 'web'
 
+export type HomeHeroSlideAction = {
+  label: string
+  url: string
+  tone?: 'light' | 'outline'
+}
+
 export type HomeHeroSlide = {
-  id: keyof HomeHeroImageSet | 'sell'
+  id: keyof HomeHeroImageSet | 'sell' | 'app'
   eyebrow: string
   title: string
   subtitle: string
@@ -30,6 +37,8 @@ export type HomeHeroSlide = {
   href: Href
   gradient: keyof typeof gradients
   images: string[]
+  /** External CTAs (App Store / Play) — replaces the single in-app link when set. */
+  actions?: HomeHeroSlideAction[]
 }
 
 type HomeHeroSliderProps = {
@@ -49,7 +58,12 @@ const EMPTY_HERO_IMAGES: HomeHeroImageSet = {
 
 export function buildHomeHeroSlides(
   stats: CommerceStats,
-  options?: { includeSellerSlide?: boolean; images?: HomeHeroImageSet },
+  options?: {
+    includeSellerSlide?: boolean
+    /** Web-only: promote App Store / Play Store in the hero. */
+    includeAppSlide?: boolean
+    images?: HomeHeroImageSet
+  },
 ): HomeHeroSlide[] {
   const images = options?.images ?? EMPTY_HERO_IMAGES
 
@@ -64,6 +78,26 @@ export function buildHomeHeroSlides(
       gradient: 'brand',
       images: images.shops,
     },
+  ]
+
+  if (options?.includeAppSlide) {
+    slides.push({
+      id: 'app',
+      eyebrow: 'Mobile app',
+      title: 'Shop on iPhone or Android',
+      subtitle: `Take ${BRAND_NAME} with you — browse shops, track orders, and check out on the go.`,
+      cta: 'Get the app',
+      href: commerceRoutes.home,
+      gradient: 'brandSubtle',
+      images: images.trending.length ? images.trending : images.shops,
+      actions: [
+        { label: 'App Store', url: IOS_APP_STORE_URL, tone: 'light' },
+        { label: 'Google Play', url: ANDROID_PLAY_STORE_URL, tone: 'outline' },
+      ],
+    })
+  }
+
+  slides.push(
     {
       id: 'physical',
       eyebrow: 'Ships nationwide',
@@ -88,13 +122,13 @@ export function buildHomeHeroSlides(
       id: 'trending',
       eyebrow: 'Community picks',
       title: 'Popular right now',
-      subtitle: 'Trending finds from makers and sellers you will love',
+      subtitle: `Trending finds from ${BRAND_NAME} sellers`,
       cta: 'See trending',
       href: commerceRoutes.browse('trending'),
       gradient: 'brandSubtle',
       images: images.trending,
     },
-  ]
+  )
 
   if (options?.includeSellerSlide) {
     slides.push({
@@ -125,7 +159,7 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
 
   // Phone gets extra height so the copy can bottom-align over the dark part of the
   // gradient (the native treatment) without colliding with the pagination bar.
-  const slideHeight = isDesktop ? 428 : isTablet ? 320 : 260
+  const slideHeight = isDesktop ? 360 : isTablet ? 280 : 220
   const density: HeroDensity = isDesktop ? 'desktop' : isTablet ? 'tablet' : 'phone'
   const showNav = slides.length > 1
   // On mobile/tablet, the hero is an inset card with horizontal padding so we
@@ -371,22 +405,63 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
             </Text>
           </YStack>
 
-          <AppLink href={slide.href} asChild>
-            <Button
-              tone="primary"
-              size={isDesktop ? '$4' : '$3'}
-              borderRadius={radius.pill}
-              alignSelf="flex-start"
-              backgroundColor="white"
-              color={brandColors.primary}
-              paddingHorizontal={isDesktop ? 24 : isPhone ? 14 : 20}
-              hoverStyle={{ opacity: 0.94, scale: 1.02 }}
-              pressStyle={{ opacity: 0.88, scale: 0.98 }}
-              iconAfter={<Icons.ArrowRight size={isPhone ? 14 : 18} color={brandColors.primary} strokeWidth={2.4} />}
-            >
-              {slide.cta}
-            </Button>
-          </AppLink>
+          {slide.actions?.length ? (
+            <XStack gap={isPhone ? '$2' : '$2.5'} flexWrap="wrap" alignItems="center">
+              {slide.actions.map((action) => {
+                const isLight = action.tone !== 'outline'
+                return (
+                  <Button
+                    key={action.label}
+                    tone={isLight ? 'primary' : 'outline'}
+                    size={isDesktop ? '$4' : '$3'}
+                    borderRadius={radius.pill}
+                    backgroundColor={isLight ? 'white' : 'transparent'}
+                    borderColor="rgba(255,255,255,0.85)"
+                    color={isLight ? brandColors.primary : 'white'}
+                    paddingHorizontal={isDesktop ? 22 : isPhone ? 12 : 18}
+                    hoverStyle={{ opacity: 0.94, scale: 1.02 }}
+                    pressStyle={{ opacity: 0.88, scale: 0.98 }}
+                    iconAfter={
+                      isLight ? (
+                        <Icons.ArrowRight
+                          size={isPhone ? 14 : 18}
+                          color={brandColors.primary}
+                          strokeWidth={2.4}
+                        />
+                      ) : undefined
+                    }
+                    onPress={() => void Linking.openURL(action.url)}
+                    accessibilityLabel={action.label}
+                  >
+                    {action.label}
+                  </Button>
+                )
+              })}
+            </XStack>
+          ) : (
+            <AppLink href={slide.href} asChild>
+              <Button
+                tone="primary"
+                size={isDesktop ? '$4' : '$3'}
+                borderRadius={radius.pill}
+                alignSelf="flex-start"
+                backgroundColor="white"
+                color={brandColors.primary}
+                paddingHorizontal={isDesktop ? 24 : isPhone ? 14 : 20}
+                hoverStyle={{ opacity: 0.94, scale: 1.02 }}
+                pressStyle={{ opacity: 0.88, scale: 0.98 }}
+                iconAfter={
+                  <Icons.ArrowRight
+                    size={isPhone ? 14 : 18}
+                    color={brandColors.primary}
+                    strokeWidth={2.4}
+                  />
+                }
+              >
+                {slide.cta}
+              </Button>
+            </AppLink>
+          )}
         </YStack>
 
         {isDesktop ? <HeroThumbStrip images={slide.images} /> : null}

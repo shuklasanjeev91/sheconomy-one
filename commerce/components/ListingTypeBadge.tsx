@@ -11,7 +11,7 @@ type ListingTypeBadgeProps = {
 export function ListingTypeBadge({ listingType, compact, deliveryHint }: ListingTypeBadgeProps) {
   const ui = useAppUi()
   const isDigital = isDigitalListing(listingType)
-  const label = isDigital ? 'Instant download' : deliveryHint ?? 'Ships to you'
+  const label = isDigital ? 'Instant download' : deliveryHint ?? 'Physical goods'
 
   return (
     <XStack

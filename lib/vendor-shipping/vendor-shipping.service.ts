@@ -1,28 +1,19 @@
 /**
- * Vendor shipping providers service — Shiprocket + custom partners.
- *
- * Ported 1:1 from legacy `/api/vendor/shipping/*` routes.
+ * Vendor shipping providers service — custom partners.
  */
 
 import { canManageShop } from '~/lib/shop/shop.utils'
 import { supabase } from '~/lib/supabase'
 
-import {
-  CUSTOM_PARTNER_SELECT,
-  CUSTOM_PROVIDER_TYPE,
-  SHIPROCKET_PROVIDER_TYPE,
-} from '~/lib/vendor-shipping/vendor-shipping.constants'
+import { CUSTOM_PARTNER_SELECT, CUSTOM_PROVIDER_TYPE } from '~/lib/vendor-shipping/vendor-shipping.constants'
 import {
   VendorShippingError,
   VENDOR_SHIPPING_ERROR_CODES,
   toFriendlyVendorShippingError,
 } from '~/lib/vendor-shipping/vendor-shipping.errors'
 import type {
-  ConnectShiprocketInput,
   CustomPartnerInput,
   CustomShippingPartner,
-  ShiprocketEdgeResponse,
-  ShiprocketStatus,
   VendorShippingAccessContext,
   VendorShippingServiceResponse,
 } from '~/lib/vendor-shipping/vendor-shipping.type'
@@ -62,82 +53,6 @@ async function assertShopAccess(shopId: string, context?: VendorShippingAccessCo
   }
 
   return { shopId: shop.id, userId }
-}
-
-async function invokeShiprocketEdge(body: {
-  action: 'status' | 'connect' | 'disconnect'
-  shopId: string
-  email?: string
-  password?: string
-}): Promise<ShiprocketEdgeResponse> {
-  const { data, error } = await supabase.functions.invoke('vendor-shipping-shiprocket', { body })
-  if (error) {
-    throw new VendorShippingError(VENDOR_SHIPPING_ERROR_CODES.SHIPROCKET_CONNECT_FAILED, error.message)
-  }
-  if (data?.error) {
-    throw new VendorShippingError(
-      body.action === 'connect'
-        ? VENDOR_SHIPPING_ERROR_CODES.SHIPROCKET_AUTH_FAILED
-        : VENDOR_SHIPPING_ERROR_CODES.UNKNOWN,
-      String(data.error),
-    )
-  }
-  return data as ShiprocketEdgeResponse
-}
-
-export async function getShiprocketStatus(
-  shopId: string,
-  context?: VendorShippingAccessContext,
-): Promise<VendorShippingServiceResponse<ShiprocketStatus>> {
-  try {
-    await assertShopAccess(shopId, context)
-    const payload = await invokeShiprocketEdge({ action: 'status', shopId })
-    return ok({
-      connected: Boolean(payload.connected),
-      expired: payload.expired,
-      message: payload.message,
-      config: payload.config ?? null,
-    })
-  } catch (error) {
-    return fail(error)
-  }
-}
-
-export async function connectShiprocket(
-  input: ConnectShiprocketInput,
-): Promise<VendorShippingServiceResponse<ShiprocketStatus>> {
-  try {
-    await assertShopAccess(input.shopId, input.accessContext)
-    const payload = await invokeShiprocketEdge({
-      action: 'connect',
-      shopId: input.shopId,
-      email: input.email.trim(),
-      password: input.password,
-    })
-    return ok(
-      {
-        connected: true,
-        message: payload.message,
-        config: payload.config ?? null,
-      },
-      payload.message ?? 'Shiprocket connected successfully',
-    )
-  } catch (error) {
-    return fail(error, 'Could not connect Shiprocket.')
-  }
-}
-
-export async function disconnectShiprocket(
-  shopId: string,
-  context?: VendorShippingAccessContext,
-): Promise<VendorShippingServiceResponse<{ disconnected: true }>> {
-  try {
-    await assertShopAccess(shopId, context)
-    await invokeShiprocketEdge({ action: 'disconnect', shopId })
-    return ok({ disconnected: true }, 'Shiprocket disconnected successfully')
-  } catch (error) {
-    return fail(error, 'Could not disconnect Shiprocket.')
-  }
 }
 
 export async function listCustomShippingPartners(

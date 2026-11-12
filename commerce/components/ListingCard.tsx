@@ -3,14 +3,13 @@ import { Platform } from 'react-native'
 import { useRouter } from 'one'
 
 import { AppLink } from '~/components/navigation/AppLink'
-import { Button, Icons, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { radius } from '~/config/tokens'
+import { Icons, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { getListingSlug } from '~/lib/supabase/commerce'
 import type { ListingSummary } from '~/lib/supabase/commerce'
 import { routes } from '~/lib/routes'
 import { useCart } from '~/commerce/hooks/useCart'
-import { useAsyncAction } from '~/hooks/useAsyncAction'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
+import { ListingCartAction } from '~/commerce/components/ListingCartAction'
 import { motion } from '~/lib/theme/motion'
 import { prefetchNativeLoader, seedNativeLoaderCache } from '~/lib/bootstrap/native-loader-cache'
 import {
@@ -107,7 +106,7 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
           <YStack
             width="100%"
             height="100%"
-            borderRadius={radius.card}
+            borderRadius={16}
             overflow="hidden"
             backgroundColor={ui.imagePlaceholder}
             borderWidth={1}
@@ -219,55 +218,62 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
               size="sm"
               hideTaxLabel
             />
-            {listing.shop_name && !compact ? (
-              <Text fontSize={11} color={ui.textMuted} numberOfLines={1} fontWeight="500">
-                {listing.shop_name}
-              </Text>
-            ) : null}
           </YStack>
         </YStack>
       </AppLink>
 
-      {showQuickAdd ? <QuickAddButton listing={listing} /> : null}
+      {listing.shop_name && !compact ? (
+        listing.shop_slug || listing.shop_id ? (
+          <AppLink
+            href={routes.shop(listing.shop_slug || listing.shop_id!)}
+            asChild
+          >
+            <Text
+              fontSize={12}
+              color={ui.link}
+              numberOfLines={1}
+              fontWeight="600"
+              paddingHorizontal={2}
+              cursor="pointer"
+              hoverStyle={{ color: ui.brand }}
+            >
+              {listing.shop_name}
+            </Text>
+          </AppLink>
+        ) : (
+          <Text fontSize={12} color={ui.textMuted} numberOfLines={1} fontWeight="500" paddingHorizontal={2}>
+            {listing.shop_name}
+          </Text>
+        )
+      ) : null}
+
+      {showQuickAdd ? <QuickAddCartAction listing={listing} /> : null}
     </YStack>
   )
 })
 
-function QuickAddButton({ listing }: { listing: ListingSummary }) {
+function QuickAddCartAction({ listing }: { listing: ListingSummary }) {
   const { addToCart } = useCart()
   const toast = useAppToast()
   const router = useRouter()
-  const { run, pending } = useAsyncAction()
 
   return (
-    <Button
-      size="$2.5"
-      tone="primary"
-      borderRadius={999}
-      width="100%"
-      minHeight={44}
-      disabled={pending}
-      accessibilityLabel={`Add ${listing.title} to cart`}
-      icon={<Icons.ShoppingCart size={14} />}
-      onPress={() => {
-        void run(
-          async () => {
-            const { error } = await addToCart(listing.id)
-            if (error) {
-              toast.show('Choose options', {
-                tone: 'default',
-                message: 'Select options on the product page to add it.',
-              })
-              router.push(routes.listing(Platform.OS === 'web' ? getListingSlug(listing) : listing.id))
-              return
-            }
-            toast.show('Added to cart', { tone: 'success' })
-          },
-          { haptic: 'success', errorTitle: 'Could not add to cart' },
-        )
+    <ListingCartAction
+      listingId={listing.id}
+      size="sm"
+      maxQuantity={listing.quantity ?? null}
+      onAdd={async () => {
+        const { error } = await addToCart(listing.id)
+        if (error) {
+          toast.show('Choose options', {
+            tone: 'default',
+            message: 'Select options on the product page to add it.',
+          })
+          router.push(routes.listing(Platform.OS === 'web' ? getListingSlug(listing) : listing.id))
+          return { error }
+        }
+        return { error: null }
       }}
-    >
-      {pending ? 'Adding…' : 'Add to cart'}
-    </Button>
+    />
   )
 }

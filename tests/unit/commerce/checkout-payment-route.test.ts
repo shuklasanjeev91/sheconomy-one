@@ -14,9 +14,10 @@ import {
 } from '~/commerce/lib/checkout-payment-route'
 
 describe('resolveCheckoutOnlineProvider', () => {
-  it('uses SHEPay for multi-shop carts and Platform PayU for single-shop', () => {
+  it('always uses SHEPay PayU split for marketplace checkout', () => {
     expect(resolveCheckoutOnlineProvider(true)).toBe('shepay')
-    expect(resolveCheckoutOnlineProvider(false)).toBe('platform_payu')
+    expect(resolveCheckoutOnlineProvider(false)).toBe('shepay')
+    expect(resolveCheckoutOnlineProvider()).toBe('shepay')
   })
 })
 

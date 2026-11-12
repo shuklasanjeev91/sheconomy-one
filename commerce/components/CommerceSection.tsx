@@ -3,8 +3,7 @@ import type { ReactNode } from 'react'
 import type { Href } from 'one'
 
 import { AppLink } from '~/components/navigation/AppLink'
-import { Text, Theme, XStack, YStack } from '~/components/ui'
-import { BRAND_THEME } from '~/config/tokens'
+import { Text, XStack, YStack } from '~/components/ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type CommerceSectionProps = {
@@ -17,7 +16,7 @@ type CommerceSectionProps = {
   children: ReactNode
 }
 
-/** Section header for commerce feeds — accent rail, pill action, generous rhythm. */
+/** Section header for commerce feeds — marketplace rhythm without dense accent rails. */
 export function CommerceSection({
   title,
   subtitle,
@@ -31,53 +30,36 @@ export function CommerceSection({
   return (
     <YStack gap="$4" width="100%">
       <XStack alignItems="flex-end" justifyContent="space-between" gap="$3" flexWrap="wrap">
-        <XStack gap="$3" flex={1} alignItems="flex-start" minWidth={0}>
-          <YStack
-            width={4}
-            height={36}
-            borderRadius={999}
-            backgroundColor={ui.brand}
-            marginTop={4}
-            opacity={0.9}
-          />
-          <YStack gap="$1" flex={1} minWidth={0}>
-            <Text
-              fontWeight="800"
-              fontSize={24}
-              color={ui.text}
-              letterSpacing={-0.5}
-              lineHeight={30}
-            >
-              {title}
+        <YStack gap="$1" flex={1} minWidth={0}>
+          <Text
+            fontWeight="800"
+            fontSize={22}
+            color={ui.text}
+            letterSpacing={-0.45}
+            lineHeight={28}
+          >
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text color={ui.textMuted} fontSize={13} lineHeight={18} fontWeight="500">
+              {subtitle}
             </Text>
-            {subtitle ? (
-              <Text color={ui.textMuted} fontSize={13} lineHeight={18} fontWeight="500">
-                {subtitle}
-              </Text>
-            ) : null}
-          </YStack>
-        </XStack>
+          ) : null}
+        </YStack>
         {action ? (
           action
         ) : actionLabel && actionHref ? (
-          <Theme name={BRAND_THEME}>
-            <AppLink href={actionHref} asChild>
-              <XStack
-                paddingHorizontal="$3"
-                paddingVertical="$1.5"
-                borderRadius={999}
-                backgroundColor="$color3"
-                cursor="pointer"
-                animation="quick"
-                hoverStyle={{ backgroundColor: '$color4', y: -1 }}
-                pressStyle={{ scale: 0.97, y: 0 }}
-              >
-                <Text color="$color11" fontWeight="600" fontSize={12} letterSpacing={0.15}>
-                  {actionLabel}
-                </Text>
-              </XStack>
-            </AppLink>
-          </Theme>
+          <AppLink href={actionHref} asChild>
+            <Text
+              color={ui.link}
+              fontWeight="700"
+              fontSize={13}
+              cursor="pointer"
+              hoverStyle={{ color: ui.brand }}
+            >
+              {actionLabel}
+            </Text>
+          </AppLink>
         ) : null}
       </XStack>
       {children}

@@ -292,17 +292,32 @@ function infoApiUrl(creds: PayuCredentials): string {
     : 'https://info.payu.in/merchant/postservice.php?form=2'
 }
 
+export type PayuRefundSplitDetails = {
+  /** Child merchant key that received the absolute split. */
+  childMerchantKey?: string | null
+  /** Child MID used for release_settlement. */
+  childMid?: string | null
+  /** aggregatorSubTxnId from payment_split. */
+  subTxnId?: string | null
+  /** Shop amount that was split (absolute). */
+  splitAmount?: number | null
+  shopId?: string | null
+  settlementId?: string | null
+}
+
 /**
  * Initiate a PayU refund.
  * Hash: sha512(key|command|var1|salt) where var1 = mihpayid.
+ * Optional splitDetails are sent as var4 JSON so Automate refunds retain child allocation context.
  */
 export async function cancelRefundTransaction(input: {
   creds: PayuCredentials
   mihpayid: string
   tokenId: string
   amount: number
+  splitDetails?: PayuRefundSplitDetails | null
 }): Promise<CancelRefundResult> {
-  const { creds, mihpayid, tokenId } = input
+  const { creds, mihpayid, tokenId, splitDetails } = input
   const amount = formatPlatformPayuAmount(input.amount)
   const command = 'cancel_refund_transaction'
   const hash = await sha512Hex(`${creds.key}|${command}|${mihpayid}|${creds.salt}`)
@@ -315,6 +330,25 @@ export async function cancelRefundTransaction(input: {
     var3: amount,
     hash,
   })
+
+  if (splitDetails && (splitDetails.childMerchantKey || splitDetails.subTxnId || splitDetails.childMid)) {
+    body.set(
+      'var4',
+      JSON.stringify({
+        type: 'absolute',
+        platform_fee_amount: 0,
+        childMerchantKey: splitDetails.childMerchantKey ?? null,
+        childMid: splitDetails.childMid ?? null,
+        aggregatorSubTxnId: splitDetails.subTxnId ?? null,
+        aggregatorSubAmt:
+          splitDetails.splitAmount != null
+            ? formatPlatformPayuAmount(splitDetails.splitAmount)
+            : amount,
+        shopId: splitDetails.shopId ?? null,
+        settlementId: splitDetails.settlementId ?? null,
+      }),
+    )
+  }
 
   const response = await fetch(infoApiUrl(creds), {
     method: 'POST',
@@ -347,7 +381,10 @@ export async function cancelRefundTransaction(input: {
     requestId,
     status: statusNum === 1 ? 'success' : statusNum === 0 ? 'failed' : String(json?.status ?? 'unknown'),
     message: msg,
-    raw: json ?? text,
+    raw: {
+      response: json ?? text,
+      splitDetails: splitDetails ?? null,
+    },
   }
 }
 

@@ -11,11 +11,11 @@ export type OnlinePaymentCopy = {
 export type CheckoutOnlineProvider = 'shepay' | 'platform_payu'
 
 /**
- * Platform PayU charges one shop payment; multi-shop carts must use SHEPay
- * so one PayU payment can be split (and held) across vendors.
+ * Marketplace online checkout always uses SHEPay (PayU Automate absolute split).
+ * `platform_payu` remains only for legacy unpaid order resume / sponsored ads.
  */
-export function resolveCheckoutOnlineProvider(multiShop: boolean): CheckoutOnlineProvider {
-  return multiShop ? 'shepay' : 'platform_payu'
+export function resolveCheckoutOnlineProvider(_multiShop?: boolean): CheckoutOnlineProvider {
+  return 'shepay'
 }
 
 export type DirectPaymentShop = {

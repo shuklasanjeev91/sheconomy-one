@@ -1,23 +1,15 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useWindowDimensions } from 'react-native'
 import { useRouter } from 'one'
 
 import { DeliveryErrorBoundary } from '~/commerce/components/DeliveryErrorBoundary'
 import { VendorNoShopState } from '~/commerce/components/vendor/VendorShopGate'
-import { CustomShippingPartnerPanel } from '~/commerce/components/vendor/delivery/CustomShippingPartnerPanel'
-import { ShiprocketConnectionPanel } from '~/commerce/components/vendor/delivery/ShiprocketConnectionPanel'
 import { PageCenter } from '~/components/layout'
-import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { GETTING_STARTED_STEPS } from '~/lib/vendor-shipping/vendor-shipping.constants'
-import { toFriendlyVendorShippingError } from '~/lib/vendor-shipping/vendor-shipping.errors'
-import {
-  clearVendorShippingError,
-  loadCustomShippingPartners,
-  loadShiprocketStatus,
-  setVendorShippingShopId,
-} from '~/lib/vendor-shipping/vendor-shipping.store'
+import { clearVendorShippingError, setVendorShippingShopId } from '~/lib/vendor-shipping/vendor-shipping.store'
 import { VENDOR_SHIPPING_UI_COPY } from '~/lib/vendor-shipping/vendor-shipping-ui.copy'
 import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
@@ -27,7 +19,6 @@ export function VendorDeliveryScreen() {
   const ui = useAppUi()
   const router = useRouter()
   const dispatch = useAppDispatch()
-  const toast = useAppToast()
   const { isDesktop, safeBottom } = useAppLayout()
   const { width } = useWindowDimensions()
   const compact = width < 380
@@ -35,42 +26,15 @@ export function VendorDeliveryScreen() {
   const shop = useAppSelector((state) => state.shop.currentShop)
   const isLoadingMyShops = useAppSelector((state) => state.shop.isLoadingMyShops)
   const myShopsLoaded = useAppSelector((state) => state.shop.myShopsLoaded)
-  const profile = useAppSelector((state) => state.profile.profile)
-  const shiprocketStatus = useAppSelector((state) => state.vendorShipping.shiprocketStatus)
-  const customPartners = useAppSelector((state) => state.vendorShipping.customPartners)
-  const loadingStatus = useAppSelector((state) => state.vendorShipping.loadingStatus)
-  const loadingPartners = useAppSelector((state) => state.vendorShipping.loadingPartners)
-  const connecting = useAppSelector((state) => state.vendorShipping.connecting)
-  const disconnecting = useAppSelector((state) => state.vendorShipping.disconnecting)
-  const creatingPartner = useAppSelector((state) => state.vendorShipping.creatingPartner)
   const error = useAppSelector((state) => state.vendorShipping.error)
-
-  const accessContext = useMemo(
-    () => ({ userId: profile?.id, role: profile?.role }),
-    [profile?.id, profile?.role],
-  )
-
-  const refreshAll = useCallback(async () => {
-    if (!shop?.id) return
-    await Promise.all([
-      dispatch(loadShiprocketStatus({ shopId: shop.id, accessContext })).unwrap(),
-      dispatch(loadCustomShippingPartners({ shopId: shop.id, accessContext })).unwrap(),
-    ])
-  }, [accessContext, dispatch, shop?.id])
 
   useEffect(() => {
     if (!shop?.id) return
     dispatch(setVendorShippingShopId(shop.id))
-    void refreshAll().catch((err) => {
-      toast.show('Could not load delivery settings', {
-        tone: 'danger',
-        message: toFriendlyVendorShippingError(err),
-      })
-    })
     return () => {
       dispatch(clearVendorShippingError())
     }
-  }, [dispatch, refreshAll, shop?.id, toast])
+  }, [dispatch, shop?.id])
 
   if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
@@ -91,11 +55,11 @@ export function VendorDeliveryScreen() {
   }
 
   return (
-    <DeliveryErrorBoundary scope="vendor-delivery" onReset={() => void refreshAll()}>
+    <DeliveryErrorBoundary scope="vendor-delivery" onReset={() => undefined}>
       <YStack
         width="100%"
-        maxWidth={1120}
-        alignSelf="center"
+        maxWidth="100%"
+        alignSelf="stretch"
         gap="$4"
         paddingHorizontal={isDesktop ? '$6' : '$4'}
         paddingTop={isDesktop ? '$6' : '$4'}
@@ -125,7 +89,12 @@ export function VendorDeliveryScreen() {
             </YStack>
           </XStack>
           {compact ? (
-            <Button tone="primary" size="$3" icon={<Icons.Truck size={15} />}>
+            <Button
+              tone="primary"
+              size="$3"
+              icon={<Icons.Truck size={15} />}
+              onPress={() => router.push(vendorRoutes.wallet)}
+            >
               {VENDOR_SHIPPING_UI_COPY.getStartedAction}
             </Button>
           ) : null}
@@ -155,38 +124,32 @@ export function VendorDeliveryScreen() {
           </Text>
         ) : null}
 
-        <YStack gap="$2">
-          <Text fontSize={18} fontWeight="800" color={ui.text}>
+        <YStack
+          gap="$3"
+          padding="$4"
+          borderRadius={radius.card}
+          borderWidth={1.5}
+          borderColor={ui.brand}
+          backgroundColor={ui.chip}
+        >
+          <Text fontSize={16} fontWeight="800" color={ui.text}>
             {VENDOR_SHIPPING_UI_COPY.providersTitle}
           </Text>
-          <Text fontSize={13} color={ui.textSecondary}>
+          <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
             {compact
               ? VENDOR_SHIPPING_UI_COPY.providersSubtitleCompact
               : VENDOR_SHIPPING_UI_COPY.providersSubtitle}
           </Text>
+          <Button
+            tone="primary"
+            size="$3"
+            alignSelf="flex-start"
+            borderRadius={999}
+            onPress={() => router.push(vendorRoutes.wallet)}
+          >
+            Open shipping credit
+          </Button>
         </YStack>
-
-        <ShiprocketConnectionPanel
-          ui={ui}
-          shopId={shop.id}
-          status={shiprocketStatus}
-          loading={loadingStatus}
-          connecting={connecting}
-          disconnecting={disconnecting}
-          compact={compact}
-          accessContext={accessContext}
-          onStatusChange={() => void refreshAll()}
-        />
-
-        <CustomShippingPartnerPanel
-          ui={ui}
-          shopId={shop.id}
-          partners={customPartners}
-          loading={loadingPartners}
-          creating={creatingPartner}
-          accessContext={accessContext}
-          onRefresh={() => void refreshAll()}
-        />
 
         <YStack
           gap="$4"
@@ -258,6 +221,16 @@ export function VendorDeliveryScreen() {
                     Open shipping settings
                   </Button>
                 ) : null}
+                {step.id === 'fund-easyship' ? (
+                  <Button
+                    tone="outline"
+                    size="$2"
+                    alignSelf="flex-start"
+                    onPress={() => router.push(vendorRoutes.wallet)}
+                  >
+                    Open shipping credit
+                  </Button>
+                ) : null}
               </YStack>
             ))}
           </XStack>
@@ -302,11 +275,6 @@ export function VendorDeliveryScreen() {
           </XStack>
         </YStack>
 
-        {loadingStatus && loadingPartners ? (
-          <YStack alignItems="center" padding="$4">
-            <Spinner size="small" />
-          </YStack>
-        ) : null}
       </YStack>
     </DeliveryErrorBoundary>
   )

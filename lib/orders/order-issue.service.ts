@@ -74,6 +74,15 @@ export async function createOrderIssue(
   if (!validation.isValid) return fail(validation.errors.join(', '))
 
   try {
+    const { data: rateOk } = await supabase.rpc('check_api_rate_limit', {
+      p_bucket: `dispute_create:${reporterId}`,
+      p_limit: 10,
+      p_window_seconds: 600,
+    })
+    if (rateOk === false) {
+      return fail('Too many support requests. Please wait before raising another issue.')
+    }
+
     const payload: OrderIssueInsert = {
       order_id: input.order_id,
       order_item_id: input.order_item_id ?? null,

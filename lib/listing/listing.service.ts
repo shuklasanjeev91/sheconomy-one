@@ -72,9 +72,13 @@ const VALID_LISTING_TYPES: readonly ListingType[] = [
   LISTING_TYPES.SERVICE,
 ]
 
-/** Detail row plus the category assignments that live outside the view. */
+/** Detail row plus category assignments and pricing/product-info columns. */
 export type ListingDetails = ListingDetailsView & {
   category_assignments: Pick<CategoryAssignment, 'category_id' | 'is_primary'>[]
+  mrp?: number | null
+  price_includes_tax?: boolean | null
+  tax_percent?: number | null
+  product_info?: Listing['product_info'] | null
 }
 
 // ============= SHOP CATALOGUE (owner / admin) =============
@@ -420,14 +424,26 @@ export async function getListingDetails(
     if (error) return fail(error)
     if (!listing) return ok<ListingDetails | null>(null)
 
-    const { data: categories } = await supabase
-      .from('category_assignments')
-      .select('category_id, is_primary')
-      .eq('listing_id', listing.id as string)
+    const [{ data: categories }, { data: pricing }] = await Promise.all([
+      supabase
+        .from('category_assignments')
+        .select('category_id, is_primary')
+        .eq('listing_id', listing.id as string),
+      // View omits MRP / tax / product_info — load from the base table for edit.
+      supabase
+        .from('listings')
+        .select('mrp, price_includes_tax, tax_percent, product_info')
+        .eq('id', listing.id as string)
+        .maybeSingle(),
+    ])
 
     return ok<ListingDetails | null>({
       ...(listing as ListingDetailsView),
       category_assignments: categories ?? [],
+      mrp: pricing?.mrp ?? null,
+      price_includes_tax: pricing?.price_includes_tax ?? true,
+      tax_percent: pricing?.tax_percent ?? null,
+      product_info: pricing?.product_info ?? {},
     })
   } catch (error) {
     return fail(error)

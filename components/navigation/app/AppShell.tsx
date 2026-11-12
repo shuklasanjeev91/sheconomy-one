@@ -135,7 +135,7 @@ export function AppShell({ children }: AppShellProps) {
     lockViewport || Platform.OS !== 'web' || !isDesktopWeb
   // Open conversations keep the app header (shared back); hide bottom tabs only.
   const chatConversationMobile = !isDesktop && isChatConversationPath(pathname)
-  // Manage Shop uses its own top bar + Etsy-style bottom tabs — hide marketplace header.
+  // Manage Shop uses its own top bar + bottom tabs — hide marketplace header.
   const hideMobileHeader = !isDesktop && isVendorPath(pathname)
 
   const keyboardHeight = useKeyboardBottomInset()

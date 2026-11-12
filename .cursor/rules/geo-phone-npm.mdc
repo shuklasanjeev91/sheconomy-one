@@ -1,0 +1,16 @@
+---
+description: Always use npm-backed country/state/city/postal/phone helpers in forms
+alwaysApply: true
+---
+
+# Geo & phone inputs
+
+Always use the shared npm-backed helpers — never free-text fields for these:
+
+| Field | Use |
+|---|---|
+| Country / state / city | `LocationFields` or `GeoSelectField` from `~/components/geo` (`country-state-city` via `~/lib/geo`) |
+| Pincode / postal / ZIP | `LocationFields` postal input + `validatePostalCode` from `~/lib/geo` |
+| Mobile / phone | `PhoneInput` from `~/components/forms` (`libphonenumber-js` via `~/lib/phone`) |
+
+Do not invent dial-code lists, country dropdowns, or phone length regexes in screens. Reuse `~/lib/geo` and `~/lib/phone`.

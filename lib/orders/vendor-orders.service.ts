@@ -698,3 +698,32 @@ export async function getPlatformOrderAnalytics(
     return fail(error)
   }
 }
+
+/**
+ * Realtime: seller order list for a shop.
+ * Reloads when any of this shop's order_items change (RLS still gates visibility).
+ */
+export function subscribeVendorOrderItemChanges(
+  shopId: string,
+  onChange: () => void,
+): () => void {
+  if (!shopId) return () => {}
+
+  const channel = supabase
+    .channel(`vendor-orders-${shopId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'order_items',
+        filter: `vendor_id=eq.${shopId}`,
+      },
+      () => onChange(),
+    )
+    .subscribe()
+
+  return () => {
+    void supabase.removeChannel(channel)
+  }
+}

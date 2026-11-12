@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   addMonths,
   eachDayOfInterval,
   endOfMonth,
   endOfWeek,
   format,
+  getDaysInMonth,
+  isAfter,
   isBefore,
   isSameDay,
   isSameMonth,
@@ -28,6 +30,20 @@ import { Field } from '~/components/ui/Input'
 const DATE_FMT = 'yyyy-MM-dd'
 const TIME_FMT = 'HH:mm'
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+const MONTH_LABELS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
 
 type DateTimeFieldProps = {
   mode: 'date' | 'time'
@@ -40,8 +56,16 @@ type DateTimeFieldProps = {
   error?: string
   flex?: number
   minWidth?: number
+  disabled?: boolean
   /** Disable dates before this day (date mode only). */
   minDate?: Date
+  /** Disable dates after this day (date mode only). Useful for date of birth. */
+  maxDate?: Date
+  /**
+   * Date picker UI. `ymd` shows Year / Month / Day columns (best for DOB).
+   * `calendar` is the month grid (default for event/scheduling dates).
+   */
+  datePicker?: 'calendar' | 'ymd'
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -66,7 +90,10 @@ export function DateTimeField({
   error,
   flex,
   minWidth,
+  disabled = false,
   minDate,
+  maxDate,
+  datePicker = 'calendar',
 }: DateTimeFieldProps) {
   const ui = useAppUi()
   const [open, setOpen] = useState(false)
@@ -95,7 +122,9 @@ export function DateTimeField({
       minWidth={minWidth}
     >
       <XStack
-        onPress={() => setOpen(true)}
+        onPress={() => {
+          if (!disabled) setOpen(true)
+        }}
         alignItems="center"
         gap="$2.5"
         height={48}
@@ -104,9 +133,10 @@ export function DateTimeField({
         borderColor={error ? '$red9' : ui.border}
         borderRadius="$6"
         backgroundColor={ui.surface}
-        cursor="pointer"
-        hoverStyle={{ borderColor: ui.brand }}
-        pressStyle={{ opacity: 0.9 }}
+        opacity={disabled ? 0.6 : 1}
+        cursor={disabled ? 'default' : 'pointer'}
+        hoverStyle={disabled ? undefined : { borderColor: ui.brand }}
+        pressStyle={disabled ? undefined : { opacity: 0.9 }}
       >
         <LeadIcon size={18} color={ui.textMuted} />
         <Text flex={1} fontSize={15} color={parsed ? ui.text : ui.textMuted} numberOfLines={1}>
@@ -121,10 +151,22 @@ export function DateTimeField({
         title={label ?? (mode === 'date' ? 'Select date' : 'Select time')}
         scrollable={false}
       >
-        {open && mode === 'date' ? (
+        {open && mode === 'date' && datePicker === 'ymd' ? (
+          <YmdPicker
+            value={parsed}
+            minDate={minDate}
+            maxDate={maxDate}
+            onSelect={(d) => {
+              onChange(format(d, DATE_FMT))
+              setOpen(false)
+            }}
+          />
+        ) : null}
+        {open && mode === 'date' && datePicker === 'calendar' ? (
           <CalendarPicker
             value={parsed}
             minDate={minDate}
+            maxDate={maxDate}
             onSelect={(d) => {
               onChange(format(d, DATE_FMT))
               setOpen(false)
@@ -145,18 +187,126 @@ export function DateTimeField({
   )
 }
 
-function CalendarPicker({
+function clampDate(date: Date, minDate?: Date, maxDate?: Date): Date {
+  let d = date
+  if (minDate && isBefore(startOfDay(d), startOfDay(minDate))) d = startOfDay(minDate)
+  if (maxDate && isAfter(startOfDay(d), startOfDay(maxDate))) d = startOfDay(maxDate)
+  return d
+}
+
+/** Year / Month / Day columns — intended for date of birth and similar distant dates. */
+function YmdPicker({
   value,
   minDate,
+  maxDate,
   onSelect,
 }: {
   value: Date | null
   minDate?: Date
+  maxDate?: Date
   onSelect: (date: Date) => void
 }) {
   const ui = useAppUi()
-  const [month, setMonth] = useState(value ?? new Date())
+  const today = startOfDay(new Date())
+  const max = maxDate ? startOfDay(maxDate) : today
+  const min = minDate
+    ? startOfDay(minDate)
+    : new Date(max.getFullYear() - 100, 0, 1)
+
+  const initial = clampDate(value ?? new Date(max.getFullYear() - 25, 0, 1), min, max)
+  const [year, setYear] = useState(initial.getFullYear())
+  const [month, setMonth] = useState(initial.getMonth()) // 0-11
+  const [day, setDay] = useState(initial.getDate())
+
+  const years = useMemo(() => {
+    const from = min.getFullYear()
+    const to = max.getFullYear()
+    return Array.from({ length: to - from + 1 }, (_, i) => to - i)
+  }, [min, max])
+
+  const months = useMemo(() => {
+    return MONTH_LABELS.map((label, index) => ({ label, index })).filter(({ index }) => {
+      const first = new Date(year, index, 1)
+      const last = new Date(year, index + 1, 0)
+      return !isAfter(startOfDay(first), max) && !isBefore(startOfDay(last), min)
+    })
+  }, [year, min, max])
+
+  const daysInMonth = getDaysInMonth(new Date(year, month, 1))
+  const days = useMemo(() => {
+    return Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
+      const candidate = startOfDay(new Date(year, month, d))
+      return !isBefore(candidate, min) && !isAfter(candidate, max)
+    })
+  }, [year, month, daysInMonth, min, max])
+
+  useEffect(() => {
+    if (!months.some((m) => m.index === month) && months[0]) {
+      setMonth(months[0].index)
+    }
+  }, [months, month])
+
+  useEffect(() => {
+    if (!days.includes(day)) {
+      setDay(days[days.length - 1] ?? 1)
+    }
+  }, [days, day])
+
+  const preview = clampDate(new Date(year, month, day), min, max)
+
+  return (
+    <YStack gap="$3" paddingBottom="$2">
+      <Text fontSize={22} fontWeight="800" color={ui.text} alignSelf="center">
+        {format(preview, 'd MMM yyyy')}
+      </Text>
+      <XStack gap="$2" height={220}>
+        <WheelColumn
+          label="Year"
+          items={years}
+          selected={year}
+          format={(y) => String(y)}
+          onSelect={setYear}
+        />
+        <WheelColumn
+          label="Month"
+          items={months.map((m) => m.index)}
+          selected={month}
+          format={(m) => MONTH_LABELS[m]?.slice(0, 3) ?? String(m + 1)}
+          onSelect={setMonth}
+        />
+        <WheelColumn
+          label="Day"
+          items={days}
+          selected={day}
+          format={(d) => String(d).padStart(2, '0')}
+          onSelect={setDay}
+        />
+      </XStack>
+      <Button tone="primary" borderRadius={999} onPress={() => onSelect(preview)}>
+        Set date
+      </Button>
+    </YStack>
+  )
+}
+
+function CalendarPicker({
+  value,
+  minDate,
+  maxDate,
+  onSelect,
+}: {
+  value: Date | null
+  minDate?: Date
+  maxDate?: Date
+  onSelect: (date: Date) => void
+}) {
+  const ui = useAppUi()
+  const [month, setMonth] = useState(value ?? maxDate ?? new Date())
   const min = minDate ? startOfDay(minDate) : null
+  const max = maxDate ? startOfDay(maxDate) : null
+  const today = startOfDay(new Date())
+  const todayAllowed =
+    (!min || !isBefore(today, min)) && (!max || !isAfter(today, max))
 
   const weeks = useMemo(() => {
     const start = startOfWeek(startOfMonth(month), { weekStartsOn: 0 })
@@ -190,7 +340,8 @@ function CalendarPicker({
             {week.map((day) => {
               const selected = value ? isSameDay(day, value) : false
               const outside = !isSameMonth(day, month)
-              const disabled = min ? isBefore(day, min) : false
+              const disabled =
+                (min ? isBefore(day, min) : false) || (max ? isAfter(day, max) : false)
               return (
                 <YStack
                   key={day.toISOString()}
@@ -219,14 +370,16 @@ function CalendarPicker({
         ))}
       </YStack>
 
-      <Button
-        tone="ghost"
-        size="$3"
-        alignSelf="center"
-        onPress={() => onSelect(startOfDay(new Date()))}
-      >
-        Today
-      </Button>
+      {todayAllowed ? (
+        <Button
+          tone="ghost"
+          size="$3"
+          alignSelf="center"
+          onPress={() => onSelect(today)}
+        >
+          Today
+        </Button>
+      ) : null}
     </YStack>
   )
 }

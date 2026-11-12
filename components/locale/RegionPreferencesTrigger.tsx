@@ -6,12 +6,12 @@ import { useOptionalRegionPreferences } from '~/lib/locale/RegionPreferencesCont
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type RegionPreferencesTriggerProps = {
-  /** Compact for footers; `footerBar` is for the dark Etsy-style bottom bar. */
+  /** Compact for footers; `footerBar` is for the dark marketplace footer bar. */
   variant?: 'footer' | 'footerBar' | 'row' | 'chip'
 }
 
 /**
- * Opens the Etsy-style region sheet. Shows country · language · currency summary.
+ * Opens the region preferences sheet. Shows country · language · currency summary.
  */
 export function RegionPreferencesTrigger({ variant = 'footer' }: RegionPreferencesTriggerProps) {
   const ui = useAppUi()

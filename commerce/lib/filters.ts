@@ -26,7 +26,7 @@ export const LISTING_SORT_OPTIONS: { value: ListingSort; label: string }[] = [
 
 export const LISTING_TYPE_OPTIONS: { value: ListingTypeFilter | 'all'; label: string }[] = [
   { value: 'all', label: 'All items' },
-  { value: 'physical', label: 'Ships to you' },
+  { value: 'physical', label: 'Physical goods' },
   { value: 'digital', label: 'Instant delivery' },
 ]
 

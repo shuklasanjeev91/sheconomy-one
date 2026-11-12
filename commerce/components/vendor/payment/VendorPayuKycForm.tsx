@@ -38,17 +38,17 @@ type VendorPayuKycFormProps = {
   onSubmitted?: () => void
 }
 
-type DocKind = 'pan' | 'bank' | 'gst'
+type DocKind = 'pan' | 'bank' | 'gst' | 'schedule_c'
 
-const LOCKED: PayuKycStatus[] = ['submitted', 'payu_pending', 'payu_verified', 'rejected']
+const LOCKED: PayuKycStatus[] = ['submitted', 'payu_pending', 'payu_verified']
 
 const STATUS_LABEL: Record<PayuKycStatus, string> = {
   draft: 'Not submitted',
   submitted: 'Under review',
-  changes_requested: 'Changes requested',
-  payu_pending: 'Payout setup in progress',
+  changes_requested: 'Changes requested — update and resubmit',
+  payu_pending: 'Payout verification in progress',
   payu_verified: 'Verified — you can sell',
-  rejected: 'Not approved',
+  rejected: 'Not approved — update documents and resubmit',
 }
 
 async function pickFile(): Promise<{ blob: Blob; mimeType: string; fileName: string } | null> {
@@ -106,6 +106,7 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
   const [panDocumentPath, setPanDocumentPath] = useState('')
   const [bankDocumentPath, setBankDocumentPath] = useState('')
   const [gstDocumentPath, setGstDocumentPath] = useState('')
+  const [scheduleCDocumentPath, setScheduleCDocumentPath] = useState('')
   const [gstHint, setGstHint] = useState<string | null>(null)
   const [panHint, setPanHint] = useState<string | null>(null)
   const [registry, setRegistry] = useState<GstRegistryResult | null>(null)
@@ -137,7 +138,8 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
     }
 
     if (kyc) {
-      const editable = kyc.status === 'draft' || kyc.status === 'changes_requested'
+      const editable =
+        kyc.status === 'draft' || kyc.status === 'changes_requested' || kyc.status === 'rejected'
       setStatus(kyc.status)
       setAdminNote(kyc.admin_note)
       setLegalName(kyc.legal_name)
@@ -156,6 +158,7 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
       setPanDocumentPath(kyc.pan_document_path ?? '')
       setBankDocumentPath(kyc.bank_document_path ?? '')
       setGstDocumentPath(kyc.gst_document_path ?? '')
+      setScheduleCDocumentPath(kyc.schedule_c_document_path ?? '')
     } else {
       setLegalName(profile?.full_name ?? '')
       setMobile(shop?.shop_phone_number || profile?.phone || '')
@@ -257,6 +260,24 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
     if (kind === 'pan') setPanDocumentPath(uploaded.data.path)
     if (kind === 'bank') setBankDocumentPath(uploaded.data.path)
     if (kind === 'gst') setGstDocumentPath(uploaded.data.path)
+    if (kind === 'schedule_c') setScheduleCDocumentPath(uploaded.data.path)
+
+    const { data: auth } = await supabase.auth.getUser()
+    await supabase.from('shop_kyc_documents').upsert(
+      {
+        shop_id: shopId,
+        kind,
+        storage_path: uploaded.data.path,
+        mime_type: file.mimeType,
+        file_size: file.blob.size,
+        uploaded_by: auth.user?.id ?? null,
+        payu_document_uuid: null,
+        payu_document_status: null,
+        rejection_reason: null,
+      },
+      { onConflict: 'shop_id,kind' },
+    )
+
     toast.show('Document uploaded', { tone: 'success' })
   }
 
@@ -278,6 +299,7 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
       panDocumentPath,
       bankDocumentPath,
       gstDocumentPath,
+      scheduleCDocumentPath,
     }
     const nextErrors = validatePayuKycInput(input)
     if (hasGst && gstHint && !gstHint.startsWith('Active') && !gstHint.startsWith('GSTIN verified')) {
@@ -304,12 +326,35 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
       pan_document_path: panDocumentPath,
       bank_document_path: bankDocumentPath,
       gst_document_path: hasGst ? gstDocumentPath : null,
+      schedule_c_document_path: scheduleCDocumentPath,
       gst_legal_name: registry?.legalName || null,
       gst_trade_name: registry?.tradeName || null,
       gst_status: registry?.status || (hasGst ? 'checksum' : null),
       status: 'submitted' as const,
     }
     const { error } = await supabase.from('shop_payu_kyc').upsert(payload, { onConflict: 'shop_id' })
+    if (!error) {
+      const docs: Array<{ kind: DocKind; path: string }> = [
+        { kind: 'pan', path: panDocumentPath },
+        { kind: 'bank', path: bankDocumentPath },
+        { kind: 'schedule_c', path: scheduleCDocumentPath },
+      ]
+      if (hasGst && gstDocumentPath) docs.push({ kind: 'gst', path: gstDocumentPath })
+      const { data: auth } = await supabase.auth.getUser()
+      await Promise.all(
+        docs.map((doc) =>
+          supabase.from('shop_kyc_documents').upsert(
+            {
+              shop_id: shopId,
+              kind: doc.kind,
+              storage_path: doc.path,
+              uploaded_by: auth.user?.id ?? null,
+            },
+            { onConflict: 'shop_id,kind' },
+          ),
+        ),
+      )
+    }
     setSaving(false)
     if (error) {
       toast.show('Could not submit payout details', { tone: 'danger', message: error.message })
@@ -342,14 +387,14 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
         <Text fontSize={13} fontWeight="700" color={ui.brand}>
           {STATUS_LABEL[status]}
         </Text>
-        {adminNote && status === 'changes_requested' ? (
+        {adminNote && (status === 'changes_requested' || status === 'rejected') ? (
           <Text fontSize={13} color={ui.textSecondary}>
             Review note: {adminNote}
           </Text>
         ) : null}
-        {status === 'rejected' && adminNote ? (
+        {status === 'payu_pending' ? (
           <Text fontSize={13} color={ui.textSecondary}>
-            {adminNote}
+            SHEconomy sent your details for payout verification. Selling unlocks when verification finishes.
           </Text>
         ) : null}
       </YStack>
@@ -472,6 +517,14 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
           {errors.bankDocumentPath ? (
             <Text fontSize={12} color="#B91C1C">
               {errors.bankDocumentPath}
+            </Text>
+          ) : null}
+          <Button size="$3" tone="outline" onPress={() => void upload('schedule_c')}>
+            {scheduleCDocumentPath ? 'Schedule C uploaded' : 'Upload signed Schedule C'}
+          </Button>
+          {errors.scheduleCDocumentPath ? (
+            <Text fontSize={12} color="#B91C1C">
+              {errors.scheduleCDocumentPath}
             </Text>
           ) : null}
           {hasGst ? (

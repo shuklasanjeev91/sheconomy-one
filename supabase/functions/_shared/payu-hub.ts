@@ -241,6 +241,132 @@ export async function updatePayuChildBank(
   return createdChildFromAccount(account)
 }
 
+export type PayuKycDocUploadResult = {
+  uuid: string | null
+  status: string | null
+  error: string | null
+}
+
+const PARTNER_BASE =
+  Deno.env.get('PAYU_PARTNER_BASE_URL')?.replace(/\/$/, '').trim() || 'https://partner.payu.in'
+
+/** Map SHEconomy doc kinds to PayU Partner KYC category/type names. */
+export function payuDocumentCategory(kind: 'pan' | 'bank' | 'schedule_c' | 'gst'): {
+  category: string
+  type: string
+} {
+  switch (kind) {
+    case 'pan':
+      return { category: 'PAN Card of Signing Authority', type: 'PAN Card' }
+    case 'bank':
+      return { category: 'Bank Account Proof', type: 'Canceled Cheque' }
+    case 'schedule_c':
+      return { category: 'Schedule C', type: 'Schedule C' }
+    case 'gst':
+      return { category: 'GST Certificate', type: 'GST Certificate' }
+  }
+}
+
+/**
+ * Upload one KYC document for a child merchant MID via Partner API.
+ * Falls back to onboarding product-account document endpoint on 404/405.
+ */
+export async function uploadPayuKycDocument(
+  config: PayuHubConfig,
+  accessToken: string,
+  input: {
+    mid: string
+    productAccountUuid?: string | null
+    kind: 'pan' | 'bank' | 'schedule_c' | 'gst'
+    fileName: string
+    mimeType: string
+    bytes: Uint8Array
+  },
+): Promise<PayuKycDocUploadResult> {
+  const mapping = payuDocumentCategory(input.kind)
+  const form = new FormData()
+  form.append('merchant[document_category]', mapping.category)
+  form.append('merchant[document_type]', mapping.type)
+  form.append(
+    'merchant[processed_document]',
+    new Blob([input.bytes], { type: input.mimeType || 'application/pdf' }),
+    input.fileName || `${input.kind}.pdf`,
+  )
+
+  const partnerUrl = `${PARTNER_BASE}/api/v3/merchants/${encodeURIComponent(input.mid)}/kyc_document`
+  let res = await fetch(partnerUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  })
+  let json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+
+  if (!res.ok && input.productAccountUuid && (res.status === 404 || res.status === 405 || res.status === 422)) {
+    const onboardingForm = new FormData()
+    onboardingForm.append('document_category', mapping.category)
+    onboardingForm.append('document_type', mapping.type)
+    onboardingForm.append(
+      'document',
+      new Blob([input.bytes], { type: input.mimeType || 'application/pdf' }),
+      input.fileName || `${input.kind}.pdf`,
+    )
+    res = await fetch(
+      `${config.onboardingBaseUrl}/api/v3/product_accounts/${encodeURIComponent(input.productAccountUuid)}/documents`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: onboardingForm,
+      },
+    )
+    json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  }
+
+  if (!res.ok) {
+    return {
+      uuid: null,
+      status: null,
+      error: payuErrorMessage(json, res.status),
+    }
+  }
+
+  const merchant =
+    json.merchant && typeof json.merchant === 'object'
+      ? (json.merchant as Record<string, unknown>)
+      : json
+  return {
+    uuid:
+      (typeof merchant.kyc_document_uuid === 'string' && merchant.kyc_document_uuid) ||
+      (typeof merchant.uuid === 'string' && merchant.uuid) ||
+      null,
+    status:
+      (typeof merchant.kyc_document_status === 'string' && merchant.kyc_document_status) ||
+      (typeof merchant.document_status === 'string' && merchant.document_status) ||
+      'DOCUMENT_SUBMITTED',
+    error: null,
+  }
+}
+
+/** GET product account details for KYC / onboarding status polling. */
+export async function fetchPayuProductAccount(
+  config: PayuHubConfig,
+  accessToken: string,
+  productAccountUuid: string,
+): Promise<PayuCreatedChild & { raw: Record<string, unknown> }> {
+  const res = await fetch(
+    `${config.onboardingBaseUrl}/api/v3/product_accounts/${encodeURIComponent(productAccountUuid)}`,
+    {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  )
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  const account = readProductAccount(json) ?? (json as Record<string, unknown>)
+  if (!res.ok) {
+    throw new Error(payuErrorMessage(json, res.status))
+  }
+  return { ...createdChildFromAccount(account), raw: account }
+}
+
 /** Prefer shop-id match, then email, then phone. */
 export async function findPayuChildForShop(
   config: PayuHubConfig,

@@ -332,6 +332,10 @@ const LISTING_TABLE_FIELDS: (keyof ListingInsert)[] = [
   'description',
   'listing_type',
   'price',
+  'mrp',
+  'price_includes_tax',
+  'tax_percent',
+  'product_info',
   'quantity',
   'category',
   'is_featured',
@@ -385,8 +389,14 @@ export function prepareListingDataForSubmission(formData: Partial<ListingFormDat
 
   // Coerce numeric fields.
   if (payload.price !== undefined) payload.price = toNumberOrNull(payload.price) ?? 0
+  if (payload.mrp !== undefined) payload.mrp = toNumberOrNull(payload.mrp)
+  if (payload.tax_percent !== undefined) payload.tax_percent = toNumberOrNull(payload.tax_percent)
   for (const field of ['quantity', 'stock', 'weight', 'digital_file_size', 'download_limit', 'booking_duration_minutes', 'max_attendees']) {
     if (payload[field] !== undefined) payload[field] = toNumberOrNull(payload[field])
+  }
+
+  if (payload.price_includes_tax !== undefined) {
+    payload.price_includes_tax = Boolean(payload.price_includes_tax)
   }
 
   // Clean tags array.
@@ -397,6 +407,12 @@ export function prepareListingDataForSubmission(formData: Partial<ListingFormDat
   // Ensure JSON objects are objects.
   if (payload.listing_metadata && typeof payload.listing_metadata !== 'object') {
     payload.listing_metadata = {}
+  }
+  if (payload.product_info && typeof payload.product_info !== 'object') {
+    payload.product_info = {}
+  }
+  if (payload.product_info == null) {
+    payload.product_info = {}
   }
 
   return payload as ListingInsert

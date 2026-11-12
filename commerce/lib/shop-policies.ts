@@ -78,7 +78,7 @@ function buildShippingSection(
   }
 
   if (fulfillment.shipsFromLabel) points.push(fulfillment.shipsFromLabel)
-  if (fulfillment.providerLabel) points.push(`Fulfilled via ${fulfillment.providerLabel}`)
+  if (fulfillment.providerLabel) points.push('Tracked shipping')
 
   const details = parseReturnsPolicyNote(profile?.delivery_metadata)
 

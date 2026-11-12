@@ -70,7 +70,7 @@ export function MeetingAiDraftPanel({ timeZone, onApply, initialPrompt }: Meetin
         maxParticipants: draft.maxParticipants,
       })
       if (fromPrompt) setPrompt(fromPrompt)
-      toast.show(draft.usedFallback ? 'Draft ready' : 'AI draft ready', {
+      toast.show('SHERPA draft ready', {
         tone: 'success',
         message: 'Review the title, time, and agenda below.',
       })

@@ -80,10 +80,10 @@ export function searchFieldStyle(ui: AppUiTokens) {
 }
 
 /**
- * Etsy-style omnibox shell — white pill, strong border, brand CTA slot.
+ * Marketplace omnibox shell — white pill, strong border, brand CTA slot.
  * Use with an overflow:hidden parent and a flush search button on the right.
  */
-export function etsySearchFieldStyle(ui: AppUiTokens, focused?: boolean) {
+export function marketplaceSearchFieldStyle(ui: AppUiTokens, focused?: boolean) {
   return {
     backgroundColor: ui.surface,
     borderRadius: 999,

@@ -187,22 +187,20 @@ export function buildListingFulfillmentInfo(input: ListingFulfillmentInput): Lis
   let shippingCostLabel = 'Shipping calculated at checkout'
 
   if (profile?.fixed_fee != null && profile.fixed_fee <= 0) {
-    shippingCostLabel = 'Free shipping'
+    shippingCostLabel = 'FREE delivery'
   } else if (
     profile?.free_shipping_threshold != null &&
     input.price >= profile.free_shipping_threshold
   ) {
-    shippingCostLabel = 'Free shipping'
+    shippingCostLabel = 'FREE delivery'
   } else if (profile?.fixed_fee != null && profile.fixed_fee > 0) {
     shippingCostLabel = `${formatCurrency(profile.fixed_fee, currency)} shipping`
   } else if (profile?.shipping_rate_type === 'free') {
-    shippingCostLabel = 'Free shipping'
-  } else if (input.shopShipping?.rail === 'shedelivery' || input.shopShipping?.rail === 'own_account') {
-    shippingCostLabel = input.shopShipping.providerLabel
-      ? `Shipping via ${input.shopShipping.providerLabel}`
-      : 'Seller ships'
+    shippingCostLabel = 'FREE delivery'
+  } else if (input.shopShipping?.rail === 'own_account') {
+    shippingCostLabel = 'Seller ships'
   } else if (input.shopShipping?.providerLabel) {
-    shippingCostLabel = `Shipping via ${input.shopShipping.providerLabel}`
+    shippingCostLabel = 'Tracked shipping'
   }
 
   const shipsFrom =
@@ -216,19 +214,13 @@ export function buildListingFulfillmentInfo(input: ListingFulfillmentInput): Lis
   const hasDeliveryEstimate = transit != null && (processingMin + transit.min) >= 0
 
   if (!hasDeliveryEstimate) {
-    const fallbackLabel = providerLabel
-      ? `Ships via ${providerLabel}`
-      : shipsFrom
-        ? `Ships from ${shipsFrom}`
-        : 'Ships to you'
-
     return {
       kind: 'physical',
       processingLabel:
         processingMax > 0
           ? `Processing time: ${formatProcessingTime(processingMin, processingMax)}`
           : 'Processing time varies by shop',
-      estimatedDeliveryLabel: fallbackLabel,
+      estimatedDeliveryLabel: 'Delivery estimate after pin code',
       shippingCostLabel,
       shipsFromLabel: shipsFrom ? `Ships from ${shipsFrom}` : undefined,
       returnsLabel: listingMeta.returns_policy ?? profileMeta.returns_policy,
@@ -259,16 +251,12 @@ export function getListingCardFulfillmentLabel(input: ListingFulfillmentInput): 
   if (info.kind === 'digital') return 'Instant download'
 
   if (info.hasDeliveryEstimate) {
-    const estimate = info.estimatedDeliveryLabel.replace('Estimated delivery ', 'Est. delivery ')
-    if (info.providerLabel && info.providerLabel !== 'Seller ships') {
-      return estimate
-    }
-    return estimate
+    return info.estimatedDeliveryLabel.replace('Estimated delivery ', 'Est. delivery ')
   }
 
-  if (info.providerLabel) return `Ships via ${info.providerLabel}`
-  if (info.shipsFromLabel) return info.shipsFromLabel.replace('Ships from ', 'Ships from ')
-  return 'Ships to you'
+  if (info.providerLabel) return 'Tracked shipping'
+  if (info.shipsFromLabel) return info.shipsFromLabel
+  return null
 }
 
 export function buildListingFulfillmentInputFromSummary(listing: {

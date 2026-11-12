@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Platform } from 'react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { Linking, Platform } from 'react-native'
 
 import {
   Avatar,
@@ -24,7 +24,13 @@ import { formatCustomerContactPhone } from '~/features/auth/services/account-con
 import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
 import { openMailtoLink } from '~/lib/platform/openMailto'
 import { openExternalUrl, safeHttpUrl } from '~/lib/platform/openUrl'
-import { DELIVERY_STATUS_DISPLAY } from '~/lib/orders/order.constants'
+import {
+  DELIVERY_STATUS_DISPLAY,
+  ORDER_STATUS,
+  RETURN_REJECT_REASON,
+  RETURN_REJECT_REASON_LABELS,
+  type ReturnRejectReason,
+} from '~/lib/orders/order.constants'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderPayment } from '~/lib/orders/payment.type'
 import type { OrderAddressSummary, VendorOrderItem } from '~/lib/orders/vendor-orders.type'
@@ -45,13 +51,7 @@ import {
   confirmOrderReturnReceived,
   resolveOrderIssueRequest,
 } from '~/commerce/lib/customer-order-trust'
-import { autoBookReturnPickup } from '~/commerce/lib/vendor-return-pickup'
 import type { VendorInboxCoordination } from '~/commerce/lib/vendor-inbox-notes'
-import {
-  RETURN_REJECT_REASON,
-  RETURN_REJECT_REASON_LABELS,
-  type ReturnRejectReason,
-} from '~/lib/orders/order.constants'
 import {
   getVendorIssueActions,
   type VendorIssueAction,
@@ -60,6 +60,12 @@ import {
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import { VendorActionButton } from '~/commerce/components/vendor/VendorActionButton'
 import { getVendorOrderActions, type VendorOrderAction } from '~/commerce/components/vendor/vendor-order-actions'
+import { vendorRoutes } from '~/lib/routes'
+import { AppLink } from '~/components/navigation/AppLink'
+import {
+  canAffordEasyshipShip,
+  fetchOrderEasyshipFreight,
+} from '~/lib/vendor-shipping/easyship-shipping-credit'
 
 const PANEL_WIDTH = 460
 
@@ -74,12 +80,18 @@ type VendorOrderDetailDrawerProps = {
   payments: OrderPayment[]
   issues?: EnrichedOrderIssue[]
   role: string | null
+  shopId?: string | null
+  easyshipCreditBalance?: number | null
+  easyshipCreditCurrency?: string
+  easyshipCanAfford?: boolean
+  easyshipSubmitting?: boolean
   onClose: () => void
   onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
   /** Refresh issues / item after seller resolves a request. */
   onIssuesChanged?: () => void
   /** Open Add Tracking for outbound ship or return pickup. */
   onRequestTracking?: (item: VendorOrderItem, mode: 'outbound' | 'return') => void
+  onProcessEasyship?: (item: VendorOrderItem) => void
 }
 
 function addressLines(address: OrderAddressSummary | null | undefined): string[] {
@@ -103,10 +115,16 @@ export function VendorOrderDetailDrawer({
   payments,
   issues = [],
   role,
+  shopId,
+  easyshipCreditBalance,
+  easyshipCreditCurrency,
+  easyshipCanAfford,
+  easyshipSubmitting,
   onClose,
   onAdvance,
   onIssuesChanged,
   onRequestTracking,
+  onProcessEasyship,
 }: VendorOrderDetailDrawerProps) {
   const toast = useAppToast()
 
@@ -148,10 +166,16 @@ export function VendorOrderDetailDrawer({
             payments={payments}
             issues={issues}
             role={role}
+            shopId={shopId}
+            easyshipCreditBalance={easyshipCreditBalance}
+            easyshipCreditCurrency={easyshipCreditCurrency}
+            easyshipCanAfford={easyshipCanAfford}
+            easyshipSubmitting={easyshipSubmitting}
             onClose={onClose}
             onAdvance={onAdvance}
             onIssuesChanged={onIssuesChanged}
             onRequestTracking={onRequestTracking}
+            onProcessEasyship={onProcessEasyship}
             onContact={() => {
               const email = item.orders?.profiles?.email
               if (email) void openMailtoLink(`mailto:${email}`)
@@ -193,10 +217,16 @@ type DrawerBodyProps = {
   payments: OrderPayment[]
   issues: EnrichedOrderIssue[]
   role: string | null
+  shopId?: string | null
+  easyshipCreditBalance?: number | null
+  easyshipCreditCurrency?: string
+  easyshipCanAfford?: boolean
+  easyshipSubmitting?: boolean
   onClose: () => void
   onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
   onIssuesChanged?: () => void
   onRequestTracking?: (item: VendorOrderItem, mode: 'outbound' | 'return') => void
+  onProcessEasyship?: (item: VendorOrderItem) => void
   onContact: () => void
   onDownload: () => void
 }
@@ -209,14 +239,22 @@ function DrawerBody({
   payments,
   issues,
   role,
+  shopId,
+  easyshipCreditBalance,
+  easyshipCreditCurrency = 'INR',
+  easyshipCanAfford,
+  easyshipSubmitting,
   onClose,
   onAdvance,
   onIssuesChanged,
   onRequestTracking,
+  onProcessEasyship,
   onContact,
   onDownload,
 }: DrawerBodyProps) {
   const toast = useAppToast()
+  const [easyshipFreight, setEasyshipFreight] = useState<number | null>(null)
+  const [quoteLoading, setQuoteLoading] = useState(false)
   const [note, setNote] = useState('')
   const [rejectReasonCode, setRejectReasonCode] = useState<string | null>(null)
   const [confirmingReturn, setConfirmingReturn] = useState(false)
@@ -246,6 +284,38 @@ function DrawerBody({
   const actions = useMemo(() => getVendorOrderActions(item.item_status, role), [item.item_status, role])
   const payment = payments[0] ?? null
 
+  const openForShip = [ORDER_STATUS.PENDING, ORDER_STATUS.CONFIRMED, ORDER_STATUS.PROCESSING].includes(
+    item.item_status as typeof ORDER_STATUS.PENDING,
+  ) && !trackingCode
+
+  const canProcessEasyship = Boolean(onProcessEasyship) && openForShip
+
+  const freightAmount =
+    easyshipFreight ??
+    (order?.shipping_amount != null ? Number(order.shipping_amount) : null)
+  const affordable = canAffordEasyshipShip(
+    easyshipCreditBalance,
+    freightAmount,
+  ) && (easyshipCanAfford !== false)
+
+  useEffect(() => {
+    if (!order?.id) {
+      setEasyshipFreight(null)
+      return
+    }
+    let active = true
+    setQuoteLoading(true)
+    void fetchOrderEasyshipFreight(order.id)
+      .then((amount) => {
+        if (active) setEasyshipFreight(amount)
+      })
+      .finally(() => {
+        if (active) setQuoteLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [order?.id])
   async function openDoc(url: string, label: string) {
     const opened = await openExternalUrl(url)
     if (!opened) {
@@ -312,20 +382,13 @@ function DrawerBody({
 
         const isReturnOrExchange =
           isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)
-        if (action.decision === 'accept' && isReturnOrExchange && issue.order_item_id) {
-          const pickup = await autoBookReturnPickup(issue.order_item_id)
-          toast.show('Request accepted', {
-            tone: 'success',
-            message:
-              pickup.status === 'booked'
-                ? `Reverse pickup booked automatically — AWB ${pickup.awb}.`
-                : 'Approved. Auto-pickup was unavailable — arrange the return pickup with your courier.',
-          })
-        } else {
-          toast.show(action.decision === 'accept' ? 'Request accepted' : 'Request declined', {
-            tone: 'success',
-          })
-        }
+        toast.show(action.decision === 'accept' ? 'Request accepted' : 'Request declined', {
+          tone: 'success',
+          message:
+            action.decision === 'accept' && isReturnOrExchange
+              ? 'Arrange return pickup with your courier, then paste the AWB under Arrange return pickup.'
+              : undefined,
+        })
       } else if (action.kind === 'return-received') {
         setConfirmingReturn(true)
         const result = await confirmOrderReturnReceived({
@@ -341,7 +404,7 @@ function DrawerBody({
             tone: 'success',
             message: result.data?.replacementItemId
               ? 'Add tracking on the new replacement line when you ship it.'
-              : 'PayU will process the refund to the original payment method.',
+              : 'The refund will be sent to the original payment method.',
           },
         )
       }
@@ -769,6 +832,44 @@ function DrawerBody({
           </Section>
         ) : null}
 
+        <Section ui={ui} label="Shipping credit">
+          <YStack gap="$2">
+            <SummaryRow
+              ui={ui}
+              label="Available credit"
+              value={
+                easyshipCreditBalance != null && Number.isFinite(easyshipCreditBalance)
+                  ? `${easyshipCreditCurrency} ${Number(easyshipCreditBalance).toFixed(2)}`
+                  : '—'
+              }
+            />
+            <SummaryRow
+              ui={ui}
+              label="Order freight"
+              value={
+                quoteLoading
+                  ? '…'
+                  : freightAmount != null
+                    ? formatOrderAmount(freightAmount, currency)
+                    : '—'
+              }
+            />
+            {!affordable && canProcessEasyship ? (
+              <YStack gap="$2" marginTop="$1">
+                <Text fontSize={12} color={ui.danger} lineHeight={18}>
+                  Shipping credit is below this order&apos;s freight. Top up before buying a
+                  shipping label.
+                </Text>
+                <AppLink href={vendorRoutes.wallet}>
+                  <Button tone="outline" size="$3">
+                    Open shipping credit
+                  </Button>
+                </AppLink>
+              </YStack>
+            ) : null}
+          </YStack>
+        </Section>
+
         {/* Payment summary */}
         <Section ui={ui} label="Payment Summary">
           <YStack gap="$2">
@@ -813,6 +914,27 @@ function DrawerBody({
         borderTopColor={ui.borderSubtle}
         backgroundColor={ui.surface}
       >
+        {canProcessEasyship ? (
+          <YStack gap="$2">
+            <Button
+              tone="primary"
+              size="$3"
+              borderRadius={999}
+              disabled={updating || easyshipSubmitting || !affordable}
+              icon={<Icons.Truck size={15} />}
+              onPress={() => onProcessEasyship?.(item)}
+            >
+              {easyshipSubmitting ? 'Creating shipping label…' : 'Create shipping label'}
+            </Button>
+            {!affordable ? (
+              <AppLink href={vendorRoutes.wallet}>
+                <Button tone="outline" size="$3" borderRadius={999}>
+                  Top up shipping credit
+                </Button>
+              </AppLink>
+            ) : null}
+          </YStack>
+        ) : null}
         {actions.length > 0 ? (
           <XStack gap="$2">
             {actions.map((action) => (

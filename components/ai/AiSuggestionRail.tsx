@@ -7,7 +7,6 @@ import { radius } from '~/config/tokens'
 import {
   aiProductLabel,
   fetchAiSuggestions,
-  localAiSuggestionChips,
   sendAiSuggestionFeedback,
   type AiContext,
   type AiProduct,
@@ -15,7 +14,7 @@ import {
 } from '~/lib/ai'
 import { helpHref } from '~/lib/help/types'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { useAiAssistOptional } from '~/providers/AiAssistProvider'
+import { useAiAssistOptional } from '~/providers/ai-assist-context'
 import { navigateApp } from '~/lib/platform/navigate'
 
 type AiSuggestionRailProps = {
@@ -62,21 +61,16 @@ export function AiSuggestionRail({
     }
   }, [product, contextPage])
 
-  const localSuggestions: AiSuggestion[] = localAiSuggestionChips(product, contextPage)
-  const visible = suggestions.length > 0 ? suggestions : localSuggestions
+  const visible = suggestions
 
   function onChip(suggestion: AiSuggestion) {
     const href = suggestion.href?.trim()
     if (href) {
-      if (!suggestion.id.startsWith('local-')) {
-        void sendAiSuggestionFeedback({ suggestionId: suggestion.id, helpful: true }).catch(() => {})
-      }
+      void sendAiSuggestionFeedback({ suggestionId: suggestion.id, helpful: true }).catch(() => {})
       navigateApp(href as never)
       return
     }
-    if (!suggestion.id.startsWith('local-')) {
-      void sendAiSuggestionFeedback({ suggestionId: suggestion.id, helpful: true }).catch(() => {})
-    }
+    void sendAiSuggestionFeedback({ suggestionId: suggestion.id, helpful: true }).catch(() => {})
     if (ai) {
       ai.openAssist({
         product,
@@ -119,6 +113,10 @@ export function AiSuggestionRail({
         <XStack paddingVertical="$2">
           <Spinner size="small" color={ui.brand} />
         </XStack>
+      ) : visible.length === 0 ? (
+        <Text fontSize={12} color={ui.textMuted}>
+          {AI_NAME} has no suggestions right now. Tap Open to ask.
+        </Text>
       ) : (
         <HorizontalScrollRow gap="$2">
           {visible.map((suggestion) => (

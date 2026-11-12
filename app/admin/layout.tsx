@@ -75,6 +75,20 @@ const NAV_GROUPS: AdminNavGroup[] = [
         href: '/admin/shops' as Href,
       },
       {
+        id: 'sellers-ops',
+        label: 'Sellers ops',
+        description: 'KYC, PayU, Easyship credit, dispute counts.',
+        icon: Icons.Store,
+        href: '/admin/sellers-ops' as Href,
+      },
+      {
+        id: 'payu-kyc',
+        label: 'Payout KYC',
+        description: 'Approve seller payout applications for PayU.',
+        icon: Icons.CreditCard,
+        href: '/admin/payu-kyc' as Href,
+      },
+      {
         id: 'products',
         label: 'Products',
         description: 'Catalog, listings, and inventory.',
@@ -89,11 +103,32 @@ const NAV_GROUPS: AdminNavGroup[] = [
         href: '/admin/orders' as Href,
       },
       {
+        id: 'ops-orders',
+        label: 'Order ops',
+        description: 'Search PayU / AWB, retry split, resync, release.',
+        icon: Icons.PackageSearch,
+        href: '/admin/ops-orders' as Href,
+      },
+      {
+        id: 'disputes',
+        label: 'Disputes',
+        description: 'Open issues with SLA timers.',
+        icon: Icons.AlertTriangle,
+        href: '/admin/disputes' as Href,
+      },
+      {
         id: 'payments',
         label: 'Payments',
         description: 'Payouts, refunds, and transactions.',
         icon: Icons.CreditCard,
         href: '/admin/payments' as Href,
+      },
+      {
+        id: 'reconciliation',
+        label: 'Reconciliation',
+        description: 'PayU vs pending settlements matched / mismatch.',
+        icon: Icons.BarChart3,
+        href: '/admin/reconciliation' as Href,
       },
       {
         id: 'cart',
