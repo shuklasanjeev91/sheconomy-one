@@ -257,13 +257,15 @@ export function VendorOrdersScreen() {
     setOrderIssues([])
   }
 
-  const handleAdvance = async (item: VendorOrderItem, target: VendorOrderAction['target']) => {
-    // Shipping requires tracking info: open the Add-Tracking drawer instead of
-    // advancing straight to "shipped". The item is only marked shipped once a
-    // delivery record (with a valid tracking number) is created.
-    if (target === ORDER_STATUS.SHIPPED) {
-      setTrackingMode('outbound')
-      setTrackingItem(item)
+  const handleAdvance = async (
+    item: VendorOrderItem,
+    target: VendorOrderAction['target'],
+    action?: VendorOrderAction,
+  ) => {
+    // Amazon-style Fulfill: buy EasyShip label, auto-add tracking, notify buyer.
+    // Manual tracking drawer remains available from the order detail if needed.
+    if (target === ORDER_STATUS.SHIPPED || action?.kind === 'fulfill') {
+      await handleShipWithEasyship(item)
       return
     }
 
@@ -745,7 +747,11 @@ type TableProps = {
   role: string | null
   updating: boolean
   onOpen: (item: VendorOrderItem) => void
-  onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
+  onAdvance: (
+    item: VendorOrderItem,
+    target: VendorOrderAction['target'],
+    action?: VendorOrderAction,
+  ) => void
 }
 
 function OrdersTable({ ui, orders, role, updating, onOpen, onAdvance }: TableProps) {
@@ -808,7 +814,11 @@ type RowProps = {
   updating: boolean
   isLast: boolean
   onOpen: (item: VendorOrderItem) => void
-  onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
+  onAdvance: (
+    item: VendorOrderItem,
+    target: VendorOrderAction['target'],
+    action?: VendorOrderAction,
+  ) => void
 }
 
 function OrderRow({ ui, item, role, updating, isLast, onOpen, onAdvance }: RowProps) {
@@ -892,7 +902,7 @@ function OrderRow({ ui, item, role, updating, isLast, onOpen, onAdvance }: RowPr
               ui={ui}
               action={action}
               disabled={updating}
-              onPress={() => onAdvance(item, action.target)}
+              onPress={() => onAdvance(item, action.target, action)}
             />
           ))
         ) : (
@@ -922,7 +932,11 @@ type CardProps = {
   role: string | null
   updating: boolean
   onOpen: (item: VendorOrderItem) => void
-  onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
+  onAdvance: (
+    item: VendorOrderItem,
+    target: VendorOrderAction['target'],
+    action?: VendorOrderAction,
+  ) => void
 }
 
 function OrderCard({ ui, item, role, updating, onOpen, onAdvance }: CardProps) {
@@ -982,7 +996,7 @@ function OrderCard({ ui, item, role, updating, onOpen, onAdvance }: CardProps) {
             action={action}
             disabled={updating}
             flex={1}
-            onPress={() => onAdvance(item, action.target)}
+            onPress={() => onAdvance(item, action.target, action)}
           />
         ))}
         <Button tone="outline" size="$3" borderRadius={999} flex={actions.length > 0 ? undefined : 1} onPress={() => onOpen(item)}>

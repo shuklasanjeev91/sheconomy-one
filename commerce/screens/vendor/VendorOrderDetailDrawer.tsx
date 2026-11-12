@@ -921,11 +921,14 @@ function DrawerBody({
               size="$3"
               borderRadius={999}
               disabled={updating || easyshipSubmitting || !affordable}
-              icon={<Icons.Truck size={15} />}
+              icon={<Icons.Package size={15} />}
               onPress={() => onProcessEasyship?.(item)}
             >
-              {easyshipSubmitting ? 'Creating shipping label…' : 'Create shipping label'}
+              {easyshipSubmitting ? 'Fulfilling…' : 'Fulfill order'}
             </Button>
+            <Text fontSize={11} color={ui.textMuted} textAlign="center" lineHeight={16}>
+              Buys the shipping label, adds tracking automatically, and notifies the customer.
+            </Text>
             {!affordable ? (
               <AppLink href={vendorRoutes.wallet}>
                 <Button tone="outline" size="$3" borderRadius={999}>
@@ -935,9 +938,11 @@ function DrawerBody({
             ) : null}
           </YStack>
         ) : null}
-        {actions.length > 0 ? (
+        {actions.filter((action) => !(canProcessEasyship && action.kind === 'fulfill')).length > 0 ? (
           <XStack gap="$2">
-            {actions.map((action) => (
+            {actions
+              .filter((action) => !(canProcessEasyship && action.kind === 'fulfill'))
+              .map((action) => (
               <VendorActionButton
                 key={action.key}
                 ui={ui}
