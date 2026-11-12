@@ -5,7 +5,7 @@
  */
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js')
 
-const SHELL_CACHE = 'sheconomy-pwa-shell-v10'
+const SHELL_CACHE = 'sheconomy-pwa-shell-v11'
 const PRECACHE_URLS = [
   '/offline.html',
   '/manifest.webmanifest',

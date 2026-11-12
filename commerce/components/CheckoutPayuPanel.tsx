@@ -179,6 +179,9 @@ export function CheckoutPayuPanel({
   const showQrForMode = payuUpiShouldShowQr(mode)
   const showPicker = !hideMethodPicker && !autoStart
   const authActive = Boolean(acsHtml || intentUri)
+  /** Card OTP locks the method form; UPI QR replaces it entirely (full-width focus). */
+  const acsActive = Boolean(acsHtml)
+  const qrActive = Boolean(intentUri)
   const controlsLocked = authActive || busy || awaitingVerify
   const paidOnceRef = useRef(false)
   const [methodSections, setMethodSections] = useState<PayuCheckoutSection[]>(() =>
@@ -773,32 +776,158 @@ export function CheckoutPayuPanel({
       </YStack>
     ) : null
 
-  const paymentForm = (
+  const clearQrAndReturnToMethods = () => {
+    setIntentUri(null)
+    setNativeLaunchHint(null)
+    setError(null)
+    setAwaitingVerify(false)
+    autoStartedRef.current = false
+  }
+
+  const qrFocusView =
+    intentUri && !collapsed ? (
+      <YStack
+        gap="$4"
+        alignItems="center"
+        padding={isDesktop ? '$5' : '$4'}
+        borderRadius={16}
+        borderWidth={1}
+        borderColor={borderColor}
+        backgroundColor={ui.surfaceMuted}
+        width="100%"
+        alignSelf="stretch"
+        minWidth={0}
+      >
+        <YStack alignItems="center" gap="$1" width="100%">
+          <Text fontSize={18} fontWeight="800" color={ui.text} textAlign="center">
+            Scan QR to pay
+          </Text>
+          {amountLabel ? (
+            <Text fontSize={28} fontWeight="800" color={ui.text} textAlign="center">
+              {amountLabel}
+            </Text>
+          ) : null}
+          <Text fontSize={14} fontWeight="600" color={ui.text} textAlign="center">
+            {showQrForMode
+              ? `Scan with ${modeMeta.shortLabel} or any UPI app`
+              : `Open ${modeMeta.label} or scan QR`}
+          </Text>
+        </YStack>
+
+        <YStack
+          padding={isDesktop ? '$5' : '$4'}
+          backgroundColor="#ffffff"
+          borderRadius={16}
+          alignItems="center"
+          justifyContent="center"
+          borderWidth={1}
+          borderColor={borderColor}
+          width="100%"
+          maxWidth={420}
+        >
+          {QRCode ? (
+            <QRCode
+              value={intentUri}
+              size={isDesktop ? 300 : showQrForMode ? 260 : 220}
+              backgroundColor="#ffffff"
+              color="#111111"
+            />
+          ) : (
+            <Text fontSize={12} color={secondaryColor} textAlign="center">
+              QR unavailable — open your UPI app from the button below.
+            </Text>
+          )}
+        </YStack>
+
+        <Text fontSize={13} color={secondaryColor} textAlign="center" lineHeight={19} maxWidth={420}>
+          Keep this screen open until payment succeeds. After paying in your UPI app, tap I’ve paid.
+        </Text>
+
+        {nativeLaunchHint && !error ? (
+          <Text fontSize={13} color={secondaryColor} textAlign="center" lineHeight={18}>
+            {nativeLaunchHint}
+          </Text>
+        ) : null}
+
+        {error ? (
+          <Text fontSize={13} color={ui.danger} textAlign="center">
+            {error}
+          </Text>
+        ) : null}
+
+        {txnid ? (
+          <Text fontSize={11} color={secondaryColor}>
+            Txn {txnid}
+          </Text>
+        ) : null}
+
+        {awaitingVerify ? (
+          <YStack alignItems="center" gap="$2">
+            <Spinner size="large" />
+            <Text fontSize={12} color={secondaryColor}>
+              Verifying with SHEPay…
+            </Text>
+          </YStack>
+        ) : (
+          <XStack gap="$2" flexWrap="wrap" justifyContent="center" width="100%">
+            {Platform.OS !== 'web' ? (
+              <Button
+                backgroundColor={brandColor}
+                color={ui.onBrand}
+                borderRadius={999}
+                onPress={() => {
+                  void launchPayuUpiIntent(intentUri, mode).then((opened) => {
+                    setNativeLaunchHint(
+                      opened
+                        ? `Opened ${modeMeta.shortLabel}. Complete payment, then tap I’ve paid.`
+                        : `Couldn’t open ${modeMeta.shortLabel}. Scan the QR instead.`,
+                    )
+                  })
+                }}
+              >
+                Open {modeMeta.shortLabel}
+              </Button>
+            ) : null}
+            <Button
+              backgroundColor={brandColor}
+              color={ui.onBrand}
+              borderRadius={999}
+              minWidth={160}
+              onPress={() => void handleIvePaid()}
+            >
+              I’ve paid {amountLabel ? amountLabel : ''}
+            </Button>
+            <Button tone="outline" borderRadius={999} onPress={clearQrAndReturnToMethods}>
+              Change payment method
+            </Button>
+            <Button tone="outline" borderRadius={999} onPress={onCancel} disabled={busy}>
+              Cancel
+            </Button>
+          </XStack>
+        )}
+      </YStack>
+    ) : null
+
+  const paymentForm = qrActive ? (
+    qrFocusView
+  ) : (
     <YStack
       gap="$3"
       width="100%"
       flexShrink={0}
       minWidth={0}
-      opacity={authActive ? 0.45 : 1}
-      pointerEvents={authActive ? 'none' : 'auto'}
+      opacity={acsActive ? 0.45 : 1}
+      pointerEvents={acsActive ? 'none' : 'auto'}
     >
-      {(intentUri || authActive) && !collapsed ? (
+      {acsActive && !collapsed ? (
         <YStack gap="$1">
           <Text fontSize={18} fontWeight="800" color={ui.text}>
-            {intentUri && showQrForMode
-              ? 'Scan QR to pay'
-              : intentUri
-                ? `Pay with ${modeMeta.label}`
-                : 'Complete bank authentication →'}
+            Complete bank authentication →
           </Text>
           <Text fontSize={13} color={secondaryColor} lineHeight={18}>
-            {authActive
-              ? isDesktop
-                ? 'Your card details are locked while you finish OTP on the right.'
-                : 'Your card details are locked while you finish OTP below.'
-              : amountLabel
-                ? `Open ${modeMeta.shortLabel} or any UPI app and scan to pay ${amountLabel}.`
-                : `Open ${modeMeta.shortLabel} or any UPI app and scan this QR to complete payment.`}
+            {isDesktop
+              ? 'Your card details are locked while you finish OTP on the right.'
+              : 'Your card details are locked while you finish OTP below.'}
           </Text>
         </YStack>
       ) : null}
@@ -904,98 +1033,6 @@ export function CheckoutPayuPanel({
 
       {!isDesktop ? acsWebFrame : null}
       {!isDesktop ? acsNativeFrame : null}
-
-      {intentUri ? (
-        <YStack
-          gap="$3"
-          alignItems="center"
-          padding="$4"
-          borderRadius={16}
-          borderWidth={1}
-          borderColor={borderColor}
-          backgroundColor={ui.surfaceMuted}
-          width="100%"
-        >
-          {amountLabel ? (
-            <YStack alignItems="center" gap="$1">
-              <Text fontSize={12} color={secondaryColor} fontWeight="600">
-                Amount to pay
-              </Text>
-              <Text fontSize={28} fontWeight="800" color={ui.text}>
-                {amountLabel}
-              </Text>
-            </YStack>
-          ) : null}
-
-          <Text fontSize={14} fontWeight="700" color={ui.text} textAlign="center">
-            {showQrForMode
-              ? `Scan with ${modeMeta.shortLabel} or any UPI app`
-              : `Open ${modeMeta.label} or scan QR`}
-          </Text>
-
-          <YStack
-            padding="$4"
-            backgroundColor="#ffffff"
-            borderRadius={16}
-            alignItems="center"
-            justifyContent="center"
-            borderWidth={1}
-            borderColor={borderColor}
-          >
-            {QRCode ? (
-              <QRCode
-                value={intentUri}
-                size={showQrForMode ? 260 : 200}
-                backgroundColor="#ffffff"
-                color="#111111"
-              />
-            ) : (
-              <Text fontSize={12} color={secondaryColor} textAlign="center">
-                QR unavailable — open your UPI app from the button below.
-              </Text>
-            )}
-          </YStack>
-
-          <Text fontSize={12} color={secondaryColor} textAlign="center" lineHeight={18}>
-            Keep this screen open until payment succeeds. After paying in your UPI app, tap I’ve paid.
-          </Text>
-
-          {txnid ? (
-            <Text fontSize={11} color={secondaryColor}>
-              Txn {txnid}
-            </Text>
-          ) : null}
-
-          <XStack gap="$2" flexWrap="wrap" justifyContent="center">
-            {Platform.OS !== 'web' ? (
-              <Button
-                backgroundColor={brandColor}
-                color={ui.onBrand}
-                borderRadius={999}
-                onPress={() => {
-                  void launchPayuUpiIntent(intentUri, mode).then((opened) => {
-                    setNativeLaunchHint(
-                      opened
-                        ? `Opened ${modeMeta.shortLabel}. Complete payment, then tap I’ve paid.`
-                        : `Couldn’t open ${modeMeta.shortLabel}. Scan the QR instead.`,
-                    )
-                  })
-                }}
-              >
-                Open {modeMeta.shortLabel}
-              </Button>
-            ) : null}
-            <Button
-              backgroundColor={brandColor}
-              color={ui.onBrand}
-              borderRadius={999}
-              onPress={() => void handleIvePaid()}
-            >
-              I’ve paid {amountLabel ? amountLabel : ''}
-            </Button>
-          </XStack>
-        </YStack>
-      ) : null}
     </YStack>
   )
 
@@ -1011,7 +1048,7 @@ export function CheckoutPayuPanel({
       flexShrink={0}
       alignSelf="stretch"
     >
-      {isDesktop && authActive && Platform.OS === 'web' ? (
+      {isDesktop && acsActive && Platform.OS === 'web' ? (
         <XStack gap="$4" width="100%" alignItems="flex-start" flexWrap="wrap">
           <YStack flex={1} minWidth={260} width="100%">
             {paymentForm}
