@@ -221,28 +221,6 @@ export function VendorVerificationPanel({ ui, shopId, isDesktop }: VendorVerific
           ) : null}
         </YStack>
 
-        <YStack
-          gap="$2"
-          padding={isDesktop ? '$4' : '$3'}
-          borderRadius={radius.card}
-          borderWidth={1}
-          borderColor={ui.borderSubtle}
-          backgroundColor={ui.surfaceMuted}
-        >
-          <Text fontSize={13} fontWeight="700" color={ui.text}>
-            Tax GST is separate
-          </Text>
-          <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-            Storefront GST registration lives under Tax & GST. This Verification flow is for payout
-            KYC (PAN, bank proof, Schedule C, and optional GSTIN for PayU).
-          </Text>
-          <AppLink href={vendorRoutes.settingsSection('gst') as Href} asChild>
-            <Button size="$2" tone="outline" borderRadius={999} alignSelf="flex-start">
-              Open Tax & GST
-            </Button>
-          </AppLink>
-        </YStack>
-
         {statusKey === 'payu_verified' && !showForm ? (
           <Button
             size="$4"
@@ -270,11 +248,11 @@ export function VendorVerificationPanel({ ui, shopId, isDesktop }: VendorVerific
           >
             <YStack gap="$1">
               <Text fontSize={16} fontWeight="800" color={ui.text}>
-                Upload required documents
+                Business, Tax & GST, and bank documents
               </Text>
               <Text fontSize={13} color={ui.textSecondary}>
-                PAN, bank proof, and signed Schedule C are required. GST certificate is optional
-                when you have a GSTIN.
+                PAN, bank proof, and signed Schedule C are required. If you have GST, add GSTIN and
+                the certificate here — Tax & GST is part of this Verification KYC.
               </Text>
             </YStack>
             <VendorPayuKycForm

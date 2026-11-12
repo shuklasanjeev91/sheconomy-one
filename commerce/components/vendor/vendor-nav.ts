@@ -126,7 +126,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
       {
         id: 'settings-verification',
         label: 'Verification',
-        description: 'Upload KYC documents for admin review and PayU payout setup.',
+        description: 'KYC, Tax & GST, and bank documents for admin review and PayU setup.',
         icon: Icons.BadgeCheck,
         href: settingsHref('verification'),
         ready: true,
@@ -232,14 +232,6 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Phone, email, shop address, and social links.',
         icon: Icons.MapPin,
         href: settingsHref('connect'),
-        ready: true,
-      },
-      {
-        id: 'settings-gst',
-        label: 'Tax & GST',
-        description: 'GST registration for tax compliance.',
-        icon: Icons.FileText,
-        href: settingsHref('gst'),
         ready: true,
       },
       {

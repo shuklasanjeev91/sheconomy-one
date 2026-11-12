@@ -27,6 +27,8 @@ import {
   type PayuKycStatus,
   type ShopPayuKycRow,
 } from '~/lib/payment/payu-kyc'
+import { updateShopGst } from '~/lib/shop/shop.store'
+import { useAppDispatch } from '~/lib/store/hooks'
 import { supabase } from '~/lib/supabase'
 import { uploadShopKycDocument } from '~/lib/supabase/storage-upload'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
@@ -86,6 +88,7 @@ async function pickFile(): Promise<{ blob: Blob; mimeType: string; fileName: str
 
 export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycFormProps) {
   const toast = useAppToast()
+  const dispatch = useAppDispatch()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<PayuKycStatus>('draft')
@@ -354,13 +357,28 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
           ),
         ),
       )
+      // Keep storefront Tax & GST in sync — it lives inside Verification KYC now.
+      try {
+        await dispatch(
+          updateShopGst({
+            shopId,
+            userId: auth.user?.id,
+            gst_revenue_above_20l: hasGst,
+            gst_number: hasGst ? normalizePan(gstNumber) : '',
+            gst_document_path: hasGst ? gstDocumentPath : '',
+            gst_document_uri: '',
+          }),
+        ).unwrap()
+      } catch {
+        // KYC submit already succeeded; shop GST sync is best-effort.
+      }
     }
     setSaving(false)
     if (error) {
       toast.show('Could not submit payout details', { tone: 'danger', message: error.message })
       return
     }
-    toast.show('Payout details submitted for review', { tone: 'success' })
+    toast.show('Verification submitted for review', { tone: 'success' })
     onSubmitted?.()
     await load()
   }
@@ -449,38 +467,47 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
           keyboardType="number-pad"
         />
       </Field>
-      <Button
-        size="$3"
-        tone={hasGst ? 'primary' : 'outline'}
-        disabled={locked}
-        onPress={() => setHasGst((value) => !value)}
-      >
-        {hasGst ? 'GST applies' : 'No GST'}
-      </Button>
-      {hasGst ? (
-        <YStack gap="$2">
-          <Field label="GSTIN" error={errors.gstNumber}>
-            <Input
-              value={gstNumber}
-              onChangeText={(value) => setGstNumber(value.toUpperCase())}
-              editable={!locked}
-              autoCapitalize="characters"
-            />
-          </Field>
-          {gstHint ? (
-            <Text
-              fontSize={12}
-              color={
-                gstHint.startsWith('Active') || gstHint.startsWith('GSTIN verified')
-                  ? '#15803D'
-                  : ui.textSecondary
-              }
-            >
-              {gstHint}
-            </Text>
-          ) : null}
-        </YStack>
-      ) : null}
+      <YStack gap="$2">
+        <Text fontSize={14} fontWeight="800" color={ui.text}>
+          Tax & GST
+        </Text>
+        <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+          Turn this on if your shop needs GST. Details here are used for payout KYC and storefront
+          tax compliance.
+        </Text>
+        <Button
+          size="$3"
+          tone={hasGst ? 'primary' : 'outline'}
+          disabled={locked}
+          onPress={() => setHasGst((value) => !value)}
+        >
+          {hasGst ? 'GST registered (above ₹20L / GSTIN)' : 'No GST / below threshold'}
+        </Button>
+        {hasGst ? (
+          <YStack gap="$2">
+            <Field label="GSTIN" error={errors.gstNumber}>
+              <Input
+                value={gstNumber}
+                onChangeText={(value) => setGstNumber(value.toUpperCase())}
+                editable={!locked}
+                autoCapitalize="characters"
+              />
+            </Field>
+            {gstHint ? (
+              <Text
+                fontSize={12}
+                color={
+                  gstHint.startsWith('Active') || gstHint.startsWith('GSTIN verified')
+                    ? '#15803D'
+                    : ui.textSecondary
+                }
+              >
+                {gstHint}
+              </Text>
+            ) : null}
+          </YStack>
+        ) : null}
+      </YStack>
       <Field label="Bank account number" error={errors.bankAccountNumber}>
         <Input
           value={bankAccountNumber}

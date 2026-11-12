@@ -35,8 +35,6 @@ import {
   updateShop,
   updateShopField,
   validateForm,
-  updateShopGst,
-  getGstInfoFromShop,
 } from '~/lib/shop/shop.store'
 import {
   DEFAULT_SHOP_CURRENCY,
@@ -48,7 +46,7 @@ import {
 } from '~/lib/shop/shop.type'
 import { useShopCategoryOptions } from '~/lib/shop/useShopCategoryOptions'
 import { shopToFormData } from '~/lib/shop/shop.utils'
-import { validateShopData, validateGstStep } from '~/lib/shop/shop.validation'
+import { validateShopData } from '~/lib/shop/shop.validation'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -160,18 +158,12 @@ export function VendorSettingsScreen() {
     return <GeneralSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
   }
 
-  if (section.id === 'gst') {
-    return <GstSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
-  }
-
-  if (section.id === 'connect') {
-    return <VendorConnectSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
-  }
-
-  if (section.id === 'verification') {
+  // Legacy `?section=gst` deep links land on Verification (Tax & GST lives in KYC).
+  if (section.id === 'gst' || section.id === 'verification') {
+    const verificationSection = getSettingsSection('verification')
     return (
       <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
-        <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
+        <SectionHeader ui={ui} section={verificationSection} isDesktop={isDesktop} />
         <YStack
           flex={1}
           paddingHorizontal={isDesktop ? '$6' : '$4'}
@@ -181,6 +173,10 @@ export function VendorSettingsScreen() {
         </YStack>
       </YStack>
     )
+  }
+
+  if (section.id === 'connect') {
+    return <VendorConnectSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
   }
 
   if (section.id === 'payments') {
@@ -275,11 +271,11 @@ const HUB_GROUPS: {
   {
     title: 'Shop profile',
     blurb: 'How your storefront looks and how buyers reach you.',
-    sectionIds: ['general', 'connect', 'gst'],
+    sectionIds: ['general', 'connect'],
   },
   {
     title: 'Money & verification',
-    blurb: 'Get verified for payouts, then track settlements.',
+    blurb: 'KYC, Tax & GST, then payouts after approval.',
     sectionIds: ['verification', 'payments'],
   },
   {
@@ -407,476 +403,6 @@ function SettingsHub({
   )
 }
 
-// ============================================================================
-// GST Settings Component
-// ============================================================================
-
-function GstSettings({
-  ui,
-  shop,
-  isDesktop,
-  safeBottom,
-}: {
-  ui: AppUiTokens
-  shop: Shop
-  isDesktop: boolean
-  safeBottom: number
-}) {
-  const dispatch = useAppDispatch()
-  const toast = useAppToast()
-  const { user } = useSupabase()
-
-  // Get GST info from shop metadata
-  const gstInfo = useMemo(() => getGstInfoFromShop(shop), [shop])
-
-  const [showGstFields, setShowGstFields] = useState(gstInfo.revenue_above_20l)
-  const [gstNumber, setGstNumber] = useState(gstInfo.gst_number)
-  const [gstDocumentPath, setGstDocumentPath] = useState(gstInfo.gst_document_path)
-  const [gstDocumentUri, setGstDocumentUri] = useState('')
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [isSaving, setIsSaving] = useState(false)
-  const [fileName, setFileName] = useState<string | null>(null)
-
-  // Reset state when shop changes
-  useEffect(() => {
-    const info = getGstInfoFromShop(shop)
-    setShowGstFields(info.revenue_above_20l)
-    setGstNumber(info.gst_number)
-    setGstDocumentPath(info.gst_document_path)
-    setGstDocumentUri('')
-    setFileName(info.gst_document_path ? info.gst_document_path.split('/').pop() || null : null)
-    setErrors({})
-  }, [shop])
-
-  const handleFilePick = async () => {
-    try {
-      if (Platform.OS === 'web') {
-        const input = document.createElement('input')
-        input.type = 'file'
-        input.accept = 'application/pdf,image/jpeg,image/png,image/webp'
-        input.onchange = async (e) => {
-          const file = (e.target as HTMLInputElement).files?.[0]
-          if (!file) return
-          setFileName(file.name)
-          const uri = URL.createObjectURL(file)
-          setGstDocumentUri(uri)
-          // Store the actual file for upload
-          setGstDocumentPath(file.name)
-        }
-        input.click()
-      } else {
-        const { default: DocumentPicker } = await import('expo-document-picker')
-        const result = await DocumentPicker.getDocumentAsync({
-          type: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
-          copyToCacheDirectory: true,
-        })
-        if (result.canceled) return
-        const asset = result.assets[0]
-        if (!asset) return
-        setFileName(asset.name)
-        setGstDocumentUri(asset.uri)
-        setGstDocumentPath(asset.name)
-      }
-    } catch {
-      toast.show('Could not open file picker', { tone: 'danger' })
-    }
-  }
-
-  const handleSave = async () => {
-    // Validate GST fields
-    const validation = validateGstStep({
-      gst_revenue_above_20l: showGstFields,
-      gst_number: gstNumber,
-      gst_document_uri: showGstFields ? gstDocumentUri : '',
-    })
-
-    if (!validation.isValid) {
-      setErrors(validation.errors)
-      toast.show('Please fix the highlighted fields', { tone: 'danger' })
-      return
-    }
-
-    setIsSaving(true)
-    setErrors({})
-
-    try {
-      // Use the updateShopGst thunk
-      const result = await dispatch(
-        updateShopGst({
-          shopId: shop.id,
-          gst_revenue_above_20l: showGstFields,
-          gst_number: showGstFields ? gstNumber.trim().toUpperCase() : '',
-          gst_document_uri: showGstFields ? gstDocumentUri : '',
-          gst_document_path: showGstFields ? gstDocumentPath : '',
-          userId: user?.id,
-        })
-      ).unwrap()
-
-      // Update local state with returned data
-      const updatedGstInfo = getGstInfoFromShop(result)
-      setShowGstFields(updatedGstInfo.revenue_above_20l)
-      setGstNumber(updatedGstInfo.gst_number)
-      setGstDocumentPath(updatedGstInfo.gst_document_path)
-      setGstDocumentUri('')
-      setFileName(updatedGstInfo.gst_document_path ? updatedGstInfo.gst_document_path.split('/').pop() || null : null)
-
-      toast.show('GST information updated', {
-        tone: 'success',
-        message: 'Your GST details have been saved.',
-      })
-    } catch (error) {
-      toast.show('Could not save GST information', {
-        tone: 'danger',
-        message: error instanceof Error ? error.message : 'Try again.',
-      })
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleCancel = () => {
-    const info = getGstInfoFromShop(shop)
-    setShowGstFields(info.revenue_above_20l)
-    setGstNumber(info.gst_number)
-    setGstDocumentPath(info.gst_document_path)
-    setGstDocumentUri('')
-    setFileName(info.gst_document_path ? info.gst_document_path.split('/').pop() || null : null)
-    setErrors({})
-  }
-
-  return (
-    <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
-      <YStack
-        gap="$4"
-        paddingHorizontal={isDesktop ? '$6' : '$4'}
-        paddingTop={isDesktop ? '$6' : '$4'}
-        paddingBottom="$5"
-      >
-        <YStack gap="$1">
-          <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
-            Tax & GST
-          </Text>
-          <Text fontSize={14} color={ui.textSecondary} maxWidth={620}>
-            GST registration for tax compliance on your storefront.
-          </Text>
-        </YStack>
-
-        {/* GST Status Card */}
-        <Card ui={ui}>
-          <YStack gap="$2" marginBottom="$2">
-            <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
-              This page is for storefront tax compliance only. Payout KYC (PAN, bank, Schedule C)
-              lives under Verification.
-            </Text>
-            <AppLink href={vendorRoutes.settingsSection('verification') as Href} asChild>
-              <Button size="$2" tone="outline" borderRadius={999} alignSelf="flex-start">
-                Open Verification
-              </Button>
-            </AppLink>
-          </YStack>
-          <SectionTitle ui={ui} icon={Icons.FileText} title="GST Status" />
-
-          {gstInfo.gst_verified ? (
-            <XStack
-              alignItems="center"
-              gap="$3"
-              padding="$3"
-              borderRadius={radius.chip}
-              backgroundColor="rgba(34, 197, 94, 0.08)"
-              borderWidth={1}
-              borderColor="rgba(34, 197, 94, 0.2)"
-            >
-              <Icons.CheckCircle2 size={20} color="#22c55e" />
-              <YStack flex={1}>
-                <Text fontSize={14} fontWeight="700" color="#16a34a">
-                  GST Verified ✓
-                </Text>
-                <Text fontSize={12} color={ui.textMuted}>
-                  {gstInfo.gst_verified_at
-                    ? `Verified on ${new Date(gstInfo.gst_verified_at).toLocaleDateString()}`
-                    : 'Verified'}
-                </Text>
-                {gstInfo.gst_number && (
-                  <Text fontSize={12} color={ui.textMuted}>
-                    GST Number: {gstInfo.gst_number}
-                  </Text>
-                )}
-              </YStack>
-            </XStack>
-          ) : gstInfo.revenue_above_20l ? (
-            <XStack
-              alignItems="center"
-              gap="$3"
-              padding="$3"
-              borderRadius={radius.chip}
-              backgroundColor="rgba(234, 179, 8, 0.08)"
-              borderWidth={1}
-              borderColor="rgba(234, 179, 8, 0.2)"
-            >
-              <Icons.Clock size={20} color="#ca8a04" />
-              <YStack flex={1}>
-                <Text fontSize={14} fontWeight="700" color="#a16207">
-                  Pending Verification
-                </Text>
-                <Text fontSize={12} color={ui.textMuted}>
-                  Your GST documents are being reviewed. This usually takes 2-3 business days.
-                </Text>
-                {gstInfo.gst_number && (
-                  <Text fontSize={12} color={ui.textMuted}>
-                    GST Number: {gstInfo.gst_number}
-                  </Text>
-                )}
-              </YStack>
-            </XStack>
-          ) : (
-            <XStack
-              alignItems="center"
-              gap="$3"
-              padding="$3"
-              borderRadius={radius.chip}
-              backgroundColor={ui.surfaceMuted}
-              borderWidth={1}
-              borderColor={ui.borderSubtle}
-            >
-              <Icons.Info size={20} color={ui.textMuted} />
-              <YStack flex={1}>
-                <Text fontSize={14} fontWeight="700" color={ui.text}>
-                  No GST Required
-                </Text>
-                <Text fontSize={12} color={ui.textMuted}>
-                  Your shop is below the ₹20 Lakh threshold.
-                </Text>
-              </YStack>
-            </XStack>
-          )}
-        </Card>
-
-        {/* GST Details Card */}
-        <Card ui={ui}>
-          <SectionTitle ui={ui} icon={Icons.Edit} title="Update GST Information" />
-
-          <YStack gap="$4">
-            {/* Revenue Threshold Toggle */}
-            <XStack
-              alignItems="center"
-              gap="$3"
-              padding="$3"
-              borderRadius={radius.chip}
-              borderWidth={1.5}
-              borderColor={showGstFields ? ui.brand : ui.borderSubtle}
-              backgroundColor={showGstFields ? ui.roseSurface : ui.surface}
-              cursor="pointer"
-              pressStyle={{ opacity: 0.8 }}
-              onPress={() => {
-                setShowGstFields(!showGstFields)
-                if (!showGstFields) {
-                  setErrors({})
-                }
-              }}
-            >
-              <YStack
-                width={22}
-                height={22}
-                borderRadius={6}
-                borderWidth={2}
-                borderColor={showGstFields ? ui.brand : ui.border}
-                backgroundColor={showGstFields ? ui.brand : 'transparent'}
-                alignItems="center"
-                justifyContent="center"
-                marginTop={2}
-                flexShrink={0}
-              >
-                {showGstFields ? <Icons.Check size={13} color={ui.onBrand} /> : null}
-              </YStack>
-              <YStack flex={1} gap="$1">
-                <Text fontSize={14} fontWeight="700" color={ui.text}>
-                  My annual revenue exceeds ₹20 Lakh
-                </Text>
-                <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-                  I am required to register for GST and maintain compliance.
-                </Text>
-              </YStack>
-            </XStack>
-
-            {/* GST Fields */}
-            {showGstFields && (
-              <YStack gap="$4" animation="quick" enterStyle={{ opacity: 0, y: -8 }}>
-                <Field label="GST Registration Number" required error={errors.gst_number}>
-                  <Input
-                    value={gstNumber}
-                    onChangeText={setGstNumber}
-                    placeholder="22AAAAA0000A1Z5"
-                    autoCapitalize="characters"
-                    maxLength={15}
-                    invalid={Boolean(errors.gst_number)}
-                    editable={!isSaving}
-                  />
-                </Field>
-
-                <Field label="GST Certificate Document" required error={errors.gst_document_path}>
-                  <YStack gap="$2">
-                    {fileName ? (
-                      <XStack
-                        alignItems="center"
-                        gap="$3"
-                        padding="$3"
-                        borderRadius={radius.chip}
-                        borderWidth={1}
-                        borderColor={ui.brand}
-                        backgroundColor={ui.roseSurface}
-                      >
-                        <Icons.FileText size={18} color={ui.brand} />
-                        <Text flex={1} fontSize={13} color={ui.text} numberOfLines={1}>
-                          {fileName}
-                        </Text>
-                        <XStack
-                          padding="$1"
-                          cursor="pointer"
-                          pressStyle={{ opacity: 0.6 }}
-                          onPress={() => {
-                            setFileName(null)
-                            setGstDocumentUri('')
-                            setGstDocumentPath('')
-                          }}
-                        >
-                          <Icons.X size={16} color={ui.error} />
-                        </XStack>
-                      </XStack>
-                    ) : (
-                      <XStack
-                        alignItems="center"
-                        justifyContent="center"
-                        gap="$2"
-                        padding="$4"
-                        borderRadius={radius.chip}
-                        borderWidth={1.5}
-                        borderStyle="dashed"
-                        borderColor={errors.gst_document_path ? ui.error : ui.borderSubtle}
-                        backgroundColor={ui.surfaceMuted}
-                        cursor="pointer"
-                        hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
-                        pressStyle={{ opacity: 0.8 }}
-                        onPress={handleFilePick}
-                      >
-                        <Icons.Upload size={18} color={ui.icon} />
-                        <YStack>
-                          <Text fontSize={13} fontWeight="700" color={ui.text}>
-                            Upload GST Document
-                          </Text>
-                          <Text fontSize={11} color={ui.textMuted}>
-                            PDF, JPG, PNG or WebP · Max 10 MB
-                          </Text>
-                        </YStack>
-                      </XStack>
-                    )}
-                  </YStack>
-                </Field>
-
-                {gstInfo.gst_verified && (
-                  <XStack
-                    gap="$3"
-                    padding="$3"
-                    borderRadius={radius.chip}
-                    backgroundColor="rgba(34, 197, 94, 0.06)"
-                    borderWidth={1}
-                    borderColor="rgba(34, 197, 94, 0.2)"
-                  >
-                    <Icons.ShieldCheck size={18} color="#22c55e" />
-                    <Text fontSize={12} color="#16a34a" flex={1}>
-                      Your GST registration is verified. Updating these details will require
-                      re-verification.
-                    </Text>
-                  </XStack>
-                )}
-
-                <XStack
-                  gap="$3"
-                  padding="$3"
-                  borderRadius={radius.chip}
-                  backgroundColor="rgba(217, 119, 6, 0.06)"
-                  borderWidth={1}
-                  borderColor="rgba(217, 119, 6, 0.20)"
-                >
-                  <Icons.Clock size={16} color="#b45309" />
-                  <Text fontSize={12} color="#b45309" flex={1} lineHeight={18}>
-                    Updated GST information will require re-verification by our team.
-                  </Text>
-                </XStack>
-              </YStack>
-            )}
-
-            {!showGstFields && (
-              <XStack
-                gap="$3"
-                padding="$3"
-                borderRadius={radius.chip}
-                backgroundColor={ui.surfaceMuted}
-                borderWidth={1}
-                borderColor={ui.borderSubtle}
-              >
-                <Icons.CheckCircle2 size={18} color={ui.badgeSuccessText} />
-                <YStack flex={1}>
-                  <Text fontSize={14} fontWeight="700" color={ui.text}>
-                    No GST Registration Required
-                  </Text>
-                  <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-                    Your shop is below the ₹20 Lakh threshold. Update this setting if your revenue
-                    grows.
-                  </Text>
-                </YStack>
-              </XStack>
-            )}
-          </YStack>
-        </Card>
-      </YStack>
-
-      {/* Sticky bottom action bar */}
-      <XStack
-        style={Platform.OS === 'web' ? ({ position: 'sticky', bottom: 0 } as const) : undefined}
-        alignItems="center"
-        justifyContent={isDesktop ? 'space-between' : 'stretch'}
-        gap="$3"
-        flexWrap="wrap"
-        paddingHorizontal={isDesktop ? '$6' : '$4'}
-        paddingTop="$3"
-        paddingBottom={16 + (Platform.OS !== 'web' ? safeBottom : 0)}
-        borderTopWidth={1}
-        borderTopColor={ui.borderSubtle}
-        backgroundColor={ui.surface}
-        zIndex={20}
-      >
-        {isDesktop ? (
-          <Text fontSize={12} color={ui.textMuted}>
-            GST compliance information is subject to verification.
-          </Text>
-        ) : null}
-        <XStack gap="$3" flex={isDesktop ? undefined : 1}>
-          <Button
-            tone="outline"
-            size="$4"
-            borderRadius={999}
-            flex={isDesktop ? undefined : 1}
-            onPress={handleCancel}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-          <Button
-            tone="primary"
-            size="$4"
-            borderRadius={999}
-            flex={isDesktop ? undefined : 1}
-            disabled={isSaving}
-            onPress={() => void handleSave()}
-            icon={isSaving ? <Spinner size="small" color="white" /> : <Icons.Check size={16} />}
-          >
-            {isSaving ? 'Saving…' : 'Update GST Info'}
-          </Button>
-        </XStack>
-      </XStack>
-    </YStack>
-  )
-}
 
 // ============================================================================
 // Notifications
