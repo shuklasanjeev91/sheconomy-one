@@ -64,8 +64,10 @@ import { VendorConnectSettings } from '~/commerce/screens/vendor/VendorConnectSe
 import { VendorPaymentSettings } from '~/commerce/screens/vendor/VendorPaymentSettings'
 import { VendorReturnPolicySettings } from '~/commerce/screens/vendor/VendorReturnPolicySettings'
 import { VendorShippingPolicySettings } from '~/commerce/screens/vendor/VendorShippingPolicySettings'
+import { VendorVerificationPanel } from '~/commerce/screens/vendor/VendorVerificationPanel'
 import { AppLink } from '~/components/navigation/AppLink'
-import { appRoutes } from '~/lib/routes'
+import { appRoutes, vendorRoutes } from '~/lib/routes'
+import type { Href } from 'one'
 
 type IconType = (typeof Icons)[keyof typeof Icons]
 
@@ -82,11 +84,11 @@ const HOURS_DAYS = [
 
 const DEFAULT_OPEN_HOURS = '09:00-17:00'
 
-/** Resolve a section id from the `?section=` query param, defaulting to General. */
+/** Resolve a section id from the `?section=` query param, defaulting to the hub. */
 function resolveSectionId(raw: string | string[] | undefined): SettingsSectionId {
   const value = Array.isArray(raw) ? raw[0] : raw
   const match = SETTINGS_SECTIONS.find((section) => section.id === value)
-  return match?.id ?? 'general'
+  return match?.id ?? 'hub'
 }
 
 /** Read the tagline persisted alongside other shop metadata. */
@@ -150,6 +152,10 @@ export function VendorSettingsScreen() {
     )
   }
 
+  if (section.id === 'hub') {
+    return <SettingsHub ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
+  }
+
   if (section.id === 'general') {
     return <GeneralSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
   }
@@ -160,6 +166,21 @@ export function VendorSettingsScreen() {
 
   if (section.id === 'connect') {
     return <VendorConnectSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
+  }
+
+  if (section.id === 'verification') {
+    return (
+      <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
+        <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
+        <YStack
+          flex={1}
+          paddingHorizontal={isDesktop ? '$6' : '$4'}
+          paddingBottom={safeBottom + 24}
+        >
+          <VendorVerificationPanel ui={ui} shopId={shop.id} isDesktop={isDesktop} />
+        </YStack>
+      </YStack>
+    )
   }
 
   if (section.id === 'payments') {
@@ -238,6 +259,150 @@ export function VendorSettingsScreen() {
     <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
       <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
       <ComingSoonSection ui={ui} section={section} isDesktop={isDesktop} />
+    </YStack>
+  )
+}
+
+// ============================================================================
+// Settings hub
+// ============================================================================
+
+const HUB_GROUPS: {
+  title: string
+  blurb: string
+  sectionIds: SettingsSectionId[]
+}[] = [
+  {
+    title: 'Shop profile',
+    blurb: 'How your storefront looks and how buyers reach you.',
+    sectionIds: ['general', 'connect', 'gst'],
+  },
+  {
+    title: 'Money & verification',
+    blurb: 'Get verified for payouts, then track settlements.',
+    sectionIds: ['verification', 'payments'],
+  },
+  {
+    title: 'Policies',
+    blurb: 'Shipping rates and return rules buyers see at checkout.',
+    sectionIds: ['shipping', 'returns'],
+  },
+  {
+    title: 'Team',
+    blurb: 'Alerts and who can manage this shop.',
+    sectionIds: ['notifications', 'security'],
+  },
+]
+
+function SettingsHub({
+  ui,
+  shop,
+  isDesktop,
+  safeBottom,
+}: {
+  ui: AppUiTokens
+  shop: Shop
+  isDesktop: boolean
+  safeBottom: number
+}) {
+  const section = getSettingsSection('hub')
+  const verified = Boolean(shop.verified)
+
+  return (
+    <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
+      <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
+      <YStack
+        gap="$4"
+        paddingHorizontal={isDesktop ? '$6' : '$4'}
+        paddingBottom={safeBottom + 24}
+        maxWidth={920}
+      >
+        <YStack
+          gap="$2"
+          padding={isDesktop ? '$4' : '$3.5'}
+          borderRadius={radius.card}
+          borderWidth={1}
+          borderColor={verified ? '#86EFAC' : '#FCD34D'}
+          backgroundColor={verified ? '#F0FDF4' : '#FFFBEB'}
+        >
+          <XStack alignItems="center" gap="$2">
+            {verified ? (
+              <Icons.BadgeCheck size={20} color="#16A34A" />
+            ) : (
+              <Icons.ShieldCheck size={20} color="#CA8A04" />
+            )}
+            <Text fontSize={15} fontWeight="800" color={ui.text}>
+              Verification: {verified ? 'Verified' : 'Action needed'}
+            </Text>
+          </XStack>
+          <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
+            {verified
+              ? 'Payout KYC is complete. Settlements can release after delivery.'
+              : 'Upload KYC documents under Verification. After admin approval, PayU creates your payout account automatically.'}
+          </Text>
+          <AppLink href={vendorRoutes.settingsSection('verification') as Href} asChild>
+            <Button size="$3" tone="primary" borderRadius={999} alignSelf="flex-start">
+              {verified ? 'View verification' : 'Start verification'}
+            </Button>
+          </AppLink>
+        </YStack>
+
+        {HUB_GROUPS.map((group) => (
+          <YStack key={group.title} gap="$2.5">
+            <YStack gap="$0.5">
+              <Text fontSize={16} fontWeight="800" color={ui.text}>
+                {group.title}
+              </Text>
+              <Text fontSize={13} color={ui.textSecondary}>
+                {group.blurb}
+              </Text>
+            </YStack>
+            <XStack gap="$3" flexWrap="wrap">
+              {group.sectionIds.map((id) => {
+                const item = getSettingsSection(id)
+                const Icon = item.icon
+                return (
+                  <AppLink key={id} href={vendorRoutes.settingsSection(id) as Href} asChild>
+                    <YStack
+                      width={isDesktop ? 260 : '100%'}
+                      gap="$2"
+                      padding="$4"
+                      borderRadius={radius.card}
+                      borderWidth={1}
+                      borderColor={ui.borderSubtle}
+                      backgroundColor={ui.surface}
+                      cursor="pointer"
+                      hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
+                      pressStyle={{ opacity: 0.92 }}
+                      style={getShadowStyle('sm')}
+                    >
+                      <XStack alignItems="center" gap="$2">
+                        <YStack
+                          width={36}
+                          height={36}
+                          borderRadius={999}
+                          backgroundColor={ui.roseSurface}
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          <Icon size={18} color={ui.brand} />
+                        </YStack>
+                        <Text fontSize={14} fontWeight="800" color={ui.text} flex={1}>
+                          {item.label}
+                        </Text>
+                        <Icons.ChevronRight size={16} color={ui.textMuted} />
+                      </XStack>
+                      <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+                        {item.description}
+                      </Text>
+                    </YStack>
+                  </AppLink>
+                )
+              })}
+            </XStack>
+          </YStack>
+        ))}
+      </YStack>
     </YStack>
   )
 }
@@ -389,15 +554,26 @@ function GstSettings({
       >
         <YStack gap="$1">
           <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
-            GST Compliance
+            Tax & GST
           </Text>
           <Text fontSize={14} color={ui.textSecondary} maxWidth={620}>
-            Manage your GST registration and compliance information.
+            GST registration for tax compliance on your storefront.
           </Text>
         </YStack>
 
         {/* GST Status Card */}
         <Card ui={ui}>
+          <YStack gap="$2" marginBottom="$2">
+            <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
+              This page is for storefront tax compliance only. Payout KYC (PAN, bank, Schedule C)
+              lives under Verification.
+            </Text>
+            <AppLink href={vendorRoutes.settingsSection('verification') as Href} asChild>
+              <Button size="$2" tone="outline" borderRadius={999} alignSelf="flex-start">
+                Open Verification
+              </Button>
+            </AppLink>
+          </YStack>
           <SectionTitle ui={ui} icon={Icons.FileText} title="GST Status" />
 
           {gstInfo.gst_verified ? (
@@ -1174,10 +1350,10 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
       >
         <YStack gap="$1">
           <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
-            General
+            Shop profile
           </Text>
           <Text fontSize={14} color={ui.textSecondary} maxWidth={620}>
-            Configure your shop identity, hours, categories, and currency.
+            Name, logo, hours, categories, and storefront currency.
           </Text>
         </YStack>
 

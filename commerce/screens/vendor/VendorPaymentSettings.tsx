@@ -1,5 +1,4 @@
 import { Text, YStack } from '~/components/ui'
-import { PAYMENT_UI_COPY } from '~/lib/payment/payment-ui.copy'
 import type { Shop } from '~/lib/shop/shop.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
@@ -13,8 +12,8 @@ type VendorPaymentSettingsProps = {
 }
 
 /**
- * Payment Methods section of `/vendor/settings?section=payments`.
- * Mirrors `VendorConnectSettings` — same shell, padding, and title pattern.
+ * Payouts section of `/vendor/settings?section=payments`.
+ * KYC upload lives under Verification; this page shows settlement status.
  */
 export function VendorPaymentSettings({
   ui,
@@ -32,10 +31,11 @@ export function VendorPaymentSettings({
       >
         <YStack gap="$1">
           <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
-            {PAYMENT_UI_COPY.pageTitle}
+            Payouts
           </Text>
           <Text fontSize={14} color={ui.textSecondary} maxWidth={620}>
-            {PAYMENT_UI_COPY.pageSubtitle}
+            Settlement status after Verification. Complete KYC under Verification if payouts are not
+            active yet.
           </Text>
         </YStack>
 

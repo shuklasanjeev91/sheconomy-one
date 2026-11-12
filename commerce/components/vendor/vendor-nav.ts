@@ -15,7 +15,7 @@ export type VendorNavItem = {
   href: Href
   /** Whether the destination is a real, functional page (vs. a "coming soon" stub). */
   ready?: boolean
-  /** Nested rows revealed by expanding this item (e.g. Settings sections). */
+  /** Nested rows revealed by expanding this item (e.g. Orders sections). */
   children?: VendorNavItem[]
 }
 
@@ -68,77 +68,6 @@ const ORDERS_CHILDREN: VendorNavItem[] = [
   },
 ]
 
-/**
- * Settings sub-sections, surfaced as a dropdown under the main "Settings" item.
- * All sections below are implemented in VendorSettingsScreen.
- */
-const SETTINGS_CHILDREN: VendorNavItem[] = [
-  {
-    id: 'settings-general',
-    label: 'General',
-    description: 'Shop identity, hours, categories, and currency.',
-    icon: Icons.SlidersHorizontal,
-    href: settingsHref('general'),
-    ready: true,
-  },
-  {
-    id: 'settings-gst',
-    label: 'GST Compliance',
-    description: 'GST registration, number, and document management.',
-    icon: Icons.FileText,
-    href: settingsHref('gst'),
-    ready: true,
-  },
-  {
-    id: 'settings-connect',
-    label: 'Connect',
-    description: 'Contact details, shop address, and social platforms.',
-    icon: Icons.Share2,
-    href: settingsHref('connect'),
-    ready: true,
-  },
-  {
-    id: 'settings-payments',
-    label: 'Payment Methods',
-    description: 'Manage how you receive funds from your customers worldwide.',
-    icon: Icons.CreditCard,
-    href: settingsHref('payments'),
-    ready: true,
-  },
-  {
-    id: 'settings-notifications',
-    label: 'Notifications',
-    description: 'Order, marketing, and customer alerts.',
-    icon: Icons.Bell,
-    href: settingsHref('notifications'),
-    ready: true,
-  },
-  {
-    id: 'settings-security',
-    label: 'Security',
-    description: 'Sign-in, team access, and permissions.',
-    icon: Icons.ShieldCheck,
-    href: settingsHref('security'),
-    ready: true,
-  },
-  {
-    id: 'settings-shipping',
-    label: 'Shipping',
-    description: 'Delivery zones and courier partners.',
-    icon: Icons.Truck,
-    href: settingsHref('shipping'),
-    ready: true,
-  },
-  {
-    id: 'settings-returns',
-    label: 'Return Policies',
-    description: 'Return windows, services, and shipping rules.',
-    icon: Icons.Undo2,
-    href: settingsHref('returns'),
-    ready: true,
-  },
-]
-
 export type VendorNavGroup = {
   title: string
   items: VendorNavItem[]
@@ -146,7 +75,7 @@ export type VendorNavGroup = {
 
 export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
   {
-    title: 'Storefront',
+    title: 'Sell',
     items: [
       {
         id: 'myshop',
@@ -184,7 +113,65 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
     ],
   },
   {
-    title: 'Growth',
+    title: 'Money',
+    items: [
+      {
+        id: 'wallet',
+        label: 'Wallet',
+        description: 'Prepaid balance for shipping, ads, and referral rewards.',
+        icon: Icons.Wallet,
+        href: vendorRoutes.wallet,
+        ready: true,
+      },
+      {
+        id: 'settings-verification',
+        label: 'Verification',
+        description: 'Upload KYC documents for admin review and PayU payout setup.',
+        icon: Icons.BadgeCheck,
+        href: settingsHref('verification'),
+        ready: true,
+      },
+      {
+        id: 'settings-payments',
+        label: 'Payouts',
+        description: 'Settlement status after your shop is verified.',
+        icon: Icons.Banknote,
+        href: settingsHref('payments'),
+        ready: true,
+      },
+    ],
+  },
+  {
+    title: 'Fulfillment',
+    items: [
+      {
+        id: 'delivery',
+        label: 'Delivery',
+        description: 'Carriers, EasyShip labels, and shipping wallet.',
+        icon: Icons.Truck,
+        href: vendorRoutes.delivery,
+        ready: true,
+      },
+      {
+        id: 'settings-shipping',
+        label: 'Shipping policies',
+        description: 'Delivery fees, free-shipping thresholds, and zones.',
+        icon: Icons.Package,
+        href: settingsHref('shipping'),
+        ready: true,
+      },
+      {
+        id: 'settings-returns',
+        label: 'Return policies',
+        description: 'Return windows, refund rules, and reverse logistics.',
+        icon: Icons.Undo2,
+        href: settingsHref('returns'),
+        ready: true,
+      },
+    ],
+  },
+  {
+    title: 'Grow',
     items: [
       {
         id: 'analytics',
@@ -200,22 +187,6 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: '360 profiles, segments, and journeys.',
         icon: Icons.Users,
         href: vendorRoutes.customers,
-        ready: true,
-      },
-      {
-        id: 'delivery',
-        label: 'Delivery',
-        description: 'Shipping options and fulfilment.',
-        icon: Icons.Truck,
-        href: vendorRoutes.delivery,
-        ready: true,
-      },
-      {
-        id: 'wallet',
-        label: 'Wallet',
-        description: 'Prepaid balance for shipping, ads, and referral rewards.',
-        icon: Icons.Wallet,
-        href: vendorRoutes.wallet,
         ready: true,
       },
       {
@@ -237,16 +208,55 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
     ],
   },
   {
-    title: 'System',
+    title: 'Shop setup',
     items: [
       {
-        id: 'settings',
-        label: 'Shop settings',
-        description: 'Storefront config — personal account prefs live at Account settings.',
-        icon: Icons.Settings,
-        href: SETTINGS_CHILDREN[0].href,
+        id: 'settings-hub',
+        label: 'Overview',
+        description: 'All shop setup links in one place.',
+        icon: Icons.LayoutGrid,
+        href: settingsHref('hub'),
         ready: true,
-        children: SETTINGS_CHILDREN,
+      },
+      {
+        id: 'settings-general',
+        label: 'Shop profile',
+        description: 'Name, logo, hours, categories, and currency.',
+        icon: Icons.Store,
+        href: settingsHref('general'),
+        ready: true,
+      },
+      {
+        id: 'settings-connect',
+        label: 'Contact & address',
+        description: 'Phone, email, shop address, and social links.',
+        icon: Icons.MapPin,
+        href: settingsHref('connect'),
+        ready: true,
+      },
+      {
+        id: 'settings-gst',
+        label: 'Tax & GST',
+        description: 'GST registration for tax compliance.',
+        icon: Icons.FileText,
+        href: settingsHref('gst'),
+        ready: true,
+      },
+      {
+        id: 'settings-notifications',
+        label: 'Notifications',
+        description: 'Order, marketing, and customer alerts.',
+        icon: Icons.Bell,
+        href: settingsHref('notifications'),
+        ready: true,
+      },
+      {
+        id: 'settings-security',
+        label: 'Team & security',
+        description: 'Sign-in, teammates, and permissions.',
+        icon: Icons.ShieldCheck,
+        href: settingsHref('security'),
+        ready: true,
       },
       {
         id: 'seller-help',
@@ -271,9 +281,11 @@ export const VENDOR_NAV_ITEMS: VendorNavItem[] = VENDOR_NAV_GROUPS.flatMap((grou
 // derived from that registry rather than hard-coded per page.
 
 export const VENDOR_SETTINGS_SECTION_IDS = [
+  'hub',
   'general',
   'gst',
   'connect',
+  'verification',
   'payments',
   'notifications',
   'security',
@@ -288,7 +300,7 @@ export const VENDOR_ORDERS_SECTION_IDS = ['inbox', 'all', 'issues', 'fulfillment
 export type VendorOrdersSectionId = (typeof VENDOR_ORDERS_SECTION_IDS)[number]
 
 type VendorSectionRoute = {
-  /** Nav item that owns these sections (also the sub-nav id prefix). */
+  /** Logical owner for section sub-ids (`settings-*`, `orders-*`). */
   navItemId: string
   /** Normalized pathname of the hosting page. */
   path: string
@@ -307,7 +319,7 @@ const VENDOR_SECTION_ROUTES: VendorSectionRoute[] = [
     navItemId: 'settings',
     path: '/vendor/settings',
     sectionIds: VENDOR_SETTINGS_SECTION_IDS,
-    defaultSection: 'general',
+    defaultSection: 'hub',
   },
 ]
 
@@ -429,11 +441,51 @@ export function isVendorNavChildActive(child: VendorNavItem, activeSubId?: strin
   return subIdFromHref(child.href) === activeSubId
 }
 
+/** Whether a leaf (or parent) nav row should highlight for the current URL. */
+export function isVendorNavItemActive(
+  item: VendorNavItem,
+  activeId: string,
+  activeSubId?: string,
+  pathname?: string,
+): boolean {
+  if (item.children?.length) {
+    const groupActive =
+      item.id === activeId ||
+      (pathname ? item.id === getVendorSectionNavItemId(pathname) : false)
+    const hasActiveChild = Boolean(
+      activeSubId && item.children.some((child) => isVendorNavChildActive(child, activeSubId)),
+    )
+    return groupActive && !hasActiveChild
+  }
+
+  // Flat settings/orders links use `settings-*` / `orders-*` ids matching activeSubId.
+  if (activeSubId && isVendorNavChildActive(item, activeSubId)) return true
+
+  if (activeSubId) return false
+  return item.id === activeId
+}
+
 /** Resolve the active nav item from the current pathname (defaults to My Shop). */
 export function getActiveVendorNavItem(pathname: string): VendorNavItem {
   const normalized = normalizeVendorPathname(pathname)
 
   if (normalized === '/vendor') return VENDOR_NAV_ITEMS[0]
+
+  const sectionResolved = resolveVendorSection(pathname)
+  if (sectionResolved) {
+    const subId = getVendorSectionSubId(sectionResolved.navItemId, sectionResolved.section)
+    const bySub = VENDOR_NAV_ITEMS.find(
+      (item) =>
+        item.id === subId ||
+        item.children?.some((child) => child.id === subId || isVendorNavChildActive(child, subId)),
+    )
+    if (bySub) {
+      if (bySub.children?.some((child) => child.id === subId || isVendorNavChildActive(child, subId))) {
+        return bySub
+      }
+      return bySub
+    }
+  }
 
   return (
     VENDOR_NAV_ITEMS.find((item) => {

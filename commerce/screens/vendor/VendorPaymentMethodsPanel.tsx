@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { Href } from 'one'
 
 import { PaymentErrorBoundary } from '~/commerce/components/PaymentErrorBoundary'
-import { VendorPayuKycForm } from '~/commerce/components/vendor/payment/VendorPayuKycForm'
+import { AppLink } from '~/components/navigation/AppLink'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import type { PayuKycStatus, ShopPayuKycRow } from '~/lib/payment/payu-kyc'
@@ -18,6 +19,7 @@ import {
   selectVendorPaymentLogs,
   setVendorPaymentShopId,
 } from '~/lib/payment/payment.store'
+import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { supabase } from '~/lib/supabase'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
@@ -60,7 +62,6 @@ export function VendorPaymentMethodsPanel({
   const [initializedShopId, setInitializedShopId] = useState<string | null>(null)
   const [kycRow, setKycRow] = useState<ShopPayuKycRow | null>(null)
   const [kycLoading, setKycLoading] = useState(true)
-  const [showUpdateForm, setShowUpdateForm] = useState(false)
 
   const loadKyc = useCallback(async () => {
     setKycLoading(true)
@@ -127,7 +128,7 @@ export function VendorPaymentMethodsPanel({
       <XStack alignItems="center" gap="$2" paddingVertical="$6">
         <Spinner size="small" />
         <Text fontSize={13} color={ui.textMuted}>
-          Loading payments…
+          Loading payouts…
         </Text>
       </XStack>
     )
@@ -136,7 +137,7 @@ export function VendorPaymentMethodsPanel({
   return (
     <PaymentErrorBoundary
       scope="VendorPaymentMethods"
-      title="Payment settings unavailable"
+      title="Payout settings unavailable"
       onReset={() => void refreshPaymentState()}
     >
       <YStack gap="$4" width="100%" maxWidth={560} alignSelf="flex-start">
@@ -153,7 +154,7 @@ export function VendorPaymentMethodsPanel({
             {isReady ? (
               <Icons.CheckCircle2 size={28} color="#16A34A" />
             ) : (
-              <Icons.Wallet size={28} color={ui.brand} />
+              <Icons.Banknote size={28} color={ui.brand} />
             )}
             <YStack flex={1} gap="$0.5" minWidth={0}>
               <Text fontSize={18} fontWeight="800" color={ui.text} letterSpacing={-0.3}>
@@ -172,24 +173,21 @@ export function VendorPaymentMethodsPanel({
                           ? ` Current status: ${PAYU_STATUS_LABEL[kycRow.status]}.`
                           : ''
                       }`
-                    : PAYMENT_UI_COPY.statusNeededBody}
+                    : 'Complete Verification first. Upload KYC documents; after admin approval PayU creates your payout account.'}
               </Text>
             </YStack>
           </XStack>
 
-          <YStack gap="$1.5" marginTop="$2">
-            <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
-              {PAYMENT_UI_COPY.howItWorksTitle}
-            </Text>
-            {PAYMENT_UI_COPY.howItWorksSteps.map((step) => (
-              <Text key={step} fontSize={12} color={ui.textSecondary} lineHeight={17}>
-                · {step}
-              </Text>
-            ))}
-          </YStack>
+          {!isReady ? (
+            <AppLink href={vendorRoutes.settingsSection('verification') as Href} asChild>
+              <Button size="$3" tone="primary" borderRadius={999} alignSelf="flex-start" marginTop="$2">
+                Go to Verification
+              </Button>
+            </AppLink>
+          ) : null}
         </YStack>
 
-        {!isReady || showUpdateForm ? (
+        {isReady ? (
           <YStack
             gap="$3"
             padding={isDesktop ? '$5' : '$4'}
@@ -197,47 +195,18 @@ export function VendorPaymentMethodsPanel({
             borderWidth={1}
             borderColor={ui.borderSubtle}
             backgroundColor={ui.surface}
-            style={getShadowStyle('sm')}
           >
-            <VendorPayuKycForm
-              ui={ui}
-              shopId={shopId}
-              embedded
-              onSubmitted={() => {
-                setShowUpdateForm(false)
-                void refreshPaymentState()
-              }}
-            />
+            <Text fontSize={15} fontWeight="700" color={ui.text}>
+              {PAYMENT_UI_COPY.settlementsTitle}
+            </Text>
+            <SettlementsStrip ui={ui} shopId={shopId} />
+            <AppLink href={vendorRoutes.settingsSection('verification') as Href} asChild>
+              <Button size="$3" tone="outline" borderRadius={999} alignSelf="flex-start">
+                View verification details
+              </Button>
+            </AppLink>
           </YStack>
-        ) : (
-          <YStack gap="$3">
-            <Button
-              size="$4"
-              tone="outline"
-              borderRadius={radius.chip}
-              borderColor={ui.brand}
-              color={ui.brand}
-              fontWeight="700"
-              onPress={() => setShowUpdateForm(true)}
-            >
-              Update payout details
-            </Button>
-
-            <YStack
-              gap="$3"
-              padding={isDesktop ? '$5' : '$4'}
-              borderRadius={radius.card}
-              borderWidth={1}
-              borderColor={ui.borderSubtle}
-              backgroundColor={ui.surface}
-            >
-              <Text fontSize={15} fontWeight="700" color={ui.text}>
-                {PAYMENT_UI_COPY.settlementsTitle}
-              </Text>
-              <SettlementsStrip ui={ui} shopId={shopId} />
-            </YStack>
-          </YStack>
-        )}
+        ) : null}
       </YStack>
     </PaymentErrorBoundary>
   )

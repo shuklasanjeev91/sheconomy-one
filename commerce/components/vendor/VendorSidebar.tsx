@@ -9,6 +9,7 @@ import {
   VENDOR_NAV_GROUPS,
   getVendorSectionNavItemId,
   isVendorNavChildActive,
+  isVendorNavItemActive,
   type VendorNavItem,
 } from '~/commerce/components/vendor/vendor-nav'
 import { useVendorActiveSubId } from '~/commerce/components/vendor/useVendorActiveSubId'
@@ -184,11 +185,12 @@ function VendorNavEntry({ ui, item, activeId, activeSubId, collapsed, onSelect }
   const hasActiveChild = Boolean(
     activeSubId && children.some((child) => isVendorNavChildActive(child, activeSubId)),
   )
+  const leafActive = isVendorNavItemActive(item, activeId, activeSubId, pathname)
 
-  const [expanded, setExpanded] = useState(groupActive)
+  const [expanded, setExpanded] = useState(groupActive || hasActiveChild)
   useEffect(() => {
-    if (groupActive) setExpanded(true)
-  }, [groupActive])
+    if (groupActive || hasActiveChild) setExpanded(true)
+  }, [groupActive, hasActiveChild])
 
   const showChildren = hasChildren && !collapsed && expanded
 
@@ -197,7 +199,7 @@ function VendorNavEntry({ ui, item, activeId, activeSubId, collapsed, onSelect }
       <VendorNavRow
         ui={ui}
         item={item}
-        active={groupActive && !hasActiveChild}
+        active={leafActive}
         collapsed={collapsed}
         onPress={() => onSelect(item)}
       />

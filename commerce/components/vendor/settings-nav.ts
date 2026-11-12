@@ -4,9 +4,11 @@ type IconType = (typeof Icons)[keyof typeof Icons]
 
 /** Stable identifiers for each shop-settings section. */
 export type SettingsSectionId =
+  | 'hub'
   | 'general'
   | 'gst'
   | 'connect'
+  | 'verification'
   | 'payments'
   | 'notifications'
   | 'security'
@@ -23,66 +25,78 @@ export type SettingsSection = {
 }
 
 /**
- * The shop-settings sidebar navigation. Sections marked `ready` are
- * implemented; the rest render a "coming soon" placeholder and are built out
- * incrementally. Shared across web + mobile so the two stay in sync.
+ * The shop-settings section catalog. Used by the settings hub and section headers.
+ * Sidebar placement lives in `vendor-nav.ts` (Money / Fulfillment / Shop setup).
  */
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
-    id: 'general',
-    label: 'General',
-    description: 'Configure your shop identity and core preferences.',
-    icon: Icons.SlidersHorizontal,
+    id: 'hub',
+    label: 'Shop setup',
+    description: 'Jump to profile, verification, policies, and team settings.',
+    icon: Icons.LayoutGrid,
     ready: true,
   },
   {
-    id: 'gst',
-    label: 'GST Compliance',
-    description: 'GST registration, number, and document management.',
-    icon: Icons.FileText,
+    id: 'general',
+    label: 'Shop profile',
+    description: 'Name, logo, hours, categories, and storefront currency.',
+    icon: Icons.Store,
     ready: true,
   },
   {
     id: 'connect',
-    label: 'Connect',
-    description: 'Manage your contact details, shop address, and social platforms.',
-    icon: Icons.Share2,
+    label: 'Contact & address',
+    description: 'Phone, email, shop address, and social links.',
+    icon: Icons.MapPin,
     ready: true,
   },
-
+  {
+    id: 'gst',
+    label: 'Tax & GST',
+    description: 'GST registration for tax compliance on your storefront.',
+    icon: Icons.FileText,
+    ready: true,
+  },
+  {
+    id: 'verification',
+    label: 'Verification',
+    description: 'Upload business and bank documents for payout KYC review.',
+    icon: Icons.BadgeCheck,
+    ready: true,
+  },
   {
     id: 'payments',
-    label: 'Payment Methods',
-    description: 'Submit payout and KYC details so SHEconomy can pay you.',
-    icon: Icons.CreditCard,
-    ready: true,
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-    description: 'Control how you receive order updates, marketing insights, and customer messages.',
-    icon: Icons.Bell,
-    ready: true,
-  },
-  {
-    id: 'security',
-    label: 'Security',
-    description: 'Manage sign-in, team access, and role-based permissions for your shop.',
-    icon: Icons.ShieldCheck,
+    label: 'Payouts',
+    description: 'Settlement status and how you receive buyer payments.',
+    icon: Icons.Banknote,
     ready: true,
   },
   {
     id: 'shipping',
-    label: 'Shipping',
-    description: 'Configure delivery fees, free-shipping thresholds, processing times, and zone-based rates.',
+    label: 'Shipping policies',
+    description: 'Delivery fees, free-shipping thresholds, and zone rates.',
     icon: Icons.Truck,
     ready: true,
   },
   {
     id: 'returns',
-    label: 'Return Policies',
-    description: 'Manage return windows, refund rules, and reverse-logistics preferences.',
+    label: 'Return policies',
+    description: 'Return windows, refund rules, and reverse logistics.',
     icon: Icons.Undo2,
+    ready: true,
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    description: 'Order, stock, and marketing alerts for your shop.',
+    icon: Icons.Bell,
+    ready: true,
+  },
+  {
+    id: 'security',
+    label: 'Team & security',
+    description: 'Sign-in, teammates, and shop permissions.',
+    icon: Icons.ShieldCheck,
     ready: true,
   },
 ] as const

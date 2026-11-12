@@ -778,19 +778,19 @@ function MainColumn({
         </Card>
         <Card ui={ui} flex={1} minWidth={260}>
           <XStack alignItems="center" justifyContent="space-between">
-            <SectionHeading ui={ui} icon={Icons.CreditCard} title="Payment Methods" noMargin />
+            <SectionHeading ui={ui} icon={Icons.BadgeCheck} title="Verification" noMargin />
           </XStack>
           <YStack gap="$2" marginTop="$3">
             <Text fontSize={13} color={ui.textSecondary}>
-              Checkout accepts cards, UPI, net banking, and COD based on your shop Payments and
-              Shipping settings.
+              Upload KYC documents for admin review. Once approved, PayU creates your payout account
+              automatically so settlements can release.
             </Text>
             <AppLink
-              href={`${String(vendorRoutes.settings)}?section=payments` as Href}
+              href={vendorRoutes.settingsSection('verification') as Href}
               asChild
             >
               <Button size="$3" borderRadius={999} alignSelf="flex-start">
-                Manage payments
+                {shop.verified ? 'View verification' : 'Complete verification'}
               </Button>
             </AppLink>
           </YStack>

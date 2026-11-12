@@ -175,7 +175,7 @@ Deno.serve(async (request) => {
               seller_name: row.legal_name || 'there',
               shop_name: shop.shop_name || 'your shop',
               reason,
-              action_url: '/vendor/settings?section=payments',
+              action_url: '/vendor/settings?section=verification',
             },
             p_context_type: 'shop',
             p_context_id: row.shop_id,
@@ -302,7 +302,7 @@ Deno.serve(async (request) => {
           p_variables: {
             seller_name: row.legal_name || 'there',
             shop_name: shop.shop_name || 'your shop',
-            action_url: '/vendor/settings?section=payments',
+            action_url: '/vendor/settings?section=verification',
           },
           p_context_type: 'shop',
           p_context_id: row.shop_id,
