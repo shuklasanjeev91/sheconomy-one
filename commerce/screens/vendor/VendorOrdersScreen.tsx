@@ -19,7 +19,6 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
-import { vendorRoutes } from '~/lib/routes'
 
 import { createTracking, selectDeliveryLoading } from '~/lib/orders/delivery.store'
 import { subscribeVendorOrderItemChanges } from '~/lib/orders/vendor-orders.service'
