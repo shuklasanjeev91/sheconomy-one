@@ -17,6 +17,8 @@ export async function registerPwaServiceWorker(): Promise<ServiceWorkerRegistrat
     return url.includes('OneSignalSDKWorker') || url.endsWith(PWA_SERVICE_WORKER_URL)
   })
   if (already) {
+    // Force check for a newer worker so vendors don't keep a stale shell after OTA/web deploys.
+    void already.update().catch(() => undefined)
     await navigator.serviceWorker.ready
     return already
   }
@@ -25,6 +27,7 @@ export async function registerPwaServiceWorker(): Promise<ServiceWorkerRegistrat
     scope: '/',
     updateViaCache: 'none',
   })
+  void registration.update().catch(() => undefined)
   await navigator.serviceWorker.ready
   return registration
 }
