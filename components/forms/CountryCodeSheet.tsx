@@ -9,7 +9,7 @@ import {
   hasStrictPhoneRule,
   type Country,
 } from '~/lib/phone/countries'
-import { Icons, Input, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { Icons, Input, SafeIcon, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type CountryCodeSheetProps = {
@@ -73,7 +73,7 @@ export function CountryCodeSheet({
                   {strict ? ` · ${country.placeholder}` : ' · International format'}
                 </Text>
               </YStack>
-              {selected ? <Icons.Check size={18} color={ui.brand} /> : null}
+              {selected ? <SafeIcon icon={Icons.Check} size={18} color={ui.brand} /> : null}
             </XStack>
           )
         })}
@@ -102,7 +102,7 @@ export function CountryCodeSheet({
           borderColor={ui.borderSubtle}
           backgroundColor={ui.surfaceMuted}
         >
-          <Icons.Search size={18} color={ui.textMuted} />
+          <SafeIcon icon={Icons.Search} size={18} color={ui.textMuted} />
           <Input
             flex={1}
             borderWidth={0}

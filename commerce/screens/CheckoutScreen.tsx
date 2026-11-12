@@ -1,5 +1,5 @@
 import { useRouter } from 'one'
-import { Platform } from 'react-native'
+import { Platform, Text as RNText, View as RNView } from 'react-native'
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AppLink } from '~/components/navigation/AppLink'
 import type { ReactNode } from 'react'
@@ -19,6 +19,7 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { SafeIcon } from '~/commerce/components/SafeIcon'
+import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection, StickyRail } from '~/components/layout'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useStorefrontCartItems } from '~/commerce/hooks/useStorefrontCartItems'
@@ -1158,7 +1159,9 @@ export function CheckoutScreen() {
           valueColor={c.inStock}
         />
       ) : null}
-      <CartCoupon />
+      <AppErrorBoundary scope="CheckoutCoupon" alwaysShowError>
+        <CartCoupon />
+      </AppErrorBoundary>
       <YStack height={1} backgroundColor={c.divider} />
       <XStack justifyContent="space-between" alignItems="center">
         <Text fontSize={18} fontWeight="700" color={c.priceStrong}>
@@ -1217,15 +1220,18 @@ export function CheckoutScreen() {
             <YStack flex={1} minWidth={0} width="100%" gap="$4" flexShrink={0}>
               {user ? (
                 <SectionCard step={1} title="Contact details">
-                  <CheckoutContactSection
-                    user={user}
-                    onCheckoutReadyChange={setContactCheckoutReady}
-                  />
+                  <AppErrorBoundary scope="CheckoutContact" alwaysShowError>
+                    <CheckoutContactSection
+                      user={user}
+                      onCheckoutReadyChange={setContactCheckoutReady}
+                    />
+                  </AppErrorBoundary>
                 </SectionCard>
               ) : null}
 
               {needsShipping ? (
                 <SectionCard step={2} title="Delivery address">
+                  <AppErrorBoundary scope="CheckoutAddress" alwaysShowError>
                   {addresses.length === 0 ? (
                     <XStack alignItems="center" gap="$2">
                       <SafeIcon icon={Icons.Info} size={14} color={ui.badgeAccentText} />
@@ -1399,6 +1405,7 @@ export function CheckoutScreen() {
                       </Text>
                     </XStack>
                   ) : null}
+                  </AppErrorBoundary>
                 </SectionCard>
               ) : (
                 <SectionCard step={2} title="Digital delivery">
@@ -1410,84 +1417,87 @@ export function CheckoutScreen() {
               )}
 
               <SectionCard step={needsShipping ? 3 : 2} title="Payment method">
-                <YStack gap="$3" width="100%" flexShrink={0}>
-                  <CheckoutPayuPanel
-                    embedded
-                    ui={ui}
-                    brandColor={c.brand}
-                    borderColor={c.border}
-                    chipColor={c.chip}
-                    secondaryColor={c.secondary}
-                    initialMode="upi_intent"
-                    amount={displayTotals.orderTotal}
-                    amountLabel={formatCheckoutMoney(displayTotals.orderTotal)}
-                    session={payuPanelSession}
-                    onEnsureSession={ensureShepayPayuSession}
-                    onAuthActiveChange={setPayuAuthActive}
-                    collapsed={paymentMethod === 'cod'}
-                    onSelectOnline={() => setPaymentMethod('online')}
-                    cod={
-                      needsShipping
-                        ? {
-                            selected: paymentMethod === 'cod',
-                            title: 'Cash on delivery / Pay on delivery',
-                            subtitle: 'Pay with cash, UPI or card when your order arrives',
-                            onSelect: () => {
-                              void (async () => {
-                                if (payuCheckoutMeta?.checkoutGroupId) {
-                                  await cancelCheckoutPayment(payuCheckoutMeta.checkoutGroupId)
-                                }
-                                clearPayuCheckoutState()
-                                setPaymentMethod('cod')
-                              })()
-                            },
-                          }
-                        : null
-                    }
-                    onPaid={() => {
-                      const meta = payuCheckoutMetaRef.current
-                      trackCommerceEvent('purchase', {
-                        currency: settlementCurrency,
-                        value: orderTotal,
-                        transactionId:
-                          meta?.orderNumbers[0] ?? meta?.orderIds[0] ?? cart?.id ?? '',
-                        items: selectedItems.map((item) => ({
-                          id: item.listing_id,
-                          name: item.listing_id,
-                          price: item.unit_price ?? undefined,
-                          quantity: item.quantity,
-                        })),
-                      })
-                      toast.show('Payment received', {
-                        tone: 'success',
-                        message: 'Your order is confirmed.',
-                      })
-                      if (meta?.orderIds?.length) {
-                        replaceApp(commerceRoutes.orderSuccess(meta.orderIds) as never)
-                      } else {
-                        replaceApp(commerceRoutes.orders as never)
+                <AppErrorBoundary scope="CheckoutPayu" alwaysShowError>
+                  <YStack gap="$3" width="100%" flexShrink={0}>
+                    <CheckoutPayuPanel
+                      embedded
+                      ui={ui}
+                      brandColor={c.brand}
+                      borderColor={c.border}
+                      chipColor={c.chip}
+                      secondaryColor={c.secondary}
+                      initialMode="upi_intent"
+                      amount={displayTotals.orderTotal}
+                      amountLabel={formatCheckoutMoney(displayTotals.orderTotal)}
+                      session={payuPanelSession}
+                      onEnsureSession={ensureShepayPayuSession}
+                      onAuthActiveChange={setPayuAuthActive}
+                      collapsed={paymentMethod === 'cod'}
+                      onSelectOnline={() => setPaymentMethod('online')}
+                      cod={
+                        needsShipping
+                          ? {
+                              selected: paymentMethod === 'cod',
+                              title: 'Cash on delivery / Pay on delivery',
+                              subtitle: 'Pay with cash, UPI or card when your order arrives',
+                              onSelect: () => {
+                                void (async () => {
+                                  if (payuCheckoutMeta?.checkoutGroupId) {
+                                    await cancelCheckoutPayment(payuCheckoutMeta.checkoutGroupId)
+                                  }
+                                  clearPayuCheckoutState()
+                                  setPaymentMethod('cod')
+                                })()
+                              },
+                            }
+                          : null
                       }
-                      void refresh()
-                    }}
-                    onFailed={(message) => {
-                      toast.show('Payment failed', { tone: 'danger', message })
-                    }}
-                    onCancel={async () => {
-                      if (payuCheckoutMeta?.checkoutGroupId) {
-                        await cancelCheckoutPayment(payuCheckoutMeta.checkoutGroupId)
-                      }
-                      clearPayuCheckoutState()
-                      await refresh()
-                      toast.show('Payment cancelled', {
-                        tone: 'default',
-                        message: 'Your order was not charged. You can try again.',
-                      })
-                    }}
-                  />
-                </YStack>
+                      onPaid={() => {
+                        const meta = payuCheckoutMetaRef.current
+                        trackCommerceEvent('purchase', {
+                          currency: settlementCurrency,
+                          value: orderTotal,
+                          transactionId:
+                            meta?.orderNumbers[0] ?? meta?.orderIds[0] ?? cart?.id ?? '',
+                          items: selectedItems.map((item) => ({
+                            id: item.listing_id,
+                            name: item.listing_id,
+                            price: item.unit_price ?? undefined,
+                            quantity: item.quantity,
+                          })),
+                        })
+                        toast.show('Payment received', {
+                          tone: 'success',
+                          message: 'Your order is confirmed.',
+                        })
+                        if (meta?.orderIds?.length) {
+                          replaceApp(commerceRoutes.orderSuccess(meta.orderIds) as never)
+                        } else {
+                          replaceApp(commerceRoutes.orders as never)
+                        }
+                        void refresh()
+                      }}
+                      onFailed={(message) => {
+                        toast.show('Payment failed', { tone: 'danger', message })
+                      }}
+                      onCancel={async () => {
+                        if (payuCheckoutMeta?.checkoutGroupId) {
+                          await cancelCheckoutPayment(payuCheckoutMeta.checkoutGroupId)
+                        }
+                        clearPayuCheckoutState()
+                        await refresh()
+                        toast.show('Payment cancelled', {
+                          tone: 'default',
+                          message: 'Your order was not charged. You can try again.',
+                        })
+                      }}
+                    />
+                  </YStack>
+                </AppErrorBoundary>
               </SectionCard>
 
               <SectionCard step={needsShipping ? 4 : 3} title="Review your order">
+                <AppErrorBoundary scope="CheckoutReview" alwaysShowError>
                 {multiShop ? (
                   <Text fontSize={12} color={c.secondary}>
                     Your order includes items from {orderShops.length} shops. Each shop packs and
@@ -1631,6 +1641,7 @@ export function CheckoutScreen() {
                     </YStack>
                   )
                 })}
+                </AppErrorBoundary>
               </SectionCard>
 
               {!hasSideRails ? orderSummary : null}
@@ -1712,40 +1723,45 @@ function SectionCard({
 }) {
   const c = useCommercePalette()
   const ui = useAppUi()
+  // Plain RN views — Tamagui Text-as-badge / YStack here was on the React #130
+  // stack (minified `w` / `T` → SectionCard) even with icons disabled.
   return (
-    <YStack
-      backgroundColor={c.panel}
-      borderColor={c.border}
-      borderWidth={1}
-      borderRadius={12}
-      padding="$4"
-      gap="$3"
-      width="100%"
-      flexShrink={0}
-      position="relative"
-      overflow="visible"
-      zIndex={1}
+    <RNView
+      style={{
+        backgroundColor: c.panel,
+        borderColor: c.border,
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 16,
+        gap: 12,
+        width: '100%',
+        flexShrink: 0,
+        position: 'relative',
+        overflow: 'visible',
+        zIndex: 1,
+      }}
     >
-      <XStack alignItems="center" gap="$2">
-        <Text
-          width={22}
-          height={22}
-          borderRadius={11}
-          backgroundColor={ui.brand}
-          color={ui.onBrand}
-          fontSize={13}
-          fontWeight="700"
-          textAlign="center"
-          lineHeight={22}
+      <RNView style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <RNView
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 11,
+            backgroundColor: ui.brand,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
-          {step}
-        </Text>
-        <Text fontSize={18} fontWeight="700" color={c.text}>
+          <RNText style={{ color: ui.onBrand, fontSize: 13, fontWeight: '700', lineHeight: 16 }}>
+            {step}
+          </RNText>
+        </RNView>
+        <RNText style={{ fontSize: 18, fontWeight: '700', color: c.text, flexShrink: 1 }}>
           {title}
-        </Text>
-      </XStack>
+        </RNText>
+      </RNView>
       {children}
-    </YStack>
+    </RNView>
   )
 }
 

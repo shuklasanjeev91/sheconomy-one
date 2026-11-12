@@ -1,5 +1,6 @@
 export { AddressAutocompleteField } from '~/components/location/AddressAutocompleteField'
 export { MapAddressPicker } from '~/components/location/MapAddressPicker'
 export { LocationAssistActions } from '~/components/location/LocationAssistActions'
+export { DeliveryPinCheck } from '~/components/location/DeliveryPinCheck'
 export { NearbyShopsSection } from '~/components/location/NearbyShopsSection'
 export { NearYouLocationChip } from '~/components/location/NearYouLocationChip'

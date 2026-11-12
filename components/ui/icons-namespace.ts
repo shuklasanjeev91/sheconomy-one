@@ -1,13 +1,9 @@
 /**
  * App-wide Lucide icon namespace.
  *
- * Rolldown emits icon re-exports as lazy thunks (`() => ActualIcon`). Spreading
- * that namespace into a plain object kept the thunks — React then tried to
- * render the thunk (or its return value) and crashed with minified #130
- * ("Element type is invalid … got: undefined") on checkout SectionCards.
- *
- * We unwrap thunks into real components, then Proxy any still-missing name to a
- * no-op so checkout cannot crash on a bad icon lookup.
+ * Rolldown emits icon re-exports as lazy getters (`() => ActualIcon`). We resolve
+ * those to real components (forwardRef / memo / function) and Proxy any missing
+ * name to a no-op so checkout cannot crash with React #130.
  *
  * File is intentionally not named Icons.tsx — on macOS that collides with icons.ts.
  */
@@ -19,27 +15,41 @@ function MissingIcon(_props: IconProps) {
   return null
 }
 
-function isReactComponentType(value: unknown): value is ComponentType<IconProps> {
-  if (value == null) return false
+const REACT_ELEMENT = Symbol.for('react.element')
+const REACT_FORWARD_REF = Symbol.for('react.forward_ref')
+const REACT_MEMO = Symbol.for('react.memo')
+const REACT_LAZY = Symbol.for('react.lazy')
+
+function isRenderableComponent(value: unknown): value is ComponentType<IconProps> {
   if (typeof value === 'function') return true
-  if (typeof value === 'object' && value !== null && '$$typeof' in value) return true
-  return false
+  if (typeof value !== 'object' || value == null || !('$$typeof' in value)) return false
+  const kind = (value as { $$typeof: symbol }).$$typeof
+  if (kind === REACT_ELEMENT) return false
+  return kind === REACT_FORWARD_REF || kind === REACT_MEMO || kind === REACT_LAZY
 }
 
-/** Unwrap Rolldown/Vite lazy re-export thunks: `() => ActualIcon`. */
+/** Unwrap Rolldown lazy re-export thunks: `() => ActualIcon`. */
 function resolveIcon(value: unknown): ComponentType<IconProps> | null {
-  if (!isReactComponentType(value)) return null
-  if (typeof value === 'function' && value.length === 0) {
-    try {
-      const inner = (value as () => unknown)()
-      if (inner != null && inner !== value && isReactComponentType(inner)) {
-        return inner
+  if (value == null) return null
+
+  if (typeof value === 'function') {
+    // Prefer treating it as a component. Only unwrap 0-arg thunks when the
+    // result is a real component type — never when it's a React element.
+    if (value.length === 0) {
+      try {
+        const inner = (value as () => unknown)()
+        if (inner != null && inner !== value && isRenderableComponent(inner)) {
+          return inner
+        }
+      } catch {
+        /* keep function as component */
       }
-    } catch {
-      /* use value as-is */
     }
+    return value as ComponentType<IconProps>
   }
-  return value
+
+  if (isRenderableComponent(value)) return value
+  return null
 }
 
 const iconsTable: Record<string, ComponentType<IconProps>> = {}
