@@ -36,17 +36,15 @@ import {
   ShopRatingBadge,
   useCommercePalette,
 } from '~/commerce/components'
+import { CheckoutPayuPanel, type CheckoutPayuSession } from '~/commerce/components/CheckoutPayuPanel'
 import {
   checkCartStock,
   cancelCheckoutPayment,
   createAtomicMarketplaceCheckout,
   type CheckoutPaymentMode,
 } from '~/commerce/lib/checkout'
-import { createShepayPayuSession } from '~/commerce/lib/shepay'
 import {
   checkoutShippingLabel,
-  onlinePaymentOptionCopy,
-  resolveCheckoutOnlineProvider,
   resolvePostCheckoutNext,
   toInAppPayUHref,
 } from '~/commerce/lib/checkout-payment-route'
@@ -126,7 +124,16 @@ export function CheckoutScreen() {
   const [notesByShop, setNotesByShop] = useState<Record<string, string>>({})
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
-  const onlineProvider = resolveCheckoutOnlineProvider()
+  const [payuSession, setPayuSession] = useState<CheckoutPayuSession | null>(null)
+  const [payuCheckoutMeta, setPayuCheckoutMeta] = useState<{
+    orderIds: string[]
+    orderNumbers: string[]
+    checkoutGroupId: string | null
+  } | null>(null)
+  const [payuAuthActive, setPayuAuthActive] = useState(false)
+  const payuCheckoutMetaRef = useRef(payuCheckoutMeta)
+  payuCheckoutMetaRef.current = payuCheckoutMeta
+  const ensurePayuInFlight = useRef<Promise<CheckoutPayuSession | null> | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRedirectingToPayment, setIsRedirectingToPayment] = useState(false)
   const [orderPlaced, setOrderPlaced] = useState(false)
@@ -344,15 +351,6 @@ export function CheckoutScreen() {
 
   const multiShop = orderShops.length > 1
 
-  const shepayOnlineCopy = useMemo(
-    () =>
-      onlinePaymentOptionCopy({
-        shepayShops: orderShops.map((shop) => ({ shopName: shop.shopName })),
-        directShops: [],
-      }),
-    [orderShops],
-  )
-
   useEffect(() => {
     const ids = items.map((item) => item.listing_id)
     if (!ids.length) {
@@ -550,18 +548,38 @@ export function CheckoutScreen() {
 
   const showSettlementCurrencyNote = preferredCurrency !== settlementCurrency
 
-  // Online marketplace checkout uses PayU Hosted via SHEPay absolute split.
-  const placeLabel = paymentMethod === 'online' ? 'Pay with PayU' : 'Place your order'
-  const submittingLabel = paymentMethod === 'online' ? 'Opening PayU…' : 'Placing…'
+  // Online: PayU merchant-hosted S2S accordion on this screen (no PayU redirect CTA).
+  const placeLabel = 'Place your order'
+  const submittingLabel = 'Placing…'
+  const usesInlinePayu = paymentMethod === 'online'
 
   const canPlace =
+    !usesInlinePayu &&
+    !payuSession &&
     !noneSelected &&
     !isSubmitting &&
     !isRedirectingToPayment &&
     !isLoadingAddresses &&
     contactCheckoutReady &&
     addressReady
-  const showMobileBar = !hasSideRails && !orderPlaced
+  const showMobileBar = !hasSideRails && !orderPlaced && !usesInlinePayu && !payuSession
+
+  const payuPanelSession: CheckoutPayuSession =
+    payuSession ??
+    ({
+      provider: 'shepay',
+      actionUrl: '',
+      fields: {},
+      txnid: '',
+    } satisfies CheckoutPayuSession)
+
+  function clearPayuCheckoutState() {
+    checkoutAttemptKey.current = null
+    ensurePayuInFlight.current = null
+    setPayuAuthActive(false)
+    setPayuSession(null)
+    setPayuCheckoutMeta(null)
+  }
 
   async function handleCheckoutQuantityChange(itemId: string, nextQuantity: number) {
     const { error } = await updateQuantity(itemId, nextQuantity)
@@ -589,7 +607,186 @@ export function CheckoutScreen() {
     }
   }
 
+
+  /** Place order + create SHEPay step; PayU S2S charge runs inside CheckoutPayuPanel. */
+  async function ensureShepayPayuSession(): Promise<CheckoutPayuSession | null> {
+    if (payuSession?.paymentStepId) return payuSession
+    if (ensurePayuInFlight.current) return ensurePayuInFlight.current
+
+    const run = (async (): Promise<CheckoutPayuSession | null> => {
+      if (!cart || !user || noneSelected || !contactCheckoutReady) {
+        if (!contactCheckoutReady) {
+          toast.show('Verify your mobile', {
+            tone: 'warning',
+            message: 'Add and verify a mobile number before paying.',
+          })
+        }
+        return null
+      }
+      if (needsShipping && !addressReady) {
+        const message = addressRequirementMessage ?? 'Add a delivery address to continue.'
+        setAddressError(message)
+        toast.show('Delivery address required', { tone: 'warning', message })
+        return null
+      }
+
+      let shippingAddressId = selectedAddressId
+      try {
+        const { issues, error: stockError } = await checkCartStock(
+          selectedItems.map((item) => ({ listingId: item.listing_id, quantity: item.quantity })),
+        )
+        if (stockError) {
+          toast.show('Could not verify stock', { tone: 'danger', message: stockError })
+          return null
+        }
+        if (issues.length > 0) {
+          const first = issues[0]
+          toast.show('Not enough stock', {
+            tone: 'danger',
+            message:
+              issues.length === 1
+                ? `Only ${first.available} left of "${first.title}". Update the quantity in your cart.`
+                : `${issues.length} items exceed available stock. Update quantities in your cart.`,
+          })
+          navigateApp(commerceRoutes.cart)
+          return null
+        }
+
+        if (needsShipping) {
+          if (!shippingAddressId) {
+            toast.show('Select a delivery address', { tone: 'danger' })
+            return null
+          }
+        } else if (!shippingAddressId && addresses[0]?.id) {
+          shippingAddressId = addresses[0].id
+        }
+        if (!shippingAddressId) {
+          toast.show('Add an address for your order records', { tone: 'danger' })
+          return null
+        }
+
+        const selectionKey = selectedItems
+          .map((item) => item.id)
+          .sort()
+          .join(',')
+        if (!selectionKey) {
+          toast.show('Cart is empty', {
+            tone: 'danger',
+            message: 'Refresh the page or return to your cart and try again.',
+          })
+          return null
+        }
+
+        if (cart.applied_discount_id) {
+          const { removed } = await ensureCartDiscountValidForCheckout(
+            cart,
+            toCartOfferItems(selectedItems),
+          )
+          if (removed) {
+            await refresh()
+            toast.show('Coupon removed', {
+              tone: 'default',
+              message:
+                'The applied offer no longer applies to your selected items. Review your order and try again.',
+            })
+            return null
+          }
+        }
+
+        if (
+          !checkoutAttemptKey.current ||
+          !checkoutAttemptKey.current.includes(`:${selectionKey}:`)
+        ) {
+          checkoutAttemptKey.current = `${user.id}:${cart.id}:${selectionKey}:${Date.now()}`
+        }
+
+        const result = await createAtomicMarketplaceCheckout({
+          cartId: cart.id,
+          cartItemIds: selectedItems.map((item) => item.id),
+          shippingAddressId,
+          billingAddressId: shippingAddressId,
+          paymentMode: 'online',
+          idempotencyKey: checkoutAttemptKey.current,
+          notesByShop,
+          giftShopIds: Object.entries(giftByShop)
+            .filter(([, enabled]) => enabled)
+            .map(([shopId]) => shopId),
+          customerCurrency: preferredCurrency,
+          customerAmountsByShop: customerAmountsByShop,
+          skipShepayFinalize: false,
+        })
+        if (result.error || !result.data) {
+          const msg = result.error ?? 'Please try again.'
+          if (/cart item|cart not found|unavailable|cancelled|invalid/i.test(msg)) {
+            checkoutAttemptKey.current = null
+            await refresh()
+          }
+          toast.show('Checkout failed', { tone: 'danger', message: msg })
+          return null
+        }
+
+        const { orderIds, orderNumbers, checkoutGroupId } = result.data
+        const shepayStep = result.data.paymentSteps.find((step) => step.collection === 'shepay')
+        if (!shepayStep?.id) {
+          if (checkoutGroupId) await cancelCheckoutPayment(checkoutGroupId)
+          checkoutAttemptKey.current = null
+          toast.show('Payment setup incomplete', {
+            tone: 'danger',
+            message: 'PayU split checkout is not ready for these shops. Please try again.',
+          })
+          return null
+        }
+
+        const usedAddressEarly = addresses.find((row) => row.id === shippingAddressId)
+        if (usedAddressEarly) {
+          void rememberRecentAddress(usedAddressEarly).then(setRecentAddresses)
+        }
+
+        await savePendingOrderSuccess({
+          orderIds,
+          orderNumbers,
+          createdAt: Date.now(),
+          paymentMode: 'online',
+          awaitingExternalPayment: true,
+          checkoutGroupId,
+          checkoutUrl: null,
+        })
+
+        const nextSession: CheckoutPayuSession = {
+          provider: 'shepay',
+          paymentStepId: shepayStep.id,
+          actionUrl: '',
+          fields: {},
+          txnid: '',
+        }
+        setPayuCheckoutMeta({ orderIds, orderNumbers, checkoutGroupId })
+        setPayuSession(nextSession)
+        return nextSession
+      } catch (err) {
+        toast.show('Checkout failed', {
+          tone: 'danger',
+          message: err instanceof Error ? err.message : 'Please try again.',
+        })
+        return null
+      }
+    })()
+
+    ensurePayuInFlight.current = run
+    try {
+      return await run
+    } finally {
+      if (ensurePayuInFlight.current === run) ensurePayuInFlight.current = null
+    }
+  }
+
   function handlePlaceOrderPress() {
+    if (usesInlinePayu) {
+      toast.show('Pay in the payment section', {
+        tone: 'default',
+        message: 'Choose UPI, card or net banking below — your order is placed when payment succeeds.',
+      })
+      return
+    }
     if (needsShipping && !addressReady) {
       const message = addressRequirementMessage ?? 'Add a delivery address to continue.'
       setAddressError(message)
@@ -667,7 +864,13 @@ export function CheckoutScreen() {
       }
 
       const mode: CheckoutPaymentMode = needsShipping ? paymentMethod : 'online'
-      // Online → SHEPay PayU Hosted (absolute split to child merchants).
+      if (mode === 'online') {
+        toast.show('Pay in the payment section', {
+          tone: 'default',
+          message: 'Choose UPI, card or net banking below to complete payment on this page.',
+        })
+        return
+      }
       const selectionKey = selectedItems
         .map((item) => item.id)
         .sort()
@@ -718,59 +921,9 @@ export function CheckoutScreen() {
       }
 
       const { orderIds, orderNumbers, checkoutGroupId } = result.data
-      let checkoutUrl =
+      const checkoutUrl =
         result.data.paymentSteps.find((step) => step.checkoutUrl)?.checkoutUrl ?? null
-      let paymentSetupError: string | null = null
-      const shepayStep = result.data.paymentSteps.find((step) => step.collection === 'shepay')
-      const hasShepaySteps = Boolean(shepayStep)
-      const hasDirectSteps = result.data.paymentSteps.some((step) => step.collection === 'direct')
-
-      /** PayU Hosted: create session then POST immediately (no intermediate checkout screen). */
-      if (mode === 'online' && onlineProvider === 'shepay' && shepayStep) {
-        setIsRedirectingToPayment(true)
-        const payu = await createShepayPayuSession(shepayStep.id, {
-          checkoutStyle: 'hosted',
-          seamless: false,
-        })
-        if (payu.error || !payu.data?.action_url || !payu.data?.fields) {
-          if (checkoutGroupId) await cancelCheckoutPayment(checkoutGroupId)
-          toast.show('Payment setup incomplete', {
-            tone: 'danger',
-            message: payu.error ?? 'Could not open the payment page. Please try again.',
-          })
-          setIsRedirectingToPayment(false)
-          setIsSubmitting(false)
-          return
-        }
-
-        const usedAddressEarly = addresses.find((row) => row.id === shippingAddressId)
-        if (usedAddressEarly) {
-          void rememberRecentAddress(usedAddressEarly).then(setRecentAddresses)
-        }
-
-        const bridgeHref = payu.data.checkout_url
-          ? toInAppPayUHref(payu.data.checkout_url)
-          : null
-        await savePendingOrderSuccess({
-          orderIds,
-          orderNumbers,
-          createdAt: Date.now(),
-          paymentMode: mode,
-          awaitingExternalPayment: true,
-          checkoutGroupId,
-          checkoutUrl: bridgeHref,
-        })
-
-        savePayuBridgeSession(payu.data.action_url, payu.data.fields)
-        if (Platform.OS === 'web') {
-          submitPayuFormPost(payu.data.action_url, payu.data.fields)
-          return
-        }
-        setOrderPlaced(true)
-        void refresh()
-        replaceApp((bridgeHref ?? '/orders/payu') as never)
-        return
-      }
+      const hasShepaySteps = result.data.paymentSteps.some((step) => step.collection === 'shepay')
 
       const usedAddress = addresses.find((row) => row.id === shippingAddressId)
       if (usedAddress) {
@@ -780,7 +933,7 @@ export function CheckoutScreen() {
       const next = resolvePostCheckoutNext({
         mode,
         checkoutUrl,
-        shepayError: paymentSetupError,
+        shepayError: null,
         hasShepaySteps,
         payuInline: null,
       })
@@ -915,7 +1068,24 @@ export function CheckoutScreen() {
     }
   }
 
-  const placeButton = (
+  const placeButton = usesInlinePayu || payuSession ? (
+    <YStack
+      gap="$2"
+      width="100%"
+      padding="$3"
+      borderRadius={10}
+      backgroundColor={c.chip}
+      borderWidth={1}
+      borderColor={c.border}
+    >
+      <Text fontSize={13} fontWeight="600" color={c.text}>
+        Pay below to place your order
+      </Text>
+      <Text fontSize={12} color={c.secondary} lineHeight={17}>
+        Choose UPI, card or net banking in the payment section. Your order is confirmed after successful payment.
+      </Text>
+    </YStack>
+  ) : (
     <YStack gap="$2" width="100%">
       {needsShipping && deliveryAddressNotice ? (
         <XStack
@@ -1237,25 +1407,82 @@ export function CheckoutScreen() {
                 </SectionCard>
               )}
 
-              <SectionCard step={needsShipping ? 3 : 2} title="Payment">
+              <SectionCard
+                step={needsShipping ? 3 : 2}
+                title={usesInlinePayu ? 'Pay with PayU' : 'Payment'}
+              >
                 <YStack gap="$3" width="100%" flexShrink={0}>
-                  <PaymentOption
-                    selected={paymentMethod === 'online'}
-                    title={shepayOnlineCopy.title}
-                    subtitle={
-                      multiShop
-                        ? `${shepayOnlineCopy.subtitle} · one PayU payment split across ${orderShops.length} shops`
-                        : shepayOnlineCopy.subtitle
-                    }
-                    onPress={() => setPaymentMethod('online')}
+                  <CheckoutPayuPanel
+                    embedded
+                    ui={ui}
+                    brandColor={c.brand}
+                    borderColor={c.border}
+                    chipColor={c.chip}
+                    secondaryColor={c.secondary}
+                    initialMode="upi_intent"
+                    amountLabel={formatCheckoutMoney(displayTotals.orderTotal)}
+                    disabledMethodSections={['more']}
+                    session={payuPanelSession}
+                    onEnsureSession={ensureShepayPayuSession}
+                    onAuthActiveChange={setPayuAuthActive}
+                    collapsed={paymentMethod === 'cod'}
+                    onSelectOnline={() => setPaymentMethod('online')}
+                    onPaid={() => {
+                      const meta = payuCheckoutMetaRef.current
+                      trackCommerceEvent('purchase', {
+                        currency: settlementCurrency,
+                        value: orderTotal,
+                        transactionId:
+                          meta?.orderNumbers[0] ?? meta?.orderIds[0] ?? cart?.id ?? '',
+                        items: selectedItems.map((item) => ({
+                          id: item.listing_id,
+                          name: item.listing_id,
+                          price: item.unit_price ?? undefined,
+                          quantity: item.quantity,
+                        })),
+                      })
+                      toast.show('Payment received', {
+                        tone: 'success',
+                        message: 'Your order is confirmed.',
+                      })
+                      if (meta?.orderIds?.length) {
+                        replaceApp(commerceRoutes.orderSuccess(meta.orderIds) as never)
+                      } else {
+                        replaceApp(commerceRoutes.orders as never)
+                      }
+                      void refresh()
+                    }}
+                    onFailed={(message) => {
+                      toast.show('Payment failed', { tone: 'danger', message })
+                    }}
+                    onCancel={async () => {
+                      if (payuCheckoutMeta?.checkoutGroupId) {
+                        await cancelCheckoutPayment(payuCheckoutMeta.checkoutGroupId)
+                      }
+                      clearPayuCheckoutState()
+                      await refresh()
+                      toast.show('Payment cancelled', {
+                        tone: 'default',
+                        message: 'Your order was not charged. You can try again.',
+                      })
+                    }}
                   />
 
                   {needsShipping ? (
                     <PaymentOption
                       selected={paymentMethod === 'cod'}
+                      disabled={payuAuthActive}
                       title="Cash on delivery / Pay on delivery"
                       subtitle="Pay with cash, UPI or card when your order arrives"
-                      onPress={() => setPaymentMethod('cod')}
+                      onPress={() => {
+                        void (async () => {
+                          if (payuCheckoutMeta?.checkoutGroupId) {
+                            await cancelCheckoutPayment(payuCheckoutMeta.checkoutGroupId)
+                          }
+                          clearPayuCheckoutState()
+                          setPaymentMethod('cod')
+                        })()
+                      }}
                     />
                   ) : null}
                 </YStack>

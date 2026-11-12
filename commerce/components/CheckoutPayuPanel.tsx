@@ -151,10 +151,10 @@ export function CheckoutPayuPanel({
   }, [session])
 
   const modeMeta = useMemo(() => resolvePayuPaymentMode(mode), [mode])
+  // Platform PayU uses order_payment_id; SHEPay S2S uses payment_step_id.
+  // Do not treat `onEnsureSession` alone as platform — marketplace checkout ensures a SHEPay step.
   const isPlatform =
-    session.provider === 'platform_payu' ||
-    Boolean(session.orderPaymentId) ||
-    Boolean(onEnsureSession)
+    session.provider === 'platform_payu' || Boolean(session.orderPaymentId)
   const isCards = mode === 'cards'
   const isUpiAppMode =
     mode === 'upi_gpay' ||
@@ -460,9 +460,19 @@ export function CheckoutPayuPanel({
     setNativeLaunchHint(null)
     try {
       let activeSession = sessionRef.current
-      if (isPlatform && !activeSession.orderPaymentId && onEnsureSession) {
+      const needsEnsure = onEnsureSession
+        ? activeSession.provider === 'platform_payu' || activeSession.orderPaymentId
+          ? !activeSession.orderPaymentId
+          : !activeSession.paymentStepId
+        : false
+      if (needsEnsure && onEnsureSession) {
         const ensured = await onEnsureSession()
-        if (!ensured?.orderPaymentId) {
+        const ensuredOk =
+          ensured &&
+          (ensured.provider === 'platform_payu' || ensured.orderPaymentId
+            ? Boolean(ensured.orderPaymentId)
+            : Boolean(ensured.paymentStepId))
+        if (!ensuredOk) {
           setError('Could not start checkout. Check your address and try again.')
           setBusy(false)
           return
@@ -471,6 +481,8 @@ export function CheckoutPayuPanel({
         sessionRef.current = ensured
         setTxnid(ensured.txnid || '')
       }
+      const chargeAsPlatform =
+        activeSession.provider === 'platform_payu' || Boolean(activeSession.orderPaymentId)
 
       const extras: Record<string, string> = {}
       if (vpa.trim()) extras.vpa = vpa.trim()
@@ -496,7 +508,7 @@ export function CheckoutPayuPanel({
               }
             : null
 
-      const chargeResult = isPlatform
+      const chargeResult = chargeAsPlatform
         ? await platformPayuService.chargePayment(activeSession.orderPaymentId ?? '', {
             payuMode: chargeMode,
             extraFields: Object.keys(extras).length ? extras : null,
@@ -524,7 +536,7 @@ export function CheckoutPayuPanel({
       if (chargeResult.error || !chargeResult.data) {
         setError(
           chargeResult.error ??
-            (isPlatform ? 'Could not start PayU payment' : 'Could not start SHEPay payment'),
+            (chargeAsPlatform ? 'Could not start PayU payment' : 'Could not start PayU payment'),
         )
         setBusy(false)
         return
@@ -613,7 +625,7 @@ export function CheckoutPayuPanel({
         return
       }
 
-      setError(data.message ?? (isPlatform ? 'Unexpected PayU response' : 'Unexpected SHEPay response'))
+      setError(data.message ?? 'Unexpected PayU response')
       setBusy(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment failed to start')
