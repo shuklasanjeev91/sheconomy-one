@@ -2,21 +2,21 @@
 
 UPDATE public.notification_templates
 SET
-  action_url = '/vendor/settings?section=verification',
-  body = replace(
-    coalesce(body, ''),
+  action_url_template = '/vendor/settings?section=verification',
+  message_template = replace(
+    coalesce(message_template, ''),
     '/vendor/settings?section=payments',
     '/vendor/settings?section=verification'
   ),
-  html_body = replace(
-    coalesce(html_body, ''),
+  email_body_template = replace(
+    coalesce(email_body_template, ''),
     '/vendor/settings?section=payments',
     '/vendor/settings?section=verification'
   ),
   updated_at = now()
-WHERE action_url = '/vendor/settings?section=payments'
-   OR coalesce(body, '') LIKE '%/vendor/settings?section=payments%'
-   OR coalesce(html_body, '') LIKE '%/vendor/settings?section=payments%';
+WHERE action_url_template = '/vendor/settings?section=payments'
+   OR coalesce(message_template, '') LIKE '%/vendor/settings?section=payments%'
+   OR coalesce(email_body_template, '') LIKE '%/vendor/settings?section=payments%';
 
 CREATE OR REPLACE FUNCTION public.process_payu_kyc_reminders(p_limit integer DEFAULT 200)
 RETURNS integer
