@@ -17,6 +17,22 @@ export const PAYU_MARKETPLACE_CATEGORY = {
   business_sub_category_id: 128,
 } as const
 
+export const PAYU_KYC_DOC_KINDS = [
+  'pan',
+  'bank',
+  'schedule_c',
+  'gst',
+  'incorporation',
+  'ownership',
+  'id_front',
+  'id_back',
+] as const
+
+export type PayuKycDocKind = (typeof PAYU_KYC_DOC_KINDS)[number]
+
+/** Docs forwarded to PayU on approve. Everything else is admin-only. */
+export const PAYU_FORWARDED_DOC_KINDS = ['pan', 'bank', 'schedule_c', 'gst'] as const
+
 export const PAYU_BUSINESS_ENTITIES = [
   { id: 2, label: 'Sole Proprietorship' },
   { id: 14, label: 'Individual' },
@@ -28,11 +44,43 @@ export const PAYU_BUSINESS_ENTITIES = [
   { id: 7, label: 'Trust' },
 ] as const
 
+export type PayuBusinessEntityId = (typeof PAYU_BUSINESS_ENTITIES)[number]['id']
+
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/
 const GSTIN_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/
 const ACCOUNT_RE = /^[0-9]{9,18}$/
+const CIN_RE = /^[UL][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/
+const LLPIN_RE = /^[A-Z]{3}-[0-9]{4}$/
+
+export function normalizeLlpin(value: string): string {
+  const compact = value.trim().toUpperCase().replace(/\s+/g, '').replace(/-/g, '')
+  if (/^[A-Z]{3}[0-9]{4}$/.test(compact)) {
+    return `${compact.slice(0, 3)}-${compact.slice(3)}`
+  }
+  return value.trim().toUpperCase()
+}
+
+export function verifyKycCin(
+  cin: string,
+): { ok: true; value: string } | { ok: false; error: string } {
+  const value = normalizePan(cin)
+  if (!CIN_RE.test(value)) {
+    return { ok: false, error: 'Enter a valid 21-character CIN (e.g. U12345MH2020PTC123456).' }
+  }
+  return { ok: true, value }
+}
+
+export function verifyKycLlpin(
+  llpin: string,
+): { ok: true; value: string } | { ok: false; error: string } {
+  const value = normalizeLlpin(llpin)
+  if (!LLPIN_RE.test(value)) {
+    return { ok: false, error: 'Enter a valid LLPIN (e.g. AAA-1234).' }
+  }
+  return { ok: true, value }
+}
 
 /** Fourth character of a PAN, and the business types that use it. */
 const PAN_ENTITY_TYPES: Record<string, readonly number[]> = {
@@ -41,6 +89,128 @@ const PAN_ENTITY_TYPES: Record<string, readonly number[]> = {
   F: [3, 6],
   T: [7],
   A: [8],
+}
+
+export type EntityKycRequirements = {
+  entityId: number
+  legalNameHint: string
+  tradeNameHint: string
+  /** Extra registry IDs required for admin review. */
+  requiresCin: boolean
+  requiresLlpin: boolean
+  requiresRegistrationNumber: boolean
+  /** Admin-only docs required before submit. */
+  requiredAdminDocs: Array<{
+    kind: PayuKycDocKind
+    label: string
+  }>
+  /** Optional admin docs shown for this entity. */
+  optionalAdminDocs: Array<{
+    kind: PayuKycDocKind
+    label: string
+  }>
+}
+
+const ENTITY_REQUIREMENTS: Record<number, EntityKycRequirements> = {
+  14: {
+    entityId: 14,
+    legalNameHint: 'Your full legal name as on PAN (PayU account name). Not a brand or trademark.',
+    tradeNameHint: 'Shop / brand name buyers see. Not a trademark certificate.',
+    requiresCin: false,
+    requiresLlpin: false,
+    requiresRegistrationNumber: false,
+    requiredAdminDocs: [],
+    optionalAdminDocs: [{ kind: 'id_front', label: 'Government ID (Aadhaar / voter ID)' }],
+  },
+  2: {
+    entityId: 2,
+    legalNameHint: 'Proprietor legal name as on PAN (PayU account name). Not a brand or trademark.',
+    tradeNameHint: 'Shop / brand name buyers see. Not a trademark certificate.',
+    requiresCin: false,
+    requiresLlpin: false,
+    requiresRegistrationNumber: false,
+    requiredAdminDocs: [],
+    optionalAdminDocs: [{ kind: 'id_front', label: 'Government ID (Aadhaar / voter ID)' }],
+  },
+  3: {
+    entityId: 3,
+    legalNameHint: 'Firm legal name as on the partnership deed (PayU account name).',
+    tradeNameHint: 'Trade / shop name buyers see. Not a trademark certificate.',
+    requiresCin: false,
+    requiresLlpin: false,
+    requiresRegistrationNumber: false,
+    requiredAdminDocs: [{ kind: 'ownership', label: 'Partnership deed' }],
+    optionalAdminDocs: [],
+  },
+  4: {
+    entityId: 4,
+    legalNameHint: 'Company name exactly as on the Certificate of Incorporation (PayU account name).',
+    tradeNameHint: 'Trade / brand name buyers see. Not a trademark certificate.',
+    requiresCin: true,
+    requiresLlpin: false,
+    requiresRegistrationNumber: false,
+    requiredAdminDocs: [{ kind: 'incorporation', label: 'Certificate of Incorporation' }],
+    optionalAdminDocs: [],
+  },
+  16: {
+    entityId: 16,
+    legalNameHint: 'OPC name exactly as on the Certificate of Incorporation (PayU account name).',
+    tradeNameHint: 'Trade / brand name buyers see. Not a trademark certificate.',
+    requiresCin: true,
+    requiresLlpin: false,
+    requiresRegistrationNumber: false,
+    requiredAdminDocs: [{ kind: 'incorporation', label: 'Certificate of Incorporation' }],
+    optionalAdminDocs: [],
+  },
+  6: {
+    entityId: 6,
+    legalNameHint: 'LLP registered name as on MCA records (PayU account name).',
+    tradeNameHint: 'Trade / brand name buyers see. Not a trademark certificate.',
+    requiresCin: false,
+    requiresLlpin: true,
+    requiresRegistrationNumber: false,
+    requiredAdminDocs: [{ kind: 'ownership', label: 'LLP agreement' }],
+    optionalAdminDocs: [],
+  },
+  8: {
+    entityId: 8,
+    legalNameHint: 'Registered society name (PayU account name).',
+    tradeNameHint: 'Trade / public-facing name buyers see.',
+    requiresCin: false,
+    requiresLlpin: false,
+    requiresRegistrationNumber: true,
+    requiredAdminDocs: [{ kind: 'ownership', label: 'Society registration certificate' }],
+    optionalAdminDocs: [],
+  },
+  7: {
+    entityId: 7,
+    legalNameHint: 'Registered trust name (PayU account name).',
+    tradeNameHint: 'Trade / public-facing name buyers see.',
+    requiresCin: false,
+    requiresLlpin: false,
+    requiresRegistrationNumber: true,
+    requiredAdminDocs: [{ kind: 'ownership', label: 'Trust deed' }],
+    optionalAdminDocs: [],
+  },
+}
+
+export function entityLabel(businessEntityId: number): string {
+  return PAYU_BUSINESS_ENTITIES.find((row) => row.id === businessEntityId)?.label ?? 'Business'
+}
+
+export function getEntityKycRequirements(businessEntityId: number): EntityKycRequirements {
+  return (
+    ENTITY_REQUIREMENTS[businessEntityId] ?? {
+      entityId: businessEntityId,
+      legalNameHint: 'Legal name for the PayU payout account. Not a brand or trademark.',
+      tradeNameHint: 'Shop / brand name buyers see. Not a trademark certificate.',
+      requiresCin: false,
+      requiresLlpin: false,
+      requiresRegistrationNumber: false,
+      requiredAdminDocs: [],
+      optionalAdminDocs: [],
+    }
+  )
 }
 
 export type PayuKycInput = {
@@ -57,10 +227,17 @@ export type PayuKycInput = {
   bankAccountNumber: string
   bankHolderName: string
   ifsc: string
+  cin: string
+  llpin: string
+  registrationNumber: string
   panDocumentPath: string
   bankDocumentPath: string
   gstDocumentPath: string
   scheduleCDocumentPath: string
+  incorporationDocumentPath: string
+  ownershipDocumentPath: string
+  idFrontDocumentPath: string
+  idBackDocumentPath: string
 }
 
 export function normalizePersonName(value: string): string {
@@ -184,7 +361,11 @@ export function kycAllowsStorefront(status: PayuKycStatus | null | undefined): b
 
 export function validatePayuKycInput(input: PayuKycInput): Record<string, string> {
   const errors: Record<string, string> = {}
-  if (!input.legalName.trim()) errors.legalName = 'Enter the name on your PAN.'
+  const entity = getEntityKycRequirements(input.businessEntityId)
+
+  if (!input.legalName.trim()) {
+    errors.legalName = 'Enter the legal name for your PayU payout account.'
+  }
   if (normalizeMobile(input.mobile).length !== 10) errors.mobile = 'Enter a 10-digit mobile number.'
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim())) errors.email = 'Enter a valid email.'
   if (!PAN_RE.test(normalizePan(input.panNumber))) errors.panNumber = 'Enter a valid PAN.'
@@ -192,14 +373,27 @@ export function validatePayuKycInput(input: PayuKycInput): Record<string, string
     const panEntityError = verifyPanForEntity(input.panNumber, input.businessEntityId)
     if (panEntityError && panEntityError !== 'Enter a valid PAN.') errors.panNumber = panEntityError
   }
-  if (!input.panName.trim()) errors.panName = 'Enter the name printed on the PAN.'
-  if (!input.businessName.trim()) errors.businessName = 'Enter the business name.'
+  if (!input.panName.trim()) errors.panName = 'Enter the exact name printed on the PAN card.'
+  if (!input.businessName.trim()) errors.businessName = 'Enter the shop / trade name.'
   if (!PAYU_BUSINESS_ENTITIES.some((row) => row.id === input.businessEntityId)) {
     errors.businessEntityId = 'Choose a business type.'
   }
   if (!Number.isFinite(input.monthlyExpectedVolume) || input.monthlyExpectedVolume < 1) {
     errors.monthlyExpectedVolume = 'Enter expected monthly sales in rupees.'
   }
+
+  if (entity.requiresCin) {
+    const cin = verifyKycCin(input.cin)
+    if (!cin.ok) errors.cin = cin.error
+  }
+  if (entity.requiresLlpin) {
+    const llpin = verifyKycLlpin(input.llpin)
+    if (!llpin.ok) errors.llpin = llpin.error
+  }
+  if (entity.requiresRegistrationNumber && !input.registrationNumber.trim()) {
+    errors.registrationNumber = 'Enter the registration number.'
+  }
+
   if (input.hasGst) {
     const gst = verifyGstin(input.gstNumber)
     if (!gst.ok) errors.gstNumber = gst.error
@@ -213,13 +407,26 @@ export function validatePayuKycInput(input: PayuKycInput): Record<string, string
   }
   if (!IFSC_RE.test(normalizeIfsc(input.ifsc))) errors.ifsc = 'Enter a valid IFSC.'
   if (!holderNameMatches(input.bankHolderName, input.panName, input.businessName)) {
-    errors.bankHolderName = 'Account holder name must match the PAN name or business name.'
+    errors.bankHolderName = 'Account holder name must match the PAN name or trade name.'
   }
   if (!input.panDocumentPath.trim()) errors.panDocumentPath = 'Upload the PAN card.'
   if (!input.bankDocumentPath.trim()) errors.bankDocumentPath = 'Upload a cancelled cheque or bank proof.'
   if (!input.scheduleCDocumentPath.trim()) {
     errors.scheduleCDocumentPath = 'Upload the signed Schedule C document.'
   }
+
+  const pathByKind: Record<string, string> = {
+    incorporation: input.incorporationDocumentPath,
+    ownership: input.ownershipDocumentPath,
+    id_front: input.idFrontDocumentPath,
+    id_back: input.idBackDocumentPath,
+  }
+  for (const doc of entity.requiredAdminDocs) {
+    if (!pathByKind[doc.kind]?.trim()) {
+      errors[`${doc.kind}DocumentPath`] = `Upload the ${doc.label.toLowerCase()}.`
+    }
+  }
+
   return errors
 }
 
@@ -308,6 +515,9 @@ export type ShopPayuKycRow = {
   bank_account_number: string
   bank_holder_name: string
   ifsc: string
+  cin: string | null
+  llpin: string | null
+  registration_number: string | null
   pan_document_path: string | null
   bank_document_path: string | null
   gst_document_path: string | null
@@ -333,7 +543,7 @@ export type ShopPayuKycRow = {
 export type ShopKycDocumentRow = {
   id: string
   shop_id: string
-  kind: 'pan' | 'bank' | 'schedule_c' | 'gst'
+  kind: PayuKycDocKind
   storage_path: string
   mime_type: string | null
   file_size: number | null

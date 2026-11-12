@@ -248,11 +248,13 @@ export function VendorVerificationPanel({ ui, shopId, isDesktop }: VendorVerific
           >
             <YStack gap="$1">
               <Text fontSize={16} fontWeight="800" color={ui.text}>
-                Business, Tax & GST, and bank documents
+                PayU submerchant KYC
               </Text>
-              <Text fontSize={13} color={ui.textSecondary}>
-                PAN, bank proof, and signed Schedule C are required. If you have GST, add GSTIN and
-                the certificate here — Tax & GST is part of this Verification KYC.
+              <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
+                Legal name is for PayU; trade name is what buyers see. Pick your business type —
+                Pvt Ltd needs CIN + Certificate of Incorporation, partnerships need a deed, etc.
+                Those entity docs are for SHEconomy admin review. PayU still receives PAN, bank,
+                Schedule C, and optional GST.
               </Text>
             </YStack>
             <VendorPayuKycForm

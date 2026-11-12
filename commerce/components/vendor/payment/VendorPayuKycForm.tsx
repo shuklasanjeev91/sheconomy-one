@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Platform } from 'react-native'
 
 import {
@@ -15,8 +15,10 @@ import { PhoneInput } from '~/components/forms/PhoneInput'
 import { radius } from '~/config/tokens'
 import {
   PAYU_BUSINESS_ENTITIES,
+  getEntityKycRequirements,
   maskSecret,
   normalizeIfsc,
+  normalizeLlpin,
   normalizeMobile,
   normalizePan,
   interpretGstRegistry,
@@ -24,6 +26,7 @@ import {
   verifyGstin,
   verifyPanForEntity,
   type GstRegistryResult,
+  type PayuKycDocKind,
   type PayuKycStatus,
   type ShopPayuKycRow,
 } from '~/lib/payment/payu-kyc'
@@ -40,7 +43,7 @@ type VendorPayuKycFormProps = {
   onSubmitted?: () => void
 }
 
-type DocKind = 'pan' | 'bank' | 'gst' | 'schedule_c'
+type DocKind = PayuKycDocKind
 
 const LOCKED: PayuKycStatus[] = ['submitted', 'payu_pending', 'payu_verified']
 
@@ -86,7 +89,7 @@ async function pickFile(): Promise<{ blob: Blob; mimeType: string; fileName: str
   }
 }
 
-export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycFormProps) {
+export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorPayuKycFormProps) {
   const toast = useAppToast()
   const dispatch = useAppDispatch()
   const [loading, setLoading] = useState(true)
@@ -106,20 +109,39 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
   const [bankAccountNumber, setBankAccountNumber] = useState('')
   const [bankHolderName, setBankHolderName] = useState('')
   const [ifsc, setIfsc] = useState('')
+  const [cin, setCin] = useState('')
+  const [llpin, setLlpin] = useState('')
+  const [registrationNumber, setRegistrationNumber] = useState('')
   const [panDocumentPath, setPanDocumentPath] = useState('')
   const [bankDocumentPath, setBankDocumentPath] = useState('')
   const [gstDocumentPath, setGstDocumentPath] = useState('')
   const [scheduleCDocumentPath, setScheduleCDocumentPath] = useState('')
+  const [incorporationDocumentPath, setIncorporationDocumentPath] = useState('')
+  const [ownershipDocumentPath, setOwnershipDocumentPath] = useState('')
+  const [idFrontDocumentPath, setIdFrontDocumentPath] = useState('')
+  const [idBackDocumentPath, setIdBackDocumentPath] = useState('')
   const [gstHint, setGstHint] = useState<string | null>(null)
   const [panHint, setPanHint] = useState<string | null>(null)
   const [registry, setRegistry] = useState<GstRegistryResult | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const locked = LOCKED.includes(status)
+  const entityReqs = useMemo(() => getEntityKycRequirements(businessEntityId), [businessEntityId])
+
+  const setDocPath = useCallback((kind: DocKind, path: string) => {
+    if (kind === 'pan') setPanDocumentPath(path)
+    if (kind === 'bank') setBankDocumentPath(path)
+    if (kind === 'gst') setGstDocumentPath(path)
+    if (kind === 'schedule_c') setScheduleCDocumentPath(path)
+    if (kind === 'incorporation') setIncorporationDocumentPath(path)
+    if (kind === 'ownership') setOwnershipDocumentPath(path)
+    if (kind === 'id_front') setIdFrontDocumentPath(path)
+    if (kind === 'id_back') setIdBackDocumentPath(path)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: row }, { data: shop }, { data: userData }] = await Promise.all([
+    const [{ data: row }, { data: shop }, { data: userData }, { data: docs }] = await Promise.all([
       supabase.from('shop_payu_kyc').select('*').eq('shop_id', shopId).maybeSingle(),
       supabase
         .from('shops')
@@ -127,10 +149,12 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
         .eq('id', shopId)
         .maybeSingle(),
       supabase.auth.getUser(),
+      supabase.from('shop_kyc_documents').select('kind, storage_path').eq('shop_id', shopId),
     ])
     const kyc = row as ShopPayuKycRow | null
     const userId = userData.user?.id
-    let profile: { full_name: string | null; email: string | null; phone: string | null } | null = null
+    let profile: { full_name: string | null; email: string | null; phone: string | null } | null =
+      null
     if (userId) {
       const { data } = await supabase
         .from('profiles')
@@ -138,6 +162,11 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
         .eq('id', userId)
         .maybeSingle()
       profile = data
+    }
+
+    const pathByKind = new Map<string, string>()
+    for (const doc of docs ?? []) {
+      if (doc.storage_path) pathByKind.set(doc.kind, doc.storage_path)
     }
 
     if (kyc) {
@@ -158,10 +187,17 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
       setBankAccountNumber(editable ? kyc.bank_account_number : maskSecret(kyc.bank_account_number))
       setBankHolderName(kyc.bank_holder_name)
       setIfsc(kyc.ifsc)
-      setPanDocumentPath(kyc.pan_document_path ?? '')
-      setBankDocumentPath(kyc.bank_document_path ?? '')
-      setGstDocumentPath(kyc.gst_document_path ?? '')
-      setScheduleCDocumentPath(kyc.schedule_c_document_path ?? '')
+      setCin(kyc.cin ?? '')
+      setLlpin(kyc.llpin ?? '')
+      setRegistrationNumber(kyc.registration_number ?? '')
+      setPanDocumentPath(pathByKind.get('pan') || kyc.pan_document_path || '')
+      setBankDocumentPath(pathByKind.get('bank') || kyc.bank_document_path || '')
+      setGstDocumentPath(pathByKind.get('gst') || kyc.gst_document_path || '')
+      setScheduleCDocumentPath(pathByKind.get('schedule_c') || kyc.schedule_c_document_path || '')
+      setIncorporationDocumentPath(pathByKind.get('incorporation') || '')
+      setOwnershipDocumentPath(pathByKind.get('ownership') || '')
+      setIdFrontDocumentPath(pathByKind.get('id_front') || '')
+      setIdBackDocumentPath(pathByKind.get('id_back') || '')
     } else {
       setLegalName(profile?.full_name ?? '')
       setMobile(shop?.shop_phone_number || profile?.phone || '')
@@ -210,7 +246,9 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
           error?: string
           data?: unknown
           pan?: string
-        }>('shepay-verify-kyc', { body: { shopId, gstin: normalizePan(gstNumber), pan: local.pan } })
+        }>('shepay-verify-kyc', {
+          body: { shopId, gstin: normalizePan(gstNumber), pan: local.pan },
+        })
         if (cancelled) return
         if (error || data?.ok === false) {
           setRegistry(null)
@@ -260,10 +298,7 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
       toast.show('Could not upload the document', { tone: 'danger', message: uploaded.error ?? '' })
       return
     }
-    if (kind === 'pan') setPanDocumentPath(uploaded.data.path)
-    if (kind === 'bank') setBankDocumentPath(uploaded.data.path)
-    if (kind === 'gst') setGstDocumentPath(uploaded.data.path)
-    if (kind === 'schedule_c') setScheduleCDocumentPath(uploaded.data.path)
+    setDocPath(kind, uploaded.data.path)
 
     const { data: auth } = await supabase.auth.getUser()
     await supabase.from('shop_kyc_documents').upsert(
@@ -299,14 +334,29 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
       bankAccountNumber,
       bankHolderName,
       ifsc,
+      cin,
+      llpin,
+      registrationNumber,
       panDocumentPath,
       bankDocumentPath,
       gstDocumentPath,
       scheduleCDocumentPath,
+      incorporationDocumentPath,
+      ownershipDocumentPath,
+      idFrontDocumentPath,
+      idBackDocumentPath,
     }
     const nextErrors = validatePayuKycInput(input)
-    if (hasGst && gstHint && !gstHint.startsWith('Active') && !gstHint.startsWith('GSTIN verified')) {
-      nextErrors.gstNumber = gstHint.replace(/^Checking GSTIN on the tax registry…$/, 'Wait for the GSTIN check to finish.')
+    if (
+      hasGst &&
+      gstHint &&
+      !gstHint.startsWith('Active') &&
+      !gstHint.startsWith('GSTIN verified')
+    ) {
+      nextErrors.gstNumber = gstHint.replace(
+        /^Checking GSTIN on the tax registry…$/,
+        'Wait for the GSTIN check to finish.',
+      )
     }
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length) return
@@ -326,6 +376,11 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
       bank_account_number: bankAccountNumber.replace(/\s+/g, ''),
       bank_holder_name: bankHolderName.trim(),
       ifsc: normalizeIfsc(ifsc),
+      cin: entityReqs.requiresCin ? normalizePan(cin) : null,
+      llpin: entityReqs.requiresLlpin ? normalizeLlpin(llpin) : null,
+      registration_number: entityReqs.requiresRegistrationNumber
+        ? registrationNumber.trim()
+        : null,
       pan_document_path: panDocumentPath,
       bank_document_path: bankDocumentPath,
       gst_document_path: hasGst ? gstDocumentPath : null,
@@ -343,6 +398,12 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
         { kind: 'schedule_c', path: scheduleCDocumentPath },
       ]
       if (hasGst && gstDocumentPath) docs.push({ kind: 'gst', path: gstDocumentPath })
+      if (incorporationDocumentPath) {
+        docs.push({ kind: 'incorporation', path: incorporationDocumentPath })
+      }
+      if (ownershipDocumentPath) docs.push({ kind: 'ownership', path: ownershipDocumentPath })
+      if (idFrontDocumentPath) docs.push({ kind: 'id_front', path: idFrontDocumentPath })
+      if (idBackDocumentPath) docs.push({ kind: 'id_back', path: idBackDocumentPath })
       const { data: auth } = await supabase.auth.getUser()
       await Promise.all(
         docs.map((doc) =>
@@ -357,7 +418,6 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
           ),
         ),
       )
-      // Keep storefront Tax & GST in sync — it lives inside Verification KYC now.
       try {
         await dispatch(
           updateShopGst({
@@ -392,96 +452,140 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
     )
   }
 
-  return (
-    <YStack gap="$3">
-      <YStack gap="$1">
-        <Text fontSize={16} fontWeight="800" color={ui.text}>
-          Payout details
-        </Text>
-        <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-          Submit these once. SHEconomy reviews them and sets up payouts for you. You do not need a
-          separate payment dashboard.
-        </Text>
-        <Text fontSize={13} fontWeight="700" color={ui.brand}>
-          {STATUS_LABEL[status]}
-        </Text>
-        {adminNote && (status === 'changes_requested' || status === 'rejected') ? (
-          <Text fontSize={13} color={ui.textSecondary}>
-            Review note: {adminNote}
-          </Text>
-        ) : null}
-        {status === 'payu_pending' ? (
-          <Text fontSize={13} color={ui.textSecondary}>
-            SHEconomy sent your details for payout verification. Selling unlocks when verification finishes.
-          </Text>
-        ) : null}
-      </YStack>
+  function setPanNameAndMaybeLegal(value: string) {
+    setPanName(value)
+    if (!legalName.trim() || normalizePersonLike(legalName) === normalizePersonLike(panName)) {
+      setLegalName(value)
+    }
+  }
 
-      <Field label="Name" error={errors.legalName}>
-        <Input value={legalName} onChangeText={setLegalName} editable={!locked} />
-      </Field>
-      <Field label="Mobile" error={errors.mobile}>
-        <PhoneInput value={mobile} onChange={setMobile} disabled={locked} />
-      </Field>
-      <Field label="Email" error={errors.email}>
-        <Input value={email} onChangeText={setEmail} editable={!locked} autoCapitalize="none" />
-      </Field>
-      <Field label="PAN" error={errors.panNumber || panHint || undefined}>
-        <Input
-          value={panNumber}
-          onChangeText={(value) => setPanNumber(value.toUpperCase())}
-          editable={!locked && !hasGst}
-          autoCapitalize="characters"
-        />
-      </Field>
-      <Field label="Name on PAN" error={errors.panName}>
-        <Input value={panName} onChangeText={setPanName} editable={!locked} />
-      </Field>
-      <Field label="Business name" error={errors.businessName}>
-        <Input value={businessName} onChangeText={setBusinessName} editable={!locked} />
-      </Field>
-      <Field label="Business type" error={errors.businessEntityId}>
-        <XStack gap="$2" flexWrap="wrap">
-          {PAYU_BUSINESS_ENTITIES.map((entity) => {
-            const selected = entity.id === businessEntityId
-            return (
-              <Button
-                key={entity.id}
-                size="$2"
-                tone={selected ? 'primary' : 'outline'}
-                borderRadius={radius.chip}
-                disabled={locked}
-                onPress={() => setBusinessEntityId(entity.id)}
-              >
-                {entity.label}
-              </Button>
-            )
-          })}
-        </XStack>
-      </Field>
-      <Field label="Expected monthly sales (₹)" error={errors.monthlyExpectedVolume}>
-        <Input
-          value={monthlyExpectedVolume}
-          onChangeText={setMonthlyExpectedVolume}
-          editable={!locked}
-          keyboardType="number-pad"
-        />
-      </Field>
-      <YStack gap="$2">
-        <Text fontSize={14} fontWeight="800" color={ui.text}>
-          Tax & GST
+  function setLegalNameAndMaybePan(value: string) {
+    setLegalName(value)
+    if (!panName.trim()) setPanName(value)
+  }
+
+  const showEntityDetails =
+    entityReqs.requiresCin || entityReqs.requiresLlpin || entityReqs.requiresRegistrationNumber
+
+  return (
+    <YStack gap="$4">
+      {!embedded ? (
+        <YStack gap="$1">
+          <Text fontSize={16} fontWeight="800" color={ui.text}>
+            PayU submerchant KYC
+          </Text>
+          <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
+            Choose your business type first. Legal name is for PayU; trade name is what buyers see.
+            Extra company docs are reviewed by SHEconomy admin — PayU still receives PAN, bank,
+            Schedule C, and GST only.
+          </Text>
+        </YStack>
+      ) : null}
+
+      <Text fontSize={13} fontWeight="700" color={ui.brand}>
+        {STATUS_LABEL[status]}
+      </Text>
+      {adminNote && (status === 'changes_requested' || status === 'rejected') ? (
+        <Text fontSize={13} color={ui.textSecondary}>
+          Review note: {adminNote}
         </Text>
-        <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
-          Turn this on if your shop needs GST. Details here are used for payout KYC and storefront
-          tax compliance.
+      ) : null}
+      {status === 'payu_pending' ? (
+        <Text fontSize={13} color={ui.textSecondary}>
+          Details sent to PayU. Selling unlocks when verification finishes.
         </Text>
+      ) : null}
+
+      <FormSection title="1. Business type" hint="Controls which IDs and documents are required.">
+        <Field label="Business type" error={errors.businessEntityId}>
+          <XStack gap="$2" flexWrap="wrap">
+            {PAYU_BUSINESS_ENTITIES.map((entity) => {
+              const selected = entity.id === businessEntityId
+              return (
+                <Button
+                  key={entity.id}
+                  size="$2"
+                  tone={selected ? 'primary' : 'outline'}
+                  borderRadius={radius.chip}
+                  disabled={locked}
+                  onPress={() => setBusinessEntityId(entity.id)}
+                >
+                  {entity.label}
+                </Button>
+              )
+            })}
+          </XStack>
+        </Field>
+      </FormSection>
+
+      <FormSection title="2. Contact" hint={entityReqs.legalNameHint}>
+        <Field label="Legal name" error={errors.legalName}>
+          <Input
+            value={legalName}
+            onChangeText={setLegalNameAndMaybePan}
+            editable={!locked}
+            placeholder="Legal name for PayU account"
+          />
+        </Field>
+        <Field label="Trade / business name" error={errors.businessName}>
+          <Input
+            value={businessName}
+            onChangeText={setBusinessName}
+            editable={!locked}
+            placeholder="Shop name buyers see"
+          />
+        </Field>
+        <Text fontSize={11} color={ui.textMuted}>
+          {entityReqs.tradeNameHint}
+        </Text>
+        <Field label="Mobile" error={errors.mobile}>
+          <PhoneInput value={mobile} onChange={setMobile} disabled={locked} />
+        </Field>
+        <Field label="Email" error={errors.email}>
+          <Input
+            value={email}
+            onChangeText={setEmail}
+            editable={!locked}
+            autoCapitalize="none"
+            placeholder="payouts@yourshop.com"
+          />
+        </Field>
+      </FormSection>
+
+      <FormSection title="3. PAN & tax" hint="Required by PayU for submerchant onboarding.">
+        <Field label="PAN number" error={errors.panNumber || panHint || undefined}>
+          <Input
+            value={panNumber}
+            onChangeText={(value) => setPanNumber(value.toUpperCase())}
+            editable={!locked && !hasGst}
+            autoCapitalize="characters"
+            placeholder="ABCDE1234F"
+          />
+        </Field>
+        <Field label="Name on PAN card" error={errors.panName}>
+          <Input
+            value={panName}
+            onChangeText={setPanNameAndMaybeLegal}
+            editable={!locked}
+            placeholder="Exact spelling as printed on PAN"
+          />
+        </Field>
+        <Field label="Expected monthly sales (₹)" error={errors.monthlyExpectedVolume}>
+          <Input
+            value={monthlyExpectedVolume}
+            onChangeText={setMonthlyExpectedVolume}
+            editable={!locked}
+            keyboardType="number-pad"
+            placeholder="50000"
+          />
+        </Field>
         <Button
           size="$3"
           tone={hasGst ? 'primary' : 'outline'}
           disabled={locked}
           onPress={() => setHasGst((value) => !value)}
         >
-          {hasGst ? 'GST registered (above ₹20L / GSTIN)' : 'No GST / below threshold'}
+          {hasGst ? 'I have a GSTIN' : 'No GSTIN'}
         </Button>
         {hasGst ? (
           <YStack gap="$2">
@@ -491,6 +595,7 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
                 onChangeText={(value) => setGstNumber(value.toUpperCase())}
                 editable={!locked}
                 autoCapitalize="characters"
+                placeholder="22AAAAA0000A1Z5"
               />
             </Field>
             {gstHint ? (
@@ -507,69 +612,218 @@ export function VendorPayuKycForm({ ui, shopId, onSubmitted }: VendorPayuKycForm
             ) : null}
           </YStack>
         ) : null}
-      </YStack>
-      <Field label="Bank account number" error={errors.bankAccountNumber}>
-        <Input
-          value={bankAccountNumber}
-          onChangeText={setBankAccountNumber}
-          editable={!locked}
-          keyboardType="number-pad"
-        />
-      </Field>
-      <Field label="Account holder name" error={errors.bankHolderName}>
-        <Input value={bankHolderName} onChangeText={setBankHolderName} editable={!locked} />
-      </Field>
-      <Field label="IFSC" error={errors.ifsc}>
-        <Input
-          value={ifsc}
-          onChangeText={(value) => setIfsc(value.toUpperCase())}
-          editable={!locked}
-          autoCapitalize="characters"
-        />
-      </Field>
+      </FormSection>
+
+      {showEntityDetails ? (
+        <FormSection
+          title="4. Entity registration"
+          hint="For SHEconomy admin review. Not sent as separate PayU document fields."
+        >
+          {entityReqs.requiresCin ? (
+            <Field label="CIN" error={errors.cin}>
+              <Input
+                value={cin}
+                onChangeText={(value) => setCin(value.toUpperCase())}
+                editable={!locked}
+                autoCapitalize="characters"
+                placeholder="U12345MH2020PTC123456"
+              />
+            </Field>
+          ) : null}
+          {entityReqs.requiresLlpin ? (
+            <Field label="LLPIN" error={errors.llpin}>
+              <Input
+                value={llpin}
+                onChangeText={(value) => setLlpin(value.toUpperCase())}
+                editable={!locked}
+                autoCapitalize="characters"
+                placeholder="AAA-1234"
+              />
+            </Field>
+          ) : null}
+          {entityReqs.requiresRegistrationNumber ? (
+            <Field label="Registration number" error={errors.registrationNumber}>
+              <Input
+                value={registrationNumber}
+                onChangeText={setRegistrationNumber}
+                editable={!locked}
+                placeholder="Society / trust registration number"
+              />
+            </Field>
+          ) : null}
+        </FormSection>
+      ) : null}
+
+      <FormSection
+        title={showEntityDetails ? '5. Bank account' : '4. Bank account'}
+        hint="Settlement account PayU will credit."
+      >
+        <Field label="Account number" error={errors.bankAccountNumber}>
+          <Input
+            value={bankAccountNumber}
+            onChangeText={setBankAccountNumber}
+            editable={!locked}
+            keyboardType="number-pad"
+            placeholder="9–18 digit account number"
+          />
+        </Field>
+        <Field label="Account holder name" error={errors.bankHolderName}>
+          <Input
+            value={bankHolderName}
+            onChangeText={setBankHolderName}
+            editable={!locked}
+            placeholder="Must match PAN name or trade name"
+          />
+        </Field>
+        <Field label="IFSC" error={errors.ifsc}>
+          <Input
+            value={ifsc}
+            onChangeText={(value) => setIfsc(value.toUpperCase())}
+            editable={!locked}
+            autoCapitalize="characters"
+            placeholder="HDFC0001234"
+          />
+        </Field>
+        {!locked && !bankHolderName.trim() && (panName.trim() || businessName.trim()) ? (
+          <Button
+            size="$2"
+            tone="outline"
+            alignSelf="flex-start"
+            onPress={() => setBankHolderName(panName.trim() || businessName.trim())}
+          >
+            Use PAN / trade name as holder
+          </Button>
+        ) : null}
+      </FormSection>
 
       {!locked ? (
-        <YStack gap="$2">
-          <Button size="$3" tone="outline" onPress={() => void upload('pan')}>
-            {panDocumentPath ? 'PAN uploaded' : 'Upload PAN'}
-          </Button>
-          {errors.panDocumentPath ? (
-            <Text fontSize={12} color="#B91C1C">
-              {errors.panDocumentPath}
-            </Text>
-          ) : null}
-          <Button size="$3" tone="outline" onPress={() => void upload('bank')}>
-            {bankDocumentPath ? 'Bank proof uploaded' : 'Upload cancelled cheque or bank proof'}
-          </Button>
-          {errors.bankDocumentPath ? (
-            <Text fontSize={12} color="#B91C1C">
-              {errors.bankDocumentPath}
-            </Text>
-          ) : null}
-          <Button size="$3" tone="outline" onPress={() => void upload('schedule_c')}>
-            {scheduleCDocumentPath ? 'Schedule C uploaded' : 'Upload signed Schedule C'}
-          </Button>
-          {errors.scheduleCDocumentPath ? (
-            <Text fontSize={12} color="#B91C1C">
-              {errors.scheduleCDocumentPath}
-            </Text>
-          ) : null}
+        <FormSection
+          title={showEntityDetails ? '6. Documents' : '5. Documents'}
+          hint="PAN, bank proof, and Schedule C go to PayU on approval. Entity docs stay with SHEconomy admin."
+        >
+          <DocUploadButton
+            label={panDocumentPath ? 'PAN card uploaded' : 'Upload PAN card'}
+            done={Boolean(panDocumentPath)}
+            error={errors.panDocumentPath}
+            onPress={() => void upload('pan')}
+          />
+          <DocUploadButton
+            label={
+              bankDocumentPath ? 'Bank proof uploaded' : 'Upload cancelled cheque / bank proof'
+            }
+            done={Boolean(bankDocumentPath)}
+            error={errors.bankDocumentPath}
+            onPress={() => void upload('bank')}
+          />
+          <DocUploadButton
+            label={scheduleCDocumentPath ? 'Schedule C uploaded' : 'Upload signed Schedule C'}
+            done={Boolean(scheduleCDocumentPath)}
+            error={errors.scheduleCDocumentPath}
+            onPress={() => void upload('schedule_c')}
+          />
           {hasGst ? (
-            <>
-              <Button size="$3" tone="outline" onPress={() => void upload('gst')}>
-                {gstDocumentPath ? 'GST certificate uploaded' : 'Upload GST certificate'}
-              </Button>
-              {errors.gstDocumentPath ? (
-                <Text fontSize={12} color="#B91C1C">
-                  {errors.gstDocumentPath}
-                </Text>
-              ) : null}
-            </>
+            <DocUploadButton
+              label={gstDocumentPath ? 'GST certificate uploaded' : 'Upload GST certificate'}
+              done={Boolean(gstDocumentPath)}
+              error={errors.gstDocumentPath}
+              onPress={() => void upload('gst')}
+            />
           ) : null}
+          {entityReqs.requiredAdminDocs.map((doc) => {
+            const path =
+              doc.kind === 'incorporation'
+                ? incorporationDocumentPath
+                : doc.kind === 'ownership'
+                  ? ownershipDocumentPath
+                  : doc.kind === 'id_front'
+                    ? idFrontDocumentPath
+                    : idBackDocumentPath
+            const errorKey = `${doc.kind}DocumentPath`
+            return (
+              <DocUploadButton
+                key={doc.kind}
+                label={path ? `${doc.label} uploaded` : `Upload ${doc.label}`}
+                done={Boolean(path)}
+                error={errors[errorKey]}
+                onPress={() => void upload(doc.kind)}
+              />
+            )
+          })}
+          {entityReqs.optionalAdminDocs.map((doc) => {
+            const path = doc.kind === 'id_front' ? idFrontDocumentPath : idBackDocumentPath
+            return (
+              <DocUploadButton
+                key={doc.kind}
+                label={path ? `${doc.label} uploaded` : `Upload ${doc.label} (optional)`}
+                done={Boolean(path)}
+                onPress={() => void upload(doc.kind)}
+              />
+            )
+          })}
           <Button size="$4" tone="primary" disabled={saving} onPress={() => void submit()}>
-            {saving ? 'Submitting…' : 'Submit for review'}
+            {saving ? 'Submitting…' : 'Submit for PayU KYC review'}
           </Button>
-        </YStack>
+        </FormSection>
+      ) : null}
+    </YStack>
+  )
+}
+
+function normalizePersonLike(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function FormSection({
+  title,
+  hint,
+  children,
+}: {
+  title: string
+  hint: string
+  children: ReactNode
+}) {
+  return (
+    <YStack
+      gap="$2.5"
+      padding="$3.5"
+      borderRadius={radius.card}
+      borderWidth={1}
+      borderColor="$borderColor"
+      backgroundColor="$background"
+    >
+      <YStack gap="$0.5">
+        <Text fontSize={14} fontWeight="800">
+          {title}
+        </Text>
+        <Text fontSize={12} color="$color10" lineHeight={17}>
+          {hint}
+        </Text>
+      </YStack>
+      {children}
+    </YStack>
+  )
+}
+
+function DocUploadButton({
+  label,
+  done,
+  error,
+  onPress,
+}: {
+  label: string
+  done: boolean
+  error?: string
+  onPress: () => void
+}) {
+  return (
+    <YStack gap="$1">
+      <Button size="$3" tone={done ? 'primary' : 'outline'} onPress={onPress}>
+        {label}
+      </Button>
+      {error ? (
+        <Text fontSize={12} color="#B91C1C">
+          {error}
+        </Text>
       ) : null}
     </YStack>
   )

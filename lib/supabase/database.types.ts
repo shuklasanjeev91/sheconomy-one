@@ -13342,6 +13342,7 @@ export type Database = {
           bank_holder_name: string
           business_entity_id: number
           business_name: string
+          cin: string | null
           created_at: string
           email: string
           gst_document_path: string | null
@@ -13351,6 +13352,7 @@ export type Database = {
           gst_trade_name: string | null
           ifsc: string
           legal_name: string
+          llpin: string | null
           mobile: string
           monthly_expected_volume: number
           pan_document_path: string | null
@@ -13363,6 +13365,7 @@ export type Database = {
           payu_mid: string | null
           payu_onboarding_status: string | null
           payu_product_account_uuid: string | null
+          registration_number: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           schedule_c_document_path: string | null
@@ -13377,6 +13380,7 @@ export type Database = {
           bank_holder_name?: string
           business_entity_id?: number
           business_name?: string
+          cin?: string | null
           created_at?: string
           email?: string
           gst_document_path?: string | null
@@ -13386,6 +13390,7 @@ export type Database = {
           gst_trade_name?: string | null
           ifsc?: string
           legal_name?: string
+          llpin?: string | null
           mobile?: string
           monthly_expected_volume?: number
           pan_document_path?: string | null
@@ -13398,6 +13403,7 @@ export type Database = {
           payu_mid?: string | null
           payu_onboarding_status?: string | null
           payu_product_account_uuid?: string | null
+          registration_number?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           schedule_c_document_path?: string | null
@@ -13412,6 +13418,7 @@ export type Database = {
           bank_holder_name?: string
           business_entity_id?: number
           business_name?: string
+          cin?: string | null
           created_at?: string
           email?: string
           gst_document_path?: string | null
@@ -13421,6 +13428,7 @@ export type Database = {
           gst_trade_name?: string | null
           ifsc?: string
           legal_name?: string
+          llpin?: string | null
           mobile?: string
           monthly_expected_volume?: number
           pan_document_path?: string | null
@@ -13433,6 +13441,7 @@ export type Database = {
           payu_mid?: string | null
           payu_onboarding_status?: string | null
           payu_product_account_uuid?: string | null
+          registration_number?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           schedule_c_document_path?: string | null

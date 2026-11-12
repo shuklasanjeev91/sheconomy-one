@@ -62,6 +62,25 @@ export function verifyCin(cin: string): { ok: true; value: string } | { ok: fals
   return { ok: true, value }
 }
 
+/** Normalize LLPIN to AAA-1234. Accepts AAA1234 or AAA-1234. */
+export function normalizeLlpin(value: string): string {
+  const compact = value.trim().toUpperCase().replace(/\s+/g, '').replace(/-/g, '')
+  if (/^[A-Z]{3}[0-9]{4}$/.test(compact)) {
+    return `${compact.slice(0, 3)}-${compact.slice(3)}`
+  }
+  return value.trim().toUpperCase()
+}
+
+export function verifyLlpin(
+  llpin: string,
+): { ok: true; value: string } | { ok: false; error: string } {
+  const value = normalizeLlpin(llpin)
+  if (!LLPIN_RE.test(value)) {
+    return { ok: false, error: 'Enter a valid LLPIN (e.g. AAA-1234).' }
+  }
+  return { ok: true, value }
+}
+
 export function registrationPlaceholder(
   entity: 'BUSINESS' | 'INDIVIDUAL',
   countryCode = 'IN',

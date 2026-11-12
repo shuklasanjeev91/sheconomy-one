@@ -3,12 +3,15 @@ import { describe, expect, it } from 'vitest'
 import {
   buildBankUpdatePayload,
   buildCreateChildPayload,
+  getEntityKycRequirements,
   holderNameMatches,
   interpretGstRegistry,
   kycAllowsStorefront,
   panFromGstin,
   validatePayuKycInput,
   verifyGstin,
+  verifyKycCin,
+  verifyKycLlpin,
   verifyPanForEntity,
   type PayuKycInput,
 } from '~/lib/payment/payu-kyc'
@@ -27,18 +30,98 @@ const valid: PayuKycInput = {
   bankAccountNumber: '663380994743',
   bankHolderName: 'Gauri Gupta',
   ifsc: 'icic0000031',
+  cin: '',
+  llpin: '',
+  registrationNumber: '',
   panDocumentPath: 'user/shops/shop/kyc/pan.pdf',
   bankDocumentPath: 'user/shops/shop/kyc/bank.pdf',
   gstDocumentPath: 'user/shops/shop/kyc/gst.pdf',
   scheduleCDocumentPath: 'user/shops/shop/kyc/schedule_c.pdf',
+  incorporationDocumentPath: '',
+  ownershipDocumentPath: 'user/shops/shop/kyc/ownership.pdf',
+  idFrontDocumentPath: '',
+  idBackDocumentPath: '',
 }
 
 describe('vendor PayU KYC', () => {
-  it('accepts a complete application', () => {
+  it('accepts a complete partnership application', () => {
     expect(validatePayuKycInput(valid)).toEqual({})
   })
 
-  it('rejects a holder name that matches neither PAN nor business', () => {
+  it('requires partnership deed for partnership entities', () => {
+    const errors = validatePayuKycInput({ ...valid, ownershipDocumentPath: '' })
+    expect(errors.ownershipDocumentPath).toBeTruthy()
+  })
+
+  it('requires CIN and Certificate of Incorporation for private limited', () => {
+    const company: PayuKycInput = {
+      ...valid,
+      panNumber: 'ABCCA5416M',
+      gstNumber: '',
+      hasGst: false,
+      gstDocumentPath: '',
+      businessEntityId: 4,
+      ownershipDocumentPath: '',
+      cin: 'U12345MH2020PTC123456',
+      incorporationDocumentPath: 'user/shops/shop/kyc/coi.pdf',
+    }
+    expect(validatePayuKycInput(company)).toEqual({})
+    expect(validatePayuKycInput({ ...company, cin: '' }).cin).toBeTruthy()
+    expect(
+      validatePayuKycInput({ ...company, incorporationDocumentPath: '' }).incorporationDocumentPath,
+    ).toBeTruthy()
+  })
+
+  it('requires LLPIN and LLP agreement for LLP', () => {
+    const llp: PayuKycInput = {
+      ...valid,
+      businessEntityId: 6,
+      ownershipDocumentPath: 'user/shops/shop/kyc/llp.pdf',
+      llpin: 'AAA-1234',
+      hasGst: false,
+      gstDocumentPath: '',
+    }
+    expect(validatePayuKycInput(llp)).toEqual({})
+    expect(validatePayuKycInput({ ...llp, llpin: 'bad' }).llpin).toBeTruthy()
+  })
+
+  it('requires registration number and ownership doc for trust and society', () => {
+    const trust: PayuKycInput = {
+      ...valid,
+      panNumber: 'ABCTA5416M',
+      businessEntityId: 7,
+      hasGst: false,
+      gstDocumentPath: '',
+      registrationNumber: 'TRUST/2020/12',
+      ownershipDocumentPath: 'user/shops/shop/kyc/trust.pdf',
+    }
+    expect(validatePayuKycInput(trust)).toEqual({})
+    expect(validatePayuKycInput({ ...trust, registrationNumber: '' }).registrationNumber).toBeTruthy()
+
+    const society: PayuKycInput = {
+      ...trust,
+      panNumber: 'ABCAA5416M',
+      businessEntityId: 8,
+      ownershipDocumentPath: 'user/shops/shop/kyc/society.pdf',
+    }
+    expect(validatePayuKycInput(society)).toEqual({})
+  })
+
+  it('does not require admin docs for individual or sole prop', () => {
+    const sole: PayuKycInput = {
+      ...valid,
+      panNumber: 'ABCPA5416M',
+      businessEntityId: 2,
+      hasGst: false,
+      gstDocumentPath: '',
+      ownershipDocumentPath: '',
+    }
+    expect(validatePayuKycInput(sole)).toEqual({})
+    expect(getEntityKycRequirements(2).optionalAdminDocs[0]?.kind).toBe('id_front')
+    expect(getEntityKycRequirements(14).requiredAdminDocs).toEqual([])
+  })
+
+  it('rejects a holder name that matches neither PAN nor trade name', () => {
     const errors = validatePayuKycInput({ ...valid, bankHolderName: 'Someone Else' })
     expect(errors.bankHolderName).toBeTruthy()
     expect(holderNameMatches('Gauri Gupta', 'Gauri Gupta', 'Other Shop')).toBe(true)
@@ -100,6 +183,14 @@ describe('vendor PayU KYC', () => {
     expect(errors.scheduleCDocumentPath).toBeTruthy()
   })
 
+  it('validates CIN and LLPIN formats', () => {
+    expect(verifyKycCin('U12345MH2020PTC123456').ok).toBe(true)
+    expect(verifyKycCin('bad').ok).toBe(false)
+    expect(verifyKycLlpin('AAA1234').ok).toBe(true)
+    expect(verifyKycLlpin('AAA-1234').ok).toBe(true)
+    expect(verifyKycLlpin('xx').ok).toBe(false)
+  })
+
   it('reads the PAN from a GSTIN and rejects a mismatched or inactive registry result', () => {
     expect(verifyGstin('09ABQFA5416M1ZX')).toEqual({ ok: true, pan: 'ABQFA5416M' })
     expect(panFromGstin('09ABQFA5416M1ZX')).toBe('ABQFA5416M')
@@ -107,10 +198,18 @@ describe('vendor PayU KYC', () => {
     expect(verifyPanForEntity('ABQFA5416M', 3)).toBeNull()
     expect(verifyPanForEntity('ABQFA5416M', 2)).toBeTruthy()
     const active = interpretGstRegistry({
-      data: { gstin: '09ABQFA5416M1ZX', lgnm: 'GAURI GUPTA', tradeNam: 'GAURI STORE', sts: 'Active', ctb: 'Partnership' },
+      data: {
+        gstin: '09ABQFA5416M1ZX',
+        lgnm: 'GAURI GUPTA',
+        tradeNam: 'GAURI STORE',
+        sts: 'Active',
+        ctb: 'Partnership',
+      },
     })
     expect(active.ok && active.result.legalName).toBe('GAURI GUPTA')
-    expect(interpretGstRegistry({ data: { gstin: '09ABQFA5416M1ZX', lgnm: 'X', sts: 'Cancelled' } }).ok).toBe(false)
+    expect(
+      interpretGstRegistry({ data: { gstin: '09ABQFA5416M1ZX', lgnm: 'X', sts: 'Cancelled' } }).ok,
+    ).toBe(false)
     expect(
       interpretGstRegistry(
         { data: { gstin: '09ABQFA5416M1ZX', lgnm: 'X', sts: 'Active' } },

@@ -3,13 +3,20 @@ import { useRouter } from 'one'
 
 import { Badge, Button, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
-import type { PayuKycStatus, ShopPayuKycRow } from '~/lib/payment/payu-kyc'
+import {
+  entityLabel,
+  type PayuKycDocKind,
+  type PayuKycStatus,
+  type ShopPayuKycRow,
+} from '~/lib/payment/payu-kyc'
 import { supabase } from '~/lib/supabase'
 import { getKycDocumentSignedUrl } from '~/lib/supabase/storage-upload'
 
 type QueueRow = ShopPayuKycRow & {
   shops?: { shop_name: string | null; slug: string | null } | null
 }
+
+type DocMeta = { kind: PayuKycDocKind; storage_path: string }
 
 type QueueFilter = 'submitted' | 'payu_pending' | 'errors'
 
@@ -22,6 +29,17 @@ const STATUS_LABEL: Record<PayuKycStatus, string> = {
   rejected: 'Rejected',
 }
 
+const DOC_LABEL: Record<PayuKycDocKind, string> = {
+  pan: 'PAN',
+  bank: 'Bank',
+  schedule_c: 'Schedule C',
+  gst: 'GST',
+  incorporation: 'COI',
+  ownership: 'Ownership / deed',
+  id_front: 'Govt ID',
+  id_back: 'ID back',
+}
+
 const FILTERS: { id: QueueFilter; label: string }[] = [
   { id: 'submitted', label: 'Needs review' },
   { id: 'payu_pending', label: 'PayU pending' },
@@ -32,6 +50,7 @@ export function AdminPayuKycQueue() {
   const router = useRouter()
   const toast = useAppToast()
   const [rows, setRows] = useState<QueueRow[]>([])
+  const [docsByShop, setDocsByShop] = useState<Record<string, DocMeta[]>>({})
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [filter, setFilter] = useState<QueueFilter>('submitted')
@@ -53,8 +72,8 @@ export function AdminPayuKycQueue() {
     }
 
     const { data, error } = await query
-    setLoading(false)
     if (error) {
+      setLoading(false)
       toast.show('Could not load payout queue', { tone: 'danger', message: error.message })
       return
     }
@@ -69,6 +88,24 @@ export function AdminPayuKycQueue() {
       }
       return merged
     })
+
+    const shopIds = next.map((row) => row.shop_id)
+    if (shopIds.length) {
+      const { data: docs } = await supabase
+        .from('shop_kyc_documents')
+        .select('shop_id, kind, storage_path')
+        .in('shop_id', shopIds)
+      const map: Record<string, DocMeta[]> = {}
+      for (const doc of docs ?? []) {
+        const list = map[doc.shop_id] ?? []
+        list.push({ kind: doc.kind as PayuKycDocKind, storage_path: doc.storage_path })
+        map[doc.shop_id] = list
+      }
+      setDocsByShop(map)
+    } else {
+      setDocsByShop({})
+    }
+    setLoading(false)
   }, [filter, toast])
 
   useEffect(() => {
@@ -81,7 +118,7 @@ export function AdminPayuKycQueue() {
     return 'No PayU setup errors right now.'
   }, [filter])
 
-  async function openDoc(path: string | null) {
+  async function openDoc(path: string | null | undefined) {
     if (!path) return
     const url = await getKycDocumentSignedUrl(path)
     if (!url) {
@@ -89,6 +126,24 @@ export function AdminPayuKycQueue() {
       return
     }
     if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  function docsForRow(row: QueueRow): Array<{ label: string; path: string }> {
+    const fromTable = docsByShop[row.shop_id] ?? []
+    const byKind = new Map(fromTable.map((doc) => [doc.kind, doc.storage_path]))
+    const legacy: Array<[PayuKycDocKind, string | null]> = [
+      ['pan', row.pan_document_path],
+      ['bank', row.bank_document_path],
+      ['schedule_c', row.schedule_c_document_path],
+      ['gst', row.gst_document_path],
+    ]
+    for (const [kind, path] of legacy) {
+      if (path && !byKind.has(kind)) byKind.set(kind, path)
+    }
+    return Array.from(byKind.entries()).map(([kind, path]) => ({
+      label: DOC_LABEL[kind] ?? kind,
+      path,
+    }))
   }
 
   async function approve(shopId: string) {
@@ -140,7 +195,8 @@ export function AdminPayuKycQueue() {
           Payout KYC queue
         </Text>
         <Text color="$color10">
-          Review seller verification. Approval creates the PayU child merchant automatically.
+          Review seller verification and entity documents. Approval creates the PayU child merchant
+          (PAN / bank / Schedule C / GST only).
         </Text>
       </YStack>
 
@@ -181,6 +237,7 @@ export function AdminPayuKycQueue() {
         rows.map((row) => {
           const busy = busyId === row.shop_id
           const canApprove = row.status === 'submitted' || Boolean(row.payu_error)
+          const docs = docsForRow(row)
           return (
             <YStack
               key={row.shop_id}
@@ -193,37 +250,38 @@ export function AdminPayuKycQueue() {
               <XStack alignItems="center" gap="$2" flexWrap="wrap">
                 <Text fontWeight="800">{row.shops?.shop_name || row.business_name || 'Shop'}</Text>
                 <Badge tone={row.payu_error ? 'danger' : 'warning'}>{STATUS_LABEL[row.status]}</Badge>
+                <Badge tone="info">{entityLabel(row.business_entity_id)}</Badge>
               </XStack>
               <Text>
-                {row.legal_name} · {row.email} · {row.mobile}
+                Legal: {row.legal_name} · Trade: {row.business_name}
+              </Text>
+              <Text>
+                {row.email} · {row.mobile}
               </Text>
               <Text>
                 PAN {row.pan_number} · IFSC {row.ifsc}
               </Text>
+              {row.cin ? <Text>CIN: {row.cin}</Text> : null}
+              {row.llpin ? <Text>LLPIN: {row.llpin}</Text> : null}
+              {row.registration_number ? (
+                <Text>Registration: {row.registration_number}</Text>
+              ) : null}
               {row.payu_error ? (
                 <Text color="$red10" fontWeight="600">
                   PayU error: {row.payu_error}
                 </Text>
               ) : null}
               <XStack gap="$2" flexWrap="wrap">
-                <Button size="$2" tone="outline" onPress={() => void openDoc(row.pan_document_path)}>
-                  PAN
-                </Button>
-                <Button size="$2" tone="outline" onPress={() => void openDoc(row.bank_document_path)}>
-                  Bank
-                </Button>
-                <Button
-                  size="$2"
-                  tone="outline"
-                  onPress={() => void openDoc(row.schedule_c_document_path)}
-                >
-                  Schedule C
-                </Button>
-                {row.gst_document_path ? (
-                  <Button size="$2" tone="outline" onPress={() => void openDoc(row.gst_document_path)}>
-                    GST
+                {docs.map((doc) => (
+                  <Button
+                    key={`${row.shop_id}-${doc.label}-${doc.path}`}
+                    size="$2"
+                    tone="outline"
+                    onPress={() => void openDoc(doc.path)}
+                  >
+                    {doc.label}
                   </Button>
-                ) : null}
+                ))}
                 <Button
                   size="$2"
                   tone="outline"

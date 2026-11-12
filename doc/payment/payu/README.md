@@ -31,19 +31,21 @@ Legacy shops with **no** KYC row keep prior behavior.
 
 ## Vendor setup (zero PayU touchpoint)
 
-Vendors never open PayU. They submit payout details in shop settings:
+Vendors never open PayU. They submit payout details in **Verification** (`/vendor/settings?section=verification`):
 
-- Business + bank details
-- Documents: PAN, bank proof, **signed Schedule C**, optional GST
+- **Legal name** (PayU `name`) vs **Trade / business name** (storefront) — not a trademark certificate
+- Business type drives entity fields: CIN (Pvt Ltd / OPC), LLPIN (LLP), registration number (Society / Trust)
+- **PayU baseline docs:** PAN, bank proof, **signed Schedule C**, optional GST
+- **Admin-only entity docs** (not uploaded to PayU): Certificate of Incorporation, partnership deed / LLP agreement / trust deed / society cert, optional govt ID for individuals
 
-Stored in private bucket `shop-kyc-documents`; metadata in `shop_kyc_documents` (+ path columns on `shop_payu_kyc`).
+Stored in private bucket `shop-kyc-documents`; metadata in `shop_kyc_documents` (+ path columns on `shop_payu_kyc` for PayU kinds). Entity IDs live on `shop_payu_kyc.cin` / `llpin` / `registration_number`.
 
 Admin reviews via **/admin/payu-kyc** (queue) or the shop panel. Approve runs `shepay-create-child`:
 
 1. Hub token (`refer_child_merchant`)
 2. Create child merchant (`POST /api/v3/product_accounts`)
 3. Update bank details
-4. Upload PAN / bank / Schedule C (Partner KYC Document API, with onboarding fallback)
+4. Upload **only** PAN / bank / Schedule C / GST (Partner KYC Document API, with onboarding fallback) — entity docs stay admin-side
 5. Store child key + MID on `shop_payment_accounts` with status **`pending`**
 6. Mark `shop_payu_kyc.status = payu_pending` — **does not** set `shops.verified` yet
 
