@@ -128,11 +128,9 @@ export function CartScreen() {
 
   function goToCheckout() {
     // Keep guest cart (session id) and return to checkout after auth.
-    if (!user) {
-      navigateApp(buildSignInUrl(String(commerceRoutes.checkout)))
-      return
-    }
-    navigateApp(commerceRoutes.checkout)
+    navigateApp(
+      user ? commerceRoutes.checkout : buildSignInUrl(String(commerceRoutes.checkout)),
+    )
   }
 
   const settlementCurrency = cart?.currency ?? 'INR'

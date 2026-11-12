@@ -42,7 +42,9 @@ export async function fetchActiveListingIdSet(ids: string[]): Promise<Set<string
     .eq('shops.is_active', ACTIVE_SHOP_FILTER.is_active)
     .eq('shops.verified', ACTIVE_SHOP_FILTER.verified)
 
-  if (error || !data?.length) return new Set()
+  // Fail open on query errors so checkout/cart never bounce empty after a transient RLS/network blip.
+  if (error) return new Set(ids)
+  if (!data?.length) return new Set()
 
   return new Set(data.map((row) => row.id))
 }

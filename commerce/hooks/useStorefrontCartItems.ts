@@ -61,7 +61,11 @@ export function useStorefrontCartItems(cartItems: CartItemRow[]) {
     // Until the first visibility check finishes, keep showing cart lines so
     // checkout does not flash empty / redirect to cart.
     if (!hasChecked || checkedKey !== listingIdsKey) return cartItems
-    return cartItems.filter((item) => activeListingIds.has(item.listing_id))
+    const visible = cartItems.filter((item) => activeListingIds.has(item.listing_id))
+    // Never empty a non-empty cart on a transient empty active set — that bounced
+    // buyers off /checkout back to cart (or left them stuck on the listing CTA).
+    if (cartItems.length > 0 && visible.length === 0) return cartItems
+    return visible
   }, [activeListingIds, cartItems, hasChecked, checkedKey, listingIdsKey])
 
   return {

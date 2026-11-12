@@ -104,18 +104,20 @@ export function ListingMobileStickyBuyBar({
             onDecrease={() => onDecreaseQuantity?.()}
             onIncrease={() => onIncreaseQuantity?.()}
           />
-          <Button
-            tone="outline"
-            size="$4"
-            width="100%"
-            borderRadius={8}
-            disabled={disabled}
-            onPress={onCheckout}
-            letterSpacing={0}
-            fontSize={isNative ? 13 : 14}
-          >
-            {`Proceed to checkout · Qty ${quantity}`}
-          </Button>
+          <Theme name={BRAND_THEME}>
+            <Button
+              tone="primary"
+              size="$4"
+              width="100%"
+              borderRadius={8}
+              disabled={disabled}
+              onPress={onCheckout}
+              letterSpacing={0}
+              fontSize={isNative ? 13 : 14}
+            >
+              {`Proceed to checkout · Qty ${quantity}`}
+            </Button>
+          </Theme>
         </YStack>
       ) : (
         <XStack gap="$2" width="100%" minWidth={0}>

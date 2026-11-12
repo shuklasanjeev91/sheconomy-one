@@ -184,7 +184,14 @@ export function ListingScreen({
     averageRating: listing?.average_rating,
     totalReviews: listing?.total_reviews,
   })
-  const { addToCart, addBundleToCart, items: cartItems, updateQuantity, removeItem } = useCart()
+  const {
+    addToCart,
+    addBundleToCart,
+    items: cartItems,
+    updateQuantity,
+    removeItem,
+    refresh: refreshCart,
+  } = useCart()
   const { user } = useSupabase()
   const toast = useAppToast()
   const { hasSideRails } = useAppLayout()
@@ -454,13 +461,21 @@ export function ListingScreen({
   }
 
   function goToCheckout() {
-    // Require a confirmed cart line before sending guests to sign-in / checkout.
-    if (!cartItem && !optimisticInCart) return
-    if (!user) {
-      navigateApp(buildSignInUrl(String(commerceRoutes.checkout)))
-      return
-    }
-    navigateApp(commerceRoutes.checkout)
+    // Always open checkout (or sign-in→checkout). Do not no-op when the cart line is
+    // still syncing after add — that left buyers stuck on the listing page.
+    const href = user
+      ? commerceRoutes.checkout
+      : buildSignInUrl(String(commerceRoutes.checkout))
+    void (async () => {
+      if (!cartItem) {
+        try {
+          await refreshCart()
+        } catch {
+          // Navigation still proceeds — checkout will re-load the cart.
+        }
+      }
+      navigateApp(href)
+    })()
   }
 
   const specifications = buildListingSpecifications({
@@ -1113,9 +1128,9 @@ export function ListingScreen({
             </MarketplacePrimaryButton>
           )}
           {showInCart ? (
-            <MarketplaceSecondaryButton onPress={goToCheckout}>
+            <MarketplacePrimaryButton onPress={goToCheckout}>
               {`Proceed to checkout · Qty ${cartItem?.quantity ?? 1}`}
-            </MarketplaceSecondaryButton>
+            </MarketplacePrimaryButton>
           ) : (
             <MarketplaceSecondaryButton
               disabled={addingRef.current || (outOfStock && !allowPreorder) || purchaseLocked}
