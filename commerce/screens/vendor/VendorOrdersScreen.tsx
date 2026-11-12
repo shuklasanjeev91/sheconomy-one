@@ -285,6 +285,16 @@ export function VendorOrdersScreen() {
   const handleShipWithEasyship = async (item?: VendorOrderItem | null) => {
     const target = item ?? trackingItem
     if (!target || !shopId) return
+    const balance = easyshipCredit?.balance
+    if (!canAffordEasyshipShip(balance, null)) {
+      toast.show('Shipping credit required', {
+        tone: 'warning',
+        message:
+          'Your shipping wallet is empty. Top up shipping credit, then buy the label (carrier freight is debited from your wallet).',
+      })
+      void refreshEasyshipCredit()
+      return
+    }
     setEasyshipSubmitting(true)
     try {
       const result = await processEasyshipShipment({

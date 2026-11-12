@@ -9,6 +9,7 @@ import {
   XStack,
   YStack,
 } from '~/components/ui'
+import { AppLink } from '~/components/navigation/AppLink'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { ViewportOverlay } from '~/components/layout/ViewportOverlay'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
@@ -16,6 +17,7 @@ import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { overlayBackdropStyle, overlayPanelStyle } from '~/lib/layout/styles'
 import { formatOrderAmount } from '~/lib/orders/order.utils'
 import type { VendorOrderItem } from '~/lib/orders/vendor-orders.type'
+import { vendorRoutes } from '~/lib/routes'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 const PANEL_WIDTH = 440
@@ -227,17 +229,29 @@ function EasyshipOnlyForm({
               : 'Buy a shipping label — freight is auto-debited from your shipping wallet (0% platform commission).'}
           </Text>
           {easyshipCreditBalance != null ? (
-            <Text fontSize={12} color={ui.textMuted}>
+            <Text
+              fontSize={12}
+              color={easyshipCanAfford === false ? ui.danger : ui.textMuted}
+              fontWeight={easyshipCanAfford === false ? '600' : '400'}
+            >
               Shipping credit {Number(easyshipCreditBalance).toFixed(2)}
-              {easyshipCanAfford === false ? ' — top up in Wallet to buy labels' : ''}
+              {easyshipCanAfford === false
+                ? ' — add funds before buying a label (buyer FREE delivery still uses your wallet for carrier freight).'
+                : ''}
             </Text>
           ) : null}
-          {onShipWithEasyship ? (
+          {easyshipCanAfford === false ? (
+            <AppLink href={vendorRoutes.wallet}>
+              <Button tone="primary" size="$4" borderRadius={999}>
+                Top up shipping credit
+              </Button>
+            </AppLink>
+          ) : onShipWithEasyship ? (
             <Button
               tone="primary"
               size="$4"
               borderRadius={999}
-              disabled={busy || easyshipCanAfford === false}
+              disabled={busy}
               onPress={onShipWithEasyship}
             >
               {easyshipSubmitting

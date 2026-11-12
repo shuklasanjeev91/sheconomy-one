@@ -2,6 +2,7 @@
  * Easyship seller shipping credit helpers.
  */
 
+import { readSupabaseFunctionError } from '~/lib/supabase/function-error'
 import { supabase } from '~/lib/supabase'
 
 export const EASYSHIP_SELLER_RECHARGE_PATH = '/vendor/wallet'
@@ -25,12 +26,17 @@ export type EasyshipShippingCreditStatus = {
   }>
 }
 
+/**
+ * Buyer `shipping_amount` can be FREE (0) while the carrier label still costs the
+ * seller. Empty wallets must never look "affordable".
+ */
 export function canAffordEasyshipShip(
   balance: number | null | undefined,
   quoteAmount: number | null | undefined,
 ) {
-  if (quoteAmount == null || !Number.isFinite(quoteAmount)) return true
-  if (balance == null || !Number.isFinite(balance)) return false
+  if (balance == null || !Number.isFinite(balance) || balance <= 0) return false
+  // Unknown / FREE buyer freight — allow the attempt; server re-rates and gates.
+  if (quoteAmount == null || !Number.isFinite(quoteAmount) || quoteAmount <= 0) return true
   return balance + 1e-9 >= quoteAmount
 }
 
@@ -70,22 +76,49 @@ export async function processEasyshipShipment(input: {
   const { data, error } = await supabase.functions.invoke('easyship-process-shipment', {
     body: input,
   })
-  if (error) {
-    return { success: false, error: error.message || 'Could not process Easyship shipment' }
-  }
-  if (data?.error) {
+
+  const payload = (data ?? null) as Record<string, unknown> | null
+  if (error || payload?.error) {
+    let code =
+      payload?.code != null ? String(payload.code) : undefined
+    let rechargeUrl =
+      payload?.rechargeUrl != null
+        ? String(payload.rechargeUrl)
+        : EASYSHIP_SELLER_RECHARGE_PATH
+
+    // Non-2xx responses often put the body only on error.context.
+    if (!code && error && typeof error === 'object' && 'context' in error) {
+      try {
+        const context = (error as { context?: Response }).context
+        if (context && typeof context.clone === 'function') {
+          const body = (await context.clone().json()) as {
+            code?: unknown
+            rechargeUrl?: unknown
+          }
+          if (body?.code != null) code = String(body.code)
+          if (body?.rechargeUrl != null) rechargeUrl = String(body.rechargeUrl)
+        }
+      } catch {
+        // keep defaults
+      }
+    }
+
     return {
       success: false,
-      error: String(data.error),
-      code: data.code ? String(data.code) : undefined,
-      rechargeUrl: data.rechargeUrl ? String(data.rechargeUrl) : EASYSHIP_SELLER_RECHARGE_PATH,
+      error: await readSupabaseFunctionError(
+        error,
+        payload,
+        'Could not process Easyship shipment',
+      ),
+      code,
+      rechargeUrl,
     }
   }
   return {
     success: true,
-    trackingNumber: data?.trackingNumber ?? null,
-    labelUrl: data?.labelUrl ?? null,
-    freight: data?.freight != null ? Number(data.freight) : null,
+    trackingNumber: payload?.trackingNumber != null ? String(payload.trackingNumber) : null,
+    labelUrl: payload?.labelUrl != null ? String(payload.labelUrl) : null,
+    freight: payload?.freight != null ? Number(payload.freight) : null,
   }
 }
 
