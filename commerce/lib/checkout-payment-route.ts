@@ -48,14 +48,14 @@ export function onlinePaymentOptionCopy(input: {
 
   if (hasShepay && !hasDirect) {
     return {
-      title: 'Online payment',
-      subtitle: 'Pay with UPI, card, net banking, or wallet · SHEPay (PayU) · 0% commission',
+      title: 'Pay with PayU',
+      subtitle: 'UPI, cards, net banking or wallets on PayU Hosted Checkout · 0% commission',
     }
   }
 
   return {
-    title: 'Online payment',
-    subtitle: 'SHEPay for some shops · other sellers via their own gateway · 0% commission',
+    title: 'Pay with PayU',
+    subtitle: 'PayU for marketplace shops · other sellers via their own gateway · 0% commission',
   }
 }
 

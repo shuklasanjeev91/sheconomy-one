@@ -34,13 +34,13 @@ describe('onlinePaymentOptionCopy', () => {
     })
   })
 
-  it('uses Online payment when no seller gateway', () => {
+  it('uses PayU Hosted when no seller gateway', () => {
     const copy = onlinePaymentOptionCopy({
       shepayShops: [{ shopName: 'Platform Shop' }],
       directShops: [],
     })
-    expect(copy.title).toBe('Online payment')
-    expect(copy.subtitle.toLowerCase()).toContain('upi')
+    expect(copy.title).toBe('Pay with PayU')
+    expect(copy.subtitle.toLowerCase()).toContain('payu')
   })
 
   it('describes mixed carts', () => {
@@ -48,8 +48,8 @@ describe('onlinePaymentOptionCopy', () => {
       shepayShops: [{ shopName: 'A' }],
       directShops: [{ shopId: '2', shopName: 'B', gateway: 'Stripe' }],
     })
-    expect(copy.title).toBe('Online payment')
-    expect(copy.subtitle.toLowerCase()).toContain('shepay')
+    expect(copy.title).toBe('Pay with PayU')
+    expect(copy.subtitle.toLowerCase()).toContain('payu')
   })
 })
 

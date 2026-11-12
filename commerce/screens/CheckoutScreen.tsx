@@ -550,9 +550,9 @@ export function CheckoutScreen() {
 
   const showSettlementCurrencyNote = preferredCurrency !== settlementCurrency
 
-  // Online marketplace checkout always uses SHEPay (PayU Automate absolute split).
-  const placeLabel = 'Place your order'
-  const submittingLabel = 'Placing…'
+  // Online marketplace checkout uses PayU Hosted via SHEPay absolute split.
+  const placeLabel = paymentMethod === 'online' ? 'Pay with PayU' : 'Place your order'
+  const submittingLabel = paymentMethod === 'online' ? 'Opening PayU…' : 'Placing…'
 
   const canPlace =
     !noneSelected &&
@@ -1004,7 +1004,7 @@ export function CheckoutScreen() {
       ) : null}
       {multiShop ? (
         <Text fontSize={11} color={c.secondary} lineHeight={15}>
-          One SHEPay payment · funds released to each of {orderShops.length} shops after confirmation
+          One PayU payment · funds split to each of {orderShops.length} shops after confirmation
         </Text>
       ) : null}
       {hasSideRails ? null : (
@@ -1237,15 +1237,15 @@ export function CheckoutScreen() {
                 </SectionCard>
               )}
 
-              <SectionCard step={needsShipping ? 3 : 2} title="Payment method">
+              <SectionCard step={needsShipping ? 3 : 2} title="Payment">
                 <YStack gap="$3" width="100%" flexShrink={0}>
                   <PaymentOption
                     selected={paymentMethod === 'online'}
                     title={shepayOnlineCopy.title}
                     subtitle={
                       multiShop
-                        ? `${shepayOnlineCopy.subtitle} · one payment split across ${orderShops.length} shops`
-                        : `${shepayOnlineCopy.subtitle} · PayU split settlement to the seller`
+                        ? `${shepayOnlineCopy.subtitle} · one PayU payment split across ${orderShops.length} shops`
+                        : shepayOnlineCopy.subtitle
                     }
                     onPress={() => setPaymentMethod('online')}
                   />
