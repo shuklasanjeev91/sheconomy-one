@@ -145,7 +145,7 @@ function EasyshipOnlyForm({
             {mode === 'return' ? 'Create return label' : 'Create shipping label'}
           </Text>
           <Text fontSize={12.5} color={ui.textMuted} lineHeight={18}>
-            Order #{order?.order_number ?? '—'} · Labels are created with your shipping credit only — manual AWB entry is not available.
+            Order #{order?.order_number ?? '—'} · Labels are created with your wallet only — manual AWB entry is not available.
           </Text>
         </YStack>
         <YStack
@@ -234,7 +234,7 @@ function EasyshipOnlyForm({
               color={easyshipCanAfford === false ? ui.danger : ui.textMuted}
               fontWeight={easyshipCanAfford === false ? '600' : '400'}
             >
-              Shipping credit {Number(easyshipCreditBalance).toFixed(2)}
+              Wallet {Number(easyshipCreditBalance).toFixed(2)}
               {easyshipCanAfford === false
                 ? ' — add funds before buying a label (buyer FREE delivery still uses your wallet for carrier freight).'
                 : ''}
@@ -243,7 +243,7 @@ function EasyshipOnlyForm({
           {easyshipCanAfford === false ? (
             <AppLink href={vendorRoutes.wallet}>
               <Button tone="primary" size="$4" borderRadius={999}>
-                Top up shipping credit
+                Top up wallet
               </Button>
             </AppLink>
           ) : onShipWithEasyship ? (

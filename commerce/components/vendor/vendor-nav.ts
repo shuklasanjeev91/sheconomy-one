@@ -212,8 +212,8 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
       },
       {
         id: 'wallet',
-        label: 'Shipping credit',
-        description: 'Shipping credit, pending freight, and top-ups.',
+        label: 'Wallet',
+        description: 'Prepaid balance for shipping, ads, and referral rewards.',
         icon: Icons.Wallet,
         href: vendorRoutes.wallet,
         ready: true,
@@ -221,7 +221,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
       {
         id: 'ads',
         label: 'Ads & Promo',
-        description: 'Sponsored campaigns, discounts, and promotions.',
+        description: 'Boost posts, sponsored campaigns, and discounts.',
         icon: Icons.Megaphone,
         href: vendorRoutes.ads,
         ready: true,

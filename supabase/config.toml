@@ -441,6 +441,16 @@ verify_jwt = false
 [functions.sponsored-payu-webhook]
 verify_jwt = false
 
+# Unified platform wallet PayU top-up (user + shop).
+[functions.wallet-payu-topup]
+verify_jwt = true
+
+[functions.wallet-payu-callback]
+verify_jwt = false
+
+[functions.wallet-payu-webhook]
+verify_jwt = false
+
 [functions.sponsored-feed]
 verify_jwt = true
 

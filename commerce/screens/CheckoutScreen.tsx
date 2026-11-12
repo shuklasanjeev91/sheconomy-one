@@ -99,6 +99,10 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 import { resolveCheckoutContact } from '~/features/auth/services/account-contact'
 import { trackCommerceEvent } from '~/lib/analytics'
 import { navigateApp, replaceApp } from '~/lib/platform/navigate'
+import {
+  fetchPlatformWalletStatus,
+  settleCheckoutWithWallet,
+} from '~/lib/wallet/platform-wallet'
 
 const SUMMARY_WIDTH = 320
 
@@ -126,6 +130,8 @@ export function CheckoutScreen() {
   const [notesByShop, setNotesByShop] = useState<Record<string, string>>({})
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
+  const [useWallet, setUseWallet] = useState(false)
+  const [walletBalance, setWalletBalance] = useState(0)
   const [payuSession, setPayuSession] = useState<CheckoutPayuSession | null>(null)
   const [payuCheckoutMeta, setPayuCheckoutMeta] = useState<{
     orderIds: string[]
@@ -157,6 +163,21 @@ export function CheckoutScreen() {
   useEffect(() => {
     setContactCheckoutReady(checkoutContact.checkoutReady)
   }, [checkoutContact.checkoutReady])
+
+  useEffect(() => {
+    if (!user?.id) {
+      setWalletBalance(0)
+      return
+    }
+    let active = true
+    void fetchPlatformWalletStatus('user', user.id).then((status) => {
+      if (!active) return
+      setWalletBalance(status?.balance ?? 0)
+    })
+    return () => {
+      active = false
+    }
+  }, [user?.id])
 
   const availableIds = useMemo(() => items.map((item) => item.id), [items])
   const { isSelected, noneSelected, selectedIds } = useCartSelection(availableIds)
@@ -742,6 +763,48 @@ export function CheckoutScreen() {
         const usedAddressEarly = addresses.find((row) => row.id === shippingAddressId)
         if (usedAddressEarly) {
           void rememberRecentAddress(usedAddressEarly).then(setRecentAddresses)
+        }
+
+        const walletApply = useWallet
+          ? Math.min(walletBalance, Number(shepayStep.amount ?? orderTotal ?? 0))
+          : 0
+        if (walletApply > 0 && checkoutGroupId) {
+          const settled = await settleCheckoutWithWallet({
+            checkoutGroupId,
+            orderId: orderIds[0] ?? null,
+            amount: Math.round(walletApply * 100) / 100,
+          })
+          if (!settled.ok) {
+            toast.show('Wallet payment failed', {
+              tone: 'danger',
+              message: settled.error ?? 'Try again or pay with PayU only.',
+            })
+          } else if (settled.fullySettled) {
+            await savePendingOrderSuccess({
+              orderIds,
+              orderNumbers,
+              createdAt: Date.now(),
+              paymentMode: 'online',
+              awaitingExternalPayment: false,
+              checkoutGroupId,
+              checkoutUrl: null,
+            })
+            setPayuCheckoutMeta({ orderIds, orderNumbers, checkoutGroupId })
+            setWalletBalance((b) => Math.max(0, b - walletApply))
+            toast.show('Paid with wallet', {
+              tone: 'success',
+              message: 'Your order is confirmed.',
+            })
+            replaceApp(commerceRoutes.orderSuccess(orderIds) as never)
+            void refresh()
+            return null
+          } else {
+            setWalletBalance((b) => Math.max(0, b - walletApply))
+            toast.show('Wallet applied', {
+              tone: 'success',
+              message: `₹${walletApply.toFixed(2)} applied. Pay the remainder below.`,
+            })
+          }
         }
 
         await savePendingOrderSuccess({
@@ -1419,6 +1482,44 @@ export function CheckoutScreen() {
               <SectionCard step={needsShipping ? 3 : 2} title="Payment method">
                 <AppErrorBoundary scope="CheckoutPayu" alwaysShowError>
                   <YStack gap="$3" width="100%" flexShrink={0}>
+                    {walletBalance > 0 && paymentMethod === 'online' ? (
+                      <YStack
+                        gap="$2"
+                        padding="$3"
+                        borderRadius={12}
+                        borderWidth={1}
+                        borderColor={useWallet ? c.brand : c.border}
+                        backgroundColor={c.chip}
+                      >
+                        <XStack alignItems="center" justifyContent="space-between" gap="$3">
+                          <YStack flex={1} gap={2}>
+                            <Text fontSize={14} fontWeight="700" color={ui.text}>
+                              Use wallet
+                            </Text>
+                            <Text fontSize={12} color={c.secondary}>
+                              Available {formatCheckoutMoney(walletBalance)}
+                              {useWallet
+                                ? ` · apply up to ${formatCheckoutMoney(
+                                    Math.min(walletBalance, displayTotals.orderTotal),
+                                  )}`
+                                : ''}
+                            </Text>
+                          </YStack>
+                          <Button
+                            size="$2"
+                            tone={useWallet ? 'primary' : 'outline'}
+                            onPress={() => setUseWallet((v) => !v)}
+                          >
+                            {useWallet ? 'On' : 'Off'}
+                          </Button>
+                        </XStack>
+                        <AppLink href={commerceRoutes.wallet} asChild>
+                          <Text fontSize={12} color={c.brand} fontWeight="600">
+                            Manage wallet & top up
+                          </Text>
+                        </AppLink>
+                      </YStack>
+                    ) : null}
                     <CheckoutPayuPanel
                       embedded
                       ui={ui}
@@ -1427,8 +1528,24 @@ export function CheckoutScreen() {
                       chipColor={c.chip}
                       secondaryColor={c.secondary}
                       initialMode="upi_intent"
-                      amount={displayTotals.orderTotal}
-                      amountLabel={formatCheckoutMoney(displayTotals.orderTotal)}
+                      amount={
+                        useWallet
+                          ? Math.max(
+                              0,
+                              displayTotals.orderTotal -
+                                Math.min(walletBalance, displayTotals.orderTotal),
+                            )
+                          : displayTotals.orderTotal
+                      }
+                      amountLabel={formatCheckoutMoney(
+                        useWallet
+                          ? Math.max(
+                              0,
+                              displayTotals.orderTotal -
+                                Math.min(walletBalance, displayTotals.orderTotal),
+                            )
+                          : displayTotals.orderTotal,
+                      )}
                       session={payuPanelSession}
                       onEnsureSession={ensureShepayPayuSession}
                       onAuthActiveChange={setPayuAuthActive}

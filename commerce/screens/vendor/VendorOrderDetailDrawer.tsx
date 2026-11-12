@@ -832,7 +832,7 @@ function DrawerBody({
           </Section>
         ) : null}
 
-        <Section ui={ui} label="Shipping credit">
+        <Section ui={ui} label="Wallet">
           <YStack gap="$2">
             <SummaryRow
               ui={ui}
@@ -862,7 +862,7 @@ function DrawerBody({
                 </Text>
                 <AppLink href={vendorRoutes.wallet}>
                   <Button tone="outline" size="$3">
-                    Open shipping credit
+                    Open wallet
                   </Button>
                 </AppLink>
               </YStack>
@@ -929,7 +929,7 @@ function DrawerBody({
             {!affordable ? (
               <AppLink href={vendorRoutes.wallet}>
                 <Button tone="outline" size="$3" borderRadius={999}>
-                  Top up shipping credit
+                  Top up wallet
                 </Button>
               </AppLink>
             ) : null}

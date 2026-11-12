@@ -92,6 +92,7 @@ export const commerceRoutes = {
     return (search ? `/payment/failure?${search}` : '/payment/failure') as Href
   },
   paymentMethods: '/payment-methods' as Href,
+  wallet: '/wallet' as Href,
   addresses: '/addresses' as Href,
   search: (query?: string, scope?: string) => appRoutes.search(query, scope ?? 'listings'),
   category: (slug: string) => `/category/${encodeURIComponent(slug)}` as Href,
@@ -125,6 +126,7 @@ export const vendorRoutes = {
   delivery: '/vendor/delivery' as Href,
   wallet: '/vendor/wallet' as Href,
   ads: '/vendor/ads' as Href,
+  discounts: '/vendor/discounts' as Href,
   bundles: '/vendor/bundles' as Href,
   createDiscount: '/vendor/ads/create' as Href,
   reviews: '/vendor/reviews' as Href,

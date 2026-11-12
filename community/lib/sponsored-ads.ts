@@ -334,6 +334,19 @@ export async function beginSponsoredPayuCheckout(
   return { data: { txnid: result.data.txnid }, error: null }
 }
 
+/** Debit shop or user platform wallet for campaign budget (fallback: PayU). */
+export async function paySponsoredCampaignWithWallet(
+  campaignId: string,
+  shopId?: string | null,
+): Promise<ServiceResult<{ campaign: SponsoredCampaign }>> {
+  return invoke('sponsored-campaigns', {
+    action: 'pay_with_wallet',
+    campaign_id: campaignId,
+    shop_id: shopId ?? null,
+    client_platform: clientPlatform(),
+  })
+}
+
 export async function fetchSponsoredFeedItems(limit = 2): Promise<ServiceResult<SponsoredFeedItem[]>> {
   const result = await invoke<{
     campaigns: Array<{

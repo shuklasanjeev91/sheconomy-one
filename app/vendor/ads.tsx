@@ -1,5 +1,5 @@
-import { VendorDiscountScreen } from '~/commerce/screens/vendor/VendorDiscountScreen'
+import { VendorAdsHubScreen } from '~/commerce/screens/vendor/VendorAdsHubScreen'
 
 export default function VendorAdsRoute() {
-  return <VendorDiscountScreen />
+  return <VendorAdsHubScreen />
 }

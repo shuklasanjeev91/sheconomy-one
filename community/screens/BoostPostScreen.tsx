@@ -13,6 +13,7 @@ import {
   beginSponsoredPayuCheckout,
   createSponsoredCampaign,
   fetchSponsoredCampaign,
+  paySponsoredCampaignWithWallet,
   updateSponsoredCampaign,
   type SponsoredCallToAction,
   type SponsoredObjective,
@@ -20,6 +21,7 @@ import {
 import { Button, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { formatCurrency } from '~/lib/format'
 import { communityRoutes } from '~/lib/routes'
+import { useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -48,6 +50,7 @@ export function BoostPostScreen({
   const ui = useAppUi()
   const toast = useAppToast()
   const router = useRouter()
+  const shopId = useAppSelector((s) => s.shop.currentShop?.id ?? null)
   const { user } = useSupabase()
   const [post, setPost] = useState<CommunityPost | null>(null)
   const [loadingPost, setLoadingPost] = useState(true)
@@ -187,11 +190,33 @@ export function BoostPostScreen({
       return
     }
 
+    const walletPay = await paySponsoredCampaignWithWallet(
+      result.data.campaign.id,
+      shopId,
+    )
+    if (walletPay.data?.campaign) {
+      setSubmitting(false)
+      toast.show('Paid from wallet', {
+        tone: 'success',
+        message: 'Campaign is in review. Delivery starts after approval.',
+      })
+      router.replace(communityRoutes.ads)
+      return
+    }
+
     const payment = await beginSponsoredPayuCheckout(result.data.campaign.id)
     if (payment.error) {
       setSubmitting(false)
-      toast.show('Could not open PayU', { tone: 'danger', message: payment.error })
+      toast.show('Could not open PayU', {
+        tone: 'danger',
+        message:
+          walletPay.error && /insufficient/i.test(walletPay.error)
+            ? `${walletPay.error}. Opening PayU… failed: ${payment.error}`
+            : payment.error,
+      })
+      return
     }
+    setSubmitting(false)
   }
 
   return (
@@ -303,7 +328,7 @@ export function BoostPostScreen({
             <Button tone="primary" disabled={submitting} onPress={submit}>
               {submitting
                 ? canCheckout
-                  ? 'Opening PayU…'
+                  ? 'Paying…'
                   : 'Saving campaign…'
                 : canCheckout
                   ? `Pay ${formatCurrency(Number(totalBudget) || 0, 'INR')}`
@@ -311,7 +336,9 @@ export function BoostPostScreen({
             </Button>
             <Text fontSize={12} color={ui.textMuted} textAlign="center">
               {canCheckout
-                ? 'Payment authorizes review. Delivery starts only after approval.'
+                ? shopId
+                  ? 'We try your shop wallet first when balance covers the budget; otherwise PayU opens on web.'
+                  : 'Payment authorizes review. Delivery starts only after approval.'
                 : 'This app does not process campaign billing. Delivery starts after prepaid budget is confirmed and the campaign is approved. You can pause, resume, and view results here.'}
             </Text>
           </YStack>

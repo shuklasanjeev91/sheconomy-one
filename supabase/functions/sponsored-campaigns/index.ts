@@ -282,6 +282,135 @@ Deno.serve(async (request) => {
     return jsonResponse({ campaign: data });
   }
 
+  if (action === "pay_with_wallet") {
+    if (!["draft", "pending_payment", "rejected"].includes(current.status)) {
+      return jsonResponse({
+        error: `Campaign cannot be paid from ${current.status}`,
+      }, 409);
+    }
+    const budget = Number(current.total_budget);
+    if (!Number.isFinite(budget) || budget < 100 || current.currency !== "INR") {
+      return jsonResponse({ error: "Campaign budget is invalid" }, 409);
+    }
+    const { data: completed } = await admin
+      .from("sponsored_campaign_payments")
+      .select("id")
+      .eq("campaign_id", campaignId)
+      .eq("status", "completed")
+      .limit(1)
+      .maybeSingle();
+    if (completed || current.paid_at) {
+      return jsonResponse({ error: "Campaign is already paid" }, 409);
+    }
+
+    const shopId = cleanString(body.shop_id, 80);
+    let ownerType: "shop" | "user" = "user";
+    let ownerId = user.id;
+    if (shopId && isUuid(shopId)) {
+      const { data: shop } = await admin
+        .from("shops")
+        .select("id, user_id")
+        .eq("id", shopId)
+        .maybeSingle();
+      if (!shop || shop.user_id !== user.id) {
+        return jsonResponse({ error: "Forbidden shop wallet" }, 403);
+      }
+      ownerType = "shop";
+      ownerId = shopId;
+    }
+
+    const debitKey = `spend_ads:${campaignId}:${ownerType}:${ownerId}`;
+    const { data: debit, error: debitError } = await admin.rpc(
+      "platform_wallet_debit",
+      {
+        p_owner_type: ownerType,
+        p_owner_id: ownerId,
+        p_amount: budget,
+        p_entry_type: "spend_ads",
+        p_idempotency_key: debitKey,
+        p_currency: "INR",
+        p_description: `Sponsored campaign ${current.name}`,
+        p_metadata: { campaign_id: campaignId },
+        p_order_id: null,
+        p_shop_id: ownerType === "shop" ? ownerId : null,
+        p_campaign_id: campaignId,
+      },
+    );
+    if (debitError) {
+      return jsonResponse({ error: debitError.message }, 500);
+    }
+    const debitJson = (debit ?? {}) as Record<string, unknown>;
+    if (debitJson.ok === false) {
+      if (debitJson.error === "insufficient_credit") {
+        return jsonResponse({
+          error: "Insufficient wallet balance",
+          balance: debitJson.balance,
+          required: budget,
+        }, 402);
+      }
+      return jsonResponse({ error: "Wallet debit failed" }, 400);
+    }
+
+    const now = new Date().toISOString();
+    const txnid = `WALLET_${campaignId.replaceAll("-", "").slice(0, 8)}_${Date.now()
+      .toString(36)
+      .toUpperCase()}`;
+    const { data: payment, error: paymentError } = await admin
+      .from("sponsored_campaign_payments")
+      .insert({
+        campaign_id: campaignId,
+        advertiser_user_id: user.id,
+        status: "completed",
+        amount: budget,
+        currency: "INR",
+        transaction_id: txnid,
+        processed_at: now,
+        provider_response: {
+          source: "platform_wallet",
+          owner_type: ownerType,
+          owner_id: ownerId,
+          ledger_id: debitJson.ledger_id ?? null,
+        },
+      })
+      .select("id")
+      .single();
+    if (paymentError || !payment) {
+      return jsonResponse({ error: "Could not record wallet payment" }, 500);
+    }
+
+    const { data: transitioned, error: transitionError } = await admin
+      .from("sponsored_campaigns")
+      .update({
+        status: "pending_review",
+        paid_at: now,
+        rejection_reason: null,
+        updated_at: now,
+      })
+      .eq("id", campaignId)
+      .eq("advertiser_user_id", user.id)
+      .in("status", ["draft", "pending_payment", "rejected"])
+      .select(CAMPAIGN_SELECT)
+      .maybeSingle();
+    if (transitionError || !transitioned) {
+      return jsonResponse({ error: "Could not update campaign" }, 500);
+    }
+    await insertCampaignAudit(
+      admin,
+      campaignId,
+      user.id,
+      "payment_completed",
+      current.status,
+      "pending_review",
+      null,
+      {
+        payment_id: payment.id,
+        transaction_id: txnid,
+        source: "platform_wallet",
+      },
+    );
+    return jsonResponse({ campaign: transitioned, payment_id: payment.id });
+  }
+
   const transitions: Record<string, { from: string[]; to: string }> = {
     pause: { from: ["active"], to: "paused" },
     resume: { from: ["paused"], to: "active" },

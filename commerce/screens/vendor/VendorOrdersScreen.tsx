@@ -287,10 +287,10 @@ export function VendorOrdersScreen() {
     if (!target || !shopId) return
     const balance = easyshipCredit?.balance
     if (!canAffordEasyshipShip(balance, null)) {
-      toast.show('Shipping credit required', {
+      toast.show('Wallet balance required', {
         tone: 'warning',
         message:
-          'Your shipping wallet is empty. Top up shipping credit, then buy the label (carrier freight is debited from your wallet).',
+          'Your shipping wallet is empty. Top up wallet, then buy the label (carrier freight is debited from your wallet).',
       })
       void refreshEasyshipCredit()
       return
@@ -305,7 +305,7 @@ export function VendorOrdersScreen() {
       if (!result.success) {
         toast.show('Could not create shipping label', {
           tone: 'danger',
-          message: result.error ?? 'Check shipping credit and try again.',
+          message: result.error ?? 'Check wallet and try again.',
         })
         if (result.code === 'insufficient_shipping_credit') {
           void refreshEasyshipCredit()
@@ -315,7 +315,7 @@ export function VendorOrdersScreen() {
       toast.show('Shipment created', {
         tone: 'success',
         message: result.trackingNumber
-          ? `Tracking ${result.trackingNumber} — freight debited from shipping credit.`
+          ? `Tracking ${result.trackingNumber} — freight debited from wallet.`
           : 'Shipping label purchased.',
       })
       setTrackingItem(null)
@@ -441,7 +441,7 @@ export function VendorOrdersScreen() {
       backgroundColor={ui.roseSurface}
     >
       <Text fontSize={13} fontWeight="700" color={ui.text}>
-        Shipping credit is low
+        Wallet balance is low
       </Text>
       <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
         Recharge before buying shipping labels
@@ -451,7 +451,7 @@ export function VendorOrdersScreen() {
       </Text>
       <AppLink href={vendorRoutes.wallet}>
         <Button size="sm" tone="primary">
-          Open shipping credit
+          Open wallet
         </Button>
       </AppLink>
     </YStack>

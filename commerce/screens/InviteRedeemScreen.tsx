@@ -92,11 +92,12 @@ export function InviteRedeemScreen() {
         You are invited to {BRAND_NAME}
       </Text>
       <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360}>
-        Sign up or sign in to join with invite code{' '}
+        Sign up or sign in with invite code{' '}
         <Text fontWeight="800" color={ui.text}>
           {code.toUpperCase()}
         </Text>
-        . Members who join via friends help grow our women-first network.
+        . After your first paid order, you and your friend each get ₹50 wallet credit. Sellers who
+        complete KYC and first sale unlock ₹200 for their referrer.
       </Text>
       <YStack gap="$2" width="100%" maxWidth={320}>
         <Button

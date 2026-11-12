@@ -207,6 +207,13 @@ export function CommerceSettingsPanel() {
           title="Payment methods"
           subtitle="Saved cards and wallets"
         />
+        <Separator />
+        <DeepLinkRow
+          href={commerceRoutes.wallet}
+          icon={Icons.Wallet}
+          title="Wallet"
+          subtitle="Prepaid balance, top-ups, and referral rewards"
+        />
       </SurfaceCard>
     </SettingsPanel>
   )

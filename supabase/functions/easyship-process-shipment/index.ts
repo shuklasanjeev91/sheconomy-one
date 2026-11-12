@@ -226,16 +226,17 @@ Deno.serve(async (request) => {
     const courierServiceId =
       preferredCourierId || best.courier_service?.id || null
 
-    const { data: creditRow } = await admin
-      .from('easyship_shipping_credits')
-      .select('balance_amount, currency')
-      .eq('shop_id', body.shopId)
-      .maybeSingle()
-    const sellerBalance = Number(creditRow?.balance_amount ?? 0)
+    const { data: walletRow } = await admin.rpc('platform_wallet_get_or_create', {
+      p_owner_type: 'shop',
+      p_owner_id: body.shopId,
+      p_currency: 'INR',
+    })
+    const sellerBalance = Number(walletRow?.available_balance ?? 0)
+    const walletCurrency = String(walletRow?.currency || 'INR')
     if (sellerBalance + 1e-9 < shipmentCharge) {
       return jsonResponse(
         insufficientShippingCreditResponse(
-          `Shipping credit ${sellerBalance.toFixed(2)} is below freight ${shipmentCharge.toFixed(2)}. Recharge to ship.`,
+          `Wallet ${sellerBalance.toFixed(2)} is below freight ${shipmentCharge.toFixed(2)}. Top up under Vendor → Wallet to ship.`,
         ),
         402,
       )
@@ -268,18 +269,23 @@ Deno.serve(async (request) => {
       Number(created.shipmentCharge ?? shipmentCharge),
     )
     const { data: debitResult, error: debitError } = await admin.rpc(
-      'easyship_debit_shipping_for_label',
+      'platform_wallet_debit',
       {
-        p_shop_id: body.shopId,
-        p_order_id: body.orderId,
+        p_owner_type: 'shop',
+        p_owner_id: body.shopId,
         p_amount: debitAmount,
-        p_easyship_shipment_id: created.easyshipShipmentId,
-        p_idempotency_key: `debit_label:${created.easyshipShipmentId}`,
-        p_payload: {
+        p_entry_type: 'spend_shipping',
+        p_idempotency_key: `spend_shipping:${created.easyshipShipmentId}`,
+        p_currency: created.currency || walletCurrency || 'INR',
+        p_description: 'Easyship shipping label',
+        p_metadata: {
+          easyship_shipment_id: created.easyshipShipmentId,
           rate: best,
           shipment: created.raw,
         },
-        p_currency: created.currency || creditRow?.currency || 'INR',
+        p_order_id: body.orderId,
+        p_shop_id: body.shopId,
+        p_campaign_id: null,
       },
     )
     if (debitError) {

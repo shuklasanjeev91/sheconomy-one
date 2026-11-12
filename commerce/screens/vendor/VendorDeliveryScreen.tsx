@@ -147,7 +147,7 @@ export function VendorDeliveryScreen() {
             borderRadius={999}
             onPress={() => router.push(vendorRoutes.wallet)}
           >
-            Open shipping credit
+            Open wallet
           </Button>
         </YStack>
 
@@ -228,7 +228,7 @@ export function VendorDeliveryScreen() {
                     alignSelf="flex-start"
                     onPress={() => router.push(vendorRoutes.wallet)}
                   >
-                    Open shipping credit
+                    Open wallet
                   </Button>
                 ) : null}
               </YStack>
