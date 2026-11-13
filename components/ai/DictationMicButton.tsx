@@ -80,10 +80,10 @@ export function DictationMicButton({
       alignItems="center"
       justifyContent="center"
       flexShrink={0}
-      backgroundColor={listening ? ui.brand : ui.surfaceMuted}
+      backgroundColor={listening ? ui.brand : 'transparent'}
       opacity={blocked ? 0.45 : 1}
       cursor={blocked ? 'default' : 'pointer'}
-      hoverStyle={blocked ? undefined : { opacity: 0.9 }}
+      hoverStyle={blocked ? undefined : { backgroundColor: ui.surfaceMuted }}
       pressStyle={blocked ? undefined : { scale: 0.94 }}
       onPress={onPress}
       aria-label={listening ? `Stop ${AI_NAME} dictation` : `Speak with ${AI_NAME}`}
@@ -95,9 +95,9 @@ export function DictationMicButton({
           })}
     >
       {listening ? (
-        <Icons.MicOff size={Math.round(size * 0.42)} color="#fff" />
+        <Icons.MicOff size={Math.round(size * 0.45)} color="#fff" />
       ) : (
-        <Icons.Mic size={Math.round(size * 0.42)} color={ui.brand} />
+        <Icons.Mic size={Math.round(size * 0.45)} color={ui.brand} />
       )}
     </XStack>
   )

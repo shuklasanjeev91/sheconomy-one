@@ -563,6 +563,18 @@ export function MessageComposer({
               blurOnSubmit={false}
             />
 
+            {!recording ? (
+              <DictationMicButton
+                size={34}
+                disabled={sending}
+                bindValue={text}
+                bindOnChangeText={(next) => {
+                  setText(next)
+                  if (!isEditing) onTyping(next)
+                }}
+              />
+            ) : null}
+
             {!isEditing ? (
               <IconButton onPress={() => setAttachOpen(true)} label="Attach" size={38}>
                 {attaching ? (
@@ -574,18 +586,6 @@ export function MessageComposer({
             ) : null}
           </XStack>
         )}
-
-        {!recording ? (
-          <DictationMicButton
-            size={40}
-            disabled={sending}
-            bindValue={text}
-            bindOnChangeText={(next) => {
-              setText(next)
-              if (!isEditing) onTyping(next)
-            }}
-          />
-        ) : null}
 
         <XStack
           onPress={

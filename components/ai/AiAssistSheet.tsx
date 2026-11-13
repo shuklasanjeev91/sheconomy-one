@@ -229,14 +229,21 @@ function AiAssistSheetBody({
 
   const footer = (
     <XStack gap="$2" alignItems="center" width="100%" paddingHorizontal="$4" paddingBottom="$3">
-      <DictationMicButton
-        size={40}
-        disabled={sending}
-        bindValue={input}
-        bindOnChangeText={setInput}
-      />
-      <YStack flex={1} minWidth={0}>
+      <XStack
+        flex={1}
+        minWidth={0}
+        alignItems="center"
+        gap="$1"
+        minHeight={48}
+        paddingLeft="$3"
+        paddingRight="$1.5"
+        borderRadius={radius.pill}
+        borderWidth={1}
+        borderColor={ui.borderSubtle}
+        backgroundColor={ui.surface}
+      >
         <Input
+          flex={1}
           value={input}
           onChangeText={setInput}
           placeholder={
@@ -247,8 +254,25 @@ function AiAssistSheetBody({
           onSubmitEditing={() => void handleSend()}
           returnKeyType="send"
           editable={!sending}
+          borderWidth={0}
+          backgroundColor="transparent"
+          height={40}
+          paddingHorizontal={0}
+          focusStyle={{
+            borderWidth: 0,
+            outlineWidth: 0,
+            backgroundColor: 'transparent',
+            shadowOpacity: 0,
+          }}
+          hoverStyle={{ borderColor: 'transparent' }}
         />
-      </YStack>
+        <DictationMicButton
+          size={34}
+          disabled={sending}
+          bindValue={input}
+          bindOnChangeText={setInput}
+        />
+      </XStack>
       <Button
         tone="primary"
         size="$4"
