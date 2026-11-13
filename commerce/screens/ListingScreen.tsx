@@ -327,6 +327,24 @@ export function ListingScreen({
     return [activeImage.image_url, ...galleryUrls.filter((url) => url !== activeImage.image_url)]
   }, [activeImage, galleryUrls])
 
+  // Must stay above loading/error early returns — calling useMemo only after
+  // listing resolves triggers React #310 ("Rendered more hooks than previous render").
+  const chatListing = useMemo(
+    () =>
+      listing
+        ? listingDetailToChatListing({
+            id: listing.id,
+            title: listing.title,
+            price: listing.price,
+            currency: listing.currency,
+            slug: listing.slug,
+            imageUrl: sortedImages[0]?.image_url ?? null,
+            shopName: listing.shops?.shop_name ?? null,
+          })
+        : null,
+    [listing, sortedImages],
+  )
+
   if (isLoading && !listing) {
     return (
       <PageCenter>
@@ -543,19 +561,6 @@ export function ListingScreen({
   const buyNowLabel = isDigital ? 'Buy & download' : 'Buy it now'
   const mobileBottomInset = LISTING_MOBILE_STICKY_BAR_HEIGHT + 16
   const listingShareSlug = slug ?? listing.id
-  const chatListing = useMemo(
-    () =>
-      listingDetailToChatListing({
-        id: listing.id,
-        title: listing.title,
-        price: listing.price,
-        currency: listing.currency,
-        slug: listing.slug,
-        imageUrl: sortedImages[0]?.image_url ?? null,
-        shopName: listing.shops?.shop_name ?? null,
-      }),
-    [listing, sortedImages],
-  )
   const handleShareToCommunity = () => {
     if (!user) {
       toast.show('Sign in to share', {
