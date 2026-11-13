@@ -37,6 +37,7 @@ import { ForceUpdateGate } from '~/components/system/ForceUpdateGate'
 import { UniversalLinksHost } from '~/components/system/UniversalLinksHost'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
+import { DictationProvider } from '~/providers/DictationProvider'
 import { ConnectivityProvider } from '~/providers/ConnectivityProvider'
 import { NativeAppOnboardingGate } from '~/components/onboarding/NativeAppOnboardingGate'
 import { AppBootstrapPrefetch } from '~/components/navigation/AppBootstrapPrefetch'
@@ -57,24 +58,26 @@ function AppProviders({ children }: { children: ReactNode }) {
                       <FavoritesProvider>
                         <MarketplacePersonalizationProvider>
                           <AiAssistProvider>
-                            <ScreenZoomProvider>
-                              <ScreenZoomRoot>
-                                <ConnectivityProvider>
-                                  <AutomaticUpdateManager />
-                                  <ForceUpdateGate>
-                                    <UniversalLinksHost />
-                                    <PushSubscribePromptHost />
-                                    <PushForegroundNotificationHost />
-                                    <AppBootstrapPrefetch />
-                                    <AppErrorBoundary scope="AppShell">
-                                      <NativeAppOnboardingGate>
-                                        <AppShell>{children}</AppShell>
-                                      </NativeAppOnboardingGate>
-                                    </AppErrorBoundary>
-                                  </ForceUpdateGate>
-                                </ConnectivityProvider>
-                              </ScreenZoomRoot>
-                            </ScreenZoomProvider>
+                            <DictationProvider>
+                              <ScreenZoomProvider>
+                                <ScreenZoomRoot>
+                                  <ConnectivityProvider>
+                                    <AutomaticUpdateManager />
+                                    <ForceUpdateGate>
+                                      <UniversalLinksHost />
+                                      <PushSubscribePromptHost />
+                                      <PushForegroundNotificationHost />
+                                      <AppBootstrapPrefetch />
+                                      <AppErrorBoundary scope="AppShell">
+                                        <NativeAppOnboardingGate>
+                                          <AppShell>{children}</AppShell>
+                                        </NativeAppOnboardingGate>
+                                      </AppErrorBoundary>
+                                    </ForceUpdateGate>
+                                  </ConnectivityProvider>
+                                </ScreenZoomRoot>
+                              </ScreenZoomProvider>
+                            </DictationProvider>
                           </AiAssistProvider>
                         </MarketplacePersonalizationProvider>
                       </FavoritesProvider>

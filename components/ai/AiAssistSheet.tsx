@@ -10,6 +10,7 @@ import {
   XStack,
   YStack,
 } from '~/components/ui'
+import { DictationMicButton } from '~/components/ai/DictationMicButton'
 import { HorizontalScrollRow } from '~/components/layout'
 import { AI_NAME } from '~/config/brand'
 import { radius } from '~/config/tokens'
@@ -221,11 +222,21 @@ function AiAssistSheetBody({
 
   const footer = (
     <XStack gap="$2" alignItems="center" width="100%" paddingHorizontal="$4" paddingBottom="$3">
+      <DictationMicButton
+        size={40}
+        disabled={sending}
+        bindValue={input}
+        bindOnChangeText={setInput}
+      />
       <YStack flex={1} minWidth={0}>
         <Input
           value={input}
           onChangeText={setInput}
-          placeholder={onListing ? 'Ask about this product…' : `Ask about ${aiProductLabel(product).toLowerCase()}…`}
+          placeholder={
+            onListing
+              ? 'Ask about this product…'
+              : `Ask about ${aiProductLabel(product).toLowerCase()}…`
+          }
           onSubmitEditing={() => void handleSend()}
           returnKeyType="send"
           editable={!sending}

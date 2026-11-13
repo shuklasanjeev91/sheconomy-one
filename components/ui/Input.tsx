@@ -7,6 +7,7 @@ import { AppTextField } from '~/components/forms/AppTextField'
 import { SizableText } from '~/components/ui/Text'
 import { BRAND_THEME } from '~/config/tokens'
 import { WritingSuggestionBar } from '~/components/writing/WritingSuggestionBar'
+import { useDictationField } from '~/hooks/useDictationField'
 
 const sharedFieldStyle = {
   borderRadius: '$6',
@@ -58,6 +59,8 @@ type FieldControlExtra = {
   writingAssist?: boolean
   /** Skip a check while another suggestion panel is open. */
   writingPaused?: boolean
+  /** Register for app-wide SHERPA dictation (default true). */
+  dictation?: boolean
 }
 
 function withWritingAssist(
@@ -110,16 +113,27 @@ type InputProps = GetProps<typeof TInput> & FieldControlExtra
  * across every screen (Tamagui Input shells often swallow Android touches).
  */
 export const Input = forwardRef<any, InputProps>(function Input(
-  { invalid, writingAssist = false, writingPaused = false, ...props },
+  { invalid, writingAssist = false, writingPaused = false, dictation = true, ...props },
   ref,
 ) {
+  const dictationField = useDictationField({
+    value: props.value,
+    onChangeText: (props as { onChangeText?: (text: string) => void }).onChangeText,
+    onFocus: props.onFocus as never,
+    onBlur: props.onBlur as never,
+    secureTextEntry: Boolean((props as { secureTextEntry?: boolean }).secureTextEntry),
+    editable: props.editable,
+    disabled: Boolean((props as { disabled?: boolean }).disabled),
+    dictation,
+  })
+
   if (Platform.OS !== 'web') {
     const {
       value,
       defaultValue,
       onChangeText,
-      onBlur,
-      onFocus,
+      onBlur: _onBlur,
+      onFocus: _onFocus,
       onSubmitEditing,
       placeholder,
       placeholderTextColor,
@@ -180,8 +194,8 @@ export const Input = forwardRef<any, InputProps>(function Input(
         ref={ref}
         value={value != null ? String(value) : defaultValue != null ? String(defaultValue) : undefined}
         onChangeText={onChangeText}
-        onBlur={onBlur as never}
-        onFocus={onFocus as never}
+        onBlur={dictationField.onBlur as never}
+        onFocus={dictationField.onFocus as never}
         onSubmitEditing={onSubmitEditing as never}
         placeholder={placeholder != null ? String(placeholder) : undefined}
         placeholderTextColor={
@@ -228,7 +242,11 @@ export const Input = forwardRef<any, InputProps>(function Input(
     )
   }
 
-  const safeProps = webSafeFieldProps(props)
+  const safeProps = webSafeFieldProps({
+    ...props,
+    onFocus: dictationField.onFocus as never,
+    onBlur: dictationField.onBlur as never,
+  })
 
   return withWritingAssist(
     <TInput
@@ -265,13 +283,26 @@ Input.displayName = 'Input'
 export const TextArea = forwardRef<
   any,
   GetProps<typeof TTextArea> & FieldControlExtra
->(function TextArea({ invalid, writingAssist = true, writingPaused = false, ...props }, ref) {
+>(function TextArea(
+  { invalid, writingAssist = true, writingPaused = false, dictation = true, ...props },
+  ref,
+) {
+  const dictationField = useDictationField({
+    value: props.value,
+    onChangeText: (props as { onChangeText?: (text: string) => void }).onChangeText,
+    onFocus: props.onFocus as never,
+    onBlur: props.onBlur as never,
+    editable: props.editable,
+    disabled: Boolean((props as { disabled?: boolean }).disabled),
+    dictation,
+  })
+
   if (Platform.OS !== 'web') {
     const {
       value,
       onChangeText,
-      onBlur,
-      onFocus,
+      onBlur: _onBlur,
+      onFocus: _onFocus,
       placeholder,
       editable,
       disabled,
@@ -295,8 +326,8 @@ export const TextArea = forwardRef<
         ref={ref}
         value={value != null ? String(value) : undefined}
         onChangeText={onChangeText}
-        onBlur={onBlur as never}
-        onFocus={onFocus as never}
+        onBlur={dictationField.onBlur as never}
+        onFocus={dictationField.onFocus as never}
         placeholder={placeholder != null ? String(placeholder) : undefined}
         editable={editable}
         disabled={Boolean(disabled)}
@@ -319,7 +350,11 @@ export const TextArea = forwardRef<
     )
   }
 
-  const safeProps = webSafeFieldProps(props)
+  const safeProps = webSafeFieldProps({
+    ...props,
+    onFocus: dictationField.onFocus as never,
+    onBlur: dictationField.onBlur as never,
+  })
 
   return withWritingAssist(
     <TTextArea

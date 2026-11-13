@@ -34,6 +34,7 @@ import { PushSubscribePromptHost } from '~/components/notifications/PushSubscrib
 import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManager'
 import { OpenInAppHost } from '~/components/system/OpenInAppHost'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
+import { DictationProvider } from '~/providers/DictationProvider'
 import { ScreenZoomProvider } from '~/lib/zoom/ScreenZoomContext'
 import { ScreenZoomRoot } from '~/components/media/ScreenZoomRoot'
 import { ConnectivityProvider } from '~/providers/ConnectivityProvider'
@@ -233,29 +234,31 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                       <FavoritesProvider>
                         <MarketplacePersonalizationProvider>
                           <AiAssistProvider>
-                            <ScreenZoomProvider>
-                              <ScreenZoomRoot>
-                                <AutomaticUpdateManager />
-                                <OpenInAppHost />
-                                <PwaBootstrap />
-                                <InAppNotificationHost />
-                                <PushForegroundNotificationHost />
-                                <PushSubscribePromptHost />
-                                <AppUsageTracker />
-                                <ExternalAnalyticsTracker />
-                                <BiometricUnlockGate>
-                                  <ConnectivityProvider>
-                                    <AppErrorBoundary scope="AppShell">
-                                      <RouteSeoProvider>
-                                        <RouteWarmup />
-                                        <AppBootstrapPrefetch />
-                                        <AppShell>{children}</AppShell>
-                                      </RouteSeoProvider>
-                                    </AppErrorBoundary>
-                                  </ConnectivityProvider>
-                                </BiometricUnlockGate>
-                              </ScreenZoomRoot>
-                            </ScreenZoomProvider>
+                            <DictationProvider>
+                              <ScreenZoomProvider>
+                                <ScreenZoomRoot>
+                                  <AutomaticUpdateManager />
+                                  <OpenInAppHost />
+                                  <PwaBootstrap />
+                                  <InAppNotificationHost />
+                                  <PushForegroundNotificationHost />
+                                  <PushSubscribePromptHost />
+                                  <AppUsageTracker />
+                                  <ExternalAnalyticsTracker />
+                                  <BiometricUnlockGate>
+                                    <ConnectivityProvider>
+                                      <AppErrorBoundary scope="AppShell">
+                                        <RouteSeoProvider>
+                                          <RouteWarmup />
+                                          <AppBootstrapPrefetch />
+                                          <AppShell>{children}</AppShell>
+                                        </RouteSeoProvider>
+                                      </AppErrorBoundary>
+                                    </ConnectivityProvider>
+                                  </BiometricUnlockGate>
+                                </ScreenZoomRoot>
+                              </ScreenZoomProvider>
+                            </DictationProvider>
                           </AiAssistProvider>
                         </MarketplacePersonalizationProvider>
                       </FavoritesProvider>
