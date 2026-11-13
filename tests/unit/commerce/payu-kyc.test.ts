@@ -8,6 +8,8 @@ import {
   entityShortLabel,
   getEntityKycRequirements,
   holderNameMatches,
+  inferEntityFromGstConstitution,
+  inferEntityFromPan,
   interpretGstRegistry,
   kycAllowsStorefront,
   panFromGstin,
@@ -237,6 +239,17 @@ describe('vendor PayU KYC', () => {
     expect(pickEntityInGroup('company', 5)).toBe(5)
     expect(pickEntityInGroup('company', 2)).toBe(4)
     expect(pickEntityInGroup('nonprofit')).toBe(1)
+  })
+
+  it('infers business type from PAN letter and GST constitution', () => {
+    expect(inferEntityFromPan('ABCPK1234F')).toBe(2)
+    expect(inferEntityFromPan('ABCPK1234F', 14)).toBe(14)
+    expect(inferEntityFromPan('ABCCE1234F', 2)).toBe(4)
+    expect(inferEntityFromGstConstitution('Private Limited Company')).toBe(4)
+    expect(inferEntityFromGstConstitution('Limited Liability Partnership')).toBe(6)
+    expect(inferEntityFromGstConstitution('Proprietorship')).toBe(2)
+    expect(inferEntityFromGstConstitution('Hindu Undivided Family')).toBe(10)
+    expect(inferEntityFromGstConstitution('Mystery Org')).toBeNull()
   })
 
   it('reads the PAN from a GSTIN and rejects a mismatched or inactive registry result', () => {

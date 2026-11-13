@@ -621,6 +621,61 @@ export function verifyPanForEntity(pan: string, businessEntityId: number): strin
   return null
 }
 
+/** Preferred PayU entity when only the PAN 4th letter is known. */
+const PAN_DEFAULT_ENTITY: Record<string, number> = {
+  P: 2, // Sole proprietorship — typical marketplace seller
+  C: 4, // Private Limited
+  F: 3, // Partnership
+  T: 7, // Trust
+  A: 1, // AOP
+  H: 10, // HUF
+}
+
+/**
+ * Keep the current entity when it already matches this PAN; otherwise pick the
+ * marketplace default for that PAN letter.
+ */
+export function inferEntityFromPan(
+  pan: string,
+  currentEntityId?: number | null,
+): number | null {
+  const value = normalizePan(pan)
+  if (!PAN_RE.test(value)) return null
+  const letter = value[3] ?? ''
+  const allowed = PAN_ENTITY_TYPES[letter]
+  if (!allowed?.length) return null
+  if (currentEntityId != null && allowed.includes(currentEntityId)) return currentEntityId
+  return PAN_DEFAULT_ENTITY[letter] ?? allowed[0] ?? null
+}
+
+/**
+ * Map GST registry `ctb` (constitution of business) onto a PayU entity id.
+ * Masters India / GST portal strings vary; match loosely.
+ */
+const GST_CONSTITUTION_ENTITY: Array<{ pattern: RegExp; entityId: number }> = [
+  { pattern: /one\s*person|\bopc\b/i, entityId: 16 },
+  { pattern: /private\s*limited|pvt\.?\s*ltd/i, entityId: 4 },
+  { pattern: /public\s*limited|public\s*company|corporation/i, entityId: 5 },
+  { pattern: /limited\s*liability\s*partnership|\bllp\b/i, entityId: 6 },
+  { pattern: /partnership/i, entityId: 3 },
+  { pattern: /hindu\s*undivided|\bhuf\b/i, entityId: 10 },
+  { pattern: /proprietorship|sole\s*prop/i, entityId: 2 },
+  { pattern: /\bindividual\b/i, entityId: 14 },
+  { pattern: /\btrust\b/i, entityId: 7 },
+  { pattern: /\bsociety\b/i, entityId: 8 },
+  { pattern: /association\s*of\s*persons|\baop\b/i, entityId: 1 },
+  { pattern: /\bngo\b|non[\s-]*government|section\s*8/i, entityId: 15 },
+]
+
+export function inferEntityFromGstConstitution(constitution: string): number | null {
+  const text = constitution.trim()
+  if (!text) return null
+  for (const row of GST_CONSTITUTION_ENTITY) {
+    if (row.pattern.test(text)) return row.entityId
+  }
+  return null
+}
+
 export type GstRegistryResult = {
   gstin: string
   pan: string

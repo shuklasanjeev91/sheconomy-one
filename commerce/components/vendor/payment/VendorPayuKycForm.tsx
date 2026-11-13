@@ -4,7 +4,13 @@ import { Platform } from 'react-native'
 import {
   Button,
   Field,
+  Icons,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectViewport,
   Spinner,
   Text,
   XStack,
@@ -16,19 +22,18 @@ import { radius } from '~/config/tokens'
 import {
   PAYU_BUSINESS_ENTITY_GROUPS,
   entitiesInGroup,
-  entityGroupForId,
   getEntityKycRequirements,
+  inferEntityFromGstConstitution,
+  inferEntityFromPan,
   maskSecret,
   normalizeIfsc,
   normalizeLlpin,
   normalizeMobile,
   normalizePan,
   interpretGstRegistry,
-  pickEntityInGroup,
   validatePayuKycInput,
   verifyGstin,
   verifyPanForEntity,
-  type EntityKycGroup,
   type GstRegistryResult,
   type PayuKycDocKind,
   type PayuKycStatus,
@@ -131,36 +136,33 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
 
   const locked = LOCKED.includes(status)
   const entityReqs = useMemo(() => getEntityKycRequirements(businessEntityId), [businessEntityId])
-  const entityGroup =
-    entityGroupForId(businessEntityId) ?? ('person' satisfies EntityKycGroup)
-  const entityOptions = useMemo(() => entitiesInGroup(entityGroup), [entityGroup])
-
-  const selectEntityGroup = useCallback(
-    (group: EntityKycGroup) => {
-      if (locked) return
-      setBusinessEntityId(pickEntityInGroup(group, businessEntityId))
-      setErrors((current) => {
-        if (!current.businessEntityId) return current
-        const next = { ...current }
-        delete next.businessEntityId
-        return next
-      })
-    },
-    [businessEntityId, locked],
+  const entitySelectOptions = useMemo(
+    () =>
+      PAYU_BUSINESS_ENTITY_GROUPS.flatMap((group) =>
+        entitiesInGroup(group.id).map((entity) => ({
+          ...entity,
+          groupLabel: group.label,
+        })),
+      ),
+    [],
   )
+
+  const clearEntityError = useCallback(() => {
+    setErrors((current) => {
+      if (!current.businessEntityId) return current
+      const next = { ...current }
+      delete next.businessEntityId
+      return next
+    })
+  }, [])
 
   const selectEntity = useCallback(
     (entityId: number) => {
       if (locked) return
       setBusinessEntityId(entityId)
-      setErrors((current) => {
-        if (!current.businessEntityId) return current
-        const next = { ...current }
-        delete next.businessEntityId
-        return next
-      })
+      clearEntityError()
     },
-    [locked],
+    [clearEntityError, locked],
   )
 
   const setDocPath = useCallback((kind: DocKind, path: string) => {
@@ -250,12 +252,33 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
 
   useEffect(() => {
     if (locked) return
-    if (normalizePan(panNumber).length < 10) {
+    const pan = normalizePan(panNumber)
+    if (pan.length < 10) return
+    // Auto-pick a matching business type when the PAN letter rules out the current one.
+    setBusinessEntityId((current) => inferEntityFromPan(pan, current) ?? current)
+  }, [locked, panNumber])
+
+  useEffect(() => {
+    if (locked || normalizePan(panNumber).length < 10) {
       setPanHint(null)
       return
     }
     setPanHint(verifyPanForEntity(panNumber, businessEntityId))
   }, [businessEntityId, locked, panNumber])
+
+  useEffect(() => {
+    if (locked) return
+    const compact = normalizePan(gstNumber)
+    if (compact.length >= 15 && !hasGst) setHasGst(true)
+  }, [gstNumber, hasGst, locked])
+
+  // Keep bank holder filled when PAN/legal name arrives from GST autofill.
+  useEffect(() => {
+    if (locked) return
+    const preferred = panName.trim() || legalName.trim()
+    if (!preferred) return
+    setBankHolderName((current) => (current.trim() ? current : preferred))
+  }, [legalName, locked, panName])
 
   useEffect(() => {
     if (locked || !hasGst) {
@@ -269,7 +292,8 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
       setGstHint(normalizePan(gstNumber).length >= 15 ? local.error : null)
       return
     }
-    if (normalizePan(panNumber) !== local.pan) setPanNumber(local.pan)
+    setPanNumber((current) => (normalizePan(current) === local.pan ? current : local.pan))
+    setBusinessEntityId((current) => inferEntityFromPan(local.pan, current) ?? current)
     setGstHint('Checking GSTIN on the tax registry…')
     let cancelled = false
     const timer = setTimeout(() => {
@@ -292,6 +316,7 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
         }
         if (data?.configured === false || data?.source === 'checksum') {
           setRegistry(null)
+          setBusinessEntityId((current) => inferEntityFromPan(local.pan, current) ?? current)
           setGstHint(`GSTIN verified. PAN on this GSTIN is ${local.pan}.`)
           return
         }
@@ -302,15 +327,22 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
           return
         }
         setRegistry(parsed.result)
+        const fromCtb = inferEntityFromGstConstitution(parsed.result.constitution)
+        setBusinessEntityId((current) => fromCtb ?? inferEntityFromPan(parsed.result.pan, current) ?? current)
         if (parsed.result.legalName) {
           setPanName(parsed.result.legalName)
           setLegalName(parsed.result.legalName)
-          setBankHolderName((current) => current || parsed.result.legalName)
+          setBankHolderName((current) =>
+            current.trim() ? current : parsed.result.legalName,
+          )
         }
         if (parsed.result.tradeName) setBusinessName(parsed.result.tradeName)
         else if (parsed.result.legalName) setBusinessName(parsed.result.legalName)
         const trade = parsed.result.tradeName ? ` · ${parsed.result.tradeName}` : ''
-        setGstHint(`Active${trade} · ${parsed.result.legalName}`)
+        const structure = parsed.result.constitution
+          ? ` · ${parsed.result.constitution}`
+          : ''
+        setGstHint(`Active${trade}${structure} · ${parsed.result.legalName}`)
       })()
     }, 400)
     return () => {
@@ -517,9 +549,9 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
             PayU submerchant KYC
           </Text>
           <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-            Choose your legal structure first (Person, Firm, Company, or Nonprofit), then the exact
-            type. The form adapts fields and documents. PayU receives PAN, bank, Schedule C, and GST
-            only; entity docs stay with SHEconomy admin.
+            Paste a GSTIN to autofill PAN, names, and business type — or pick the type from the
+            dropdown. PayU receives PAN, bank, Schedule C, and GST only; entity docs stay with
+            SHEconomy admin.
           </Text>
         </YStack>
       ) : null}
@@ -540,70 +572,93 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
 
       <FormSection
         title="1. Business type"
-        hint="Step 1: legal structure. Step 2: exact type — each has its own PAN rule and document pack."
+        hint="Auto-selected from GSTIN or PAN when possible — override anytime from the list."
       >
-        <YStack gap="$3">
-          <YStack gap="$1.5">
-            <Text fontSize={12} fontWeight="700" color={ui.text}>
-              Legal structure
-            </Text>
-            <XStack gap="$2" flexWrap="wrap">
-              {PAYU_BUSINESS_ENTITY_GROUPS.map((group) => {
-                const selected = group.id === entityGroup
-                return (
-                  <Button
-                    key={group.id}
-                    size="$3"
-                    tone={selected ? 'primary' : 'outline'}
-                    borderRadius={radius.chip}
-                    disabled={locked}
-                    onPress={() => selectEntityGroup(group.id)}
-                  >
-                    {group.label}
-                  </Button>
-                )
-              })}
-            </XStack>
-            <Text fontSize={11} color={ui.textMuted}>
-              {PAYU_BUSINESS_ENTITY_GROUPS.find((group) => group.id === entityGroup)?.hint}
-            </Text>
-          </YStack>
-
-          <YStack gap="$1.5">
-            <Text fontSize={12} fontWeight="700" color={ui.text}>
-              Exact type
-            </Text>
-            <XStack gap="$2" flexWrap="wrap">
-              {entityOptions.map((entity) => {
-                const selected = entity.id === businessEntityId
-                return (
-                  <Button
-                    key={entity.id}
-                    size="$2"
-                    tone={selected ? 'primary' : 'outline'}
-                    borderRadius={radius.chip}
-                    disabled={locked}
-                    onPress={() => selectEntity(entity.id)}
-                  >
-                    {entity.shortLabel}
-                  </Button>
-                )
-              })}
-            </XStack>
-          </YStack>
-
-          {errors.businessEntityId ? (
-            <Text fontSize={12} color="#B91C1C">
-              {errors.businessEntityId}
-            </Text>
-          ) : null}
-          <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
-            {entityReqs.summary}
-          </Text>
-        </YStack>
+        <Field label="Legal structure" error={errors.businessEntityId}>
+          <Select
+            value={String(businessEntityId)}
+            onValueChange={(value) => selectEntity(Number(value))}
+            disabled={locked}
+          >
+            <SelectTrigger
+              width="100%"
+              opacity={locked ? 0.7 : 1}
+              iconAfter={<Icons.ChevronDown size={16} color={ui.textMuted} />}
+            >
+              <Select.Value placeholder="Select business type" />
+            </SelectTrigger>
+            <SelectContent zIndex={300000}>
+              <SelectViewport>
+                {entitySelectOptions.map((entity, index) => (
+                  <SelectItem key={entity.id} index={index} value={String(entity.id)}>
+                    <Select.ItemText>
+                      {entity.groupLabel} · {entity.label}
+                    </Select.ItemText>
+                  </SelectItem>
+                ))}
+              </SelectViewport>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+          {entityReqs.summary}
+        </Text>
       </FormSection>
 
-      <FormSection title="2. Names & contact" hint={entityReqs.legalNameHint}>
+      <FormSection
+        title="2. GSTIN autofill"
+        hint="Paste GSTIN to fill PAN, legal name, trade name, and business type from the tax registry."
+      >
+        <Field label="GSTIN" error={errors.gstNumber}>
+          <Input
+            value={gstNumber}
+            onChangeText={(value) => {
+              const next = value.toUpperCase()
+              setGstNumber(next)
+              if (normalizePan(next).length >= 15) setHasGst(true)
+            }}
+            editable={!locked}
+            autoCapitalize="characters"
+            placeholder="22AAAAA0000A1Z5"
+          />
+        </Field>
+        {gstHint ? (
+          <Text
+            fontSize={12}
+            color={
+              gstHint.startsWith('Active') || gstHint.startsWith('GSTIN verified')
+                ? '#15803D'
+                : ui.textSecondary
+            }
+          >
+            {gstHint}
+          </Text>
+        ) : null}
+        <Button
+          size="$3"
+          tone={hasGst ? 'outline' : 'primary'}
+          disabled={locked}
+          onPress={() => {
+            if (hasGst) {
+              setHasGst(false)
+              setGstNumber('')
+              setRegistry(null)
+              setGstHint(null)
+            } else {
+              setHasGst(true)
+            }
+          }}
+        >
+          {hasGst ? 'Clear GSTIN / I don’t have one' : 'I have a GSTIN'}
+        </Button>
+        {entityReqs.suggestGst && !hasGst ? (
+          <Text fontSize={11} color={ui.textMuted}>
+            Companies and firms usually need a GSTIN — add it if you have one.
+          </Text>
+        ) : null}
+      </FormSection>
+
+      <FormSection title="3. Names & contact" hint={entityReqs.legalNameHint}>
         <Field label={entityReqs.legalNameLabel} error={errors.legalName}>
           <Input
             value={legalName}
@@ -637,7 +692,7 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
         </Field>
       </FormSection>
 
-      <FormSection title="3. PAN & tax" hint={entityReqs.panNameHint}>
+      <FormSection title="4. PAN & sales" hint={entityReqs.panNameHint}>
         <Field label="PAN number" error={errors.panNumber || panHint || undefined}>
           <Input
             value={panNumber}
@@ -647,6 +702,11 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
             placeholder="ABCDE1234F"
           />
         </Field>
+        {hasGst ? (
+          <Text fontSize={11} color={ui.textMuted}>
+            PAN is locked to the GSTIN — clear GSTIN to edit it manually.
+          </Text>
+        ) : null}
         <Field label="Name on PAN card" error={errors.panName}>
           <Input
             value={panName}
@@ -664,49 +724,11 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
             placeholder="50000"
           />
         </Field>
-        {entityReqs.suggestGst && !hasGst ? (
-          <Text fontSize={11} color={ui.textMuted}>
-            Companies and firms often need a GSTIN. Add it if you have one.
-          </Text>
-        ) : null}
-        <Button
-          size="$3"
-          tone={hasGst ? 'primary' : 'outline'}
-          disabled={locked}
-          onPress={() => setHasGst((value) => !value)}
-        >
-          {hasGst ? 'I have a GSTIN' : 'No GSTIN'}
-        </Button>
-        {hasGst ? (
-          <YStack gap="$2">
-            <Field label="GSTIN" error={errors.gstNumber}>
-              <Input
-                value={gstNumber}
-                onChangeText={(value) => setGstNumber(value.toUpperCase())}
-                editable={!locked}
-                autoCapitalize="characters"
-                placeholder="22AAAAA0000A1Z5"
-              />
-            </Field>
-            {gstHint ? (
-              <Text
-                fontSize={12}
-                color={
-                  gstHint.startsWith('Active') || gstHint.startsWith('GSTIN verified')
-                    ? '#15803D'
-                    : ui.textSecondary
-                }
-              >
-                {gstHint}
-              </Text>
-            ) : null}
-          </YStack>
-        ) : null}
       </FormSection>
 
       {showEntityDetails ? (
         <FormSection
-          title={`4. ${entityReqs.registrationSectionTitle}`}
+          title={`5. ${entityReqs.registrationSectionTitle}`}
           hint={
             entityReqs.registrationSectionHint ||
             'Entity registration details and docs are for SHEconomy admin review.'
@@ -775,7 +797,7 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
       ) : null}
 
       <FormSection
-        title={`${4 + sectionOffset}. Bank account`}
+        title={`${5 + sectionOffset}. Bank account`}
         hint={entityReqs.bankHolderHint}
       >
         <Field label="Account number" error={errors.bankAccountNumber}>
@@ -818,7 +840,7 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
 
       {!locked ? (
         <FormSection
-          title={`${5 + sectionOffset}. PayU documents`}
+          title={`${6 + sectionOffset}. PayU documents`}
           hint="These go to PayU on approval. Entity registration docs above stay with SHEconomy admin."
         >
           <DocUploadButton
