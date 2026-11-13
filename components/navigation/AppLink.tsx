@@ -1,3 +1,4 @@
+import { Link } from 'one'
 import type { Href } from 'one'
 import {
   Children,
@@ -6,6 +7,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react'
+import { Platform } from 'react-native'
 
 import { XStack } from '~/components/ui'
 import { navigateApp } from '~/lib/platform/navigate'
@@ -15,7 +17,7 @@ type AppLinkProps = {
   href: Href | string
   children: ReactNode
   /**
-   * @deprecated Ignored — navigation always uses `router.push`.
+   * @deprecated Ignored on native (always push). Still forwarded to One `Link` on web.
    */
   replace?: boolean
   asChild?: boolean
@@ -112,17 +114,26 @@ function renderAsChildPressable(
 }
 
 /**
- * Cross-platform in-app link — always soft-navigates with `router.push`
- * via `navigateApp` (web + native). External URLs open in OS / new tab.
+ * Cross-platform in-app link.
+ * - Web: real One `<Link href>` (anchor) for instant, reliable navigation + open-in-new-tab.
+ * - Native: imperative `navigateApp` so Text children still receive presses.
  */
-export function AppLink({ href, children, asChild, external }: AppLinkProps) {
+export function AppLink({ href, children, replace, asChild, external }: AppLinkProps) {
   const hrefStr = String(href)
   const inApp = !external ? inAppPathFromUrl(hrefStr) : null
 
   if (inApp) {
-    const go = () => navigateApp(inApp as Href)
-    if (asChild) return renderAsChildPressable(children, go, { inline: true })
-    return <PressableLinkShell onPress={go}>{children}</PressableLinkShell>
+    if (Platform.OS !== 'web') {
+      const go = () => navigateApp(inApp as Href)
+      if (asChild) return renderAsChildPressable(children, go, { inline: true })
+      return <PressableLinkShell onPress={go}>{children}</PressableLinkShell>
+    }
+
+    return (
+      <Link href={inApp as Href} replace={replace} asChild={asChild}>
+        {children as ReactElement}
+      </Link>
+    )
   }
 
   const open = () => {

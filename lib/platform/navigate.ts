@@ -1,4 +1,3 @@
-import { startTransition } from 'react'
 import type { Href } from 'one'
 import { router } from 'one'
 import { Platform } from 'react-native'
@@ -47,6 +46,8 @@ function isNavigatorNotReadyError(error: unknown): boolean {
 }
 
 function pushTarget(target: Href): void {
+  // Push immediately on every platform. Deferring with startTransition made
+  // category/product clicks feel dead under load (gesture lost before paint).
   const go = () => {
     // Intentionally identical on web, iOS, and Android: One/Expo `router.push`.
     // Never falls back to window.location — that hard-reloads the SPA shell.
@@ -70,11 +71,6 @@ function pushTarget(target: Href): void {
     }
   }
 
-  // Only scheduling differs: web can defer paint; native must push immediately.
-  if (Platform.OS === 'web') {
-    startTransition(go)
-    return
-  }
   go()
 }
 
