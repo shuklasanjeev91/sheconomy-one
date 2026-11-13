@@ -53,7 +53,7 @@ describe('vendor PayU KYC', () => {
     expect(errors.ownershipDocumentPath).toBeTruthy()
   })
 
-  it('requires CIN and Certificate of Incorporation for private limited', () => {
+  it('requires CIN and Certificate of Incorporation for private limited and corporation', () => {
     const company: PayuKycInput = {
       ...valid,
       panNumber: 'ABCCA5416M',
@@ -70,6 +70,39 @@ describe('vendor PayU KYC', () => {
     expect(
       validatePayuKycInput({ ...company, incorporationDocumentPath: '' }).incorporationDocumentPath,
     ).toBeTruthy()
+
+    const corp: PayuKycInput = {
+      ...company,
+      businessEntityId: 5,
+      cin: 'L12345MH2020PLC123456',
+    }
+    expect(validatePayuKycInput(corp)).toEqual({})
+    expect(verifyPanForEntity('ABCCA5416M', 5)).toBeNull()
+    expect(getEntityKycRequirements(5).legalNameLabel).toContain('Corporation')
+  })
+
+  it('supports HUF and NGO entity packs', () => {
+    const huf: PayuKycInput = {
+      ...valid,
+      panNumber: 'ABCHA5416M',
+      businessEntityId: 10,
+      hasGst: false,
+      gstDocumentPath: '',
+      ownershipDocumentPath: '',
+    }
+    expect(validatePayuKycInput(huf)).toEqual({})
+    expect(verifyPanForEntity('ABCHA5416M', 10)).toBeNull()
+
+    const ngo: PayuKycInput = {
+      ...valid,
+      panNumber: 'ABCTA5416M',
+      businessEntityId: 15,
+      hasGst: false,
+      gstDocumentPath: '',
+      registrationNumber: 'NGO/2020/12',
+      ownershipDocumentPath: 'user/shops/shop/kyc/ngo.pdf',
+    }
+    expect(validatePayuKycInput(ngo)).toEqual({})
   })
 
   it('requires LLPIN and LLP agreement for LLP', () => {

@@ -14,7 +14,8 @@ import {
 import { PhoneInput } from '~/components/forms/PhoneInput'
 import { radius } from '~/config/tokens'
 import {
-  PAYU_BUSINESS_ENTITIES,
+  PAYU_BUSINESS_ENTITY_GROUPS,
+  entitiesInGroup,
   getEntityKycRequirements,
   maskSecret,
   normalizeIfsc,
@@ -454,18 +455,25 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
 
   function setPanNameAndMaybeLegal(value: string) {
     setPanName(value)
-    if (!legalName.trim() || normalizePersonLike(legalName) === normalizePersonLike(panName)) {
+    if (
+      entityReqs.syncLegalWithPan &&
+      (!legalName.trim() || normalizePersonLike(legalName) === normalizePersonLike(panName))
+    ) {
       setLegalName(value)
     }
   }
 
   function setLegalNameAndMaybePan(value: string) {
     setLegalName(value)
-    if (!panName.trim()) setPanName(value)
+    if (entityReqs.syncLegalWithPan && !panName.trim()) setPanName(value)
   }
 
   const showEntityDetails =
-    entityReqs.requiresCin || entityReqs.requiresLlpin || entityReqs.requiresRegistrationNumber
+    entityReqs.requiresCin ||
+    entityReqs.requiresLlpin ||
+    entityReqs.requiresRegistrationNumber ||
+    entityReqs.requiredAdminDocs.length > 0
+  const sectionOffset = showEntityDetails ? 1 : 0
 
   return (
     <YStack gap="$4">
@@ -475,9 +483,9 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
             PayU submerchant KYC
           </Text>
           <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-            Choose your business type first. Legal name is for PayU; trade name is what buyers see.
-            Extra company docs are reviewed by SHEconomy admin — PayU still receives PAN, bank,
-            Schedule C, and GST only.
+            Pick your business type — Individual, Pvt Ltd, Corporation, HUF, NGO, and more. The form
+            adapts fields and documents. PayU still receives PAN, bank, Schedule C, and GST only;
+            entity docs are for SHEconomy admin.
           </Text>
         </YStack>
       ) : null}
@@ -496,43 +504,63 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
         </Text>
       ) : null}
 
-      <FormSection title="1. Business type" hint="Controls which IDs and documents are required.">
+      <FormSection
+        title="1. Business type"
+        hint="Every type uses a different PayU entity id, PAN rule, and admin document pack."
+      >
         <Field label="Business type" error={errors.businessEntityId}>
-          <XStack gap="$2" flexWrap="wrap">
-            {PAYU_BUSINESS_ENTITIES.map((entity) => {
-              const selected = entity.id === businessEntityId
-              return (
-                <Button
-                  key={entity.id}
-                  size="$2"
-                  tone={selected ? 'primary' : 'outline'}
-                  borderRadius={radius.chip}
-                  disabled={locked}
-                  onPress={() => setBusinessEntityId(entity.id)}
-                >
-                  {entity.label}
-                </Button>
-              )
-            })}
-          </XStack>
+          <YStack gap="$3">
+            {PAYU_BUSINESS_ENTITY_GROUPS.map((group) => (
+              <YStack key={group.id} gap="$1.5">
+                <YStack gap="$0.5">
+                  <Text fontSize={12} fontWeight="700" color={ui.text}>
+                    {group.label}
+                  </Text>
+                  <Text fontSize={11} color={ui.textMuted}>
+                    {group.hint}
+                  </Text>
+                </YStack>
+                <XStack gap="$2" flexWrap="wrap">
+                  {entitiesInGroup(group.id).map((entity) => {
+                    const selected = entity.id === businessEntityId
+                    return (
+                      <Button
+                        key={entity.id}
+                        size="$2"
+                        tone={selected ? 'primary' : 'outline'}
+                        borderRadius={radius.chip}
+                        disabled={locked}
+                        onPress={() => setBusinessEntityId(entity.id)}
+                      >
+                        {entity.label}
+                      </Button>
+                    )
+                  })}
+                </XStack>
+              </YStack>
+            ))}
+          </YStack>
         </Field>
+        <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+          {entityReqs.summary}
+        </Text>
       </FormSection>
 
-      <FormSection title="2. Contact" hint={entityReqs.legalNameHint}>
-        <Field label="Legal name" error={errors.legalName}>
+      <FormSection title="2. Names & contact" hint={entityReqs.legalNameHint}>
+        <Field label={entityReqs.legalNameLabel} error={errors.legalName}>
           <Input
             value={legalName}
             onChangeText={setLegalNameAndMaybePan}
             editable={!locked}
-            placeholder="Legal name for PayU account"
+            placeholder={entityReqs.legalNamePlaceholder}
           />
         </Field>
-        <Field label="Trade / business name" error={errors.businessName}>
+        <Field label={entityReqs.tradeNameLabel} error={errors.businessName}>
           <Input
             value={businessName}
             onChangeText={setBusinessName}
             editable={!locked}
-            placeholder="Shop name buyers see"
+            placeholder={entityReqs.tradeNamePlaceholder}
           />
         </Field>
         <Text fontSize={11} color={ui.textMuted}>
@@ -552,7 +580,7 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
         </Field>
       </FormSection>
 
-      <FormSection title="3. PAN & tax" hint="Required by PayU for submerchant onboarding.">
+      <FormSection title="3. PAN & tax" hint={entityReqs.panNameHint}>
         <Field label="PAN number" error={errors.panNumber || panHint || undefined}>
           <Input
             value={panNumber}
@@ -567,7 +595,7 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
             value={panName}
             onChangeText={setPanNameAndMaybeLegal}
             editable={!locked}
-            placeholder="Exact spelling as printed on PAN"
+            placeholder={entityReqs.panNameHint}
           />
         </Field>
         <Field label="Expected monthly sales (₹)" error={errors.monthlyExpectedVolume}>
@@ -579,6 +607,11 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
             placeholder="50000"
           />
         </Field>
+        {entityReqs.suggestGst && !hasGst ? (
+          <Text fontSize={11} color={ui.textMuted}>
+            Companies and firms often need a GSTIN. Add it if you have one.
+          </Text>
+        ) : null}
         <Button
           size="$3"
           tone={hasGst ? 'primary' : 'outline'}
@@ -616,47 +649,77 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
 
       {showEntityDetails ? (
         <FormSection
-          title="4. Entity registration"
-          hint="For SHEconomy admin review. Not sent as separate PayU document fields."
+          title={`4. ${entityReqs.registrationSectionTitle}`}
+          hint={
+            entityReqs.registrationSectionHint ||
+            'Entity registration details and docs are for SHEconomy admin review.'
+          }
         >
           {entityReqs.requiresCin ? (
-            <Field label="CIN" error={errors.cin}>
+            <Field label={entityReqs.cinLabel} error={errors.cin}>
               <Input
                 value={cin}
                 onChangeText={(value) => setCin(value.toUpperCase())}
                 editable={!locked}
                 autoCapitalize="characters"
-                placeholder="U12345MH2020PTC123456"
+                placeholder={entityReqs.cinPlaceholder}
               />
             </Field>
           ) : null}
           {entityReqs.requiresLlpin ? (
-            <Field label="LLPIN" error={errors.llpin}>
+            <Field label={entityReqs.llpinLabel} error={errors.llpin}>
               <Input
                 value={llpin}
                 onChangeText={(value) => setLlpin(value.toUpperCase())}
                 editable={!locked}
                 autoCapitalize="characters"
-                placeholder="AAA-1234"
+                placeholder={entityReqs.llpinPlaceholder}
               />
             </Field>
           ) : null}
           {entityReqs.requiresRegistrationNumber ? (
-            <Field label="Registration number" error={errors.registrationNumber}>
+            <Field label={entityReqs.registrationNumberLabel} error={errors.registrationNumber}>
               <Input
                 value={registrationNumber}
                 onChangeText={setRegistrationNumber}
                 editable={!locked}
-                placeholder="Society / trust registration number"
+                placeholder={entityReqs.registrationNumberPlaceholder}
               />
             </Field>
           ) : null}
+          {entityReqs.requiredAdminDocs.map((doc) => {
+            const path =
+              doc.kind === 'incorporation'
+                ? incorporationDocumentPath
+                : doc.kind === 'ownership'
+                  ? ownershipDocumentPath
+                  : doc.kind === 'id_front'
+                    ? idFrontDocumentPath
+                    : idBackDocumentPath
+            const errorKey = `${doc.kind}DocumentPath`
+            if (locked) {
+              return path ? (
+                <Text key={`reg-${doc.kind}`} fontSize={13} color={ui.textSecondary}>
+                  {doc.label}: uploaded
+                </Text>
+              ) : null
+            }
+            return (
+              <DocUploadButton
+                key={`reg-${doc.kind}`}
+                label={path ? `${doc.label} uploaded` : `Upload ${doc.label}`}
+                done={Boolean(path)}
+                error={errors[errorKey]}
+                onPress={() => void upload(doc.kind)}
+              />
+            )
+          })}
         </FormSection>
       ) : null}
 
       <FormSection
-        title={showEntityDetails ? '5. Bank account' : '4. Bank account'}
-        hint="Settlement account PayU will credit."
+        title={`${4 + sectionOffset}. Bank account`}
+        hint={entityReqs.bankHolderHint}
       >
         <Field label="Account number" error={errors.bankAccountNumber}>
           <Input
@@ -672,7 +735,7 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
             value={bankHolderName}
             onChangeText={setBankHolderName}
             editable={!locked}
-            placeholder="Must match PAN name or trade name"
+            placeholder={entityReqs.bankHolderHint}
           />
         </Field>
         <Field label="IFSC" error={errors.ifsc}>
@@ -698,8 +761,8 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
 
       {!locked ? (
         <FormSection
-          title={showEntityDetails ? '6. Documents' : '5. Documents'}
-          hint="PAN, bank proof, and Schedule C go to PayU on approval. Entity docs stay with SHEconomy admin."
+          title={`${5 + sectionOffset}. PayU documents`}
+          hint="These go to PayU on approval. Entity registration docs above stay with SHEconomy admin."
         >
           <DocUploadButton
             label={panDocumentPath ? 'PAN card uploaded' : 'Upload PAN card'}
@@ -729,26 +792,6 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
               onPress={() => void upload('gst')}
             />
           ) : null}
-          {entityReqs.requiredAdminDocs.map((doc) => {
-            const path =
-              doc.kind === 'incorporation'
-                ? incorporationDocumentPath
-                : doc.kind === 'ownership'
-                  ? ownershipDocumentPath
-                  : doc.kind === 'id_front'
-                    ? idFrontDocumentPath
-                    : idBackDocumentPath
-            const errorKey = `${doc.kind}DocumentPath`
-            return (
-              <DocUploadButton
-                key={doc.kind}
-                label={path ? `${doc.label} uploaded` : `Upload ${doc.label}`}
-                done={Boolean(path)}
-                error={errors[errorKey]}
-                onPress={() => void upload(doc.kind)}
-              />
-            )
-          })}
           {entityReqs.optionalAdminDocs.map((doc) => {
             const path = doc.kind === 'id_front' ? idFrontDocumentPath : idBackDocumentPath
             return (

@@ -251,10 +251,10 @@ export function VendorVerificationPanel({ ui, shopId, isDesktop }: VendorVerific
                 PayU submerchant KYC
               </Text>
               <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-                Legal name is for PayU; trade name is what buyers see. Pick your business type —
-                Pvt Ltd needs CIN + Certificate of Incorporation, partnerships need a deed, etc.
-                Those entity docs are for SHEconomy admin review. PayU still receives PAN, bank,
-                Schedule C, and optional GST.
+                Choose Individual, Sole Prop, HUF, Partnership, LLP, Pvt Ltd, Public Limited /
+                Corporation, OPC, Trust, Society, NGO, or AOP — the form adapts names, IDs, and
+                documents. Entity docs are for SHEconomy admin; PayU gets PAN, bank, Schedule C,
+                and optional GST.
               </Text>
             </YStack>
             <VendorPayuKycForm

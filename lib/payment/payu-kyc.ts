@@ -33,18 +33,35 @@ export type PayuKycDocKind = (typeof PAYU_KYC_DOC_KINDS)[number]
 /** Docs forwarded to PayU on approve. Everything else is admin-only. */
 export const PAYU_FORWARDED_DOC_KINDS = ['pan', 'bank', 'schedule_c', 'gst'] as const
 
+/** PayU Create Child Merchant `business_entity_id` values used for sellers. */
 export const PAYU_BUSINESS_ENTITIES = [
-  { id: 2, label: 'Sole Proprietorship' },
-  { id: 14, label: 'Individual' },
-  { id: 3, label: 'Partnership' },
-  { id: 4, label: 'Private Limited' },
-  { id: 6, label: 'LLP' },
-  { id: 16, label: 'One Person Company' },
-  { id: 8, label: 'Society' },
-  { id: 7, label: 'Trust' },
+  { id: 14, label: 'Individual', group: 'person' },
+  { id: 2, label: 'Sole Proprietorship', group: 'person' },
+  { id: 10, label: 'HUF', group: 'person' },
+  { id: 3, label: 'Partnership', group: 'firm' },
+  { id: 6, label: 'LLP', group: 'firm' },
+  { id: 4, label: 'Private Limited', group: 'company' },
+  { id: 5, label: 'Public Limited / Corporation', group: 'company' },
+  { id: 16, label: 'One Person Company', group: 'company' },
+  { id: 1, label: 'Association of Persons', group: 'nonprofit' },
+  { id: 8, label: 'Society', group: 'nonprofit' },
+  { id: 7, label: 'Trust', group: 'nonprofit' },
+  { id: 15, label: 'NGO', group: 'nonprofit' },
 ] as const
 
 export type PayuBusinessEntityId = (typeof PAYU_BUSINESS_ENTITIES)[number]['id']
+export type EntityKycGroup = (typeof PAYU_BUSINESS_ENTITIES)[number]['group']
+
+export const PAYU_BUSINESS_ENTITY_GROUPS: Array<{
+  id: EntityKycGroup
+  label: string
+  hint: string
+}> = [
+  { id: 'person', label: 'Person / proprietor', hint: 'Individual, sole prop, or HUF' },
+  { id: 'firm', label: 'Firm', hint: 'Partnership or LLP' },
+  { id: 'company', label: 'Company', hint: 'Pvt Ltd, public/corporation, or OPC' },
+  { id: 'nonprofit', label: 'Nonprofit / AOP', hint: 'Trust, society, NGO, or AOP' },
+]
 
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/
@@ -82,23 +99,47 @@ export function verifyKycLlpin(
   return { ok: true, value }
 }
 
-/** Fourth character of a PAN, and the business types that use it. */
+/**
+ * Fourth character of an Indian PAN → PayU entity ids that may use it.
+ * NGO (15) accepts company / trust / AOP PAN letters.
+ */
 const PAN_ENTITY_TYPES: Record<string, readonly number[]> = {
   P: [2, 14],
-  C: [4, 16],
+  C: [4, 5, 16, 15],
   F: [3, 6],
-  T: [7],
-  A: [8],
+  T: [7, 15],
+  A: [1, 8, 15],
+  H: [10],
 }
 
 export type EntityKycRequirements = {
   entityId: number
+  group: EntityKycGroup
+  summary: string
+  legalNameLabel: string
   legalNameHint: string
+  legalNamePlaceholder: string
+  tradeNameLabel: string
   tradeNameHint: string
+  tradeNamePlaceholder: string
+  panNameHint: string
+  bankHolderHint: string
+  registrationSectionTitle: string
+  registrationSectionHint: string
+  cinLabel: string
+  cinPlaceholder: string
+  llpinLabel: string
+  llpinPlaceholder: string
+  registrationNumberLabel: string
+  registrationNumberPlaceholder: string
   /** Extra registry IDs required for admin review. */
   requiresCin: boolean
   requiresLlpin: boolean
   requiresRegistrationNumber: boolean
+  /** Keep legal name synced with PAN name while typing (person entities). */
+  syncLegalWithPan: boolean
+  /** Soft nudge that companies often need GST. */
+  suggestGst: boolean
   /** Admin-only docs required before submit. */
   requiredAdminDocs: Array<{
     kind: PayuKycDocKind
@@ -111,85 +152,315 @@ export type EntityKycRequirements = {
   }>
 }
 
+function baseCompanyReqs(
+  entityId: number,
+  summary: string,
+  legalHint: string,
+): EntityKycRequirements {
+  return {
+    entityId,
+    group: 'company',
+    summary,
+    legalNameLabel: 'Company legal name',
+    legalNameHint: legalHint,
+    legalNamePlaceholder: 'Name on Certificate of Incorporation',
+    tradeNameLabel: 'Trade / brand name',
+    tradeNameHint: 'Name buyers see on the storefront. Not a trademark certificate.',
+    tradeNamePlaceholder: 'Shop or brand name',
+    panNameHint: 'Exact company name printed on the company PAN.',
+    bankHolderHint: 'Must match company PAN name or trade name.',
+    registrationSectionTitle: 'Company registration',
+    registrationSectionHint: 'CIN and COI are for SHEconomy admin review.',
+    cinLabel: 'CIN',
+    cinPlaceholder: 'L12345MH2020PLC123456',
+    llpinLabel: 'LLPIN',
+    llpinPlaceholder: 'AAA-1234',
+    registrationNumberLabel: 'Registration number',
+    registrationNumberPlaceholder: 'Registration number',
+    requiresCin: true,
+    requiresLlpin: false,
+    requiresRegistrationNumber: false,
+    syncLegalWithPan: false,
+    suggestGst: true,
+    requiredAdminDocs: [{ kind: 'incorporation', label: 'Certificate of Incorporation' }],
+    optionalAdminDocs: [],
+  }
+}
+
 const ENTITY_REQUIREMENTS: Record<number, EntityKycRequirements> = {
   14: {
     entityId: 14,
+    group: 'person',
+    summary: 'Selling as yourself. Legal name = your PAN name.',
+    legalNameLabel: 'Full legal name',
     legalNameHint: 'Your full legal name as on PAN (PayU account name). Not a brand or trademark.',
-    tradeNameHint: 'Shop / brand name buyers see. Not a trademark certificate.',
+    legalNamePlaceholder: 'Name as on PAN',
+    tradeNameLabel: 'Shop / display name',
+    tradeNameHint: 'Name buyers see. Can differ from your legal name.',
+    tradeNamePlaceholder: 'Shop name buyers see',
+    panNameHint: 'Exact spelling as printed on your personal PAN.',
+    bankHolderHint: 'Must match your PAN name or shop name.',
+    registrationSectionTitle: 'Registration',
+    registrationSectionHint: '',
+    cinLabel: 'CIN',
+    cinPlaceholder: '',
+    llpinLabel: 'LLPIN',
+    llpinPlaceholder: '',
+    registrationNumberLabel: 'Registration number',
+    registrationNumberPlaceholder: '',
     requiresCin: false,
     requiresLlpin: false,
     requiresRegistrationNumber: false,
+    syncLegalWithPan: true,
+    suggestGst: false,
     requiredAdminDocs: [],
     optionalAdminDocs: [{ kind: 'id_front', label: 'Government ID (Aadhaar / voter ID)' }],
   },
   2: {
     entityId: 2,
-    legalNameHint: 'Proprietor legal name as on PAN (PayU account name). Not a brand or trademark.',
-    tradeNameHint: 'Shop / brand name buyers see. Not a trademark certificate.',
+    group: 'person',
+    summary: 'Sole proprietor — PAN is personal (4th letter P).',
+    legalNameLabel: 'Proprietor legal name',
+    legalNameHint: 'Proprietor name as on PAN (PayU account name). Not a brand or trademark.',
+    legalNamePlaceholder: 'Proprietor name as on PAN',
+    tradeNameLabel: 'Trade / shop name',
+    tradeNameHint: 'Business name buyers see. Not a trademark certificate.',
+    tradeNamePlaceholder: 'Shop or trade name',
+    panNameHint: 'Exact spelling as printed on the proprietor PAN.',
+    bankHolderHint: 'Must match PAN name or trade name.',
+    registrationSectionTitle: 'Registration',
+    registrationSectionHint: '',
+    cinLabel: 'CIN',
+    cinPlaceholder: '',
+    llpinLabel: 'LLPIN',
+    llpinPlaceholder: '',
+    registrationNumberLabel: 'Registration number',
+    registrationNumberPlaceholder: '',
     requiresCin: false,
     requiresLlpin: false,
     requiresRegistrationNumber: false,
+    syncLegalWithPan: true,
+    suggestGst: false,
     requiredAdminDocs: [],
     optionalAdminDocs: [{ kind: 'id_front', label: 'Government ID (Aadhaar / voter ID)' }],
   },
-  3: {
-    entityId: 3,
-    legalNameHint: 'Firm legal name as on the partnership deed (PayU account name).',
-    tradeNameHint: 'Trade / shop name buyers see. Not a trademark certificate.',
+  10: {
+    entityId: 10,
+    group: 'person',
+    summary: 'Hindu Undivided Family — PAN 4th letter must be H.',
+    legalNameLabel: 'HUF legal name',
+    legalNameHint: 'HUF name as on PAN (usually “X HUF”). PayU account name.',
+    legalNamePlaceholder: 'e.g. Sharma HUF',
+    tradeNameLabel: 'Trade / shop name',
+    tradeNameHint: 'Name buyers see on the storefront.',
+    tradeNamePlaceholder: 'Shop name buyers see',
+    panNameHint: 'Exact HUF name printed on the HUF PAN.',
+    bankHolderHint: 'Must match HUF PAN name or trade name.',
+    registrationSectionTitle: 'Registration',
+    registrationSectionHint: '',
+    cinLabel: 'CIN',
+    cinPlaceholder: '',
+    llpinLabel: 'LLPIN',
+    llpinPlaceholder: '',
+    registrationNumberLabel: 'Registration number',
+    registrationNumberPlaceholder: '',
     requiresCin: false,
     requiresLlpin: false,
     requiresRegistrationNumber: false,
+    syncLegalWithPan: true,
+    suggestGst: false,
+    requiredAdminDocs: [],
+    optionalAdminDocs: [{ kind: 'id_front', label: 'Karta government ID (optional)' }],
+  },
+  3: {
+    entityId: 3,
+    group: 'firm',
+    summary: 'Partnership firm — PAN 4th letter F. Deed required for admin.',
+    legalNameLabel: 'Firm legal name',
+    legalNameHint: 'Firm name as on the partnership deed (PayU account name).',
+    legalNamePlaceholder: 'Name on partnership deed',
+    tradeNameLabel: 'Trade / shop name',
+    tradeNameHint: 'Name buyers see. Not a trademark certificate.',
+    tradeNamePlaceholder: 'Shop or trade name',
+    panNameHint: 'Exact firm name printed on the firm PAN.',
+    bankHolderHint: 'Must match firm PAN name or trade name.',
+    registrationSectionTitle: 'Firm documents',
+    registrationSectionHint: 'Partnership deed is reviewed by SHEconomy admin.',
+    cinLabel: 'CIN',
+    cinPlaceholder: '',
+    llpinLabel: 'LLPIN',
+    llpinPlaceholder: '',
+    registrationNumberLabel: 'Registration number',
+    registrationNumberPlaceholder: '',
+    requiresCin: false,
+    requiresLlpin: false,
+    requiresRegistrationNumber: false,
+    syncLegalWithPan: false,
+    suggestGst: true,
     requiredAdminDocs: [{ kind: 'ownership', label: 'Partnership deed' }],
-    optionalAdminDocs: [],
-  },
-  4: {
-    entityId: 4,
-    legalNameHint: 'Company name exactly as on the Certificate of Incorporation (PayU account name).',
-    tradeNameHint: 'Trade / brand name buyers see. Not a trademark certificate.',
-    requiresCin: true,
-    requiresLlpin: false,
-    requiresRegistrationNumber: false,
-    requiredAdminDocs: [{ kind: 'incorporation', label: 'Certificate of Incorporation' }],
-    optionalAdminDocs: [],
-  },
-  16: {
-    entityId: 16,
-    legalNameHint: 'OPC name exactly as on the Certificate of Incorporation (PayU account name).',
-    tradeNameHint: 'Trade / brand name buyers see. Not a trademark certificate.',
-    requiresCin: true,
-    requiresLlpin: false,
-    requiresRegistrationNumber: false,
-    requiredAdminDocs: [{ kind: 'incorporation', label: 'Certificate of Incorporation' }],
     optionalAdminDocs: [],
   },
   6: {
     entityId: 6,
-    legalNameHint: 'LLP registered name as on MCA records (PayU account name).',
-    tradeNameHint: 'Trade / brand name buyers see. Not a trademark certificate.',
+    group: 'firm',
+    summary: 'LLP — needs LLPIN and LLP agreement for admin review.',
+    legalNameLabel: 'LLP registered name',
+    legalNameHint: 'LLP name as on MCA records (PayU account name).',
+    legalNamePlaceholder: 'Registered LLP name',
+    tradeNameLabel: 'Trade / brand name',
+    tradeNameHint: 'Name buyers see. Not a trademark certificate.',
+    tradeNamePlaceholder: 'Shop or brand name',
+    panNameHint: 'Exact name printed on the LLP PAN.',
+    bankHolderHint: 'Must match LLP PAN name or trade name.',
+    registrationSectionTitle: 'LLP registration',
+    registrationSectionHint: 'LLPIN and agreement are for SHEconomy admin review.',
+    cinLabel: 'CIN',
+    cinPlaceholder: '',
+    llpinLabel: 'LLPIN',
+    llpinPlaceholder: 'AAA-1234',
+    registrationNumberLabel: 'Registration number',
+    registrationNumberPlaceholder: '',
     requiresCin: false,
     requiresLlpin: true,
     requiresRegistrationNumber: false,
+    syncLegalWithPan: false,
+    suggestGst: true,
     requiredAdminDocs: [{ kind: 'ownership', label: 'LLP agreement' }],
+    optionalAdminDocs: [],
+  },
+  4: baseCompanyReqs(
+    4,
+    'Private Limited — CIN + Certificate of Incorporation for admin.',
+    'Company name exactly as on the Certificate of Incorporation (PayU account name).',
+  ),
+  5: {
+    ...baseCompanyReqs(
+      5,
+      'Public Limited / Corporation — CIN starts with L; COI required for admin.',
+      'Corporation / public limited name exactly as on the Certificate of Incorporation.',
+    ),
+    legalNameLabel: 'Corporation legal name',
+    cinPlaceholder: 'L12345MH2020PLC123456',
+  },
+  16: {
+    ...baseCompanyReqs(
+      16,
+      'One Person Company — CIN + Certificate of Incorporation for admin.',
+      'OPC name exactly as on the Certificate of Incorporation (PayU account name).',
+    ),
+    legalNameLabel: 'OPC legal name',
+    cinPlaceholder: 'U12345MH2020OPC123456',
+  },
+  1: {
+    entityId: 1,
+    group: 'nonprofit',
+    summary: 'Association of Persons — PAN 4th letter A. Registration proof for admin.',
+    legalNameLabel: 'AOP legal name',
+    legalNameHint: 'Registered AOP name for the PayU account.',
+    legalNamePlaceholder: 'AOP registered name',
+    tradeNameLabel: 'Public-facing name',
+    tradeNameHint: 'Name buyers see on the storefront.',
+    tradeNamePlaceholder: 'Display name',
+    panNameHint: 'Exact name printed on the AOP PAN.',
+    bankHolderHint: 'Must match AOP PAN name or display name.',
+    registrationSectionTitle: 'AOP registration',
+    registrationSectionHint: 'Registration proof is for SHEconomy admin review.',
+    cinLabel: 'CIN',
+    cinPlaceholder: '',
+    llpinLabel: 'LLPIN',
+    llpinPlaceholder: '',
+    registrationNumberLabel: 'Registration number',
+    registrationNumberPlaceholder: 'AOP / deed registration number',
+    requiresCin: false,
+    requiresLlpin: false,
+    requiresRegistrationNumber: true,
+    syncLegalWithPan: false,
+    suggestGst: false,
+    requiredAdminDocs: [{ kind: 'ownership', label: 'AOP registration / deed' }],
     optionalAdminDocs: [],
   },
   8: {
     entityId: 8,
+    group: 'nonprofit',
+    summary: 'Society — registration certificate required for admin.',
+    legalNameLabel: 'Society legal name',
     legalNameHint: 'Registered society name (PayU account name).',
-    tradeNameHint: 'Trade / public-facing name buyers see.',
+    legalNamePlaceholder: 'Registered society name',
+    tradeNameLabel: 'Public-facing name',
+    tradeNameHint: 'Name buyers see on the storefront.',
+    tradeNamePlaceholder: 'Display name',
+    panNameHint: 'Exact name printed on the society PAN.',
+    bankHolderHint: 'Must match society PAN name or display name.',
+    registrationSectionTitle: 'Society registration',
+    registrationSectionHint: 'Certificate is for SHEconomy admin review.',
+    cinLabel: 'CIN',
+    cinPlaceholder: '',
+    llpinLabel: 'LLPIN',
+    llpinPlaceholder: '',
+    registrationNumberLabel: 'Society registration number',
+    registrationNumberPlaceholder: 'Society registration number',
     requiresCin: false,
     requiresLlpin: false,
     requiresRegistrationNumber: true,
+    syncLegalWithPan: false,
+    suggestGst: false,
     requiredAdminDocs: [{ kind: 'ownership', label: 'Society registration certificate' }],
     optionalAdminDocs: [],
   },
   7: {
     entityId: 7,
+    group: 'nonprofit',
+    summary: 'Trust — trust deed required for admin.',
+    legalNameLabel: 'Trust legal name',
     legalNameHint: 'Registered trust name (PayU account name).',
-    tradeNameHint: 'Trade / public-facing name buyers see.',
+    legalNamePlaceholder: 'Registered trust name',
+    tradeNameLabel: 'Public-facing name',
+    tradeNameHint: 'Name buyers see on the storefront.',
+    tradeNamePlaceholder: 'Display name',
+    panNameHint: 'Exact name printed on the trust PAN.',
+    bankHolderHint: 'Must match trust PAN name or display name.',
+    registrationSectionTitle: 'Trust registration',
+    registrationSectionHint: 'Trust deed is for SHEconomy admin review.',
+    cinLabel: 'CIN',
+    cinPlaceholder: '',
+    llpinLabel: 'LLPIN',
+    llpinPlaceholder: '',
+    registrationNumberLabel: 'Trust registration number',
+    registrationNumberPlaceholder: 'Trust registration number',
     requiresCin: false,
     requiresLlpin: false,
     requiresRegistrationNumber: true,
+    syncLegalWithPan: false,
+    suggestGst: false,
     requiredAdminDocs: [{ kind: 'ownership', label: 'Trust deed' }],
+    optionalAdminDocs: [],
+  },
+  15: {
+    entityId: 15,
+    group: 'nonprofit',
+    summary: 'NGO — registration proof for admin. PAN may be trust, society, or company type.',
+    legalNameLabel: 'NGO legal name',
+    legalNameHint: 'Registered NGO / nonprofit name (PayU account name).',
+    legalNamePlaceholder: 'Registered NGO name',
+    tradeNameLabel: 'Public-facing name',
+    tradeNameHint: 'Name buyers see on the storefront.',
+    tradeNamePlaceholder: 'Display name',
+    panNameHint: 'Exact name printed on the NGO PAN.',
+    bankHolderHint: 'Must match NGO PAN name or display name.',
+    registrationSectionTitle: 'NGO registration',
+    registrationSectionHint: 'Registration certificate is for SHEconomy admin review.',
+    cinLabel: 'CIN',
+    cinPlaceholder: '',
+    llpinLabel: 'LLPIN',
+    llpinPlaceholder: '',
+    registrationNumberLabel: 'NGO registration number',
+    registrationNumberPlaceholder: '12A / 80G / society / trust number',
+    requiresCin: false,
+    requiresLlpin: false,
+    requiresRegistrationNumber: true,
+    syncLegalWithPan: false,
+    suggestGst: false,
+    requiredAdminDocs: [{ kind: 'ownership', label: 'NGO registration certificate' }],
     optionalAdminDocs: [],
   },
 }
@@ -198,19 +469,41 @@ export function entityLabel(businessEntityId: number): string {
   return PAYU_BUSINESS_ENTITIES.find((row) => row.id === businessEntityId)?.label ?? 'Business'
 }
 
+export function entitiesInGroup(group: EntityKycGroup) {
+  return PAYU_BUSINESS_ENTITIES.filter((row) => row.group === group)
+}
+
+const FALLBACK_ENTITY_REQS: EntityKycRequirements = {
+  entityId: 0,
+  group: 'person',
+  summary: 'Choose a business type to see the fields PayU and admin need.',
+  legalNameLabel: 'Legal name',
+  legalNameHint: 'Legal name for the PayU payout account. Not a brand or trademark.',
+  legalNamePlaceholder: 'Legal name for PayU',
+  tradeNameLabel: 'Trade / business name',
+  tradeNameHint: 'Shop / brand name buyers see. Not a trademark certificate.',
+  tradeNamePlaceholder: 'Shop name buyers see',
+  panNameHint: 'Exact spelling as printed on the PAN.',
+  bankHolderHint: 'Must match PAN name or trade name.',
+  registrationSectionTitle: 'Entity registration',
+  registrationSectionHint: 'For SHEconomy admin review.',
+  cinLabel: 'CIN',
+  cinPlaceholder: 'U12345MH2020PTC123456',
+  llpinLabel: 'LLPIN',
+  llpinPlaceholder: 'AAA-1234',
+  registrationNumberLabel: 'Registration number',
+  registrationNumberPlaceholder: 'Registration number',
+  requiresCin: false,
+  requiresLlpin: false,
+  requiresRegistrationNumber: false,
+  syncLegalWithPan: false,
+  suggestGst: false,
+  requiredAdminDocs: [],
+  optionalAdminDocs: [],
+}
+
 export function getEntityKycRequirements(businessEntityId: number): EntityKycRequirements {
-  return (
-    ENTITY_REQUIREMENTS[businessEntityId] ?? {
-      entityId: businessEntityId,
-      legalNameHint: 'Legal name for the PayU payout account. Not a brand or trademark.',
-      tradeNameHint: 'Shop / brand name buyers see. Not a trademark certificate.',
-      requiresCin: false,
-      requiresLlpin: false,
-      requiresRegistrationNumber: false,
-      requiredAdminDocs: [],
-      optionalAdminDocs: [],
-    }
-  )
+  return ENTITY_REQUIREMENTS[businessEntityId] ?? { ...FALLBACK_ENTITY_REQS, entityId: businessEntityId }
 }
 
 export type PayuKycInput = {
