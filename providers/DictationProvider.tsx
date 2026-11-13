@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { DictationFab } from '~/components/ai/DictationFab'
 import { Icons, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { AI_NAME } from '~/config/brand'
 import { useContinuousDictation } from '~/hooks/useContinuousDictation'
@@ -136,13 +135,13 @@ export function DictationProvider({ children }: { children: ReactNode }) {
     <DictationContext.Provider value={value}>
       <YStack flex={1} width="100%" position="relative">
         {children}
-        <DictationFab />
+        {/* No global mic FAB — speak-to-type lives in Input / SHERPA / chat composers. */}
         {speech.supported && speech.listening ? (
           <XStack
             position="absolute"
             left={16}
             right={16}
-            bottom={Math.max(insets.bottom, 12) + 56}
+            bottom={Math.max(insets.bottom, 12) + 16}
             zIndex={1200}
             alignItems="center"
             justifyContent="center"
