@@ -9,6 +9,7 @@ Vendor delivery (`/vendor/delivery`) — **Easyship only** labels funded by per-
 | Capability | Edge / RPC |
 |---|---|
 | Checkout DDP rates | `easyship-ddp-rates` |
+| PDP pin estimate | `easyship-listing-rates` |
 | Credit balance + ledger | `easyship-shipping-credit` |
 | Process label (re-rate, gate, buy, debit) | `easyship-process-shipment` |
 | Debit on label | `easyship_debit_shipping_for_label` |
@@ -27,6 +28,7 @@ Accepted returns/exchanges use an **Easyship reverse label** from the order draw
 
 ```bash
 supabase functions deploy easyship-ddp-rates
+supabase functions deploy easyship-listing-rates
 supabase functions deploy easyship-shipping-credit
 supabase functions deploy easyship-process-shipment
 supabase functions deploy shepay-payu-webhook

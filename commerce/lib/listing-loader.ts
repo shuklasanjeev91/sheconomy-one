@@ -81,6 +81,21 @@ export type ListingShop = Pick<
     is_active?: boolean | null
     shipping_provider_id?: string | null
   }> | null
+  shop_addresses?: {
+    city?: string | null
+    state?: string | null
+    country?: string | null
+    postal_code?: string | null
+    latitude?: number | null
+    longitude?: number | null
+  } | Array<{
+    city?: string | null
+    state?: string | null
+    country?: string | null
+    postal_code?: string | null
+    latitude?: number | null
+    longitude?: number | null
+  }> | null
 }
 
 export type ListingRow = ListingDetail & {
@@ -118,9 +133,11 @@ export const LISTING_DETAIL_SELECT = LISTING_CORE_SELECT
 
 const SHOP_SHIPPING_SELECT = `
   id,
+  shop_address_id,
   shipping_providers(id, provider_name, provider_type, is_primary, is_active, configuration),
   shop_shipping_accounts(provider, status),
-  shipping_rates(delivery_days_min, delivery_days_max, zone_name, is_active, shipping_provider_id)
+  shipping_rates(delivery_days_min, delivery_days_max, zone_name, is_active, shipping_provider_id),
+  shop_addresses(city, state, country, postal_code, latitude, longitude)
 `
 
 export type ListingLoaderResult = {
@@ -191,6 +208,7 @@ async function fetchShopShippingEnrichment(shopId: string): Promise<Partial<List
     shipping_providers: data.shipping_providers ?? null,
     shop_shipping_accounts: data.shop_shipping_accounts ?? null,
     shipping_rates: data.shipping_rates ?? null,
+    shop_addresses: data.shop_addresses ?? null,
   }
 }
 
@@ -220,7 +238,8 @@ export async function enrichListingShopShipping(listing: ListingRow): Promise<Li
   if (
     listing.shops.shipping_providers != null ||
     listing.shops.shipping_rates != null ||
-    listing.shops.shop_shipping_accounts != null
+    listing.shops.shop_shipping_accounts != null ||
+    listing.shops.shop_addresses != null
   ) {
     return listing
   }

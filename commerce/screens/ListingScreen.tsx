@@ -522,6 +522,19 @@ export function ListingScreen({
     ),
   })
 
+  const shopAddressRaw = listing.shops?.shop_addresses
+  const shopWarehouse = Array.isArray(shopAddressRaw) ? shopAddressRaw[0] : shopAddressRaw
+  const warehouseOrigin = shopWarehouse
+    ? {
+        city: shopWarehouse.city ?? null,
+        state: shopWarehouse.state ?? null,
+        country: shopWarehouse.country ?? null,
+        postalCode: shopWarehouse.postal_code ?? null,
+        latitude: shopWarehouse.latitude ?? null,
+        longitude: shopWarehouse.longitude ?? null,
+      }
+    : null
+
   const fulfillmentInput = {
     listingType: listing.listing_type,
     shippingRequired: listing.shipping_required,
@@ -535,6 +548,7 @@ export function ListingScreen({
     deliveryProfiles,
     listingDeliveryProfiles: deliveryProfiles,
     shopDeliveryProfiles: listing.shops?.delivery_profiles ?? undefined,
+    shipsFromCity: warehouseOrigin?.city ?? warehouseOrigin?.state ?? null,
     shopShipping: listing.shops
       ? buildShopShippingSummary({
           shop_metadata: listing.shops.shop_metadata,
@@ -542,6 +556,7 @@ export function ListingScreen({
           shipping_providers: listing.shops.shipping_providers,
           shop_shipping_accounts: listing.shops.shop_shipping_accounts,
           shipping_rates: listing.shops.shipping_rates,
+          shop_addresses: shopWarehouse,
         })
       : null,
   }
@@ -826,14 +841,23 @@ export function ListingScreen({
     </YStack>
   )
 
-  // Only show the green chip once we have a real date — never the "Enter ZIP…" prompt.
+  // Physical PDP paints Get it by inside Amazon-style ShipsToYouWidget —
+  // chip only when that block is absent (digital / unknown).
   const deliveryChipLabel =
-    shipsToYouLabel ||
-    (fulfillmentInfo?.kind === 'physical' && fulfillmentInfo.hasDeliveryEstimate
-      ? fulfillmentInfo.estimatedDeliveryLabel
-      : null)
+    fulfillmentInfo?.kind === 'physical'
+      ? null
+      : shipsToYouLabel ||
+        (fulfillmentInfo && 'hasDeliveryEstimate' in fulfillmentInfo && fulfillmentInfo.hasDeliveryEstimate
+          ? fulfillmentInfo.estimatedDeliveryLabel
+          : null)
 
-  // Physical: one ZIP widget (no duplicate "Enter ZIP" fulfillment card).
+  const shippingMetaLine = fulfillmentInfo?.kind === 'physical'
+    ? [fulfillmentInfo.shippingCostLabel, fulfillmentInfo.shipsFromLabel]
+        .filter(Boolean)
+        .join(' · ')
+    : null
+
+  // Physical: Amazon-style deliver-to in the buy box (no duplicate ZIP card).
   // Digital: download panel only.
   const deliveryBlock =
     fulfillmentInfo?.kind === 'digital' ? (
@@ -841,14 +865,16 @@ export function ListingScreen({
     ) : fulfillmentInfo?.kind === 'physical' ? (
       <YStack gap="$2" width="100%">
         <ShipsToYouWidget
+          variant="pdp"
+          listingId={listing.id}
+          origin={warehouseOrigin}
           onEstimate={(estimate) => setShipsToYouLabel(estimate?.label ?? null)}
         />
-        <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
-          {[fulfillmentInfo.processingLabel, fulfillmentInfo.shippingCostLabel]
-            .filter(Boolean)
-            .join(' · ')}
-          {fulfillmentInfo.shipsFromLabel ? ` · ${fulfillmentInfo.shipsFromLabel}` : ''}
-        </Text>
+        {shippingMetaLine ? (
+          <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+            {shippingMetaLine}
+          </Text>
+        ) : null}
       </YStack>
     ) : null
 
@@ -858,14 +884,17 @@ export function ListingScreen({
     ) : fulfillmentInfo?.kind === 'physical' ? (
       <YStack gap="$2" width="100%">
         <ShipsToYouWidget
+          variant="pdp"
+          listingId={listing.id}
+          origin={warehouseOrigin}
           compact
           onEstimate={(estimate) => setShipsToYouLabel(estimate?.label ?? null)}
         />
-        <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
-          {[fulfillmentInfo.processingLabel, fulfillmentInfo.shippingCostLabel]
-            .filter(Boolean)
-            .join(' · ')}
-        </Text>
+        {shippingMetaLine ? (
+          <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+            {shippingMetaLine}
+          </Text>
+        ) : null}
       </YStack>
     ) : null
 
@@ -925,9 +954,9 @@ export function ListingScreen({
                   {deliveryChipLabel ? <GetItByChip label={deliveryChipLabel} /> : null}
                 </YStack>
 
-                {followersOnlyBanner}
-
                 {deliveryBlockCompact}
+
+                {followersOnlyBanner}
 
                 <ListingVariantPicker
                   groups={variationGroups}
@@ -1107,9 +1136,9 @@ export function ListingScreen({
           {deliveryChipLabel ? <GetItByChip label={deliveryChipLabel} /> : null}
         </YStack>
 
-        {followersOnlyBanner}
-
         {deliveryBlock}
+
+        {followersOnlyBanner}
 
         <ListingVariantPicker
           groups={variationGroups}

@@ -566,6 +566,10 @@ verify_jwt = true
 [functions.easyship-ddp-rates]
 verify_jwt = true
 
+# Public PDP: Easyship rate + ETA for one listing + pin (anon ok).
+[functions.easyship-listing-rates]
+verify_jwt = false
+
 # Vendor JWT: Easyship shipping credit balance / ledger.
 [functions.easyship-shipping-credit]
 verify_jwt = true
