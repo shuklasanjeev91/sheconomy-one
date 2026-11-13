@@ -34,11 +34,12 @@ Legacy shops with **no** KYC row keep prior behavior.
 Vendors never open PayU. They submit payout details in **Verification** (`/vendor/settings?section=verification`):
 
 - **Legal name** (PayU `name`) vs **Trade / business name** (storefront) — not a trademark certificate
-- Business type is grouped and drives the whole form (PayU `business_entity_id`):
+- Business type is a two-step picker (legal structure → exact type) and drives the form
+  (PayU `business_entity_id`):
   - Person: Individual (14), Sole Prop (2), HUF (10)
   - Firm: Partnership (3), LLP (6)
   - Company: Private Limited (4), Public Limited / Corporation (5), OPC (16)
-  - Nonprofit / AOP: AOP (1), Society (8), Trust (7), NGO (15)
+  - Nonprofit: AOP (1), Society (8), Trust (7), NGO (15)
 - Entity fields: CIN (companies), LLPIN (LLP), registration number (society / trust / NGO / AOP)
 - **PayU baseline docs:** PAN, bank proof, **signed Schedule C**, optional GST
 - **Admin-only entity docs** (not uploaded to PayU): Certificate of Incorporation, partnership deed / LLP agreement / trust deed / society / NGO / AOP cert, optional govt ID for person entities

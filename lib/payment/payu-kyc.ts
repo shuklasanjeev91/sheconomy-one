@@ -35,32 +35,36 @@ export const PAYU_FORWARDED_DOC_KINDS = ['pan', 'bank', 'schedule_c', 'gst'] as 
 
 /** PayU Create Child Merchant `business_entity_id` values used for sellers. */
 export const PAYU_BUSINESS_ENTITIES = [
-  { id: 14, label: 'Individual', group: 'person' },
-  { id: 2, label: 'Sole Proprietorship', group: 'person' },
-  { id: 10, label: 'HUF', group: 'person' },
-  { id: 3, label: 'Partnership', group: 'firm' },
-  { id: 6, label: 'LLP', group: 'firm' },
-  { id: 4, label: 'Private Limited', group: 'company' },
-  { id: 5, label: 'Public Limited / Corporation', group: 'company' },
-  { id: 16, label: 'One Person Company', group: 'company' },
-  { id: 1, label: 'Association of Persons', group: 'nonprofit' },
-  { id: 8, label: 'Society', group: 'nonprofit' },
-  { id: 7, label: 'Trust', group: 'nonprofit' },
-  { id: 15, label: 'NGO', group: 'nonprofit' },
+  { id: 14, label: 'Individual', shortLabel: 'Individual', group: 'person' },
+  { id: 2, label: 'Sole Proprietorship', shortLabel: 'Sole Prop', group: 'person' },
+  { id: 10, label: 'HUF', shortLabel: 'HUF', group: 'person' },
+  { id: 3, label: 'Partnership', shortLabel: 'Partnership', group: 'firm' },
+  { id: 6, label: 'LLP', shortLabel: 'LLP', group: 'firm' },
+  { id: 4, label: 'Private Limited', shortLabel: 'Private Ltd', group: 'company' },
+  { id: 5, label: 'Public Limited / Corporation', shortLabel: 'Public Ltd', group: 'company' },
+  { id: 16, label: 'One Person Company', shortLabel: 'OPC', group: 'company' },
+  { id: 1, label: 'Association of Persons', shortLabel: 'AOP', group: 'nonprofit' },
+  { id: 8, label: 'Society', shortLabel: 'Society', group: 'nonprofit' },
+  { id: 7, label: 'Trust', shortLabel: 'Trust', group: 'nonprofit' },
+  { id: 15, label: 'NGO', shortLabel: 'NGO', group: 'nonprofit' },
 ] as const
 
 export type PayuBusinessEntityId = (typeof PAYU_BUSINESS_ENTITIES)[number]['id']
 export type EntityKycGroup = (typeof PAYU_BUSINESS_ENTITIES)[number]['group']
 
+/**
+ * Top-level legal-structure buckets shown first in Verification.
+ * Pick a group, then a specific PayU entity within it.
+ */
 export const PAYU_BUSINESS_ENTITY_GROUPS: Array<{
   id: EntityKycGroup
   label: string
   hint: string
 }> = [
-  { id: 'person', label: 'Person / proprietor', hint: 'Individual, sole prop, or HUF' },
+  { id: 'person', label: 'Person', hint: 'Individual, sole proprietor, or HUF' },
   { id: 'firm', label: 'Firm', hint: 'Partnership or LLP' },
-  { id: 'company', label: 'Company', hint: 'Pvt Ltd, public/corporation, or OPC' },
-  { id: 'nonprofit', label: 'Nonprofit / AOP', hint: 'Trust, society, NGO, or AOP' },
+  { id: 'company', label: 'Company', hint: 'Private Ltd, public Ltd, or OPC' },
+  { id: 'nonprofit', label: 'Nonprofit', hint: 'Trust, society, NGO, or AOP' },
 ]
 
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/
@@ -469,8 +473,27 @@ export function entityLabel(businessEntityId: number): string {
   return PAYU_BUSINESS_ENTITIES.find((row) => row.id === businessEntityId)?.label ?? 'Business'
 }
 
+export function entityShortLabel(businessEntityId: number): string {
+  const row = PAYU_BUSINESS_ENTITIES.find((entry) => entry.id === businessEntityId)
+  return row?.shortLabel ?? row?.label ?? 'Business'
+}
+
+export function entityGroupForId(businessEntityId: number): EntityKycGroup | null {
+  return PAYU_BUSINESS_ENTITIES.find((row) => row.id === businessEntityId)?.group ?? null
+}
+
 export function entitiesInGroup(group: EntityKycGroup) {
   return PAYU_BUSINESS_ENTITIES.filter((row) => row.group === group)
+}
+
+/** Keep the current entity when it already belongs to `group`; otherwise pick the first. */
+export function pickEntityInGroup(
+  group: EntityKycGroup,
+  currentEntityId?: number | null,
+): PayuBusinessEntityId {
+  const inGroup = entitiesInGroup(group)
+  const current = inGroup.find((row) => row.id === currentEntityId)
+  return (current ?? inGroup[0]).id
 }
 
 const FALLBACK_ENTITY_REQS: EntityKycRequirements = {

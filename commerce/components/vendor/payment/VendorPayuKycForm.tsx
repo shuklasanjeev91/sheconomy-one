@@ -16,6 +16,7 @@ import { radius } from '~/config/tokens'
 import {
   PAYU_BUSINESS_ENTITY_GROUPS,
   entitiesInGroup,
+  entityGroupForId,
   getEntityKycRequirements,
   maskSecret,
   normalizeIfsc,
@@ -23,9 +24,11 @@ import {
   normalizeMobile,
   normalizePan,
   interpretGstRegistry,
+  pickEntityInGroup,
   validatePayuKycInput,
   verifyGstin,
   verifyPanForEntity,
+  type EntityKycGroup,
   type GstRegistryResult,
   type PayuKycDocKind,
   type PayuKycStatus,
@@ -128,6 +131,37 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
 
   const locked = LOCKED.includes(status)
   const entityReqs = useMemo(() => getEntityKycRequirements(businessEntityId), [businessEntityId])
+  const entityGroup =
+    entityGroupForId(businessEntityId) ?? ('person' satisfies EntityKycGroup)
+  const entityOptions = useMemo(() => entitiesInGroup(entityGroup), [entityGroup])
+
+  const selectEntityGroup = useCallback(
+    (group: EntityKycGroup) => {
+      if (locked) return
+      setBusinessEntityId(pickEntityInGroup(group, businessEntityId))
+      setErrors((current) => {
+        if (!current.businessEntityId) return current
+        const next = { ...current }
+        delete next.businessEntityId
+        return next
+      })
+    },
+    [businessEntityId, locked],
+  )
+
+  const selectEntity = useCallback(
+    (entityId: number) => {
+      if (locked) return
+      setBusinessEntityId(entityId)
+      setErrors((current) => {
+        if (!current.businessEntityId) return current
+        const next = { ...current }
+        delete next.businessEntityId
+        return next
+      })
+    },
+    [locked],
+  )
 
   const setDocPath = useCallback((kind: DocKind, path: string) => {
     if (kind === 'pan') setPanDocumentPath(path)
@@ -483,9 +517,9 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
             PayU submerchant KYC
           </Text>
           <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-            Pick your business type — Individual, Pvt Ltd, Corporation, HUF, NGO, and more. The form
-            adapts fields and documents. PayU still receives PAN, bank, Schedule C, and GST only;
-            entity docs are for SHEconomy admin.
+            Choose your legal structure first (Person, Firm, Company, or Nonprofit), then the exact
+            type. The form adapts fields and documents. PayU receives PAN, bank, Schedule C, and GST
+            only; entity docs stay with SHEconomy admin.
           </Text>
         </YStack>
       ) : null}
@@ -506,44 +540,67 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
 
       <FormSection
         title="1. Business type"
-        hint="Every type uses a different PayU entity id, PAN rule, and admin document pack."
+        hint="Step 1: legal structure. Step 2: exact type — each has its own PAN rule and document pack."
       >
-        <Field label="Business type" error={errors.businessEntityId}>
-          <YStack gap="$3">
-            {PAYU_BUSINESS_ENTITY_GROUPS.map((group) => (
-              <YStack key={group.id} gap="$1.5">
-                <YStack gap="$0.5">
-                  <Text fontSize={12} fontWeight="700" color={ui.text}>
+        <YStack gap="$3">
+          <YStack gap="$1.5">
+            <Text fontSize={12} fontWeight="700" color={ui.text}>
+              Legal structure
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              {PAYU_BUSINESS_ENTITY_GROUPS.map((group) => {
+                const selected = group.id === entityGroup
+                return (
+                  <Button
+                    key={group.id}
+                    size="$3"
+                    tone={selected ? 'primary' : 'outline'}
+                    borderRadius={radius.chip}
+                    disabled={locked}
+                    onPress={() => selectEntityGroup(group.id)}
+                  >
                     {group.label}
-                  </Text>
-                  <Text fontSize={11} color={ui.textMuted}>
-                    {group.hint}
-                  </Text>
-                </YStack>
-                <XStack gap="$2" flexWrap="wrap">
-                  {entitiesInGroup(group.id).map((entity) => {
-                    const selected = entity.id === businessEntityId
-                    return (
-                      <Button
-                        key={entity.id}
-                        size="$2"
-                        tone={selected ? 'primary' : 'outline'}
-                        borderRadius={radius.chip}
-                        disabled={locked}
-                        onPress={() => setBusinessEntityId(entity.id)}
-                      >
-                        {entity.label}
-                      </Button>
-                    )
-                  })}
-                </XStack>
-              </YStack>
-            ))}
+                  </Button>
+                )
+              })}
+            </XStack>
+            <Text fontSize={11} color={ui.textMuted}>
+              {PAYU_BUSINESS_ENTITY_GROUPS.find((group) => group.id === entityGroup)?.hint}
+            </Text>
           </YStack>
-        </Field>
-        <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
-          {entityReqs.summary}
-        </Text>
+
+          <YStack gap="$1.5">
+            <Text fontSize={12} fontWeight="700" color={ui.text}>
+              Exact type
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              {entityOptions.map((entity) => {
+                const selected = entity.id === businessEntityId
+                return (
+                  <Button
+                    key={entity.id}
+                    size="$2"
+                    tone={selected ? 'primary' : 'outline'}
+                    borderRadius={radius.chip}
+                    disabled={locked}
+                    onPress={() => selectEntity(entity.id)}
+                  >
+                    {entity.shortLabel}
+                  </Button>
+                )
+              })}
+            </XStack>
+          </YStack>
+
+          {errors.businessEntityId ? (
+            <Text fontSize={12} color="#B91C1C">
+              {errors.businessEntityId}
+            </Text>
+          ) : null}
+          <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+            {entityReqs.summary}
+          </Text>
+        </YStack>
       </FormSection>
 
       <FormSection title="2. Names & contact" hint={entityReqs.legalNameHint}>

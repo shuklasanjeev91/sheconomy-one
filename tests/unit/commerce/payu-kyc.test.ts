@@ -3,11 +3,15 @@ import { describe, expect, it } from 'vitest'
 import {
   buildBankUpdatePayload,
   buildCreateChildPayload,
+  entitiesInGroup,
+  entityGroupForId,
+  entityShortLabel,
   getEntityKycRequirements,
   holderNameMatches,
   interpretGstRegistry,
   kycAllowsStorefront,
   panFromGstin,
+  pickEntityInGroup,
   validatePayuKycInput,
   verifyGstin,
   verifyKycCin,
@@ -222,6 +226,17 @@ describe('vendor PayU KYC', () => {
     expect(verifyKycLlpin('AAA1234').ok).toBe(true)
     expect(verifyKycLlpin('AAA-1234').ok).toBe(true)
     expect(verifyKycLlpin('xx').ok).toBe(false)
+  })
+
+  it('organises entities into structure → exact-type buckets', () => {
+    expect(entityGroupForId(2)).toBe('person')
+    expect(entityGroupForId(6)).toBe('firm')
+    expect(entityShortLabel(5)).toBe('Public Ltd')
+    expect(entityShortLabel(1)).toBe('AOP')
+    expect(entitiesInGroup('company').map((row) => row.id)).toEqual([4, 5, 16])
+    expect(pickEntityInGroup('company', 5)).toBe(5)
+    expect(pickEntityInGroup('company', 2)).toBe(4)
+    expect(pickEntityInGroup('nonprofit')).toBe(1)
   })
 
   it('reads the PAN from a GSTIN and rejects a mismatched or inactive registry result', () => {

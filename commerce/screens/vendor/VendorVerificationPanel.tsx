@@ -251,10 +251,9 @@ export function VendorVerificationPanel({ ui, shopId, isDesktop }: VendorVerific
                 PayU submerchant KYC
               </Text>
               <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-                Choose Individual, Sole Prop, HUF, Partnership, LLP, Pvt Ltd, Public Limited /
-                Corporation, OPC, Trust, Society, NGO, or AOP — the form adapts names, IDs, and
-                documents. Entity docs are for SHEconomy admin; PayU gets PAN, bank, Schedule C,
-                and optional GST.
+                Pick Person, Firm, Company, or Nonprofit, then the exact type — the form adapts
+                names, IDs, and documents. Entity docs are for SHEconomy admin; PayU gets PAN, bank,
+                Schedule C, and optional GST.
               </Text>
             </YStack>
             <VendorPayuKycForm
