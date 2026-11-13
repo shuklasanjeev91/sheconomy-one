@@ -60,10 +60,11 @@ Admin reviews via **/admin/payu-kyc** (queue) or the shop panel. Approve runs `s
 
 `process_payu_kyc_reminders` (pg_cron `30 4 * * *` UTC ≈ 10:00 IST):
 
-- Targets active shops older than 1 day that are not `payu_verified` (including shops with no KYC row yet)
-- Creates `payu_kyc_reminder` notifications (in_app + push + email), deduped ~23h per shop
-- Copy varies by status (`not_started` / `draft` / `submitted` / `changes_requested` / `payu_pending` / …)
-- Delivery goes through the existing `dispatch-notifications` pipeline
+- Targets active shops that are not `payu_verified` (including shops with no KYC row yet)
+- Creates `payu_kyc_reminder` notifications (**in_app + push + email**), deduped ~23h per shop
+- Copy states selling is blocked until KYC is verified; CTA → `/vendor/settings?section=verification`
+- `process_payu_kyc_reminders(limit, true)` force-sends immediately (5-minute dedupe only)
+- Delivery goes through `dispatch-notifications` (immediate push trigger + 5-minute cron)
 
 ### KYC status sync (every 6 hours)
 
