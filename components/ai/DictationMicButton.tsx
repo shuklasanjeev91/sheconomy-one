@@ -1,8 +1,9 @@
 import { useId, useRef } from 'react'
 import { Platform } from 'react-native'
 
-import { Icons, XStack } from '~/components/ui'
+import { Icons, XStack, useAppToast } from '~/components/ui'
 import { AI_NAME } from '~/config/brand'
+import { isContinuousDictationAvailable } from '~/hooks/useContinuousDictation'
 import { useDictationOptional } from '~/providers/dictation-context'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -26,19 +27,38 @@ export function DictationMicButton({
   bindOnChangeText,
 }: DictationMicButtonProps) {
   const ui = useAppUi()
+  const toast = useAppToast()
   const dictation = useDictationOptional()
   const bindId = useId()
   const valueRef = useRef(bindValue ?? '')
   const onChangeRef = useRef(bindOnChangeText)
   valueRef.current = bindValue ?? ''
   onChangeRef.current = bindOnChangeText
-  if (!dictation?.supported) return null
 
-  const listening = dictation.listening
+  const platformSupports = isContinuousDictationAvailable()
+  const listening = Boolean(dictation?.listening)
   const blocked = Boolean(disabled)
+
+  // Always show the control when the platform can do STT — even if the
+  // provider is missing we toast instead of rendering nothing (SHERPA sheet).
+  if (!platformSupports && !dictation?.supported) return null
 
   const onPress = () => {
     if (blocked) return
+    if (!dictation) {
+      toast.show(`${AI_NAME} dictation`, {
+        tone: 'danger',
+        message: 'Voice typing is not available right now. Refresh and try again.',
+      })
+      return
+    }
+    if (!dictation.supported) {
+      toast.show(`${AI_NAME} dictation`, {
+        tone: 'danger',
+        message: 'Voice typing needs microphone permission (Chrome, Edge, or Safari).',
+      })
+      return
+    }
     if (!listening && onChangeRef.current) {
       dictation.focusTarget({
         id: `dictation-bind-${bindId}`,
@@ -66,7 +86,7 @@ export function DictationMicButton({
       hoverStyle={blocked ? undefined : { opacity: 0.9 }}
       pressStyle={blocked ? undefined : { scale: 0.94 }}
       onPress={onPress}
-      aria-label={listening ? `Stop ${AI_NAME} dictation` : `Start ${AI_NAME} dictation`}
+      aria-label={listening ? `Stop ${AI_NAME} dictation` : `Speak with ${AI_NAME}`}
       {...(Platform.OS === 'web'
         ? { role: 'button' as const }
         : {
@@ -75,9 +95,9 @@ export function DictationMicButton({
           })}
     >
       {listening ? (
-        <Icons.MicOff size={Math.round(size * 0.4)} color="#fff" />
+        <Icons.MicOff size={Math.round(size * 0.42)} color="#fff" />
       ) : (
-        <Icons.Mic size={Math.round(size * 0.4)} color={ui.text} />
+        <Icons.Mic size={Math.round(size * 0.42)} color={ui.brand} />
       )}
     </XStack>
   )

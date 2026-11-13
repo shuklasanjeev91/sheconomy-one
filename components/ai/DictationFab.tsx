@@ -13,16 +13,18 @@ import {
 import { useInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { useGlobalSession } from '~/lib/session/global-session'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useAiAssistOptional } from '~/providers/ai-assist-context'
 import { useDictationOptional } from '~/providers/dictation-context'
 
 /**
  * Global SHERPA dictation toggle — speak and type into the focused field.
- * Hidden in meetings / post compose where mic conflict or chrome already owns the corner.
+ * Hidden in meetings / post compose / SHERPA sheet (sheet has its own mic).
  */
 export function DictationFab() {
   const ui = useAppUi()
   const pathname = usePathname()
   const dictation = useDictationOptional()
+  const assist = useAiAssistOptional()
   const { open: composerOpen } = useComposerState()
   const { isDesktop, mobileTabBarOffset, safeLeft, safeBottom } = useAppLayout()
   const instantMeeting = useInstantMeetingSession()
@@ -35,6 +37,7 @@ export function DictationFab() {
   if (
     !dictation?.supported ||
     composerOpen ||
+    assist?.open ||
     isCreatePostPath(pathname ?? '') ||
     isCoWorkMeetingRoomPath(pathname ?? '') ||
     instantFullscreen

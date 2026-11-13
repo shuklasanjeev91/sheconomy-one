@@ -233,8 +233,10 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                     <CartProvider>
                       <FavoritesProvider>
                         <MarketplacePersonalizationProvider>
-                          <AiAssistProvider>
-                            <DictationProvider>
+                          {/* Dictation must wrap AiAssistProvider — the SHERPA sheet
+                              renders as a sibling of provider children. */}
+                          <DictationProvider>
+                            <AiAssistProvider>
                               <ScreenZoomProvider>
                                 <ScreenZoomRoot>
                                   <AutomaticUpdateManager />
@@ -258,8 +260,8 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                                   </BiometricUnlockGate>
                                 </ScreenZoomRoot>
                               </ScreenZoomProvider>
-                            </DictationProvider>
-                          </AiAssistProvider>
+                            </AiAssistProvider>
+                          </DictationProvider>
                         </MarketplacePersonalizationProvider>
                       </FavoritesProvider>
                     </CartProvider>

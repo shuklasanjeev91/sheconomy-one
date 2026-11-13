@@ -13,6 +13,7 @@ import {
 import { DictationMicButton } from '~/components/ai/DictationMicButton'
 import { HorizontalScrollRow } from '~/components/layout'
 import { AI_NAME } from '~/config/brand'
+import { useDictationOptional } from '~/providers/dictation-context'
 import { radius } from '~/config/tokens'
 import { ListingGrid } from '~/commerce/components/ListingGrid'
 import { fetchListingsByIds, type ListingSummary } from '~/commerce/lib/commerce'
@@ -113,6 +114,7 @@ function AiAssistSheetBody({
   autoSendPrompt: boolean
   clearDraft: AiAssistContextValue['clearDraft']
 }) {
+  const dictation = useDictationOptional()
   const product: AiProduct = override?.product ?? routeContext.product
   const contextPage = override?.contextPage ?? routeContext.contextPage
   const context = { ...routeContext.context, ...(override?.context ?? {}) }
@@ -186,10 +188,15 @@ function AiAssistSheetBody({
   )
 
   useEffect(() => {
-    if (!open) {
-      autoSentRef.current = null
-      return
-    }
+    if (open) return
+    autoSentRef.current = null
+    void dictation?.stop()
+    // Only when the sheet closes — don't restart suggestion fetch on mic toggles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stop dictation on close only
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
     setError(null)
     void fetchAiSuggestions({ product, contextPage })
       .then(setSuggestions)

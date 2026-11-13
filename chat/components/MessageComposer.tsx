@@ -15,6 +15,7 @@ import type { ChatComposerAttachment, ChatMessage } from '~/chat/lib/types'
 import { HorizontalScrollRow } from '~/components/layout'
 import { MediaDropZone } from '~/components/media/MediaDropZone'
 import { UploadProgressBar } from '~/components/media/UploadProgressBar'
+import { DictationMicButton } from '~/components/ai/DictationMicButton'
 import { Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { WritingSuggestionBar } from '~/components/writing/WritingSuggestionBar'
 import {
@@ -573,6 +574,18 @@ export function MessageComposer({
             ) : null}
           </XStack>
         )}
+
+        {!recording ? (
+          <DictationMicButton
+            size={40}
+            disabled={sending}
+            bindValue={text}
+            bindOnChangeText={(next) => {
+              setText(next)
+              if (!isEditing) onTyping(next)
+            }}
+          />
+        ) : null}
 
         <XStack
           onPress={
