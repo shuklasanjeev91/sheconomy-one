@@ -331,30 +331,37 @@ export function ShipsToYouWidget({
     </YStack>
   ) : null
 
+  const indiaPin = resolvedCountry.toUpperCase() === 'IN'
   const pinRow = (
-    <XStack gap="$2" alignItems="center" flexWrap="wrap">
+    <XStack gap="$2" alignItems="center" flexWrap="wrap" width="100%">
       <Input
         flex={1}
         minWidth={120}
-        height={isPdp ? 36 : undefined}
+        height={isPdp ? 40 : 44}
         value={zip}
         onChangeText={setZip}
         placeholder={getPostalCodePlaceholder(resolvedCountry)}
         autoComplete={Platform.OS === 'web' ? ('postal-code' as never) : undefined}
         textContentType={Platform.OS === 'ios' ? 'postalCode' : undefined}
+        keyboardType={indiaPin ? 'number-pad' : 'default'}
+        returnKeyType="done"
         onSubmitEditing={() =>
           void runEstimate({ ...locationDestination, postalCode: zip })
         }
       />
       <XStack
-        height={isPdp ? 36 : 40}
-        paddingHorizontal={14}
+        height={isPdp ? 40 : 44}
+        paddingHorizontal={16}
         borderRadius={999}
         backgroundColor={ui.brand}
         alignItems="center"
         justifyContent="center"
         opacity={loading ? 0.7 : 1}
         cursor="pointer"
+        accessibilityRole="button"
+        accessibilityLabel={loading ? 'Checking delivery' : 'Check delivery'}
+        pressStyle={{ opacity: 0.85 }}
+        hitSlop={8}
         onPress={() => {
           if (!loading) void runEstimate({ ...locationDestination, postalCode: zip })
         }}
@@ -398,11 +405,15 @@ export function ShipsToYouWidget({
               key={address.id}
               gap="$3"
               padding="$3"
+              minHeight={56}
               borderRadius={10}
               borderWidth={1}
               borderColor={selected ? ui.brand : ui.panelBorder}
               backgroundColor={selected ? ui.surfaceMuted : ui.panelBg}
               cursor="pointer"
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              pressStyle={{ opacity: 0.9 }}
               onPress={() => selectAddress(address)}
             >
               <YStack paddingTop={2}>
@@ -473,21 +484,30 @@ export function ShipsToYouWidget({
         {showAddressMode ? (
           <XStack
             alignItems="center"
-            gap="$1.5"
-            alignSelf="flex-start"
-            maxWidth="100%"
+            gap="$2"
+            alignSelf="stretch"
+            width="100%"
+            minHeight={44}
+            paddingVertical={8}
+            paddingHorizontal={2}
             cursor="pointer"
-            onPress={openAddressPicker}
+            accessibilityRole="button"
+            accessibilityLabel={`Deliver to ${deliverToLabel}. Change delivery address.`}
+            pressStyle={{ opacity: 0.75 }}
             hoverStyle={{ opacity: 0.85 }}
+            hitSlop={6}
+            onPress={openAddressPicker}
           >
-            <Icons.MapPin size={15} color={ui.brand} />
-            <Text fontSize={13} color={ui.text} flexShrink={1} numberOfLines={2}>
-              Deliver to{' '}
-              <Text fontSize={13} fontWeight="700" color={ui.brand}>
+            <Icons.MapPin size={16} color={ui.brand} />
+            <YStack flex={1} minWidth={0} gap={1}>
+              <Text fontSize={12} color={ui.textSecondary}>
+                Deliver to
+              </Text>
+              <Text fontSize={14} fontWeight="700" color={ui.brand} numberOfLines={2}>
                 {deliverToLabel}
               </Text>
-            </Text>
-            <Icons.ChevronDown size={14} color={ui.brand} flexShrink={0} />
+            </YStack>
+            <Icons.ChevronDown size={16} color={ui.brand} />
           </XStack>
         ) : (
           <YStack gap="$2" width="100%">
@@ -499,17 +519,14 @@ export function ShipsToYouWidget({
             {pinRow}
             {user?.id ? (
               <Text
-                fontSize={12}
+                fontSize={13}
                 fontWeight="700"
                 color={ui.brand}
                 cursor="pointer"
+                accessibilityRole="button"
+                pressStyle={{ opacity: 0.7 }}
                 onPress={() => {
                   setPinMode(false)
-                  if (hasSavedAddresses) {
-                    openAddressPicker()
-                    return
-                  }
-                  // No addresses yet — open sheet with add CTA
                   openAddressPicker()
                 }}
               >
@@ -550,6 +567,7 @@ export function ShipsToYouWidget({
           <XStack
             alignItems="center"
             gap="$2"
+            minHeight={48}
             paddingVertical={10}
             paddingHorizontal={12}
             borderRadius={10}
@@ -558,6 +576,10 @@ export function ShipsToYouWidget({
             backgroundColor={ui.surfaceMuted}
             cursor="pointer"
             opacity={addressesLoading ? 0.7 : 1}
+            accessibilityRole="button"
+            accessibilityLabel={`Deliver to ${deliverToLabel}. Change delivery address.`}
+            pressStyle={{ opacity: 0.85 }}
+            hitSlop={6}
             onPress={openAddressPicker}
           >
             <Icons.MapPin size={16} color={ui.brand} />
