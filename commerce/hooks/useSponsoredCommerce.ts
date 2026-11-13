@@ -112,7 +112,16 @@ export function useSponsoredCommerce({
   const [items, setItems] = useState<SponsoredCommerceItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const contextKey = useMemo(() => JSON.stringify(context ?? {}), [context])
+  // Serialize once per render — do not depend on `context` object identity
+  // (callers often pass inline objects every render).
+  const contextKey = JSON.stringify(context ?? {})
+  const parsedContext = useMemo((): AppAdContext => {
+    try {
+      return JSON.parse(contextKey) as AppAdContext
+    } catch {
+      return {}
+    }
+  }, [contextKey])
 
   const refresh = useCallback(async () => {
     if (!enabled || limit <= 0) {
@@ -122,7 +131,7 @@ export function useSponsoredCommerce({
     }
 
     setLoading(true)
-    const result = await fetchAppAds({ placement, context, limit })
+    const result = await fetchAppAds({ placement, context: parsedContext, limit })
     if (result.error || !result.data?.ads.length) {
       setItems([])
       setError(result.error)
@@ -162,7 +171,7 @@ export function useSponsoredCommerce({
     )
     setError(shopsResult.error)
     setLoading(false)
-  }, [contextKey, enabled, limit, placement])
+  }, [contextKey, parsedContext, enabled, limit, placement])
 
   useEffect(() => {
     void refresh()

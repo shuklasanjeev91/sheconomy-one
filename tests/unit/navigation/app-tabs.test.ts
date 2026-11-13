@@ -105,6 +105,8 @@ describe('mobile bottom tabs', () => {
     expect(getMobileBottomTabSection('/vendor/myshop')).toBe('vendor')
     expect(getMobileBottomTabSection('/vendor/orders')).toBe('vendor')
     expect(getMobileBottomTabSection('/auth/sign-in')).toBeNull()
+    expect(getMobileBottomTabSection('/auth')).toBeNull()
+    expect(getMobileBottomTabSection('/logout')).toBeNull()
     expect(getMobileBottomTabSection('/ui-kit')).toBeNull()
   })
 

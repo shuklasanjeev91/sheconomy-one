@@ -382,7 +382,22 @@ export const APP_COWORK_MOBILE_TABS: AppMobileTabItem[] = [
 ]
 
 export function getMobileBottomTabSection(pathname: string): BottomTabSection | null {
-  if (pathname.startsWith('/auth/') || pathname.startsWith('/ui-kit')) return null
+  // Auth surfaces (and short aliases that redirect into them) hide the dock.
+  if (
+    pathname === '/auth' ||
+    pathname.startsWith('/auth/') ||
+    pathname === '/logout' ||
+    pathname === '/log-out' ||
+    pathname === '/sign-in' ||
+    pathname === '/signin' ||
+    pathname === '/login' ||
+    pathname === '/log-in' ||
+    pathname === '/sign-up' ||
+    pathname === '/signup' ||
+    pathname.startsWith('/ui-kit')
+  ) {
+    return null
+  }
   if (isCoWorkLivePath(pathname)) return null
   // Manage Shop gets its own tab chrome (not marketplace Home/Shops/You).
   if (isVendorPath(pathname) || isManageShopPath(pathname)) return 'vendor'

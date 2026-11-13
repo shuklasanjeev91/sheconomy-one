@@ -64,6 +64,8 @@ export function ShipsToYouWidget({
       setEstimate(result)
       onEstimate?.(result)
     }
+    // Intentionally omit onEstimate — parents pass inline lambdas; including it
+    // re-fires setState every render (React #185).
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once when location/initial arrives
   }, [initialZip, location?.postal_code])
 

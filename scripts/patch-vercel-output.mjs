@@ -39,10 +39,51 @@ function patchVercelOutputConfig() {
 
   const sitemapRoute = { src: '^/sitemap\\.xml$', dest: '/api/sitemap' }
   const withoutSitemap = patched.filter((route) => route.dest !== '/api/sitemap')
-  config.routes = [{ handle: 'filesystem' }, { handle: 'rewrite' }, sitemapRoute, ...withoutSitemap]
+
+  // Permanent redirects from vercel.json must run before `filesystem`, or the
+  // SPA alias HTML shells (e.g. /sign-in) would paint a blank body first.
+  const edgeRedirects = loadVercelJsonRedirectRoutes()
+
+  config.routes = [
+    ...edgeRedirects,
+    { handle: 'filesystem' },
+    { handle: 'rewrite' },
+    sitemapRoute,
+    ...withoutSitemap,
+  ]
 
   writeFileSync(configPath, `${JSON.stringify(config)}\n`)
-  console.log('[patch-vercel-output] patched routes for /assets, filesystem, and /sitemap.xml')
+  console.log(
+    `[patch-vercel-output] patched routes for /assets, filesystem, and /sitemap.xml` +
+      (edgeRedirects.length ? ` (+${edgeRedirects.length} edge redirects)` : ''),
+  )
+}
+
+/** Map `vercel.json` redirects into Build Output API route entries. */
+function loadVercelJsonRedirectRoutes() {
+  const vercelJsonPath = resolve(process.cwd(), 'vercel.json')
+  if (!existsSync(vercelJsonPath)) return []
+  try {
+    const vercelJson = JSON.parse(readFileSync(vercelJsonPath, 'utf8'))
+    const redirects = Array.isArray(vercelJson.redirects) ? vercelJson.redirects : []
+    return redirects.flatMap((entry) => {
+      const source = typeof entry?.source === 'string' ? entry.source : ''
+      const destination = typeof entry?.destination === 'string' ? entry.destination : ''
+      if (!source.startsWith('/') || !destination.startsWith('/')) return []
+      const status = entry.permanent === false ? 307 : 308
+      const escaped = source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return [
+        {
+          src: `^${escaped}/?$`,
+          status,
+          headers: { Location: destination },
+        },
+      ]
+    })
+  } catch (error) {
+    console.warn('[patch-vercel-output] failed to load vercel.json redirects', error)
+    return []
+  }
 }
 
 /**

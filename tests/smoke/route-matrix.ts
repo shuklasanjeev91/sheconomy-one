@@ -24,6 +24,9 @@ export const guestPublicRoutes = [
   '/create-my-shop',
   // Auth
   '/auth/sign-in',
+  '/sign-in',
+  '/login',
+  '/logout',
   '/auth/complete-profile',
   '/auth/verify-gender',
   '/auth/verify-handoff',

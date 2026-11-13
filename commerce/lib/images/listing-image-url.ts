@@ -87,65 +87,27 @@ function buildProxyUrl(originalUrl: string): string {
   return `${IMAGE_PROXY_FUNCTION_URL}?url=${encodeURIComponent(originalUrl)}`
 }
 
-function clampEdge(value: number | undefined): number | undefined {
-  if (value == null || !Number.isFinite(value) || value <= 0) return undefined
-  // Cap so we never request absurd transforms for huge layout numbers.
-  return Math.min(Math.round(value), 2048)
-}
-
-function applyRenderSearchParams(url: URL, size: ListingImageDisplaySize): void {
-  const width = clampEdge(size.width)
-  const height = clampEdge(size.height)
-  if (width) url.searchParams.set('width', String(width))
-  if (height) url.searchParams.set('height', String(height))
-  url.searchParams.set('resize', size.resize ?? 'cover')
-  url.searchParams.set('quality', String(size.quality ?? 72))
-}
-
-function buildSupabaseRenderUrl(bucketAndPath: string, size: ListingImageDisplaySize): string {
-  const normalized = bucketAndPath.replace(/^\/+/, '')
-  const url = new URL(`${SUPABASE_PROJECT_URL}${RENDER_PUBLIC_PREFIX}${normalized}`)
-  applyRenderSearchParams(url, size)
-  return url.toString()
-}
-
 /**
- * Downscale Supabase (and mirrored CloudFront) listing images for cards/galleries.
- * Leaves proxies, data URIs, and non-Supabase hosts untouched.
+ * Prefer original object/CDN URLs. Supabase Storage Image Transformations are
+ * capped (Pro includes 100); rewriting every card to `/render/image` exhausted
+ * the org quota and tripped the spend-cap lockdown (521 / blank shops).
+ * Keep `size` in the API for callers; only strip existing render params back
+ * to object URLs so we stop counting transforms.
  */
 export function withListingImageDisplaySize(
   url: string,
-  size?: ListingImageDisplaySize | null,
+  _size?: ListingImageDisplaySize | null,
 ): string {
-  if (!url || !size) return url
-  if (!clampEdge(size.width) && !clampEdge(size.height)) return url
+  if (!url) return url
   if (url.startsWith('data:') || url.startsWith('blob:')) return url
   if (url.includes('/functions/v1/image-proxy')) return url
 
   try {
     const parsed = new URL(url)
-
     if (parsed.pathname.includes(RENDER_PUBLIC_PREFIX)) {
-      applyRenderSearchParams(parsed, size)
-      return parsed.toString()
-    }
-
-    if (parsed.pathname.includes(OBJECT_PUBLIC_PREFIX)) {
-      parsed.pathname = parsed.pathname.replace(OBJECT_PUBLIC_PREFIX, RENDER_PUBLIC_PREFIX)
-      // Drop any leftover object query noise.
+      parsed.pathname = parsed.pathname.replace(RENDER_PUBLIC_PREFIX, OBJECT_PUBLIC_PREFIX)
       parsed.search = ''
-      applyRenderSearchParams(parsed, size)
       return parsed.toString()
-    }
-
-    // Only rewrite CloudFront paths that actually mirror Supabase `listing-images/`.
-    // Most catalog images live under `/images/...` on the same CDN and must stay as-is
-    // (rewriting them to render/image produces 400s and blank cards).
-    if (parsed.hostname === CLOUDFRONT_CDN_HOST) {
-      const path = parsed.pathname.replace(/^\/+/, '')
-      if (path.startsWith('listing-images/')) {
-        return buildSupabaseRenderUrl(path, size)
-      }
     }
   } catch {
     return url
@@ -161,7 +123,7 @@ export function withListingImageDisplaySize(
  *
  * @param rawUrl   - The URL stored in the DB (may be ibb.co, dropbox, CDN path, etc.)
  * @param fallback - Optional fallback URL if rawUrl is empty/broken (defaults to placeholder)
- * @param size     - Optional display size → Supabase image transform (much smaller downloads)
+ * @param size     - Optional display size (ignored for transforms; kept for API compat)
  */
 export function getListingImageUrl(
   rawUrl: string | null | undefined,
@@ -198,14 +160,7 @@ export function getListingImageUrl(
     return placeholder
   }
 
-  // Relative storage key — prefer Supabase render when sizing, else CloudFront.
-  if (size && (clampEdge(size.width) || clampEdge(size.height))) {
-    return buildSupabaseRenderUrl(
-      url.includes('/') ? (url.startsWith('listing-images/') ? url : `listing-images/${url}`) : `listing-images/${url}`,
-      size,
-    )
-  }
-
+  // Relative storage key — serve via CloudFront/object URL (no image transforms).
   return `${CLOUDFRONT_CDN_URL}/${url}`
 }
 

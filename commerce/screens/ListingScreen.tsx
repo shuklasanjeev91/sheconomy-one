@@ -260,8 +260,21 @@ export function ListingScreen({
   }, [hasSideRails])
 
   useEffect(() => {
-    setVariantSelection(getDefaultVariantSelection(variationGroups))
-  }, [listing?.id, variationGroups])
+    setVariantSelection((current) => {
+      const next = getDefaultVariantSelection(variationGroups)
+      const keys = Object.keys(next)
+      if (
+        keys.length === Object.keys(current).length &&
+        keys.every((key) => current[key] === next[key])
+      ) {
+        return current
+      }
+      return next
+    })
+    // Reset only when the listing identity changes — `variationGroups` is derived
+    // and must not re-trigger setState every render (React #185).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- listing id gate
+  }, [listing?.id])
 
   useEffect(() => {
     if (!listing?.id) return

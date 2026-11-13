@@ -117,9 +117,14 @@ function renderAsChildPressable(
  * Cross-platform in-app link.
  * - Web: real One `<Link href>` (anchor) for instant, reliable navigation + open-in-new-tab.
  * - Native: imperative `navigateApp` so Text children still receive presses.
+ *
+ * One's `Link asChild` uses Radix Slot and throws when the child cannot receive a
+ * ref/props merge — fall back to a wrapping `<Link>` (real `<a>`) in that case.
  */
 export function AppLink({ href, children, replace, asChild, external }: AppLinkProps) {
-  const hrefStr = String(href)
+  const hrefStr = href == null ? '' : String(href)
+  if (!hrefStr) return <>{children}</>
+
   const inApp = !external ? inAppPathFromUrl(hrefStr) : null
 
   if (inApp) {
@@ -129,8 +134,22 @@ export function AppLink({ href, children, replace, asChild, external }: AppLinkP
       return <PressableLinkShell onPress={go}>{children}</PressableLinkShell>
     }
 
+    const canSlot =
+      asChild &&
+      isValidElement(children) &&
+      canReceivePress(children as ReactElement)
+
+    if (canSlot) {
+      return (
+        <Link href={inApp as Href} replace={replace} asChild>
+          {children as ReactElement}
+        </Link>
+      )
+    }
+
+    // Wrapping Link → real <a href> (no Slot). Safer than asChild + Text/fragments.
     return (
-      <Link href={inApp as Href} replace={replace} asChild={asChild}>
+      <Link href={inApp as Href} replace={replace}>
         {children as ReactElement}
       </Link>
     )
@@ -149,7 +168,8 @@ export function pressNavigate(
   href: Href | string,
   options?: { replace?: boolean; external?: boolean },
 ) {
-  const hrefStr = String(href)
+  const hrefStr = href == null ? '' : String(href)
+  if (!hrefStr) return
   if (options?.external || !inAppPathFromUrl(hrefStr)) {
     void openExternalUrl(hrefStr)
     return

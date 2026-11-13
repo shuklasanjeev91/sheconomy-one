@@ -6,15 +6,20 @@ import {
 } from '~/commerce/lib/images/listing-image-url'
 
 describe('listing image display sizing', () => {
-  it('rewrites supabase object URLs to render/image with size params', () => {
+  it('keeps supabase object URLs (no image transforms under spend-cap quota)', () => {
     const raw =
       'https://zsaqrrzwygzwrlzgymxk.supabase.co/storage/v1/object/public/listing-images/a/b.jpg'
     const out = withListingImageDisplaySize(raw, { width: 640, height: 640, quality: 72 })
-    expect(out).toContain('/storage/v1/render/image/public/listing-images/a/b.jpg')
-    expect(out).toContain('width=640')
-    expect(out).toContain('height=640')
-    expect(out).toContain('quality=72')
-    expect(out).toContain('resize=cover')
+    expect(out).toBe(raw)
+  })
+
+  it('rewrites existing render/image URLs back to object URLs', () => {
+    const raw =
+      'https://zsaqrrzwygzwrlzgymxk.supabase.co/storage/v1/render/image/public/listing-images/a/b.jpg?width=640'
+    const out = withListingImageDisplaySize(raw, { width: 640 })
+    expect(out).toBe(
+      'https://zsaqrrzwygzwrlzgymxk.supabase.co/storage/v1/object/public/listing-images/a/b.jpg',
+    )
   })
 
   it('leaves image-proxy URLs alone', () => {
@@ -23,22 +28,17 @@ describe('listing image display sizing', () => {
     expect(withListingImageDisplaySize(proxy, { width: 640 })).toBe(proxy)
   })
 
-  it('applies sizing through getListingImageUrl for allowed hosts', () => {
+  it('keeps object URLs through getListingImageUrl for allowed hosts', () => {
     const raw =
       'https://zsaqrrzwygzwrlzgymxk.supabase.co/storage/v1/object/public/post-media/listings/x.jpg'
     const out = getListingImageUrl(raw, undefined, { width: 144, height: 144 })
-    expect(out).toContain('/storage/v1/render/image/public/post-media/listings/x.jpg')
-    expect(out).toContain('width=144')
+    expect(out).toBe(raw)
   })
 
-  it('rewrites cloudfront listing-images to supabase render when sized', () => {
+  it('leaves cloudfront listing-images unchanged (no supabase render rewrite)', () => {
     const raw = 'https://dfasp73o8frrg.cloudfront.net/listing-images/shop/photo.jpg'
     const out = withListingImageDisplaySize(raw, { width: 480, height: 480 })
-    expect(out.startsWith('https://zsaqrrzwygzwrlzgymxk.supabase.co/storage/v1/render/image/public/')).toBe(
-      true,
-    )
-    expect(out).toContain('listing-images/shop/photo.jpg')
-    expect(out).toContain('width=480')
+    expect(out).toBe(raw)
   })
 
   it('does not rewrite cloudfront /images/... catalog URLs to supabase', () => {

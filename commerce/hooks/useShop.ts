@@ -5,6 +5,7 @@ import {
   type ShopDetail,
   type ShopLoaderResult,
 } from '~/commerce/lib/shop-loader'
+import { shopSlugMatches } from '~/commerce/lib/seo-urls'
 
 export type { ShopAddress, ShopOwnerProfile } from '~/commerce/lib/shop-location'
 export type { ShopDetail } from '~/commerce/lib/shop-loader'
@@ -23,10 +24,18 @@ export function useShop(
   options: UseShopOptions = {},
 ) {
   const { awaitingInitial = false } = options
-  const hasInitial = Boolean(initial?.data || initial?.error)
-  const [shop, setShop] = useState<ShopDetail | null>(initial?.data ?? null)
+  const matchedInitial =
+    Boolean(shopRef) &&
+    Boolean(initial?.data) &&
+    shopSlugMatches(initial!.data!, shopRef!)
+  const hasInitial = matchedInitial && Boolean(initial?.data || initial?.error)
+  const [shop, setShop] = useState<ShopDetail | null>(
+    matchedInitial ? (initial?.data ?? null) : null,
+  )
   const [isLoading, setIsLoading] = useState(!hasInitial && Boolean(shopRef))
-  const [error, setError] = useState<string | null>(initial?.error ?? null)
+  const [error, setError] = useState<string | null>(
+    matchedInitial ? (initial?.error ?? null) : null,
+  )
   const requestGen = useRef(0)
 
   const load = useCallback(async () => {
@@ -48,7 +57,8 @@ export function useShop(
   }, [shopRef])
 
   useEffect(() => {
-    if (initial?.data || initial?.error) {
+    // Soft-nav: only apply loader payload when it belongs to this shop slug.
+    if (matchedInitial && (initial?.data || initial?.error)) {
       setShop(initial.data)
       setError(initial.error)
       setIsLoading(false)
@@ -68,7 +78,7 @@ export function useShop(
       cancelled = true
       requestGen.current += 1
     }
-  }, [load, initial?.data, initial?.error, awaitingInitial])
+  }, [load, matchedInitial, initial?.data, initial?.error, awaitingInitial])
 
   return { shop, isLoading, error, refresh: load }
 }

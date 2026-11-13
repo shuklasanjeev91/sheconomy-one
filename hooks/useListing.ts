@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { DeliveryProfile } from '~/commerce/lib/listing-fulfillment'
 import {
@@ -9,6 +9,7 @@ import {
   type ListingLoaderResult,
   type ListingRow,
 } from '~/commerce/lib/listing-loader'
+import { listingSlugMatches } from '~/commerce/lib/seo-urls'
 
 export type { ListingDetail, ListingImage, ListingShop, ListingRow } from '~/commerce/lib/listing-loader'
 
@@ -17,16 +18,33 @@ type UseListingOptions = {
   awaitingInitial?: boolean
 }
 
+/** True when the SSR/native loader payload is for the route slug currently on screen. */
+function initialMatchesRef(
+  listingRef: string | undefined,
+  initial?: ListingLoaderResult | null,
+): boolean {
+  if (!listingRef || !initial) return false
+  if (initial.data) return listingSlugMatches(initial.data, listingRef)
+  // Error-only payloads: trust only on first paint when we have no better signal.
+  // Soft-nav must refetch rather than keep showing a previous slug's error/empty.
+  return false
+}
+
 export function useListing(
   listingRef?: string,
   initial?: ListingLoaderResult | null,
   options: UseListingOptions = {},
 ) {
   const { awaitingInitial = false } = options
-  const hasInitial = Boolean(initial?.data || initial?.error)
-  const [listing, setListing] = useState<ListingRow | null>(initial?.data ?? null)
+  const matchedInitial = initialMatchesRef(listingRef, initial)
+  const hasInitial = matchedInitial && Boolean(initial?.data || initial?.error)
+  const [listing, setListing] = useState<ListingRow | null>(
+    matchedInitial ? (initial?.data ?? null) : null,
+  )
   const [isLoading, setIsLoading] = useState(!hasInitial && Boolean(listingRef))
-  const [error, setError] = useState<string | null>(initial?.error ?? null)
+  const [error, setError] = useState<string | null>(
+    matchedInitial ? (initial?.error ?? null) : null,
+  )
 
   useEffect(() => {
     if (!listingRef) {
@@ -36,8 +54,11 @@ export function useListing(
       return
     }
 
-    // Prefer SSR / native-loader payload when present for this mount.
-    if (initial?.data || initial?.error) {
+    // Prefer SSR / native-loader payload only when it belongs to this slug.
+    // Soft-nav reuses the page with a new slug while `useLoader` may still hold
+    // the previous listing — applying it caused canonical-slug rewrite loops
+    // (React #185 / APPSHELL crashes).
+    if (matchedInitial && (initial?.data || initial?.error)) {
       setListing(initial.data)
       setError(initial.error)
       setIsLoading(false)
@@ -66,7 +87,7 @@ export function useListing(
     return () => {
       cancelled = true
     }
-  }, [listingRef, initial?.data, initial?.error, awaitingInitial])
+  }, [listingRef, matchedInitial, initial?.data, initial?.error, awaitingInitial])
 
   // Shipping rails are optional for first paint — fill in without blocking the spinner.
   useEffect(() => {
@@ -83,18 +104,29 @@ export function useListing(
 
   const images = mapListingImages(listing)
 
-  const variations = [...(listing?.listing_variations ?? [])].sort(
-    (a, b) => a.display_order - b.display_order,
+  const variations = useMemo(
+    () =>
+      [...(listing?.listing_variations ?? [])].sort(
+        (a, b) => a.display_order - b.display_order,
+      ),
+    [listing?.listing_variations],
   )
 
-  const attributes = [...(listing?.listing_attributes ?? [])].sort(
-    (a, b) => a.display_order - b.display_order,
+  const attributes = useMemo(
+    () =>
+      [...(listing?.listing_attributes ?? [])].sort(
+        (a, b) => a.display_order - b.display_order,
+      ),
+    [listing?.listing_attributes],
   )
 
-  const deliveryProfiles =
-    listing?.listing_delivery_profiles
-      ?.map((row) => row.delivery_profiles)
-      .filter((profile): profile is DeliveryProfile => profile != null) ?? []
+  const deliveryProfiles = useMemo(
+    () =>
+      listing?.listing_delivery_profiles
+        ?.map((row) => row.delivery_profiles)
+        .filter((profile): profile is DeliveryProfile => profile != null) ?? [],
+    [listing?.listing_delivery_profiles],
+  )
 
   return { listing, images, variations, attributes, deliveryProfiles, isLoading, error }
 }
