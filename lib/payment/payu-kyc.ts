@@ -724,9 +724,8 @@ export function maskSecret(value: string): string {
   return `••••${trimmed.slice(-4)}`
 }
 
-/** Legacy shops with no KYC row stay on the existing verified flag. */
+/** Every seller must reach `payu_verified` — missing KYC blocks selling. */
 export function kycAllowsStorefront(status: PayuKycStatus | null | undefined): boolean {
-  if (!status) return true
   return status === 'payu_verified'
 }
 

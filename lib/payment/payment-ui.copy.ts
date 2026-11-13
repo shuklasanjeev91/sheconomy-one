@@ -26,7 +26,7 @@ export const PAYMENT_UI_COPY = {
   ] as const,
   withoutConnectionTitle: 'Before you connect',
   withoutConnectionBody:
-    'Orders still go through. Complete payout verification so settlements can release to your bank.',
+    'Complete payout verification to accept orders and release settlements to your bank.',
   heldTitle: 'Amount on hold',
   heldEmpty: 'No held payouts right now.',
   heldHint:
@@ -66,7 +66,7 @@ export const PAYMENT_UI_COPY = {
   settlementsHint:
     'Connected shops settle at payment, then release after delivery + return window with no open dispute (0% platform fee).',
   noProvidersWarning:
-    'Payouts are not connected yet. Buyers can still purchase — finish verification so settlements can release to you.',
+    'Payouts are not connected yet. Finish verification so buyers can purchase and settlements can release to you.',
   connectDrawerBack: 'Back',
   secureStorageTitle: 'Secure Credential Storage',
   secureStorageBody:

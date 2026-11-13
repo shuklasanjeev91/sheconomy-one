@@ -63,7 +63,7 @@ export function AdminShopPayuKycPanel({
       })),
     )
     setLoaded(true)
-    onBlocksPublish?.(Boolean(next && !kycAllowsStorefront(next.status)))
+    onBlocksPublish?.(!kycAllowsStorefront(next?.status))
   }, [onBlocksPublish, shopId])
 
   useEffect(() => {

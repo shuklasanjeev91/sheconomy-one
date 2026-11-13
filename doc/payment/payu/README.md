@@ -4,7 +4,7 @@
 
 1. Cart groups line items **by shop** (cart + checkout UI).
 2. Single Pay → Edge Function `commerce-create-checkout` (idempotency key):
-   - Validates cart, stock, and seller KYC (`payu_verified` when a KYC row exists).
+   - Validates cart, stock, and seller KYC (every shop must be `payu_verified`).
    - Calls `atomic_marketplace_checkout` → **one** `commerce_checkout_groups` row + **N** child orders (items + `order_delivery` + inventory reservations) + **N** per-shop payment steps (`platform_fee_amount: 0`).
    - Per-shop shipping from delivery profiles / Easyship DDP is included in the seller absolute split (0% platform fee). Sellers self-fund `easyship_shipping_credits`; labels debit that wallet.
    - Online SHEPay: `finalize_shepay_bundle_charge` → one charge step with `metadata.allocations[]`.
@@ -19,15 +19,15 @@
    - Refunds (`process-refund`) call PayU with split/child details and mark settlements `refunded`.
    - Connecting a child (`shepay-release-pending`) attaches keys and runs eligibility release — not an immediate payout.
 
-### Order gating (Phase 1)
+### Order gating (mandatory KYC)
 
-Shops that have a `shop_payu_kyc` row can only accept orders when status is **`payu_verified`**.
+Every shop must have a `shop_payu_kyc` row with status **`payu_verified`** before it can accept orders.
+Missing KYC is treated the same as incomplete KYC.
 
-- Server: KYC check inside `atomic_marketplace_checkout` / `create_customer_order` (orders have no `shop_id` column)
-- Edge + client soft check in `commerce-create-checkout` / `createAtomicMarketplaceCheckout`
-- Storefront: listings still require `shops.verified` (set only when KYC sync activates)
-
-Legacy shops with **no** KYC row keep prior behavior.
+- Server: `shop_payu_kyc_allows_orders` inside `atomic_marketplace_checkout` / referral first-sale helpers
+- Edge check in `commerce-create-checkout`
+- Storefront: listings require `shops.verified` (set only when KYC sync activates; cleared for non-verified shops)
+- Vendor hub: banner + publish blocked until `payu_verified`
 
 ## Vendor setup (zero PayU touchpoint)
 

@@ -41,6 +41,7 @@ import {
   validateForm,
 } from '~/lib/listing/listing.store'
 import { toFriendlyListingError } from '~/lib/listing/listing.errors'
+import { useShopPayuKyc } from '~/commerce/hooks/useShopPayuKyc'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { APP_LAYOUT } from '~/lib/layout/constants'
 import { vendorRoutes } from '~/lib/routes'
@@ -136,6 +137,7 @@ function VendorListingPublishContent() {
   const isEditMode = Boolean(editListingId)
 
   const shop = useAppSelector((s) => s.shop.currentShop)
+  const { allowsSelling: kycAllowsSelling, isLoading: kycLoading } = useShopPayuKyc(shop?.id)
   const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
   const formData = useAppSelector((s) => s.listing.formData)
   const validation = useAppSelector((s) => s.listing.validation)
@@ -550,6 +552,18 @@ function VendorListingPublishContent() {
       toast.show('No shop selected', { tone: 'danger' })
       return
     }
+    if (kycLoading) {
+      toast.show('Checking verification…', { tone: 'warning' })
+      return
+    }
+    if (!kycAllowsSelling) {
+      toast.show('Complete verification to publish', {
+        tone: 'danger',
+        message: 'Payout KYC must be verified before listings can go live.',
+      })
+      router.push(vendorRoutes.settingsSection('verification'))
+      return
+    }
 
     const full = validateFullPublishForm(formData)
     if (!full.isValid) {
@@ -603,7 +617,17 @@ function VendorListingPublishContent() {
         message: toFriendlyListingError(error),
       })
     }
-  }, [dispatch, editListingId, formData, isEditMode, router, shop?.id, toast])
+  }, [
+    dispatch,
+    editListingId,
+    formData,
+    isEditMode,
+    kycAllowsSelling,
+    kycLoading,
+    router,
+    shop?.id,
+    toast,
+  ])
 
   const isSaving = isUpdating || publishProgress.isPublishing
 

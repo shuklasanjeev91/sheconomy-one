@@ -16,12 +16,14 @@ import { loadMyShops } from '~/lib/shop/shop.store'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
+import { VendorKycRequiredBanner } from '~/commerce/components/vendor/VendorKycRequiredBanner'
 import { VendorSidebar } from '~/commerce/components/vendor/VendorSidebar'
 import {
   getActiveVendorNavItem,
   resolveVendorActiveSubId,
   type VendorNavItem,
 } from '~/commerce/components/vendor/vendor-nav'
+import { useShopPayuKyc } from '~/commerce/hooks/useShopPayuKyc'
 import { commerceRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 
@@ -42,8 +44,13 @@ export function VendorLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const currentShop = useAppSelector((s) => s.shop.currentShop)
+  const { status: kycStatus, isLoading: kycLoading, allowsSelling } = useShopPayuKyc(
+    currentShop?.id,
+  )
   const mobileTabPad =
     !isDesktop ? APP_LAYOUT.mobileTabBarHeight + Math.max(safeBottom, 8) : 0
+  const showKycBanner = Boolean(currentShop?.id) && !kycLoading && !allowsSelling
+  const onVerificationRoute = pathname.includes('/vendor/settings')
 
   useEffect(() => {
     // Always refresh on entering the vendor area so `myShops`/`currentShop` are
@@ -192,6 +199,9 @@ export function VendorLayout() {
                 paddingBottom: mobileTabPad,
               }}
             >
+              {showKycBanner && !onVerificationRoute ? (
+                <VendorKycRequiredBanner ui={ui} status={kycStatus} />
+              ) : null}
               <Slot />
             </ScrollView>
           </YStack>

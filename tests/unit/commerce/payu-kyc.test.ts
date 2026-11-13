@@ -211,7 +211,8 @@ describe('vendor PayU KYC', () => {
   })
 
   it('keeps a submitted shop off the storefront until PayU verified', () => {
-    expect(kycAllowsStorefront(null)).toBe(true)
+    expect(kycAllowsStorefront(null)).toBe(false)
+    expect(kycAllowsStorefront(undefined)).toBe(false)
     expect(kycAllowsStorefront('submitted')).toBe(false)
     expect(kycAllowsStorefront('payu_pending')).toBe(false)
     expect(kycAllowsStorefront('payu_verified')).toBe(true)

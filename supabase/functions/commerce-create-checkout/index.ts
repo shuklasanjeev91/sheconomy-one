@@ -183,8 +183,11 @@ Deno.serve(async (request) => {
       .select('shop_id, status')
       .in('shop_id', shopIds)
     if (kycError) return jsonResponse({ success: false, message: kycError.message }, 400)
-    // Match shop_payu_kyc_allows_orders: any KYC row that is not payu_verified blocks checkout.
-    const blocked = (kycRows ?? []).filter((row) => row.status !== 'payu_verified')
+    // Match shop_payu_kyc_allows_orders: every shop must have payu_verified KYC (missing row blocks).
+    const verified = new Set(
+      (kycRows ?? []).filter((row) => row.status === 'payu_verified').map((row) => row.shop_id),
+    )
+    const blocked = shopIds.filter((id) => !verified.has(id))
     if (blocked.length) {
       return jsonResponse(
         {
