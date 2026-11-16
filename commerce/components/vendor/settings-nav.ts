@@ -73,13 +73,6 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     ready: true,
   },
   {
-    id: 'shipping',
-    label: 'Shipping policies',
-    description: 'Delivery fees, free-shipping thresholds, and zone rates.',
-    icon: Icons.Truck,
-    ready: true,
-  },
-  {
     id: 'warehouse',
     label: 'Warehouse',
     description: 'Ship-from address EasyShip uses for shipping labels.',
@@ -87,8 +80,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     ready: true,
   },
   {
+    id: 'shipping',
+    label: 'Shipping rates',
+    description: 'Delivery fees, free-shipping thresholds, and zone rates.',
+    icon: Icons.Package,
+    ready: true,
+  },
+  {
     id: 'returns',
-    label: 'Return policies',
+    label: 'Returns',
     description: 'Return windows, refund rules, and reverse logistics.',
     icon: Icons.Undo2,
     ready: true,

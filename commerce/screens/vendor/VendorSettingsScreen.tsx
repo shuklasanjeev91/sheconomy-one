@@ -292,7 +292,7 @@ const HUB_GROUPS: {
   },
   {
     title: 'Fulfillment',
-    blurb: 'Ship-from warehouse, shipping rates, and return rules.',
+    blurb: 'Ship-from warehouse, then buyer shipping rates and returns.',
     sectionIds: ['warehouse', 'shipping', 'returns'],
   },
   {

@@ -181,10 +181,14 @@ function VendorNavEntry({ ui, item, activeId, activeSubId, collapsed, onSelect }
   const pathname = usePathname()
   const children = item.children ?? []
   const hasChildren = children.length > 0
-  const groupActive = item.id === activeId || item.id === getVendorSectionNavItemId(pathname)
   const hasActiveChild = Boolean(
-    activeSubId && children.some((child) => isVendorNavChildActive(child, activeSubId)),
+    (activeSubId && children.some((child) => isVendorNavChildActive(child, activeSubId))) ||
+      children.some((child) => isVendorNavItemActive(child, activeId, activeSubId, pathname)),
   )
+  const groupActive =
+    item.id === activeId ||
+    item.id === getVendorSectionNavItemId(pathname) ||
+    hasActiveChild
   const leafActive = isVendorNavItemActive(item, activeId, activeSubId, pathname)
 
   const [expanded, setExpanded] = useState(groupActive || hasActiveChild)
