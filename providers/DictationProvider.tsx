@@ -9,6 +9,7 @@ import {
   appendTranscript,
   withInterimTranscript,
 } from '~/lib/dictation/append-transcript'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useOptionalRegionPreferences } from '~/lib/locale'
 import { speechRecognitionLocale } from '~/co-work/lib/caption-translate'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -27,6 +28,8 @@ export function DictationProvider({ children }: { children: ReactNode }) {
   const toast = useAppToast()
   const ui = useAppUi()
   const insets = useSafeAreaInsets()
+  const { isDesktopWeb } = useAppLayout()
+  const documentScroll = Platform.OS === 'web' && isDesktopWeb
   const region = useOptionalRegionPreferences()
   const locale = speechRecognitionLocale(
     (region?.languageCode || 'en').toLowerCase(),
@@ -133,7 +136,14 @@ export function DictationProvider({ children }: { children: ReactNode }) {
 
   return (
     <DictationContext.Provider value={value}>
-      <YStack flex={1} width="100%" position="relative">
+      <YStack
+        flex={documentScroll ? undefined : 1}
+        flexGrow={documentScroll ? 1 : undefined}
+        flexShrink={documentScroll ? 0 : undefined}
+        width="100%"
+        position="relative"
+        style={documentScroll ? ({ flex: '1 0 auto', minHeight: '100dvh' } as const) : undefined}
+      >
         {children}
         {/* No global mic FAB — speak-to-type lives in Input / SHERPA / chat composers. */}
         {speech.supported && speech.listening ? (

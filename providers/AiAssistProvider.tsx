@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { Platform } from 'react-native'
 import { usePathname } from 'one'
 
 import { AiAssistSheet } from '~/components/ai/AiAssistSheet'
 import { YStack } from '~/components/ui'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { resolveAiRouteContext } from '~/lib/ai'
 
 import {
@@ -14,6 +16,8 @@ import {
 /** App-wide SHERPA assistant host. Hooks live in `ai-assist-context` for Fast Refresh. */
 export function AiAssistProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '/'
+  const { isDesktopWeb } = useAppLayout()
+  const documentScroll = Platform.OS === 'web' && isDesktopWeb
   const routeContext = useMemo(() => resolveAiRouteContext(pathname), [pathname])
 
   const [open, setOpen] = useState(false)
@@ -63,7 +67,14 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
 
   return (
     <AiAssistContext.Provider value={value}>
-      <YStack flex={1} width="100%" position="relative">
+      <YStack
+        flex={documentScroll ? undefined : 1}
+        flexGrow={documentScroll ? 1 : undefined}
+        flexShrink={documentScroll ? 0 : undefined}
+        width="100%"
+        position="relative"
+        style={documentScroll ? ({ flex: '1 0 auto', minHeight: '100dvh' } as const) : undefined}
+      >
         {children}
         <AiAssistSheet />
       </YStack>
