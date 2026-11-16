@@ -153,7 +153,9 @@ Deno.serve(async (request) => {
 
   let query = admin
     .from('order_delivery')
-    .select('id, delivery_status, delivery_metadata, tracking_number, shipped_at, delivered_at')
+    .select(
+      'id, delivery_status, delivery_metadata, status_history, tracking_number, carrier_tracking_url, shipped_at, delivered_at',
+    )
     .limit(40)
 
   if (easyshipShipmentId) {
@@ -168,15 +170,62 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: error.message }, 500)
   }
 
+  const checkpointLocation = pickString(
+    tracking.location,
+    asRecord(tracking.checkpoint).location,
+    asRecord(payload.checkpoint).location,
+    shipment.location,
+  )
+  const checkpointNote = pickString(
+    tracking.message,
+    tracking.description,
+    asRecord(tracking.checkpoint).message,
+    asRecord(payload.checkpoint).message,
+    deliveryState,
+  )
+  const trackingUrl = pickString(
+    tracking.tracking_url,
+    tracking.tracking_page_url,
+    shipment.tracking_url,
+    shipment.tracking_page_url,
+    asRecord(shipment.tracking).tracking_url,
+  )
+
   const now = new Date().toISOString()
   let updated = 0
   for (const row of rows ?? []) {
     const current = typeof row.delivery_status === 'string' ? row.delivery_status : null
-    if (!shouldUpgradeStatus(current, nextStatus)) continue
-
+    const statusCanUpgrade = shouldUpgradeStatus(current, nextStatus)
     const meta = asRecord(row.delivery_metadata)
+    const prevHistory = Array.isArray(row.status_history) ? [...row.status_history] : []
+
+    const historyEntry = {
+      status: nextStatus,
+      at: now,
+      note: checkpointNote || `Easyship ${eventType}`,
+      location: checkpointLocation || null,
+      source: 'easyship-webhook',
+      event_type: eventType,
+      delivery_state: deliveryState,
+    }
+    // Always append a checkpoint when we have a shipment match (even if status doesn't upgrade).
+    const lastHist = prevHistory.length
+      ? asRecord(prevHistory[prevHistory.length - 1])
+      : null
+    const duplicateCheckpoint =
+      lastHist &&
+      lastHist.status === historyEntry.status &&
+      lastHist.note === historyEntry.note &&
+      lastHist.location === historyEntry.location
+    if (!duplicateCheckpoint) {
+      prevHistory.push(historyEntry)
+    }
+
+    if (!statusCanUpgrade && duplicateCheckpoint && !trackingNumber && !trackingUrl) {
+      continue
+    }
+
     const patch: Json = {
-      delivery_status: nextStatus,
       delivery_metadata: {
         ...meta,
         courier_slug: meta.courier_slug || 'easyship',
@@ -185,18 +234,27 @@ Deno.serve(async (request) => {
         easyship_event_type: eventType,
         easyship_delivery_state: deliveryState,
         easyship_last_webhook_at: now,
+        last_checkpoint: historyEntry,
       },
+      status_history: prevHistory,
       updated_at: now,
+    }
+    if (statusCanUpgrade) {
+      patch.delivery_status = nextStatus
     }
     if (trackingNumber) {
       patch.tracking_number = trackingNumber
       patch.awb_code = trackingNumber
     }
-    if (nextStatus === 'delivered') patch.delivered_at = now
+    if (trackingUrl && !row.carrier_tracking_url) {
+      patch.carrier_tracking_url = trackingUrl
+    }
+    if (statusCanUpgrade && nextStatus === 'delivered') patch.delivered_at = now
     if (
-      nextStatus === 'shipped' ||
-      nextStatus === 'in_transit' ||
-      nextStatus === 'out_for_delivery'
+      statusCanUpgrade &&
+      (nextStatus === 'shipped' ||
+        nextStatus === 'in_transit' ||
+        nextStatus === 'out_for_delivery')
     ) {
       patch.shipped_at = row.shipped_at || now
     }

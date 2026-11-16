@@ -8,6 +8,11 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import {
+  ShipAddressError,
+  resolveSellerOrigin,
+  toEasyshipApiAddress,
+} from '../_shared/easyship-addresses.ts'
+import {
   EASYSHIP_DEFAULT_DIMS,
   EASYSHIP_DEFAULT_WEIGHT_KG,
   pickBestDdpRate,
@@ -233,7 +238,7 @@ Deno.serve(async (request) => {
   if (shopError) return jsonResponse({ error: shopError.message }, 400)
   if (!shop) return jsonResponse({ error: 'Shop not found' }, 404)
 
-  // Warehouse: shop_addresses (id = shop id) → addresses via shop_address_id → seller address
+  // Same origin resolver as fulfill/DDP (warehouse → shop_address_id). Soft-fallback for ETA only.
   let origin: OriginAddress = {
     city: null,
     state: null,
@@ -243,73 +248,43 @@ Deno.serve(async (request) => {
     longitude: null,
     line_1: null,
   }
+  let originApiAddress: ReturnType<typeof toEasyshipApiAddress> | null = null
+  let originComplete = false
 
-  const { data: shopAddressRow } = await admin
-    .from('shop_addresses')
-    .select('city, state, country, postal_code, latitude, longitude')
-    .eq('id', shop.id)
-    .maybeSingle()
-
-  if (shopAddressRow) {
+  try {
+    const resolved = await resolveSellerOrigin(admin, shop)
+    originApiAddress = toEasyshipApiAddress(resolved.address)
+    originComplete = true
     origin = {
-      city: (shopAddressRow.city as string) || null,
-      state: (shopAddressRow.state as string) || null,
-      country: normalizeCountry(shopAddressRow.country) || 'IN',
-      postal_code: normalizePostal(shopAddressRow.postal_code) || null,
-      latitude: Number.isFinite(Number(shopAddressRow.latitude))
-        ? Number(shopAddressRow.latitude)
-        : null,
-      longitude: Number.isFinite(Number(shopAddressRow.longitude))
-        ? Number(shopAddressRow.longitude)
-        : null,
-      line_1: null,
+      city: resolved.address.city || null,
+      state: resolved.address.state || null,
+      country: normalizeCountry(resolved.address.country_alpha2) || 'IN',
+      postal_code: normalizePostal(resolved.address.postal_code) || null,
+      latitude: resolved.address.latitude ?? null,
+      longitude: resolved.address.longitude ?? null,
+      line_1: resolved.address.line_1 || null,
     }
-  }
-
-  if (shop.shop_address_id) {
-    const { data } = await admin
-      .from('addresses')
-      .select('address_line_1, city, state, country, postal_code, latitude, longitude')
-      .eq('id', shop.shop_address_id)
+  } catch (err) {
+    if (!(err instanceof ShipAddressError)) throw err
+    // Soft ETA fallback when seller origin is incomplete (no live EasyShip quote).
+    const { data: shopAddressRow } = await admin
+      .from('shop_addresses')
+      .select('city, state, country, postal_code, latitude, longitude')
+      .eq('id', shop.id)
       .maybeSingle()
-    if (data) {
+    if (shopAddressRow) {
       origin = {
-        city: (data.city as string) || origin.city,
-        state: (data.state as string) || origin.state,
-        country: normalizeCountry(data.country) || origin.country,
-        postal_code: normalizePostal(data.postal_code) || origin.postal_code,
-        latitude: Number.isFinite(Number(data.latitude))
-          ? Number(data.latitude)
-          : origin.latitude,
-        longitude: Number.isFinite(Number(data.longitude))
-          ? Number(data.longitude)
-          : origin.longitude,
-        line_1: (data.address_line_1 as string) || null,
-      }
-    }
-  }
-
-  if (!origin.city && !origin.postal_code && shop.user_id) {
-    const { data: sellerAddr } = await admin
-      .from('addresses')
-      .select('address_line_1, city, state, country, postal_code, latitude, longitude')
-      .eq('user_id', shop.user_id)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (sellerAddr) {
-      origin = {
-        city: (sellerAddr.city as string) || null,
-        state: (sellerAddr.state as string) || null,
-        country: normalizeCountry(sellerAddr.country) || 'IN',
-        postal_code: normalizePostal(sellerAddr.postal_code) || null,
-        latitude: Number.isFinite(Number(sellerAddr.latitude))
-          ? Number(sellerAddr.latitude)
+        city: (shopAddressRow.city as string) || null,
+        state: (shopAddressRow.state as string) || null,
+        country: normalizeCountry(shopAddressRow.country) || 'IN',
+        postal_code: normalizePostal(shopAddressRow.postal_code) || null,
+        latitude: Number.isFinite(Number(shopAddressRow.latitude))
+          ? Number(shopAddressRow.latitude)
           : null,
-        longitude: Number.isFinite(Number(sellerAddr.longitude))
-          ? Number(sellerAddr.longitude)
+        longitude: Number.isFinite(Number(shopAddressRow.longitude))
+          ? Number(shopAddressRow.longitude)
           : null,
-        line_1: (sellerAddr.address_line_1 as string) || null,
+        line_1: null,
       }
     }
   }
@@ -367,6 +342,14 @@ Deno.serve(async (request) => {
     })
   }
 
+  if (!originComplete || !originApiAddress) {
+    return jsonResponse({
+      ...basePayload,
+      rates_error:
+        'Seller fulfillment address is incomplete. Live courier rates unlock once the shop sets Connect → Address.',
+    })
+  }
+
   const meta = listing.listing_metadata
   const hs = readMeta(meta, 'hs_code') || '99999900'
   const originCountryAlpha =
@@ -408,18 +391,9 @@ Deno.serve(async (request) => {
   const sameCountry = origin.country === country
   try {
     const rates = await requestDdpRates(config, {
-      origin_address: {
-        line_1: String(origin.line_1 || 'Warehouse'),
-        city: String(origin.city || destCity || 'City'),
-        state: String(origin.state || ''),
-        postal_code: String(origin.postal_code || ''),
-        country_alpha2: origin.country,
-        contact_name: String(shop.shop_name || 'Seller'),
-        contact_phone: String(shop.shop_phone_number || ''),
-        contact_email: String(shop.shop_email || ''),
-      },
+      origin_address: originApiAddress,
       destination_address: {
-        line_1: 'Address',
+        line_1: String(destCity || 'Address'),
         city: String(destCity || postalCode),
         state: String(destState || ''),
         postal_code: postalCode,

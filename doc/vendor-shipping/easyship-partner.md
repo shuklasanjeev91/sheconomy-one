@@ -50,8 +50,10 @@ Fulfill order
 | Public API token | Live (`EASYSHIP_API_TOKEN`) |
 | Parent company | `CIN1056135` Ampersand Media Makers |
 | `EASYSHIP_COMPANY_ID` secret | Set |
-| Partner application | Submitted (Become a Partner) |
-| Partner OAuth client id/secret | **Waiting on EasyShip** |
+| Parent plan | Downgraded to **Free** (trial modal cleared) |
+| Public API connection | `sheconomy-platform` **Active** |
+| Partner application | Submitted + follow-up (Become a Partner + Mail to support/partnerships) |
+| Partner OAuth client id/secret | **Waiting on EasyShip** (cannot self-mint; Public API lacks `enterprise.child_companies_access`) |
 | `shops.easyship_*` columns | Migration `20261116081723_shops_easyship_partner_account` |
 | Edge `easyship-shop-account` | status / ensure (pending) / topup |
 

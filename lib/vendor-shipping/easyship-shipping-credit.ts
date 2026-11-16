@@ -60,6 +60,8 @@ export async function fetchEasyshipShippingCredit(
   }
 }
 
+export const EASYSHIP_SELLER_ORIGIN_SETUP_PATH = '/vendor/settings?section=connect'
+
 export async function processEasyshipShipment(input: {
   shopId: string
   orderId: string
@@ -69,6 +71,7 @@ export async function processEasyshipShipment(input: {
   error?: string
   code?: string
   rechargeUrl?: string
+  setupPath?: string
   trackingNumber?: string | null
   labelUrl?: string | null
   freight?: number | null
@@ -85,22 +88,30 @@ export async function processEasyshipShipment(input: {
       payload?.rechargeUrl != null
         ? String(payload.rechargeUrl)
         : EASYSHIP_SELLER_RECHARGE_PATH
+    let setupPath =
+      payload?.setupPath != null ? String(payload.setupPath) : undefined
 
     // Non-2xx responses often put the body only on error.context.
-    if (!code && error && typeof error === 'object' && 'context' in error) {
+    if ((!code || !setupPath) && error && typeof error === 'object' && 'context' in error) {
       try {
         const context = (error as { context?: Response }).context
         if (context && typeof context.clone === 'function') {
           const body = (await context.clone().json()) as {
             code?: unknown
             rechargeUrl?: unknown
+            setupPath?: unknown
           }
           if (body?.code != null) code = String(body.code)
           if (body?.rechargeUrl != null) rechargeUrl = String(body.rechargeUrl)
+          if (body?.setupPath != null) setupPath = String(body.setupPath)
         }
       } catch {
         // keep defaults
       }
+    }
+
+    if (code === 'seller_origin_incomplete' && !setupPath) {
+      setupPath = EASYSHIP_SELLER_ORIGIN_SETUP_PATH
     }
 
     return {
@@ -112,6 +123,7 @@ export async function processEasyshipShipment(input: {
       ),
       code,
       rechargeUrl,
+      setupPath,
     }
   }
   return {

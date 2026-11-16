@@ -363,7 +363,8 @@ export function VendorConnectSettings({ ui, shop, isDesktop, safeBottom }: Vendo
                 </Text>
               ) : null}
               <Text fontSize={11.5} color={ui.textMuted} fontStyle="italic">
-                Shown to customers as your shop location and used for shipping origin.
+                Shown to customers as your shop location and used as the EasyShip
+                fulfillment / warehouse origin when you buy shipping labels.
               </Text>
             </YStack>
           )}

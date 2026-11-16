@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'one'
 
 import {
   Avatar,
@@ -107,6 +108,7 @@ export function VendorOrdersScreen() {
   const ui = useAppUi()
   const { isDesktop, safeBottom } = useAppLayout()
   const toast = useAppToast()
+  const router = useRouter()
   const dispatch = useAppDispatch()
   const { profile } = useProfile()
   const activeSection = useVendorSectionId() ?? 'all'
@@ -262,7 +264,7 @@ export function VendorOrdersScreen() {
     target: VendorOrderAction['target'],
     action?: VendorOrderAction,
   ) => {
-    // Amazon-style Fulfill: buy EasyShip label, auto-add tracking, notify buyer.
+    // Fulfill: buy EasyShip label, auto-add tracking, notify buyer.
     // Manual tracking drawer remains available from the order detail if needed.
     if (target === ORDER_STATUS.SHIPPED || action?.kind === 'fulfill') {
       await handleShipWithEasyship(item)
@@ -305,6 +307,27 @@ export function VendorOrdersScreen() {
         orderItemIds: [target.id],
       })
       if (!result.success) {
+        if (result.code === 'seller_origin_incomplete') {
+          toast.show('Fulfillment address required', {
+            tone: 'warning',
+            message:
+              result.error ??
+              'Add your warehouse / shipping origin under Connect → Address, then try again.',
+          })
+          router.push(
+            (result.setupPath || vendorRoutes.settingsSection('connect')) as never,
+          )
+          return
+        }
+        if (result.code === 'buyer_destination_incomplete') {
+          toast.show('Buyer delivery address incomplete', {
+            tone: 'danger',
+            message:
+              result.error ??
+              'This order is missing a complete shipping address. Ask the buyer to update it before fulfilling.',
+          })
+          return
+        }
         toast.show('Could not create shipping label', {
           tone: 'danger',
           message: result.error ?? 'Check wallet and try again.',

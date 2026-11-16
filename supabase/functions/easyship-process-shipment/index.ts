@@ -8,6 +8,13 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import {
+  ShipAddressError,
+  resolveBuyerDestination,
+  resolveSellerOrigin,
+  shipAddressErrorResponse,
+  toEasyshipApiAddress,
+} from '../_shared/easyship-addresses.ts'
+import {
   EASYSHIP_DEFAULT_DIMS,
   EASYSHIP_DEFAULT_WEIGHT_KG,
   createShipment,
@@ -36,10 +43,6 @@ function asAddress(value: unknown): Record<string, unknown> {
 function str(value: unknown, fallback = ''): string {
   if (value == null) return fallback
   return String(value).trim() || fallback
-}
-
-function countryAlpha2(raw: unknown, fallback = 'IN'): string {
-  return str(raw, fallback).toUpperCase().slice(0, 2) || fallback
 }
 
 function readMeta(meta: unknown, key: string): string {
@@ -101,16 +104,6 @@ Deno.serve(async (request) => {
   const shopCompanyId = String(shop.easyship_company_id ?? '').trim() || null
   const shipConfig = withEasyshipCompany(config, shopCompanyId)
 
-  let shopAddress: Record<string, unknown> = {}
-  if (shop.shop_address_id) {
-    const { data: addr } = await admin
-      .from('addresses')
-      .select('address_line_1, address_line_2, city, state, country, postal_code')
-      .eq('id', shop.shop_address_id)
-      .maybeSingle()
-    shopAddress = (addr ?? {}) as Record<string, unknown>
-  }
-
   let itemsQuery = admin
     .from('order_items')
     .select(
@@ -139,26 +132,19 @@ Deno.serve(async (request) => {
   if (orderError) return jsonResponse({ error: orderError.message }, 500)
   if (!order) return jsonResponse({ error: 'Order not found' }, 404)
 
-  let shipping: Record<string, unknown> = {}
-  if (order.shipping_address_id) {
-    const { data: addr } = await admin
-      .from('addresses')
-      .select('address_line_1, address_line_2, city, state, country, postal_code, phone, full_name')
-      .eq('id', order.shipping_address_id)
-      .maybeSingle()
-    shipping = asAddress(addr)
+  let originResolved
+  let destResolved
+  try {
+    originResolved = await resolveSellerOrigin(admin, shop)
+    destResolved = await resolveBuyerDestination(admin, order)
+  } catch (err) {
+    if (err instanceof ShipAddressError) {
+      return jsonResponse(shipAddressErrorResponse(err), 400)
+    }
+    throw err
   }
 
-  const { data: profileRow } = await admin
-    .from('profiles')
-    .select('full_name, email, phone')
-    .eq('id', order.user_id)
-    .maybeSingle()
-  const profile = asAddress(profileRow)
-
-  const destCountry = countryAlpha2(shipping.country, 'US')
-  const originCountry = countryAlpha2(shopAddress.country, 'IN')
-
+  const originCountry = originResolved.address.country_alpha2
   const orderMeta = asAddress(order.order_metadata)
   const easyshipMeta = asAddress(orderMeta.easyship)
   const preferredCourierId = str(easyshipMeta.courier_service_id) || null
@@ -216,29 +202,8 @@ Deno.serve(async (request) => {
     0,
   )
 
-  const originAddress = {
-    line_1: str(shopAddress.address_line_1, 'Warehouse'),
-    line_2: str(shopAddress.address_line_2) || null,
-    city: str(shopAddress.city, 'City'),
-    state: str(shopAddress.state, ''),
-    postal_code: str(shopAddress.postal_code, '000000'),
-    country_alpha2: originCountry,
-    company_name: str(shop.shop_name, 'Shop'),
-    contact_name: str(shop.shop_name, 'Shop'),
-    contact_phone: str(shop.shop_phone_number, '+910000000000'),
-    contact_email: str(shop.shop_email, 'shipping@sheconomy.in'),
-  }
-  const destinationAddress = {
-    line_1: str(shipping.address_line_1, 'Address'),
-    line_2: str(shipping.address_line_2) || null,
-    city: str(shipping.city, 'City'),
-    state: str(shipping.state, ''),
-    postal_code: str(shipping.postal_code, ''),
-    country_alpha2: destCountry,
-    contact_name: str(shipping.full_name || profile.full_name, 'Buyer'),
-    contact_phone: str(shipping.phone || profile.phone, '+10000000000'),
-    contact_email: str(profile.email, 'buyer@example.com'),
-  }
+  const originAddress = toEasyshipApiAddress(originResolved.address)
+  const destinationAddress = toEasyshipApiAddress(destResolved.address)
 
   try {
     const rates = await requestDdpRates(shipConfig, {
@@ -341,11 +306,22 @@ Deno.serve(async (request) => {
       courier_service_name: carrierName,
       tracking_number: created.trackingNumber,
       awb_code: created.trackingNumber,
-      carrier_tracking_url: created.labelUrl,
+      // Label PDF is not a public track URL — leave null until webhook/sync fills it.
+      carrier_tracking_url: null as string | null,
       label_url: created.labelUrl,
       invoice_url: created.invoiceUrl,
       shipping_cost: debitAmount,
       shipped_at: now,
+      status_history: [
+        {
+          status: 'shipped',
+          at: now,
+          note: created.trackingNumber
+            ? `Label purchased · tracking ${created.trackingNumber}`
+            : 'Shipping label purchased via Easyship',
+          source: 'easyship-process-shipment',
+        },
+      ],
       delivery_metadata: {
         courier_slug: 'easyship',
         notify_customer: true,
@@ -354,6 +330,24 @@ Deno.serve(async (request) => {
         label_url: created.labelUrl,
         invoice_url: created.invoiceUrl,
         auto_tracking: true,
+        origin_source: originResolved.source,
+        origin_warehouse_id: originResolved.warehouseId,
+        origin_address_id: originResolved.addressId,
+        destination_address_id: destResolved.addressId,
+        origin_snapshot: {
+          line_1: originResolved.address.line_1,
+          city: originResolved.address.city,
+          state: originResolved.address.state,
+          postal_code: originResolved.address.postal_code,
+          country_alpha2: originResolved.address.country_alpha2,
+        },
+        destination_snapshot: {
+          line_1: destResolved.address.line_1,
+          city: destResolved.address.city,
+          state: destResolved.address.state,
+          postal_code: destResolved.address.postal_code,
+          country_alpha2: destResolved.address.country_alpha2,
+        },
       },
       updated_at: now,
     }
@@ -362,7 +356,7 @@ Deno.serve(async (request) => {
     for (const item of items) {
       const { data: existing } = await admin
         .from('order_delivery')
-        .select('id, delivery_metadata')
+        .select('id, delivery_metadata, status_history')
         .eq('order_item_id', item.id)
         .maybeSingle()
 
@@ -371,13 +365,17 @@ Deno.serve(async (request) => {
           existing.delivery_metadata &&
             typeof existing.delivery_metadata === 'object' &&
             !Array.isArray(existing.delivery_metadata)
-            ? existing.delivery_metadata as Record<string, unknown>
+            ? (existing.delivery_metadata as Record<string, unknown>)
             : {}
+        const prevHistory = Array.isArray(existing.status_history)
+          ? existing.status_history
+          : []
         const { data: updated } = await admin
           .from('order_delivery')
           .update({
             ...deliveryPayload,
             delivery_metadata: { ...prevMeta, ...deliveryPayload.delivery_metadata },
+            status_history: [...prevHistory, ...deliveryPayload.status_history],
           })
           .eq('id', existing.id)
           .select('id')

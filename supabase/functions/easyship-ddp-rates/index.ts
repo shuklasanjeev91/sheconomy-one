@@ -7,6 +7,12 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import {
+  ShipAddressError,
+  buildBuyerDestinationFromAddressRow,
+  resolveSellerOrigin,
+  toEasyshipApiAddress,
+} from '../_shared/easyship-addresses.ts'
+import {
   EASYSHIP_DEFAULT_DIMS,
   EASYSHIP_DEFAULT_WEIGHT_KG,
   pickBestDdpRate,
@@ -23,15 +29,6 @@ type CartLine = {
   shop_id: string
   quantity: number
   unit_price: number
-}
-
-function countryFromAddress(row: Record<string, unknown> | null): string {
-  const raw =
-    (row?.country_code as string) ||
-    (row?.country as string) ||
-    (row?.country_alpha2 as string) ||
-    'IN'
-  return String(raw).trim().toUpperCase().slice(0, 2) || 'IN'
 }
 
 function readMeta(meta: unknown, key: string): string {
@@ -83,12 +80,32 @@ Deno.serve(async (request) => {
 
   const { data: address, error: addressError } = await admin
     .from('addresses')
-    .select('*')
+    .select('id, address_line_1, address_line_2, city, state, country, postal_code, latitude, longitude')
     .eq('id', shippingAddressId)
     .eq('user_id', userData.user.id)
     .maybeSingle()
   if (addressError || !address) {
     return jsonResponse({ error: 'Shipping address not found' }, 400)
+  }
+
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('full_name, email, phone')
+    .eq('id', userData.user.id)
+    .maybeSingle()
+
+  let destResolved
+  try {
+    destResolved = buildBuyerDestinationFromAddressRow(address as Record<string, unknown>, {
+      full_name: profile?.full_name,
+      phone: profile?.phone,
+      email: profile?.email,
+    })
+  } catch (err) {
+    if (err instanceof ShipAddressError) {
+      return jsonResponse({ error: err.message, code: err.code }, 400)
+    }
+    throw err
   }
 
   const { data: lines, error: linesError } = await admin
@@ -116,19 +133,10 @@ Deno.serve(async (request) => {
     .select('id, shop_name, shop_email, shop_phone_number, shop_address_id, shop_currency')
     .in('id', shopIds)
 
-  const addressIds = [...new Set((shops ?? []).map((s) => s.shop_address_id).filter(Boolean))] as string[]
-  const { data: shopAddresses } = addressIds.length
-    ? await admin
-        .from('addresses')
-        .select('id, address_line_1, address_line_2, city, state, country, postal_code')
-        .in('id', addressIds)
-    : { data: [] as Array<Record<string, unknown>> }
-  const shopAddressById = new Map((shopAddresses ?? []).map((a) => [a.id as string, a]))
-
   const listingById = new Map((listings ?? []).map((l) => [l.id as string, l]))
   const shopById = new Map((shops ?? []).map((s) => [s.id as string, s]))
 
-  const destCountry = countryFromAddress(address as Record<string, unknown>)
+  const destinationAddress = toEasyshipApiAddress(destResolved.address)
   const byShop = new Map<string, CartLine[]>()
   for (const line of cartLines) {
     const list = byShop.get(line.shop_id) ?? []
@@ -166,15 +174,30 @@ Deno.serve(async (request) => {
       continue
     }
 
-    const shopAddr = shop?.shop_address_id
-      ? shopAddressById.get(String(shop.shop_address_id))
-      : null
-    const originCountry = String(
-      (shopAddr as { country?: string } | undefined)?.country || 'IN',
-    )
-      .trim()
-      .toUpperCase()
-      .slice(0, 2)
+    let originResolved
+    try {
+      if (!shop) throw new ShipAddressError('seller_origin_incomplete', 'Shop not found')
+      originResolved = await resolveSellerOrigin(admin, shop)
+    } catch (err) {
+      const message =
+        err instanceof ShipAddressError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Seller origin incomplete'
+      warnings.push(`Shop ${shopId}: ${message}`)
+      return jsonResponse(
+        {
+          error: message,
+          code: err instanceof ShipAddressError ? err.code : 'seller_origin_incomplete',
+          warnings,
+        },
+        400,
+      )
+    }
+
+    const originCountry = originResolved.address.country_alpha2
+    const originAddress = toEasyshipApiAddress(originResolved.address)
 
     const items: EasyshipParcelItem[] = physical.map((line) => {
       const listing = listingById.get(line.listing_id)
@@ -215,43 +238,8 @@ Deno.serve(async (request) => {
 
     try {
       const rates = await requestDdpRates(config, {
-        origin_address: {
-          line_1: String(
-            (shopAddr as { address_line_1?: string } | undefined)?.address_line_1 || 'Warehouse',
-          ),
-          city: String((shopAddr as { city?: string } | undefined)?.city || 'City'),
-          state: String((shopAddr as { state?: string } | undefined)?.state || ''),
-          postal_code: String(
-            (shopAddr as { postal_code?: string } | undefined)?.postal_code || '',
-          ),
-          country_alpha2: originCountry,
-          contact_name: String((shop as { shop_name?: string } | undefined)?.shop_name || 'Seller'),
-          contact_phone: String(
-            (shop as { shop_phone_number?: string } | undefined)?.shop_phone_number || '',
-          ),
-          contact_email: String((shop as { shop_email?: string } | undefined)?.shop_email || ''),
-        },
-        destination_address: {
-          line_1: String(
-            (address as { address_line1?: string; line1?: string }).address_line1 ||
-              (address as { line1?: string }).line1 ||
-              'Address',
-          ),
-          line_2:
-            (address as { address_line2?: string }).address_line2 ||
-            (address as { line2?: string }).line2 ||
-            null,
-          city: String((address as { city?: string }).city || ''),
-          state: String((address as { state?: string }).state || ''),
-          postal_code: String(
-            (address as { postal_code?: string; pincode?: string }).postal_code ||
-              (address as { pincode?: string }).pincode ||
-              '',
-          ),
-          country_alpha2: destCountry,
-          contact_name: String((address as { full_name?: string }).full_name || 'Buyer'),
-          contact_phone: String((address as { phone?: string }).phone || ''),
-        },
+        origin_address: originAddress,
+        destination_address: destinationAddress,
         parcels: [{ items }],
         incoterms: 'DDP',
         calculate_tax_and_duties: true,
