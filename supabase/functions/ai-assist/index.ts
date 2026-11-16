@@ -18,6 +18,9 @@ type AssistBody = {
   message?: string
   suggestionId?: string
   helpful?: boolean
+  /** Preferred language code from Region Preferences (e.g. hi, ta, es). */
+  language?: string
+  locale?: string
 }
 
 type DeepLink = { label: string; href: string }
@@ -42,6 +45,74 @@ function normalizeProduct(value: unknown): AiProduct {
 
 function helpHref(product: AiProduct) {
   return `/help?product=${encodeURIComponent(product)}`
+}
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  hi: 'Hindi',
+  bn: 'Bengali',
+  ta: 'Tamil',
+  te: 'Telugu',
+  mr: 'Marathi',
+  gu: 'Gujarati',
+  kn: 'Kannada',
+  ml: 'Malayalam',
+  pa: 'Punjabi',
+  ur: 'Urdu',
+  or: 'Odia',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  pt: 'Portuguese',
+  ar: 'Arabic',
+  zh: 'Chinese',
+  ja: 'Japanese',
+  ko: 'Korean',
+  it: 'Italian',
+  nl: 'Dutch',
+}
+
+function baseLang(code: unknown): string {
+  const raw = typeof code === 'string' ? code.trim().toLowerCase() : ''
+  if (!raw) return 'en'
+  return raw.split('-')[0] || 'en'
+}
+
+function preferredLanguageFromContext(context: Record<string, unknown>, body?: AssistBody): string {
+  for (const key of ['preferred_language', 'language', 'lang'] as const) {
+    const value = context[key]
+    if (typeof value === 'string' && value.trim()) return baseLang(value)
+  }
+  if (body && typeof (body as { language?: unknown }).language === 'string') {
+    return baseLang((body as { language?: string }).language)
+  }
+  if (typeof context.locale === 'string' && context.locale.trim()) return baseLang(context.locale)
+  return 'en'
+}
+
+function languageLabelFromContext(context: Record<string, unknown>, code: string): string {
+  const label = context.language_label
+  if (typeof label === 'string' && label.trim()) return label.trim()
+  return LANGUAGE_NAMES[code] ?? code.toUpperCase()
+}
+
+/** Train SHERPA to answer in the member's preferred language across the app. */
+function languageDirective(context: Record<string, unknown>, body?: AssistBody): string {
+  const lang = preferredLanguageFromContext(context, body)
+  const label = languageLabelFromContext(context, lang)
+  const lines = [
+    `Member preferred language: ${label} (code: ${lang}).`,
+    `ALWAYS reply in ${label}. Understand the user in any language they write, then answer in ${label}.`,
+    'Keep in-app path strings unchanged (e.g. /search, /orders, /help, /co-work/schedule).',
+    'Translate natural-language button labels and explanations into the preferred language.',
+    'Do not mix English into the reply unless the preferred language is English or the user asked for English.',
+  ]
+  if (lang !== 'en') {
+    lines.push(
+      'If grounding facts or help articles arrive in English, rewrite the answer fully in the preferred language — do not paste English paragraphs.',
+    )
+  }
+  return lines.join('\n')
 }
 
 /** In-product training playbooks injected into the system prompt + grounded replies. */
@@ -1776,6 +1847,7 @@ Deno.serve(async (req) => {
         'You write short professional comment suggestions for a community feed.',
         'Return ONLY a JSON array of 3 or 4 strings. No markdown fences.',
         'Comments must be warm, specific to the post type, under 140 characters, and never spammy.',
+        languageDirective(context, body),
         `Post type: ${postType || 'text'}.`,
         authorName ? `Author: ${authorName}.` : '',
         postContent ? `Post excerpt: ${postContent.slice(0, 400)}` : '',
@@ -1809,6 +1881,8 @@ Deno.serve(async (req) => {
         'You draft professional video-meeting details like Zoom / Google Calendar AI.',
         'Return ONLY JSON with keys: title (string), description (string), scheduledAt (ISO 8601 string or null), maxParticipants (number or null), agenda (string array).',
         'Prefer practical titles. Agenda should be 3 short bullets.',
+        languageDirective(context, body),
+        'Write title, description, and agenda items in the preferred language.',
         `User timezone: ${timeZone}. Current time UTC: ${new Date().toISOString()}.`,
         'If the user mentions a relative time (tomorrow, Friday 3pm), resolve scheduledAt in ISO.',
       ].join('\n')
@@ -1835,6 +1909,8 @@ Deno.serve(async (req) => {
         'title is required for article mode; otherwise null.',
         'content should be warm, specific, under 900 characters for text modes, under 2500 for article.',
         'No hashtag spam. At most 2 hashtags. No markdown fences.',
+        languageDirective(context, body),
+        'Write the post content (and title when present) in the preferred language.',
         `Compose mode: ${composeMode}.`,
       ].join('\n')
 
@@ -1867,6 +1943,8 @@ Deno.serve(async (req) => {
         'Return ONLY JSON with keys: names (string array of 4-6 unique shop names), description (one warm storefront blurb, 80-220 characters).',
         'Names must be brandable, memorable, under 40 characters, no trademarked brands, no ALL CAPS spam.',
         'Description should mention what they sell and who they serve. No hashtag spam. No markdown fences.',
+        languageDirective(context, body),
+        'Write the description in the preferred language. Shop names may stay brandable when natural.',
         categories.length ? `Categories: ${categories.join(', ')}.` : '',
         currentName ? `Current name draft: ${currentName}.` : '',
         currentDescription ? `Current description draft: ${currentDescription.slice(0, 280)}.` : '',
@@ -1984,6 +2062,7 @@ Deno.serve(async (req) => {
         'Use grounding facts for personalization. Never invent order numbers, stock, prices, meetings, or listings not in the facts.',
         'Point to real in-app paths (/search, /listing/…, /orders, /cart, /community, /chat, /class, /co-work, /co-work/schedule, /co-work/join, /vendor/myshop, /create-my-shop, /settings, /help).',
         'Prefer concrete next steps. Never ask for passwords or full payment card numbers.',
+        languageDirective(context, body),
         scheduleRequested
           ? 'The user wants to SCHEDULE a Co-Work meeting. Use the Suggested meeting draft fact. Tell them the drafted title/time and send them to /co-work/schedule (Create with AI). Do not reply that there are no upcoming meetings as the only answer.'
           : '',

@@ -1,3 +1,4 @@
+import { withAiLanguage } from '~/lib/ai/language'
 import { supabase } from '~/lib/supabase'
 
 export type OwnedRankKind =
@@ -84,13 +85,15 @@ export async function invokeOwnedAssist<T>(body: Record<string, unknown>): Promi
   const action = String(body.action ?? '')
   if (!authorization && !GUEST_ACTIONS.has(action)) return null
 
+  const payload = withAiLanguage(body)
+
   const response = await fetch(`${base}/v1/assist`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(authorization ? { Authorization: authorization } : {}),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
     signal: timeoutSignal(
       action === 'listing_draft_from_image' || action === 'moderate_image' || action === 'describe_search_image'
         ? 45000

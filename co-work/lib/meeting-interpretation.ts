@@ -13,7 +13,18 @@ export const MEETING_INTERPRETATION_CHANNELS: MeetingInterpretationChannel[] = [
   { id: 'floor', label: 'Floor (original)', languageCode: 'und' },
   { id: 'en', label: 'English', languageCode: 'en' },
   { id: 'hi', label: 'Hindi', languageCode: 'hi' },
+  { id: 'bn', label: 'Bengali', languageCode: 'bn' },
+  { id: 'ta', label: 'Tamil', languageCode: 'ta' },
+  { id: 'te', label: 'Telugu', languageCode: 'te' },
+  { id: 'mr', label: 'Marathi', languageCode: 'mr' },
+  { id: 'gu', label: 'Gujarati', languageCode: 'gu' },
+  { id: 'kn', label: 'Kannada', languageCode: 'kn' },
+  { id: 'ml', label: 'Malayalam', languageCode: 'ml' },
+  { id: 'pa', label: 'Punjabi', languageCode: 'pa' },
+  { id: 'ur', label: 'Urdu', languageCode: 'ur' },
   { id: 'es', label: 'Spanish', languageCode: 'es' },
+  { id: 'fr', label: 'French', languageCode: 'fr' },
+  { id: 'ar', label: 'Arabic', languageCode: 'ar' },
 ]
 
 export const MEETING_INTERPRETER_CHANNELS = MEETING_INTERPRETATION_CHANNELS.filter(

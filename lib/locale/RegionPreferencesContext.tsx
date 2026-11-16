@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { Platform } from 'react-native'
 
+import { setAiLanguagePrefs } from '~/lib/ai/language'
 import { detectDeviceRegion } from '~/lib/locale/detect-region'
 import {
   defaultCurrencyForCountry,
@@ -64,6 +65,14 @@ function applyHtmlLang(languageCode: string, countryCode: string) {
   document.documentElement.lang = `${languageCode}-${countryCode}`
 }
 
+function syncSherpaLanguage(prefs: Pick<RegionPreferences, 'languageCode' | 'countryCode' | 'localeTag'>) {
+  setAiLanguagePrefs({
+    languageCode: prefs.languageCode,
+    countryCode: prefs.countryCode,
+    localeTag: prefs.localeTag,
+  })
+}
+
 async function syncProfilePrefs(
   userId: string | undefined,
   prefs: Pick<RegionPreferences, 'countryCode' | 'languageCode' | 'currencyCode'>,
@@ -88,6 +97,10 @@ export function RegionPreferencesProvider({ children }: { children: ReactNode })
   const [prefs, setPrefs] = useState<RegionPreferences>(DEFAULTS)
 
   useEffect(() => {
+    syncSherpaLanguage(DEFAULTS)
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
 
     async function hydrate() {
@@ -105,6 +118,7 @@ export function RegionPreferencesProvider({ children }: { children: ReactNode })
         }
         setPrefs(next)
         applyHtmlLang(next.languageCode, next.countryCode)
+        syncSherpaLanguage(next)
         return
       }
 
@@ -148,6 +162,7 @@ export function RegionPreferencesProvider({ children }: { children: ReactNode })
         }
         setPrefs(next)
         applyHtmlLang(next.languageCode, next.countryCode)
+        syncSherpaLanguage(next)
         return
       }
 
@@ -161,6 +176,7 @@ export function RegionPreferencesProvider({ children }: { children: ReactNode })
       }
       setPrefs(next)
       applyHtmlLang(next.languageCode, next.countryCode)
+      syncSherpaLanguage(next)
       await writeStoredRegionPreferences({
         countryCode: next.countryCode,
         languageCode: next.languageCode,
@@ -180,6 +196,7 @@ export function RegionPreferencesProvider({ children }: { children: ReactNode })
     async (next: Omit<RegionPreferences, 'ready'>) => {
       setPrefs({ ...next, ready: true })
       applyHtmlLang(next.languageCode, next.countryCode)
+      syncSherpaLanguage(next)
       await writeStoredRegionPreferences({
         countryCode: next.countryCode,
         languageCode: next.languageCode,

@@ -1,9 +1,19 @@
 import { SUPPORTED_CURRENCIES } from '~/lib/shop/shop.type'
 
-/** BCP-47-ish language options shown in the region selector. */
+/** BCP-47-ish language options shown in the region selector (SHERPA replies in these). */
 export const REGION_LANGUAGES = [
   { code: 'en', label: 'English', locale: 'en-US' },
   { code: 'hi', label: 'Hindi', locale: 'hi-IN' },
+  { code: 'bn', label: 'Bengali', locale: 'bn-IN' },
+  { code: 'ta', label: 'Tamil', locale: 'ta-IN' },
+  { code: 'te', label: 'Telugu', locale: 'te-IN' },
+  { code: 'mr', label: 'Marathi', locale: 'mr-IN' },
+  { code: 'gu', label: 'Gujarati', locale: 'gu-IN' },
+  { code: 'kn', label: 'Kannada', locale: 'kn-IN' },
+  { code: 'ml', label: 'Malayalam', locale: 'ml-IN' },
+  { code: 'pa', label: 'Punjabi', locale: 'pa-IN' },
+  { code: 'ur', label: 'Urdu', locale: 'ur-IN' },
+  { code: 'or', label: 'Odia', locale: 'or-IN' },
   { code: 'es', label: 'Spanish', locale: 'es-ES' },
   { code: 'fr', label: 'French', locale: 'fr-FR' },
   { code: 'de', label: 'German', locale: 'de-DE' },

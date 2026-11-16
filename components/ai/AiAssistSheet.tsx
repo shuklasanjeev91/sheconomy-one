@@ -28,6 +28,7 @@ import {
 } from '~/lib/ai'
 import { helpHref } from '~/lib/help/types'
 import { productQuestionChips } from '~/lib/listing/product-questions'
+import { useOptionalRegionPreferences } from '~/lib/locale'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import {
   useAiAssistOptional,
@@ -68,6 +69,7 @@ function RelatedListingCards({ ids }: { ids: string[] }) {
 export function AiAssistSheet() {
   const ui = useAppUi()
   const assist = useAiAssistOptional()
+  const region = useOptionalRegionPreferences()
   // Avoid blanking the whole app if the provider is missing (e.g. Fast Refresh desync).
   if (!assist) return null
 
@@ -91,6 +93,8 @@ export function AiAssistSheet() {
       draftPrompt={draftPrompt}
       autoSendPrompt={autoSendPrompt}
       clearDraft={clearDraft}
+      languageName={region?.languageName ?? 'English'}
+      languageCode={region?.languageCode ?? 'en'}
     />
   )
 }
@@ -104,6 +108,8 @@ function AiAssistSheetBody({
   draftPrompt,
   autoSendPrompt,
   clearDraft,
+  languageName,
+  languageCode,
 }: {
   ui: ReturnType<typeof useAppUi>
   open: boolean
@@ -113,6 +119,8 @@ function AiAssistSheetBody({
   draftPrompt: string | null
   autoSendPrompt: boolean
   clearDraft: AiAssistContextValue['clearDraft']
+  languageName: string
+  languageCode: string
 }) {
   const dictation = useDictationOptional()
   const product: AiProduct = override?.product ?? routeContext.product
@@ -297,7 +305,7 @@ function AiAssistSheetBody({
       <YStack gap="$4" paddingHorizontal="$4" paddingTop="$2" paddingBottom="$4">
         {onListing ? null : (
           <Text fontSize={13} color={ui.textMuted}>
-            {`Context: ${aiProductLabel(product)}${contextPage ? ` · ${contextPage}` : ''}`}
+            {`Context: ${aiProductLabel(product)}${contextPage ? ` · ${contextPage}` : ''} · ${languageName}`}
           </Text>
         )}
 
@@ -362,7 +370,9 @@ function AiAssistSheetBody({
             <Text fontSize={14} color={ui.textMuted} lineHeight={20}>
               {onListing
                 ? 'Answers come from this listing.'
-                : 'AI support for Marketplace, Community, Chat, Classes, Co-Work, and your shop — including scheduling meetings, tracking orders, and seller tips.'}
+                : languageCode === 'en'
+                  ? 'AI support for Marketplace, Community, Chat, Classes, Co-Work, and your shop — including scheduling meetings, tracking orders, and seller tips.'
+                  : `${AI_NAME} replies in ${languageName}. Change language anytime in Region preferences.`}
             </Text>
           </YStack>
         ) : null}
