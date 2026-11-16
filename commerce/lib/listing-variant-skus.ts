@@ -142,6 +142,49 @@ export function childSkuLabels(options: ChildSkuOptions): {
   }
 }
 
+/** Uppercase alphanumeric slug fragment for SKU parts. */
+export function slugSkuPart(value: string, maxLen = 12): string {
+  const cleaned = String(value ?? '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '')
+  return cleaned.slice(0, maxLen)
+}
+
+/** Client-side parent SKU from title (plus short random suffix for uniqueness). */
+export function buildParentSkuFromTitle(title: string | null | undefined): string {
+  const base = slugSkuPart(title ?? '', 8) || 'SKU'
+  const suffix = Date.now().toString(36).toUpperCase().slice(-4)
+  return `${base}${suffix}`.slice(0, 16)
+}
+
+/**
+ * Child SKU = parent + option values, e.g. ASHWA1A2B-30TABLETS / ASHWA1A2B-60TABLETS.
+ * Keeps hyphens for readability (variation.sku is not constrained like listing.sku).
+ */
+export function buildChildSku(
+  parentSku: string | null | undefined,
+  options: ChildSkuOptions,
+): string {
+  const parent = slugSkuPart(parentSku ?? '', 12) || 'SKU'
+  const keys = Object.keys(options).sort()
+  const parts = keys.map((key) => slugSkuPart(options[key] ?? '', 10)).filter(Boolean)
+  const joined = [parent, ...parts].join('-')
+  return joined.slice(0, 48)
+}
+
+/** Prefer existing parent SKU; otherwise build from title. */
+export function ensureParentSku(
+  existingSku: string | null | undefined,
+  title: string | null | undefined,
+): string {
+  const cleaned = String(existingSku ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '')
+  if (cleaned) return cleaned.slice(0, 16)
+  return buildParentSkuFromTitle(title)
+}
+
 export function normalizeCountryCode(code: string | null | undefined): string {
   return String(code ?? '')
     .trim()

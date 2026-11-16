@@ -45,10 +45,11 @@ export function PricingStep({
       <YStack flex={1} minWidth={280} gap="$4">
         <ListingPublishCard ui={ui} title="Core Pricing">
           {(formData.variations?.length ?? 0) > 0 ? (
-            <ListingPublishTip ui={ui}>
-              These values seed new child SKUs. Edit each variant’s price, tax, and HSN under Details →
-              Variant SKUs.
-            </ListingPublishTip>
+            <ListingPublishTip
+              ui={ui}
+              title="Variant pricing"
+              body="These values seed new child SKUs. Edit parent SKU, child price, tax, HSN, and stock under Details → Variant SKUs."
+            />
           ) : null}
           <Field label={`Selling price (${currencySymbol})`} error={errors.price}>
             <XStack alignItems="center" gap="$2">

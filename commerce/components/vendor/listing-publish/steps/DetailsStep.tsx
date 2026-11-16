@@ -37,11 +37,14 @@ import {
   type ListingProductInfo,
 } from '~/commerce/lib/listing-product-info'
 import {
+  buildChildSku,
   buildChildSkuMetadata,
+  buildParentSkuFromTitle,
   cartesianAxes,
   childSkuLabels,
   childSkuTempKey,
   DEFAULT_TAX_COUNTRY,
+  ensureParentSku,
   normalizeCountryCode,
   parseVariationAxes,
   seedTaxByCountry,
@@ -84,6 +87,7 @@ export function DetailsStep({
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
   const materials = formData.materials ?? []
   const variations = formData.variations ?? []
+  const hasChildSkus = variations.length > 0
   const attributes = formData.attributes ?? []
   const images = formData.images ?? []
   const isDigital = formData.listing_type === LISTING_TYPES.DIGITAL
@@ -198,6 +202,11 @@ export function DetailsStep({
       }),
     )
 
+    const parentSku = ensureParentSku(formData.sku, formData.title)
+    if (!String(formData.sku ?? '').trim()) {
+      onUpdate('sku', parentSku)
+    }
+
     const next: Partial<ListingVariationInsert>[] = combinations.map((options, index) => {
       const tempKey = childSkuTempKey(options)
       const labels = childSkuLabels(options)
@@ -207,6 +216,7 @@ export function DetailsStep({
           ? Number(prev.tax_percent)
           : baseTax
       const taxMap = seedTaxByCountry(activeTax, taxCountry)
+      const autoSku = buildChildSku(parentSku, options)
       return {
         ...(prev ?? {}),
         variation_name: labels.variation_name,
@@ -219,7 +229,7 @@ export function DetailsStep({
         hsn_code: prev?.hsn_code ?? baseHsn,
         weight: prev?.weight ?? formData.weight ?? null,
         stock: prev?.stock ?? 0,
-        sku: prev?.sku ?? '',
+        sku: String(prev?.sku ?? '').trim() || autoSku,
         display_order: index,
         is_available: prev?.is_available !== false,
         variation_metadata: buildChildSkuMetadata(options, tempKey, taxMap) as never,
@@ -419,344 +429,6 @@ export function DetailsStep({
                 <Button tone="ghost" size="$2" icon={<Icons.Trash2 size={14} />} onPress={() => removeMaterial(index)} />
               </XStack>
             ))}
-          </YStack>
-        </ListingPublishCard>
-      )}
-
-      {isDigital ? null : (
-        <ListingPublishCard
-          ui={ui}
-          title="Variant SKUs"
-          headerRight={
-            <XStack gap="$3" alignItems="center">
-              <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addAxis}>
-                + Axis
-              </Text>
-              <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={generateChildSkus}>
-                Generate SKUs
-              </Text>
-            </XStack>
-          }
-        >
-          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-            Define options (Color, Size, …), generate combinations, then set price, tax, HSN, stock, and
-            images per child SKU — like Amazon parent/child listings.
-          </Text>
-          <ListingPublishFieldError ui={ui} message={errors.variations || variantError || undefined} />
-
-          <YStack gap="$3">
-            {axes.map((axis, axisIndex) => (
-              <YStack
-                key={`axis-${axisIndex}`}
-                gap="$2"
-                padding="$3"
-                borderRadius={12}
-                backgroundColor={ui.surfaceMuted}
-              >
-                <XStack gap="$2" alignItems="flex-end" flexWrap="wrap">
-                  <Field label="Option name" flex={1} minWidth={140}>
-                    <Select
-                      value={axis.name}
-                      onValueChange={(value) => updateAxis(axisIndex, { name: value })}
-                    >
-                      <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
-                        <Select.Value placeholder="Option" />
-                      </SelectTrigger>
-                      <SelectContent zIndex={300000}>
-                        <SelectViewport>
-                          {AXIS_PRESETS.map((type, typeIndex) => (
-                            <SelectItem key={type} index={typeIndex} value={type}>
-                              <Select.ItemText>{type}</Select.ItemText>
-                            </SelectItem>
-                          ))}
-                        </SelectViewport>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field label="Add value" flex={2} minWidth={160}>
-                    <Input
-                      value={axisValueDraft[axisIndex] ?? ''}
-                      onChangeText={(value) =>
-                        setAxisValueDraft((current) => ({ ...current, [axisIndex]: value }))
-                      }
-                      onSubmitEditing={() => addAxisValue(axisIndex)}
-                      placeholder="e.g. Red"
-                    />
-                  </Field>
-                  <Button tone="outline" size="$3" onPress={() => addAxisValue(axisIndex)}>
-                    Add
-                  </Button>
-                  <Button
-                    tone="ghost"
-                    size="$2"
-                    icon={<Icons.Trash2 size={14} />}
-                    onPress={() => removeAxis(axisIndex)}
-                  />
-                </XStack>
-                <XStack gap="$2" flexWrap="wrap">
-                  {axis.values.map((value) => (
-                    <XStack
-                      key={`${axis.name}-${value}`}
-                      paddingHorizontal="$2.5"
-                      paddingVertical={4}
-                      borderRadius={999}
-                      backgroundColor={ui.surface}
-                      borderWidth={1}
-                      borderColor={ui.borderSubtle}
-                      alignItems="center"
-                      gap="$1.5"
-                    >
-                      <Text fontSize={12} fontWeight="600" color={ui.text}>
-                        {value}
-                      </Text>
-                      <Text
-                        fontSize={12}
-                        color={ui.textMuted}
-                        cursor="pointer"
-                        onPress={() =>
-                          updateAxis(axisIndex, {
-                            values: axis.values.filter((entry) => entry !== value),
-                          })
-                        }
-                      >
-                        ×
-                      </Text>
-                    </XStack>
-                  ))}
-                </XStack>
-              </YStack>
-            ))}
-          </YStack>
-
-          <YStack gap="$3" marginTop="$2">
-            {variations.map((variation, index) => {
-              const meta = variation.variation_metadata as {
-                tempKey?: string
-                options?: Record<string, string>
-              } | null
-              const tempKey = meta?.tempKey ?? childSkuTempKey(meta?.options ?? {})
-              const childImages = images.filter((img) => img.variant_temp_key === tempKey)
-              return (
-                <YStack
-                  key={tempKey || `variation-${index}`}
-                  gap="$2.5"
-                  padding="$3"
-                  borderRadius={12}
-                  borderWidth={1}
-                  borderColor={ui.borderSubtle}
-                  backgroundColor={ui.surface}
-                >
-                  <XStack justifyContent="space-between" alignItems="center" gap="$2">
-                    <YStack flex={1} minWidth={0} gap={2}>
-                      <Text fontSize={14} fontWeight="800" color={ui.text}>
-                        {variation.variation_value || 'Child SKU'}
-                      </Text>
-                      <Text fontSize={11.5} color={ui.textMuted}>
-                        {variation.variation_name}
-                      </Text>
-                    </YStack>
-                    <Button
-                      tone="ghost"
-                      size="$2"
-                      icon={<Icons.X size={14} />}
-                      onPress={() => removeVariation(index)}
-                    />
-                  </XStack>
-
-                  <XStack gap="$2" flexWrap="wrap">
-                    <Field label="Price" flex={1} minWidth={110}>
-                      <Input
-                        value={String(variation.price ?? formData.price ?? 0)}
-                        onChangeText={(value) => updateVariation(index, { price: value })}
-                        keyboardType="numeric"
-                      />
-                    </Field>
-                    <Field label="MRP" flex={1} minWidth={110}>
-                      <Input
-                        value={String(variation.mrp ?? '')}
-                        onChangeText={(value) => updateVariation(index, { mrp: value })}
-                        keyboardType="numeric"
-                      />
-                    </Field>
-                    <Field label="Stock" flex={1} minWidth={90}>
-                      <Input
-                        value={String(variation.stock ?? 0)}
-                        onChangeText={(value) => updateVariation(index, { stock: value })}
-                        keyboardType="numeric"
-                      />
-                    </Field>
-                    <Field label="SKU" flex={1} minWidth={120}>
-                      <Input
-                        value={variation.sku ?? ''}
-                        onChangeText={(value) => updateVariation(index, { sku: value })}
-                        placeholder="Child SKU"
-                      />
-                    </Field>
-                    <Field label="HSN" flex={1} minWidth={110}>
-                      <Input
-                        value={variation.hsn_code ?? ''}
-                        onChangeText={(value) => updateVariation(index, { hsn_code: value })}
-                        placeholder="HSN / SAC"
-                      />
-                    </Field>
-                    <Field label="Weight (kg)" flex={1} minWidth={100}>
-                      <Input
-                        value={String(variation.weight ?? '')}
-                        onChangeText={(value) => updateVariation(index, { weight: value })}
-                        keyboardType="numeric"
-                      />
-                    </Field>
-                  </XStack>
-
-                  <XStack gap="$2" flexWrap="wrap" alignItems="flex-end">
-                    <Field label={`Tax % (${taxCountryLabel})`} flex={1} minWidth={140}>
-                      <Select
-                        value={String(
-                          variation.tax_percent ?? formData.tax_percent ?? '18',
-                        )}
-                        onValueChange={(value) => updateVariationTax(index, Number(value))}
-                      >
-                        <SelectTrigger
-                          width="100%"
-                          iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}
-                        >
-                          <Select.Value placeholder="Select %" />
-                        </SelectTrigger>
-                        <SelectContent zIndex={300000}>
-                          <SelectViewport>
-                            {GST_PRESETS.map((preset, presetIndex) => (
-                              <SelectItem
-                                key={`${tempKey}-tax-${preset}`}
-                                index={presetIndex}
-                                value={preset}
-                              >
-                                <Select.ItemText>{preset}%</Select.ItemText>
-                              </SelectItem>
-                            ))}
-                          </SelectViewport>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <XStack alignItems="center" gap="$2" paddingBottom="$2" minWidth={140}>
-                      <Switch
-                        checked={Boolean(
-                          variation.price_includes_tax ?? formData.price_includes_tax,
-                        )}
-                        onCheckedChange={(checked) =>
-                          updateVariation(index, { price_includes_tax: checked })
-                        }
-                      />
-                      <Text fontSize={12} color={ui.textSecondary}>
-                        Includes tax
-                      </Text>
-                    </XStack>
-                  </XStack>
-                  <Text fontSize={11.5} color={ui.textMuted}>
-                    Applied for your shop location ({taxCountryLabel}). Buyers see this rate
-                    automatically.
-                  </Text>
-
-                  <YStack gap="$2">
-                    <XStack justifyContent="space-between" alignItems="center" gap="$2">
-                      <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
-                        Variant images ({childImages.length})
-                      </Text>
-                      <Button
-                        tone="outline"
-                        size="$2"
-                        borderRadius={999}
-                        disabled={pickingVariantKey === tempKey}
-                        icon={
-                          pickingVariantKey === tempKey ? (
-                            <Spinner size="small" color={ui.brand} />
-                          ) : (
-                            <Icons.ImagePlus size={14} color={ui.brand} />
-                          )
-                        }
-                        onPress={() => void pickVariantImages(tempKey)}
-                      >
-                        {pickingVariantKey === tempKey ? 'Uploading…' : 'Upload media'}
-                      </Button>
-                    </XStack>
-
-                    {childImages.length ? (
-                      <XStack gap="$2" flexWrap="wrap">
-                        {childImages.map((image) => {
-                          const globalIndex = images.indexOf(image)
-                          const uri = image.image_url || ''
-                          return (
-                            <YStack
-                              key={`${tempKey}-img-${globalIndex}-${uri || image.fileName || globalIndex}`}
-                              width={72}
-                              height={72}
-                              borderRadius={10}
-                              overflow="hidden"
-                              backgroundColor={ui.surfaceMuted}
-                              borderWidth={1}
-                              borderColor={ui.borderSubtle}
-                              position="relative"
-                            >
-                              {uri ? (
-                                <Image
-                                  source={{ uri }}
-                                  width={72}
-                                  height={72}
-                                  borderRadius={10}
-                                />
-                              ) : (
-                                <YStack flex={1} alignItems="center" justifyContent="center">
-                                  <Icons.Image size={18} color={ui.textMuted} />
-                                </YStack>
-                              )}
-                              <XStack
-                                position="absolute"
-                                top={4}
-                                right={4}
-                                width={22}
-                                height={22}
-                                borderRadius={999}
-                                alignItems="center"
-                                justifyContent="center"
-                                backgroundColor="rgba(0,0,0,0.55)"
-                                cursor="pointer"
-                                onPress={() => {
-                                  if (globalIndex >= 0) removeVariantImage(globalIndex)
-                                }}
-                              >
-                                <Icons.X size={12} color="#fff" />
-                              </XStack>
-                            </YStack>
-                          )
-                        })}
-                      </XStack>
-                    ) : (
-                      <XStack
-                        gap="$2"
-                        padding="$3"
-                        borderRadius={10}
-                        borderWidth={1}
-                        borderStyle="dashed"
-                        borderColor={ui.borderSubtle}
-                        alignItems="center"
-                        cursor="pointer"
-                        hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
-                        onPress={() => void pickVariantImages(tempKey)}
-                      >
-                        <Icons.ImagePlus size={18} color={ui.brand} />
-                        <YStack flex={1} gap={2}>
-                          <Text fontSize={13} fontWeight="700" color={ui.text}>
-                            Add photos for this SKU
-                          </Text>
-                          <Text fontSize={11.5} color={ui.textMuted}>
-                            Optional — buyers see these when this variant is selected.
-                          </Text>
-                        </YStack>
-                      </XStack>
-                    )}
-                  </YStack>
-                </YStack>
-              )
-            })}
           </YStack>
         </ListingPublishCard>
       )}
@@ -965,6 +637,380 @@ export function DetailsStep({
         </ListingPublishCard>
       )}
 
+      {isDigital ? null : (
+        <ListingPublishCard
+          ui={ui}
+          title="Variant SKUs"
+          headerRight={
+            <XStack gap="$3" alignItems="center">
+              <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addAxis}>
+                + Axis
+              </Text>
+              <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={generateChildSkus}>
+                Generate SKUs
+              </Text>
+            </XStack>
+          }
+        >
+          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
+            Parent SKU identifies the listing; generate child SKUs from options (Color, Size, …) with
+            price, tax, HSN, stock, and images per combination — Amazon parent/child style.
+          </Text>
+
+          <Field label="Parent SKU">
+            <XStack gap="$2" alignItems="center">
+              <Input
+                flex={1}
+                value={formData.sku ?? ''}
+                onChangeText={(value) => onUpdate('sku', value)}
+                placeholder="Auto-generated from title if empty"
+              />
+              <Button
+                tone="outline"
+                size="$3"
+                onPress={() => onUpdate('sku', buildParentSkuFromTitle(formData.title))}
+              >
+                Generate
+              </Button>
+            </XStack>
+          </Field>
+          <ListingPublishFieldError ui={ui} message={errors.sku || errors.variations || variantError || undefined} />
+
+          <YStack gap="$3">
+            {axes.map((axis, axisIndex) => (
+              <YStack
+                key={`axis-${axisIndex}`}
+                gap="$2"
+                padding="$3"
+                borderRadius={12}
+                backgroundColor={ui.surfaceMuted}
+              >
+                <XStack gap="$2" alignItems="flex-end" flexWrap="wrap">
+                  <Field label="Option name" flex={1} minWidth={140}>
+                    <Select
+                      value={axis.name}
+                      onValueChange={(value) => updateAxis(axisIndex, { name: value })}
+                    >
+                      <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
+                        <Select.Value placeholder="Option" />
+                      </SelectTrigger>
+                      <SelectContent zIndex={300000}>
+                        <SelectViewport>
+                          {AXIS_PRESETS.map((type, typeIndex) => (
+                            <SelectItem key={type} index={typeIndex} value={type}>
+                              <Select.ItemText>{type}</Select.ItemText>
+                            </SelectItem>
+                          ))}
+                        </SelectViewport>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Add value" flex={2} minWidth={160}>
+                    <Input
+                      value={axisValueDraft[axisIndex] ?? ''}
+                      onChangeText={(value) =>
+                        setAxisValueDraft((current) => ({ ...current, [axisIndex]: value }))
+                      }
+                      onSubmitEditing={() => addAxisValue(axisIndex)}
+                      placeholder="e.g. Red"
+                    />
+                  </Field>
+                  <Button tone="outline" size="$3" onPress={() => addAxisValue(axisIndex)}>
+                    Add
+                  </Button>
+                  <Button
+                    tone="ghost"
+                    size="$2"
+                    icon={<Icons.Trash2 size={14} />}
+                    onPress={() => removeAxis(axisIndex)}
+                  />
+                </XStack>
+                <XStack gap="$2" flexWrap="wrap">
+                  {axis.values.map((value) => (
+                    <XStack
+                      key={`${axis.name}-${value}`}
+                      paddingHorizontal="$2.5"
+                      paddingVertical={4}
+                      borderRadius={999}
+                      backgroundColor={ui.surface}
+                      borderWidth={1}
+                      borderColor={ui.borderSubtle}
+                      alignItems="center"
+                      gap="$1.5"
+                    >
+                      <Text fontSize={12} fontWeight="600" color={ui.text}>
+                        {value}
+                      </Text>
+                      <Text
+                        fontSize={12}
+                        color={ui.textMuted}
+                        cursor="pointer"
+                        onPress={() =>
+                          updateAxis(axisIndex, {
+                            values: axis.values.filter((entry) => entry !== value),
+                          })
+                        }
+                      >
+                        ×
+                      </Text>
+                    </XStack>
+                  ))}
+                </XStack>
+              </YStack>
+            ))}
+          </YStack>
+
+          <YStack gap="$3" marginTop="$2">
+            {variations.map((variation, index) => {
+              const meta = variation.variation_metadata as {
+                tempKey?: string
+                options?: Record<string, string>
+              } | null
+              const tempKey = meta?.tempKey ?? childSkuTempKey(meta?.options ?? {})
+              const childImages = images.filter((img) => img.variant_temp_key === tempKey)
+              return (
+                <YStack
+                  key={tempKey || `variation-${index}`}
+                  gap="$2.5"
+                  padding="$3"
+                  borderRadius={12}
+                  borderWidth={1}
+                  borderColor={ui.borderSubtle}
+                  backgroundColor={ui.surface}
+                >
+                  <XStack justifyContent="space-between" alignItems="center" gap="$2">
+                    <YStack flex={1} minWidth={0} gap={2}>
+                      <Text fontSize={14} fontWeight="800" color={ui.text}>
+                        {variation.variation_value || 'Child SKU'}
+                      </Text>
+                      <Text fontSize={11.5} color={ui.textMuted}>
+                        {variation.variation_name}
+                      </Text>
+                    </YStack>
+                    <Button
+                      tone="ghost"
+                      size="$2"
+                      icon={<Icons.X size={14} />}
+                      onPress={() => removeVariation(index)}
+                    />
+                  </XStack>
+
+                  <XStack gap="$2" flexWrap="wrap">
+                    <Field label="Price" flex={1} minWidth={110}>
+                      <Input
+                        value={String(variation.price ?? formData.price ?? 0)}
+                        onChangeText={(value) => updateVariation(index, { price: value })}
+                        keyboardType="numeric"
+                      />
+                    </Field>
+                    <Field label="MRP" flex={1} minWidth={110}>
+                      <Input
+                        value={String(variation.mrp ?? '')}
+                        onChangeText={(value) => updateVariation(index, { mrp: value })}
+                        keyboardType="numeric"
+                      />
+                    </Field>
+                    <Field label="Stock" flex={1} minWidth={90}>
+                      <Input
+                        value={String(variation.stock ?? 0)}
+                        onChangeText={(value) => updateVariation(index, { stock: value })}
+                        keyboardType="numeric"
+                      />
+                    </Field>
+                    <Field label="SKU" flex={1} minWidth={160}>
+                      <XStack gap="$1.5" alignItems="center">
+                        <Input
+                          flex={1}
+                          value={variation.sku ?? ''}
+                          onChangeText={(value) => updateVariation(index, { sku: value })}
+                          placeholder="Auto-generated"
+                        />
+                        <Button
+                          tone="outline"
+                          size="$2"
+                          onPress={() => {
+                            const metaOptions =
+                              (variation.variation_metadata as { options?: Record<string, string> } | null)
+                                ?.options ?? {}
+                            const parentSku = ensureParentSku(formData.sku, formData.title)
+                            updateVariation(index, {
+                              sku: buildChildSku(parentSku, metaOptions),
+                            })
+                          }}
+                        >
+                          Auto
+                        </Button>
+                      </XStack>
+                    </Field>
+                    <Field label="HSN" flex={1} minWidth={110}>
+                      <Input
+                        value={variation.hsn_code ?? ''}
+                        onChangeText={(value) => updateVariation(index, { hsn_code: value })}
+                        placeholder="HSN / SAC"
+                      />
+                    </Field>
+                    <Field label="Weight (kg)" flex={1} minWidth={100}>
+                      <Input
+                        value={String(variation.weight ?? '')}
+                        onChangeText={(value) => updateVariation(index, { weight: value })}
+                        keyboardType="numeric"
+                      />
+                    </Field>
+                  </XStack>
+
+                  <XStack gap="$2" flexWrap="wrap" alignItems="flex-end">
+                    <Field label={`Tax % (${taxCountryLabel})`} flex={1} minWidth={140}>
+                      <Select
+                        value={String(
+                          variation.tax_percent ?? formData.tax_percent ?? '18',
+                        )}
+                        onValueChange={(value) => updateVariationTax(index, Number(value))}
+                      >
+                        <SelectTrigger
+                          width="100%"
+                          iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}
+                        >
+                          <Select.Value placeholder="Select %" />
+                        </SelectTrigger>
+                        <SelectContent zIndex={300000}>
+                          <SelectViewport>
+                            {GST_PRESETS.map((preset, presetIndex) => (
+                              <SelectItem
+                                key={`${tempKey}-tax-${preset}`}
+                                index={presetIndex}
+                                value={preset}
+                              >
+                                <Select.ItemText>{preset}%</Select.ItemText>
+                              </SelectItem>
+                            ))}
+                          </SelectViewport>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <XStack alignItems="center" gap="$2" paddingBottom="$2" minWidth={140}>
+                      <Switch
+                        checked={Boolean(
+                          variation.price_includes_tax ?? formData.price_includes_tax,
+                        )}
+                        onCheckedChange={(checked) =>
+                          updateVariation(index, { price_includes_tax: checked })
+                        }
+                      />
+                      <Text fontSize={12} color={ui.textSecondary}>
+                        Includes tax
+                      </Text>
+                    </XStack>
+                  </XStack>
+                  <Text fontSize={11.5} color={ui.textMuted}>
+                    Applied for your shop location ({taxCountryLabel}). Buyers see this rate
+                    automatically.
+                  </Text>
+
+                  <YStack gap="$2">
+                    <XStack justifyContent="space-between" alignItems="center" gap="$2">
+                      <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
+                        Variant images ({childImages.length})
+                      </Text>
+                      <Button
+                        tone="outline"
+                        size="$2"
+                        borderRadius={999}
+                        disabled={pickingVariantKey === tempKey}
+                        icon={
+                          pickingVariantKey === tempKey ? (
+                            <Spinner size="small" color={ui.brand} />
+                          ) : (
+                            <Icons.ImagePlus size={14} color={ui.brand} />
+                          )
+                        }
+                        onPress={() => void pickVariantImages(tempKey)}
+                      >
+                        {pickingVariantKey === tempKey ? 'Uploading…' : 'Upload media'}
+                      </Button>
+                    </XStack>
+
+                    {childImages.length ? (
+                      <XStack gap="$2" flexWrap="wrap">
+                        {childImages.map((image) => {
+                          const globalIndex = images.indexOf(image)
+                          const uri = image.image_url || ''
+                          return (
+                            <YStack
+                              key={`${tempKey}-img-${globalIndex}-${uri || image.fileName || globalIndex}`}
+                              width={72}
+                              height={72}
+                              borderRadius={10}
+                              overflow="hidden"
+                              backgroundColor={ui.surfaceMuted}
+                              borderWidth={1}
+                              borderColor={ui.borderSubtle}
+                              position="relative"
+                            >
+                              {uri ? (
+                                <Image
+                                  source={{ uri }}
+                                  width={72}
+                                  height={72}
+                                  borderRadius={10}
+                                />
+                              ) : (
+                                <YStack flex={1} alignItems="center" justifyContent="center">
+                                  <Icons.Image size={18} color={ui.textMuted} />
+                                </YStack>
+                              )}
+                              <XStack
+                                position="absolute"
+                                top={4}
+                                right={4}
+                                width={22}
+                                height={22}
+                                borderRadius={999}
+                                alignItems="center"
+                                justifyContent="center"
+                                backgroundColor="rgba(0,0,0,0.55)"
+                                cursor="pointer"
+                                onPress={() => {
+                                  if (globalIndex >= 0) removeVariantImage(globalIndex)
+                                }}
+                              >
+                                <Icons.X size={12} color="#fff" />
+                              </XStack>
+                            </YStack>
+                          )
+                        })}
+                      </XStack>
+                    ) : (
+                      <XStack
+                        gap="$2"
+                        padding="$3"
+                        borderRadius={10}
+                        borderWidth={1}
+                        borderStyle="dashed"
+                        borderColor={ui.borderSubtle}
+                        alignItems="center"
+                        cursor="pointer"
+                        hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
+                        onPress={() => void pickVariantImages(tempKey)}
+                      >
+                        <Icons.ImagePlus size={18} color={ui.brand} />
+                        <YStack flex={1} gap={2}>
+                          <Text fontSize={13} fontWeight="700" color={ui.text}>
+                            Add photos for this SKU
+                          </Text>
+                          <Text fontSize={11.5} color={ui.textMuted}>
+                            Optional — buyers see these when this variant is selected.
+                          </Text>
+                        </YStack>
+                      </XStack>
+                    )}
+                  </YStack>
+                </YStack>
+              )
+            })}
+          </YStack>
+        </ListingPublishCard>
+      )}
+
       <ListingPublishCard
         ui={ui}
         title="Additional Attributes (Optional)"
@@ -1019,34 +1065,31 @@ export function DetailsStep({
       </ListingPublishCard>
 
       {isDigital ? null : (
-        <ListingPublishCard ui={ui} title="Logistics & Inventory">
-          <Field label="SKU (Stock Keeping Unit)">
-            <XStack gap="$2" alignItems="center">
-              <Input
-                flex={1}
-                value={formData.sku ?? ''}
-                onChangeText={(value) => onUpdate('sku', value)}
-                placeholder="Auto-generated if empty"
-              />
-              <Button
-                tone="outline"
-                size="$3"
-                onPress={() => onUpdate('sku', `SKU-${Date.now().toString(36).toUpperCase()}`)}
-              >
-                Generate
-              </Button>
-            </XStack>
-          </Field>
+        <ListingPublishCard ui={ui} title="Shipping & packaging">
+          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
+            Package weight and dimensions for shipping rates. Parent and child SKUs live under Variant SKUs.
+          </Text>
 
           <XStack gap="$3" flexWrap="wrap">
-            <Field label="Initial Quantity" flex={1} minWidth={120} error={errors.stock}>
-              <Input
-                value={String(formData.stock ?? '')}
-                onChangeText={(value) => onUpdate('stock', value)}
-                keyboardType="numeric"
-                invalid={!!errors.stock}
-              />
-            </Field>
+            {hasChildSkus ? (
+              <YStack flex={1} minWidth={120} gap="$1" justifyContent="center">
+                <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
+                  Quantity
+                </Text>
+                <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
+                  Sum of child SKU stock ({formData.stock ?? 0}). Edit stock on each variant.
+                </Text>
+              </YStack>
+            ) : (
+              <Field label="Initial Quantity" flex={1} minWidth={120} error={errors.stock}>
+                <Input
+                  value={String(formData.stock ?? '')}
+                  onChangeText={(value) => onUpdate('stock', value)}
+                  keyboardType="numeric"
+                  invalid={!!errors.stock}
+                />
+              </Field>
+            )}
             <Field label="Weight (grams)" flex={1} minWidth={120}>
               <Input
                 value={formData.weight != null ? String(formData.weight) : ''}

@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildChildSku,
+  buildParentSkuFromTitle,
   cartesianAxes,
   defaultTaxFromMap,
+  ensureParentSku,
   getChildUnitPrice,
   isChildSkuMode,
   normalizeTaxByCountry,
   resolveChildSku,
   resolveChildTaxPercent,
   seedTaxByCountry,
+  slugSkuPart,
   upsertCountryTax,
 } from '~/commerce/lib/listing-variant-skus'
 import { getVariantTaxPercent } from '~/commerce/lib/listing-detail'
@@ -72,6 +76,15 @@ describe('listing-variant-skus', () => {
     expect(seedTaxByCountry(18)).toEqual({ IN: 18 })
     expect(defaultTaxFromMap({ US: 0, IN: 18 })).toBe(18)
     expect(upsertCountryTax({ IN: 18 }, 'us', 0)).toEqual({ IN: 18, US: 0 })
+  })
+
+  it('auto-builds parent and child SKUs from title/options', () => {
+    expect(slugSkuPart('30 Tablets!')).toBe('30TABLETS')
+    expect(buildParentSkuFromTitle('Ashwagandha Capsules')).toMatch(/^ASHWAGAN[A-Z0-9]{4}$/)
+    expect(ensureParentSku('  ash-30  ', 'Ignored')).toBe('ASH-30')
+    expect(ensureParentSku('', 'Ashwagandha')).toMatch(/^ASHWAGAN[A-Z0-9]{4}$/)
+    expect(buildChildSku('ASHWA12AB', { Pack: '30 Tablets' })).toBe('ASHWA12AB-30TABLETS')
+    expect(buildChildSku('ASHWA12AB', { Color: 'Red', Size: 'M' })).toBe('ASHWA12AB-RED-M')
   })
 
   it('resolves child tax by country with fallbacks', () => {

@@ -38,14 +38,14 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
     label: 'Details',
     headline: 'Listing Details',
     subtitle:
-      'Specify the core characteristics, material composition, and logistical data that define this unique artisan piece.',
+      'Product identity, variant (child) SKUs, attributes, and shipping/packaging details.',
     iconName: 'layers',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.PRICING,
     label: 'Pricing',
-    headline: 'Pricing & Inventory',
-    subtitle: 'Define your commercial strategy and stock management.',
+    headline: 'Pricing',
+    subtitle: 'Set selling price, MRP, tax, and commercial options. Stock lives on Details → Variant SKUs.',
     iconName: 'indian-rupee',
   },
   {
@@ -74,10 +74,12 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
 /** Re-export listing type options so UIs never duplicate labels. */
 export { LISTING_TYPE_OPTIONS, LISTING_VALIDATION, LISTING_IMAGE_CONSTRAINTS }
 
-/** Image guidance aligned with orchestrator (≥1) and design mockup (≥3 recommended). */
+/** Image guidance (main + detail shots). */
 export const LISTING_PUBLISH_IMAGE_HINTS = {
-  MIN_REQUIRED_PUBLISH: 1,
-  MIN_RECOMMENDED: 3,
+  MIN_REQUIRED_PUBLISH: LISTING_IMAGE_CONSTRAINTS.MIN_COUNT_PUBLISH,
+  MIN_RECOMMENDED: LISTING_IMAGE_CONSTRAINTS.MIN_COUNT_RECOMMENDED,
+  MAX_COUNT: LISTING_IMAGE_CONSTRAINTS.MAX_COUNT,
+  MIN_LONG_EDGE_PX: LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX,
   MAX_SIZE_MB: LISTING_IMAGE_CONSTRAINTS.MAX_SIZE_BYTES / (1024 * 1024),
   ACCEPTED_FORMATS_LABEL: 'JPG, PNG, WebP',
 } as const
@@ -144,17 +146,18 @@ export const LISTING_PUBLISH_COPY = {
   CLEAR_ALL: 'Clear All',
   LAST_SAVED_PREFIX: 'Last saved:',
   LAST_SAVED_NEVER: 'Not saved yet',
-  IMAGES_REQUIRED_BANNER: 'Images Required: Please upload at least 3 high-quality product images to proceed with listing.',
+  IMAGES_REQUIRED_BANNER:
+    'Upload at least 3 product photos (main + details). Main image ≥1000px, clean background, no watermarks.',
   LISTING_TIP_CATEGORIES:
     'Vendors who select specific sub-categories see a 24% increase in discovery rates. Our Orchestrator AI will verify these tags after you publish.',
   EXPERT_TIP_PRICING:
     "Products with 'Accept Offers' enabled see a 14% higher engagement rate. Bulk discounts are recommended for items in the Lifestyle category.",
   IMAGE_GUIDELINES: [
-    'Use clean, neutral backgrounds.',
-    'Upload at least 2000px on the longest side.',
-    'Include lifestyle shots.',
-    'Avoid watermarks or text overlays.',
-    'Ensure natural lighting.',
+    'Main image: product fills the frame on a clean / white background.',
+    `At least ${LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX}px on the longest side (1600px+ recommended).`,
+    `Upload ${LISTING_IMAGE_CONSTRAINTS.MIN_COUNT_PUBLISH}–${LISTING_IMAGE_CONSTRAINTS.MAX_COUNT} photos: MAIN, angle, detail, lifestyle.`,
+    'No watermarks, logos, or text overlays on the main image.',
+    'Use natural lighting; keep colours accurate to the product.',
   ] as const,
   SEO_BEST_PRACTICES: [
     'Include your primary keyword naturally in the title and description.',
