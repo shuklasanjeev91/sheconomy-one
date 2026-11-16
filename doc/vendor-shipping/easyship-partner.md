@@ -1,45 +1,72 @@
-# EasyShip partner / marketplace account
+# EasyShip partner model (like PayU child MIDs)
 
-SHEconomy runs EasyShip as a **marketplace MOR** account (labels buy on the platform company; sellers fund labels via in-app `platform_wallets`).
+Goal: **SHEconomy does not float EasyShip credit.** Sellers fund carrier labels the same way they fund PayU — through SHEconomy UI, settling on *their* EasyShip account.
 
-## Live account (already wired)
+## Compare to PayU
 
-| Field | Value |
-|---|---|
-| Company | Ampersand Media Makers |
-| EasyShip company id | `CIN1056135` |
-| Contact | sanjeev.shukla@sheconomy.in |
-| Public API | `EASYSHIP_API_TOKEN` + `EASYSHIP_BASE_URL` (Supabase Edge secrets) |
-| Webhook | `EASYSHIP_WEBHOOK_SECRET` → `easyship-webhook` |
+| | PayU today | EasyShip target |
+|---|---|---|
+| Platform | Parent MID / Hub | Partner org + parent company `CIN1056135` |
+| Per seller | Child MID (`shepay-create-child`) | **Child company** (`shops.easyship_company_id`) |
+| Seller funds | Settlements / KYC on child | Card on child → `POST /account/credit` |
+| Platform float | No | **No** (once child is linked) |
+| API routing | Child credentials / mid | `X-EASYSHIP-COMPANY-ID` on Public API |
 
-Optional Edge secret (set for partner/enterprise routing):
+## Recommended flow (seller-funded)
 
-```bash
-npx supabase secrets set EASYSHIP_COMPANY_ID=CIN1056135 --yes
+```
+Vendor enables shipping
+  → easyship-shop-account action=ensure
+  → Enterprise Create Company (external_id = shop_id)
+  → store shops.easyship_company_id
+
+Vendor adds card (Stripe token → EasyShip payment source on child)
+  → store shops.easyship_payment_source_id
+
+Vendor → Wallet → Top up shipping
+  → easyship-shop-account action=topup
+  → POST /account/credit { payment_source_id, amount } + X-EASYSHIP-COMPANY-ID
+  → EasyShip charges seller card; child credit rises
+  → optional mirror into platform_wallets for UI
+
+Fulfill order
+  → rates + createShipment with shop company header
+  → charge EasyShip child credit
+  → debit mirrored platform_wallets (ledger)
 ```
 
-`resolveEasyshipConfig()` reads `EASYSHIP_COMPANY_ID` and sends `X-EASYSHIP-COMPANY-ID` on Public API calls when present.
+**Do not** keep using a shared MOR balance long-term — that forces SHEconomy to pre-fund EasyShip (current pain).
 
-## Partner application
+## Alternatives (worse / different)
 
-Submitted via [Become a Partner](https://www.easyship.com/become-a-partner) as:
+1. **OAuth “Connect EasyShip”** — seller brings their own EasyShip login. Zero float, more friction for new sellers.
+2. **PayU top-up only into `platform_wallets`** (today) — money never reaches EasyShip; platform still must fund MOR. Keep only as interim ledger UX.
+3. **Platform auto-recharges MOR from its card when low** — still platform float / risk.
 
-- Business class: **Enterprise or Marketplace Platform**
-- Intent: **Partner or integrate with Easyship**
-- Callback (for future OAuth): `https://www.sheconomy.in/oauth/easyship`
+## Live status
 
-EasyShip will reply with partner app `client_id` / `client_secret` and scopes. Until then we keep the existing Public API token.
+| Item | Status |
+|---|---|
+| Public API token | Live (`EASYSHIP_API_TOKEN`) |
+| Parent company | `CIN1056135` Ampersand Media Makers |
+| `EASYSHIP_COMPANY_ID` secret | Set |
+| Partner application | Submitted (Become a Partner) |
+| Partner OAuth client id/secret | **Waiting on EasyShip** |
+| `shops.easyship_*` columns | Migration `20261116081723_shops_easyship_partner_account` |
+| Edge `easyship-shop-account` | status / ensure (pending) / topup |
 
-## After partner credentials arrive
+## Secrets (after EasyShip replies)
 
-1. Store secrets (never commit):
-   - `EASYSHIP_PARTNER_CLIENT_ID`
-   - `EASYSHIP_PARTNER_CLIENT_SECRET`
-2. Build OAuth connect (Authorization Code) per [connect users](https://developers.easyship.com/docs/how-to-authorize-easyship-user).
-3. For Enterprise child companies: Client Credentials + `enterprise.child_company::access`, create company per shop (`external_id = shop_id`), pass shop company id in `X-EASYSHIP-COMPANY-ID`.
+```bash
+npx supabase secrets set \
+  EASYSHIP_PARTNER_CLIENT_ID=... \
+  EASYSHIP_PARTNER_CLIENT_SECRET=... \
+  EASYSHIP_ORGANIZATION_ID=... \
+  --yes
+```
 
-## Ops checklist for fulfill to work
+Then finish `ensure` (Create Company) + Vendor Wallet card collect + top-up UI.
 
-1. **Top up EasyShip dashboard credit** for company `CIN1056135` (API currently shows ₹0 — label buy will 402).
-2. Link India courier own accounts (FedEx/UPS) on the EasyShip org when quoting IN origin.
-3. Sellers still top up **Vendor → Wallet** (shop `platform_wallets`); fulfill debits that wallet after EasyShip charges the MOR account.
+## Ops until partner is live
+
+Parent EasyShip credit is still ₹0 — fulfill on unlinked shops needs MOR top-up **or** wait for child companies. Seller in-app wallet credit alone does not buy labels.

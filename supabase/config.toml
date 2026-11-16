@@ -578,6 +578,10 @@ verify_jwt = true
 [functions.easyship-process-shipment]
 verify_jwt = true
 
+# Vendor JWT: EasyShip child-company status / ensure / seller credit top-up.
+[functions.easyship-shop-account]
+verify_jwt = true
+
 # Easyship server webhooks (label + tracking / RTO) — signature checked in-function.
 [functions.easyship-webhook]
 verify_jwt = false

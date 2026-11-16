@@ -23,6 +23,23 @@ export function resolveEasyshipConfig(): EasyshipConfig | null {
   return { token, baseUrl, companyId }
 }
 
+/** Scope Public API calls to a shop's EasyShip child company (or platform parent). */
+export function withEasyshipCompany(
+  config: EasyshipConfig,
+  companyId?: string | null,
+): EasyshipConfig {
+  const id = companyId?.trim() || config.companyId || null
+  return { ...config, companyId: id }
+}
+
+/** True when Enterprise partner credentials are configured for child-company create. */
+export function easyshipPartnerReady(): boolean {
+  return Boolean(
+    Deno.env.get('EASYSHIP_PARTNER_CLIENT_ID')?.trim() &&
+      Deno.env.get('EASYSHIP_PARTNER_CLIENT_SECRET')?.trim(),
+  )
+}
+
 /** Cloudflare rejects bare Deno UA from some edges with 403/1010. */
 function easyshipHeaders(
   config: EasyshipConfig | string,
@@ -212,6 +229,8 @@ export async function getAccountCredit(config: EasyshipConfig): Promise<Easyship
   const json = (await res.json().catch(() => ({}))) as {
     account?: {
       credit?: { available_balance?: number; balance?: number; currency?: string }
+      easyship_company_id?: string
+      name?: string
     }
     error?: { message?: string }
     message?: string
@@ -220,6 +239,63 @@ export async function getAccountCredit(config: EasyshipConfig): Promise<Easyship
     throw new Error(json.error?.message || json.message || `Easyship account failed (${res.status})`)
   }
   const credit = json.account?.credit
+  return {
+    availableBalance: Number(credit?.available_balance ?? 0) || 0,
+    balance: Number(credit?.balance ?? 0) || 0,
+    currency: String(credit?.currency || 'INR').toUpperCase(),
+    raw: json,
+  }
+}
+
+/**
+ * Top up EasyShip credit by charging a payment source on that company.
+ * Seller-funded path (PayU analogue): SHEconomy never floats carrier balance —
+ * the seller's card on the child company pays EasyShip directly.
+ * Docs: POST /2024-09/account/credit
+ */
+export async function addAccountCredit(
+  config: EasyshipConfig,
+  input: { paymentSourceId: string; amount: number },
+): Promise<EasyshipAccountCredit & { actionRequired?: unknown }> {
+  const amount = Math.round(Number(input.amount) * 100) / 100
+  if (!(amount > 0)) throw new Error('Top-up amount must be positive')
+  const paymentSourceId = input.paymentSourceId.trim()
+  if (!paymentSourceId) throw new Error('payment_source_id is required')
+
+  const res = await fetch(`${config.baseUrl}/account/credit`, {
+    method: 'POST',
+    headers: easyshipHeaders(config, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      payment_source_id: paymentSourceId,
+      amount,
+    }),
+  })
+  const json = (await res.json().catch(() => ({}))) as {
+    credit?: { available_balance?: number; balance?: number; currency?: string }
+    action_required?: unknown
+    error?: { message?: string; details?: string[] | string }
+    message?: string
+  }
+  if (res.status === 202) {
+    return {
+      availableBalance: 0,
+      balance: 0,
+      currency: 'INR',
+      raw: json,
+      actionRequired: json.action_required,
+    }
+  }
+  if (!res.ok) {
+    const details = json.error?.details
+    const detailText = Array.isArray(details)
+      ? details.filter(Boolean).join('; ')
+      : typeof details === 'string'
+        ? details
+        : ''
+    const base = json.error?.message || json.message || `EasyShip credit top-up failed (${res.status})`
+    throw new Error(detailText ? `${base}: ${detailText}` : base)
+  }
+  const credit = json.credit
   return {
     availableBalance: Number(credit?.available_balance ?? 0) || 0,
     balance: Number(credit?.balance ?? 0) || 0,

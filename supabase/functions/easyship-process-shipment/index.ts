@@ -16,6 +16,7 @@ import {
   pickBestDdpRate,
   requestDdpRates,
   resolveEasyshipConfig,
+  withEasyshipCompany,
   type EasyshipParcelItem,
 } from '../_shared/easyship.ts'
 
@@ -88,13 +89,17 @@ Deno.serve(async (request) => {
   const { data: shop } = await admin
     .from('shops')
     .select(
-      'id, user_id, shop_name, shop_email, shop_phone_number, shop_address_id, shop_currency',
+      'id, user_id, shop_name, shop_email, shop_phone_number, shop_address_id, shop_currency, easyship_company_id',
     )
     .eq('id', body.shopId)
     .maybeSingle()
   if (!shop || shop.user_id !== user.id) {
     return jsonResponse({ error: 'Shop not found' }, 404)
   }
+
+  // Prefer shop child company (seller-funded EasyShip). Fall back to platform MOR.
+  const shopCompanyId = String(shop.easyship_company_id ?? '').trim() || null
+  const shipConfig = withEasyshipCompany(config, shopCompanyId)
 
   let shopAddress: Record<string, unknown> = {}
   if (shop.shop_address_id) {
@@ -236,7 +241,7 @@ Deno.serve(async (request) => {
   }
 
   try {
-    const rates = await requestDdpRates(config, {
+    const rates = await requestDdpRates(shipConfig, {
       origin_address: originAddress,
       destination_address: destinationAddress,
       parcels: [{ total_actual_weight: totalWeight || EASYSHIP_DEFAULT_WEIGHT_KG, items: parcelItems }],
@@ -270,22 +275,24 @@ Deno.serve(async (request) => {
       )
     }
 
-    // Carrier labels are funded only from the seller shipping wallet (0% platform commission).
-    // Shared Easyship MOR balance is ops plumbing; never block with "platform retained DDP".
-    const platformCredit = await getAccountCredit(config).catch(() => null)
+    // Gate on the EasyShip company that will be charged (shop child when linked,
+    // else platform MOR). Seller-funded child = SHEconomy does not float freight.
+    const carrierCredit = await getAccountCredit(shipConfig).catch(() => null)
     if (
-      platformCredit &&
-      platformCredit.availableBalance + 1e-9 < shipmentCharge
+      carrierCredit &&
+      carrierCredit.availableBalance + 1e-9 < shipmentCharge
     ) {
       return jsonResponse(
         insufficientShippingCreditResponse(
-          `Carrier wallet cannot cover freight ${shipmentCharge.toFixed(2)}. Top up shipping credit and retry.`,
+          shopCompanyId
+            ? `EasyShip credit ${carrierCredit.availableBalance.toFixed(2)} is below freight ${shipmentCharge.toFixed(2)}. Top up EasyShip from Vendor → Wallet.`
+            : `Platform EasyShip credit ${carrierCredit.availableBalance.toFixed(2)} is below freight ${shipmentCharge.toFixed(2)}. Link seller EasyShip accounts (partner) or top up the MOR account.`,
         ),
         402,
       )
     }
 
-    const created = await createShipment(config, {
+    const created = await createShipment(shipConfig, {
       origin_address: originAddress,
       destination_address: destinationAddress,
       parcels: [{ total_actual_weight: totalWeight || EASYSHIP_DEFAULT_WEIGHT_KG, items: parcelItems }],
