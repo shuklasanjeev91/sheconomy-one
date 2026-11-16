@@ -85,7 +85,7 @@ export async function invokeOwnedAssist<T>(body: Record<string, unknown>): Promi
   const action = String(body.action ?? '')
   if (!authorization && !GUEST_ACTIONS.has(action)) return null
 
-  const payload = withAiLanguage(body)
+  const requestBody = withAiLanguage(body)
 
   const response = await fetch(`${base}/v1/assist`, {
     method: 'POST',
@@ -93,7 +93,7 @@ export async function invokeOwnedAssist<T>(body: Record<string, unknown>): Promi
       'Content-Type': 'application/json',
       ...(authorization ? { Authorization: authorization } : {}),
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(requestBody),
     signal: timeoutSignal(
       action === 'listing_draft_from_image' || action === 'moderate_image' || action === 'describe_search_image'
         ? 45000
