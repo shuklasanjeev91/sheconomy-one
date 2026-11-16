@@ -230,6 +230,10 @@ export function AppShell({ children }: AppShellProps) {
                   width="100%"
                   maxWidth="100%"
                   minHeight={stretchMainContent ? 0 : undefined}
+                  // Keep page content in normal flow above the footer — never
+                  // absolute/overlay. Document desktop grows with listings.
+                  position="relative"
+                  zIndex={0}
                   style={documentDesktopFlex}
                 >
                   {children}

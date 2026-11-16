@@ -113,10 +113,12 @@ body {
 }
 @media (min-width: 1021px) {
   html, body {
-    height: auto;
+    height: auto !important;
+    max-height: none !important;
     min-height: 100vh;
     min-height: 100dvh;
-    overflow-y: auto;
+    overflow-x: hidden;
+    overflow-y: auto !important;
     scroll-behavior: smooth;
   }
   /* Sticky footer: shell fills the viewport so footer sits after content (or at bottom when short). */
@@ -125,6 +127,7 @@ body {
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
+    flex: 1 0 auto;
   }
 }
 ::selection {

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
+import { Platform } from 'react-native'
 
-import { XStack } from '~/components/ui'
+import { XStack, YStack } from '~/components/ui'
 import { useOptionalMarketplacePersonalization } from '~/commerce/context/MarketplacePersonalizationContext'
 import { hasListingImages } from '~/lib/listing-images'
 import type { ListingSummary } from '~/lib/supabase/commerce'
@@ -52,11 +53,13 @@ function slotInsets(indexInRow: number, columns: number) {
 /**
  * Responsive listing grid for page-scroll hosts (Home, browse, shop).
  *
- * Rows are percentage slots with the gutter as slot padding, not `flexBasis`
- * plus a pixel `minWidth` and a percentage `maxWidth`: that combination wraps a
- * card early whenever the row cannot fit `columns` cards at the minimum, while
- * the cap stops the survivors from growing, so every row keeps a card-sized
- * hole at its end (an iPad-width grid asked for 4 and drew 3 plus a gap).
+ * Web uses CSS Grid so the host height always includes every row — Yoga
+ * `flexWrap` can under-measure wrapped rows, which parks the commerce footer
+ * mid-grid over product cards.
+ *
+ * Native keeps percentage slots with the gutter as slot padding (not
+ * `flexBasis` + pixel `minWidth` + percentage `maxWidth`): that combination
+ * wraps early and leaves a card-sized hole at the end of every row.
  *
  * Do not nest a non-scrolling FlashList here — FlashList under-measures inside
  * parent ScrollViews and leaves large blank regions under the first row.
@@ -100,29 +103,60 @@ export function ListingGrid({
     [sponsoredItems, visibleListings],
   )
 
-  const slotWidth = slotWidthForColumns(columns)
+  const cards = mixedListings.map((entry, index) => {
+    const card =
+      entry.kind === 'organic' ? (
+        <ListingCard listing={entry.item} compact={compact} showQuickAdd={showQuickAdd} />
+      ) : (
+        <SponsoredListingCard
+          item={entry.item}
+          compact={compact}
+          onImpression={(item) => onSponsoredEvent?.(item, 'impression')}
+          onClick={(item) => onSponsoredEvent?.(item, 'click')}
+        />
+      )
+
+    if (Platform.OS === 'web') {
+      return (
+        <YStack key={entry.key} width="100%" minWidth={0}>
+          {card}
+        </YStack>
+      )
+    }
+
+    return (
+      <XStack
+        key={entry.key}
+        width={slotWidthForColumns(columns)}
+        minWidth={0}
+        {...slotInsets(index % columns, columns)}
+      >
+        {card}
+      </XStack>
+    )
+  })
+
+  if (Platform.OS === 'web') {
+    return (
+      <YStack
+        width="100%"
+        style={
+          {
+            display: 'grid',
+            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+            gap: GRID_GAP,
+            alignContent: 'start',
+          } as const
+        }
+      >
+        {cards}
+      </YStack>
+    )
+  }
 
   return (
-    <XStack flexWrap="wrap" width="100%" rowGap={GRID_GAP}>
-      {mixedListings.map((entry, index) => (
-        <XStack
-          key={entry.key}
-          width={slotWidth}
-          minWidth={0}
-          {...slotInsets(index % columns, columns)}
-        >
-          {entry.kind === 'organic' ? (
-            <ListingCard listing={entry.item} compact={compact} showQuickAdd={showQuickAdd} />
-          ) : (
-            <SponsoredListingCard
-              item={entry.item}
-              compact={compact}
-              onImpression={(item) => onSponsoredEvent?.(item, 'impression')}
-              onClick={(item) => onSponsoredEvent?.(item, 'click')}
-            />
-          )}
-        </XStack>
-      ))}
+    <XStack flexWrap="wrap" width="100%" rowGap={GRID_GAP} alignContent="flex-start">
+      {cards}
     </XStack>
   )
 }

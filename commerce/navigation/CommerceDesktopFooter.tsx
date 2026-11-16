@@ -1,4 +1,5 @@
 import type { Href } from 'one'
+import { Platform } from 'react-native'
 
 import { RegionPreferencesTrigger } from '~/components/locale'
 import { AppLink } from '~/components/navigation/AppLink'
@@ -30,7 +31,15 @@ export function CommerceDesktopFooter() {
     : commerceRoutes.createShop
 
   return (
-    <YStack width="100%" flexShrink={0}>
+    <YStack
+      width="100%"
+      flexShrink={0}
+      position="relative"
+      zIndex={2}
+      // Document-scroll sticky footer: sit after content, or at the bottom of
+      // short pages when the shell is at least one viewport tall.
+      style={Platform.OS === 'web' ? ({ marginTop: 'auto' } as const) : undefined}
+    >
       <YStack
         backgroundColor={ui.surfaceMuted}
         borderTopWidth={1}
