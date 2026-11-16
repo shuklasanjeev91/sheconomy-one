@@ -14,6 +14,11 @@ export type ListingProductInfo = {
   careInstructions: string | null
   shelfLife: string | null
   warranty: string | null
+  /**
+   * Key feature bullets. Stored as newline-separated text in jsonb
+   * (`key_features`) or as a string array.
+   */
+  keyFeatures: string | null
   /** ISO date `YYYY-MM-DD` when the product was manufactured. */
   manufacturingDate: string | null
   /** ISO date `YYYY-MM-DD` best before / expiry. */
@@ -36,8 +41,31 @@ const EMPTY_PRODUCT_INFO: ListingProductInfo = {
   careInstructions: null,
   shelfLife: null,
   warranty: null,
+  keyFeatures: null,
   manufacturingDate: null,
   expiryDate: null,
+}
+
+/** Split key-features text / array into trimmed non-empty bullets. */
+export function parseKeyFeatures(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter(Boolean)
+  }
+  const raw = typeof value === 'string' ? value : null
+  if (!raw?.trim()) return []
+  return raw
+    .split(/\r?\n|•|·|;/)
+    .map((line) => line.replace(/^\s*[-*]\s*/, '').trim())
+    .filter(Boolean)
+}
+
+export function serializeKeyFeatures(bullets: string[]): string {
+  return bullets
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n')
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -88,6 +116,10 @@ export function parseListingProductInfo(
     unknown
   >
 
+  const keyFeatureBullets = parseKeyFeatures(
+    source.key_features ?? source.keyFeatures ?? source.bullet_points ?? source.bulletPoints,
+  )
+
   return {
     brand: str(source.brand),
     genericName: str(source.generic_name ?? source.genericName),
@@ -104,6 +136,7 @@ export function parseListingProductInfo(
     careInstructions: str(source.care_instructions ?? source.careInstructions),
     shelfLife: str(source.shelf_life ?? source.shelfLife),
     warranty: str(source.warranty),
+    keyFeatures: keyFeatureBullets.length ? serializeKeyFeatures(keyFeatureBullets) : null,
     manufacturingDate: normalizeProductInfoDate(
       source.manufacturing_date ?? source.manufacturingDate,
     ),
@@ -132,6 +165,7 @@ export function serializeListingProductInfo(
     ['careInstructions', 'care_instructions'],
     ['shelfLife', 'shelf_life'],
     ['warranty', 'warranty'],
+    ['keyFeatures', 'key_features'],
     ['manufacturingDate', 'manufacturing_date'],
     ['expiryDate', 'expiry_date'],
   ]
@@ -141,6 +175,11 @@ export function serializeListingProductInfo(
     if (key === 'manufacturingDate' || key === 'expiryDate') {
       const normalized = normalizeProductInfoDate(raw)
       if (normalized) out[snake] = normalized
+      continue
+    }
+    if (key === 'keyFeatures') {
+      const bullets = parseKeyFeatures(raw)
+      if (bullets.length) out[snake] = serializeKeyFeatures(bullets)
       continue
     }
     const value = typeof raw === 'string' ? raw.trim() : ''
@@ -158,9 +197,11 @@ export type ListingSpecification = {
 export function buildManufacturingSpecifications(
   info: ListingProductInfo,
 ): ListingSpecification[] {
+  const featureText = parseKeyFeatures(info.keyFeatures).join(' · ') || null
   const rows: Array<[string, string | null]> = [
     ['Brand', info.brand],
     ['Generic name', info.genericName],
+    ['Key features', featureText],
     ['Manufacturer', info.manufacturerName],
     ['Manufacturer address', info.manufacturerAddress],
     ['Packer', info.packerName],
