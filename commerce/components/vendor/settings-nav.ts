@@ -81,8 +81,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   },
   {
     id: 'warehouse',
-    label: 'Warehouse & ship-from',
-    description: 'Fulfillment address EasyShip uses for shipping labels.',
+    label: 'Warehouse',
+    description: 'Ship-from address EasyShip uses for shipping labels.',
     icon: Icons.Building2,
     ready: true,
   },

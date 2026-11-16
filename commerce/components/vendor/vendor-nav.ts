@@ -145,19 +145,19 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
     title: 'Fulfillment',
     items: [
       {
+        id: 'settings-warehouse',
+        label: 'Warehouse',
+        description: 'Ship-from address and warehouse inventory location.',
+        icon: Icons.Building2,
+        href: settingsHref('warehouse'),
+        ready: true,
+      },
+      {
         id: 'delivery',
         label: 'Delivery',
         description: 'Carriers, EasyShip labels, and shipping wallet.',
         icon: Icons.Truck,
         href: vendorRoutes.delivery,
-        ready: true,
-      },
-      {
-        id: 'settings-warehouse',
-        label: 'Warehouse & ship-from',
-        description: 'Fulfillment address for EasyShip labels.',
-        icon: Icons.Building2,
-        href: settingsHref('warehouse'),
         ready: true,
       },
       {

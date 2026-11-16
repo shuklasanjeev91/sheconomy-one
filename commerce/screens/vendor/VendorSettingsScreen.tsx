@@ -291,14 +291,9 @@ const HUB_GROUPS: {
     sectionIds: ['verification', 'payments'],
   },
   {
-    title: 'Policies',
-    blurb: 'Shipping rates and return rules buyers see at checkout.',
-    sectionIds: ['shipping', 'returns'],
-  },
-  {
     title: 'Fulfillment',
-    blurb: 'Ship-from warehouse used when you buy EasyShip labels.',
-    sectionIds: ['warehouse'],
+    blurb: 'Ship-from warehouse, shipping rates, and return rules.',
+    sectionIds: ['warehouse', 'shipping', 'returns'],
   },
   {
     title: 'Team',
