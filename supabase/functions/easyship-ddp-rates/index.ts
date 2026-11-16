@@ -106,7 +106,9 @@ Deno.serve(async (request) => {
 
   const { data: listings } = await admin
     .from('listings')
-    .select('id, title, price, shop_id, listing_type, shipping_required, metadata, currency')
+    .select(
+      'id, title, price, shop_id, listing_type, shipping_required, listing_metadata, product_info, weight, dimensions',
+    )
     .in('id', listingIds)
 
   const { data: shops } = await admin
@@ -176,29 +178,37 @@ Deno.serve(async (request) => {
 
     const items: EasyshipParcelItem[] = physical.map((line) => {
       const listing = listingById.get(line.listing_id)
-      const meta = listing?.metadata
+      const meta = listing?.listing_metadata
+      const productInfo = listing?.product_info
       const hs = readMeta(meta, 'hs_code') || '99999900'
       const origin =
         readMeta(meta, 'country_of_origin') ||
         readMeta(meta, 'origin_country') ||
+        readMeta(productInfo, 'countryOfOrigin') ||
+        readMeta(productInfo, 'country_of_origin') ||
         originCountry
       if (!readMeta(meta, 'hs_code')) {
         warnings.push(`Listing ${line.listing_id} missing hs_code; using fallback`)
       }
-      const weightRaw = Number(readMeta(meta, 'weight_kg') || readMeta(meta, 'weight'))
+      const weightCol = Number(listing?.weight)
+      const weightFromMeta = Number(readMeta(meta, 'weight_kg') || readMeta(meta, 'weight'))
+      const weightRaw =
+        Number.isFinite(weightCol) && weightCol > 0
+          ? weightCol
+          : Number.isFinite(weightFromMeta) && weightFromMeta > 0
+            ? weightFromMeta
+            : EASYSHIP_DEFAULT_WEIGHT_KG
       return {
         description: String(listing?.title || 'Item').slice(0, 200),
         quantity: line.quantity,
-        declared_currency: String(listing?.currency || 'INR').toUpperCase(),
+        declared_currency: String(shop?.shop_currency || 'INR').toUpperCase(),
         declared_customs_value: Math.max(
           0.01,
           Number(line.unit_price) * Number(line.quantity),
         ),
         hs_code: hs.replace(/\D/g, '').padEnd(8, '0').slice(0, 8),
         origin_country_alpha2: origin.slice(0, 2),
-        actual_weight: Number.isFinite(weightRaw) && weightRaw > 0
-          ? weightRaw
-          : EASYSHIP_DEFAULT_WEIGHT_KG,
+        actual_weight: weightRaw,
         dimensions: EASYSHIP_DEFAULT_DIMS,
       }
     })

@@ -109,7 +109,7 @@ Deno.serve(async (request) => {
   let itemsQuery = admin
     .from('order_items')
     .select(
-      'id, order_id, vendor_id, listing_id, quantity, unit_price, item_status, product_title, product_sku, listings(title, metadata, currency)',
+      'id, order_id, vendor_id, listing_id, quantity, unit_price, item_status, product_title, product_sku, listings(title, listing_metadata, product_info, weight, dimensions)',
     )
     .eq('order_id', body.orderId)
     .eq('vendor_id', body.shopId)
@@ -150,31 +150,48 @@ Deno.serve(async (request) => {
   const parcelItems: EasyshipParcelItem[] = items.map((item, index) => {
     const listing = Array.isArray(item.listings) ? item.listings[0] : item.listings
     const listingObj = (listing ?? {}) as Record<string, unknown>
-    const meta = listingObj.metadata
+    const meta = listingObj.listing_metadata
+    const productInfo = listingObj.product_info
     const hs = readMeta(meta, 'hs_code') || '99999900'
     const origin =
       readMeta(meta, 'country_of_origin') ||
       readMeta(meta, 'origin_country') ||
+      readMeta(productInfo, 'countryOfOrigin') ||
+      readMeta(productInfo, 'country_of_origin') ||
       originCountry
-    const weightRaw = Number(readMeta(meta, 'weight_kg') || readMeta(meta, 'weight'))
+    const weightCol = Number(listingObj.weight)
+    const weightFromMeta = Number(readMeta(meta, 'weight_kg') || readMeta(meta, 'weight'))
+    const weightRaw =
+      Number.isFinite(weightCol) && weightCol > 0
+        ? weightCol
+        : Number.isFinite(weightFromMeta) && weightFromMeta > 0
+          ? weightFromMeta
+          : EASYSHIP_DEFAULT_WEIGHT_KG
+    let dims = EASYSHIP_DEFAULT_DIMS
+    const rawDims = listingObj.dimensions
+    if (rawDims && typeof rawDims === 'object' && !Array.isArray(rawDims)) {
+      const d = rawDims as Record<string, unknown>
+      const length = Number(d.length ?? d.l)
+      const width = Number(d.width ?? d.w)
+      const height = Number(d.height ?? d.h)
+      if (length > 0 && width > 0 && height > 0) {
+        dims = { length, width, height }
+      }
+    }
     return {
       description: str(item.product_title || listingObj.title, `Item ${index + 1}`).slice(0, 200),
       sku: str(item.product_sku || item.listing_id, `sku-${index + 1}`),
       quantity: Number(item.quantity ?? 1) || 1,
       category: 'fashion',
-      declared_currency: str(
-        listingObj.currency || order.currency || shop.shop_currency,
-        'INR',
-      ).toUpperCase(),
+      declared_currency: str(order.currency || shop.shop_currency, 'INR').toUpperCase(),
       declared_customs_value: Math.max(
         0.01,
         Number(item.unit_price ?? 0) * (Number(item.quantity ?? 1) || 1),
       ),
       hs_code: hs.replace(/\D/g, '').padEnd(8, '0').slice(0, 8),
       origin_country_alpha2: origin.slice(0, 2),
-      actual_weight:
-        Number.isFinite(weightRaw) && weightRaw > 0 ? weightRaw : EASYSHIP_DEFAULT_WEIGHT_KG,
-      dimensions: EASYSHIP_DEFAULT_DIMS,
+      actual_weight: weightRaw,
+      dimensions: dims,
     }
   })
 
