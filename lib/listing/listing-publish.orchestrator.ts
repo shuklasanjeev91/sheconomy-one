@@ -32,7 +32,8 @@ import { replaceMaterials } from '~/lib/listing/listing-materials.service'
 import { replaceVariations } from '~/lib/listing/listing-variations.service'
 import { generateUniqueSku, normalizeSku } from '~/lib/listing/sku.utils'
 import { LISTING_STATUS, LISTING_TYPES } from '~/lib/listing/listing.type'
-import type { ListingCategoryInput, ListingFormData } from '~/lib/listing/listing.type'
+import type { ListingCategoryInput, ListingFormData, ListingImageDraft } from '~/lib/listing/listing.type'
+import { readChildSkuMeta } from '~/commerce/lib/listing-variant-skus'
 
 // Shop sections — attach via existing save_shop_section RPC / vendor-operations.
 
@@ -217,8 +218,14 @@ async function validatePublishingRequirements(
     }
 
     const images = publishData.images
-    if (publishImmediately && (!Array.isArray(images) || images.length === 0)) {
-      return { success: false, error: 'At least one image is required to publish a listing' }
+    if (
+      publishImmediately &&
+      (!Array.isArray(images) || images.length < 3)
+    ) {
+      return {
+        success: false,
+        error: 'Upload at least 3 product images before publishing (main + detail shots).',
+      }
     }
 
     // Each image must have either an upload payload (blob) or an existing URL.
@@ -322,10 +329,23 @@ async function createMainListing(
 
 // ============= STEP: IMAGES =============
 
+function resolveImageVariationId(
+  draft: ListingImageDraft,
+  tempKeyToVariationId: Map<string, string>,
+): string | null {
+  if (draft.variation_id) return draft.variation_id
+  const tempKey = draft.variant_temp_key?.trim()
+  if (tempKey && tempKeyToVariationId.has(tempKey)) {
+    return tempKeyToVariationId.get(tempKey) ?? null
+  }
+  return null
+}
+
 async function processListingImages(
   listingId: string,
   images: ListingFormData['images'] = [],
   userId?: string | null,
+  tempKeyToVariationId: Map<string, string> = new Map(),
 ): Promise<StepResult> {
   if (!images || images.length === 0) {
     return { success: false, error: 'Images are required for listing publication', images_processed: 0 }
@@ -374,6 +394,7 @@ async function processListingImages(
 
       const altText = (draft.alt_text ?? '').trim() || null
       const imageType = uploaded?.fileType?.split('/')[1] ?? draft.image_type ?? null
+      const variationId = resolveImageVariationId(draft, tempKeyToVariationId)
 
       const addResult = await addImage(
         listingId,
@@ -381,11 +402,12 @@ async function processListingImages(
           image_url: imageUrl,
           alt_text: altText,
           display_order: draft.display_order ?? i,
-          is_primary: draft.is_primary ?? i === 0,
+          is_primary: draft.is_primary ?? (i === 0 && !variationId),
           file_size: uploaded?.fileSize ?? draft.file_size ?? null,
           width: draft.width ?? null,
           height: draft.height ?? null,
           image_type: imageType,
+          variation_id: variationId,
         },
         userId,
       )
@@ -448,12 +470,27 @@ async function createListingVariations(
   variations: ListingFormData['variations'] = [],
 ): Promise<StepResult> {
   if (!variations || variations.length === 0) {
-    return { success: true, message: 'No variations to create', variations_created: 0 }
+    return {
+      success: true,
+      message: 'No variations to create',
+      variations_created: 0,
+      temp_key_to_variation_id: {},
+    }
   }
   const response = await replaceVariations(listingId, variations)
   if (!response.success) return { success: false, error: response.error ?? 'Variations creation failed' }
-  const created = response.data?.length ?? 0
-  return { success: true, variations_created: created, message: `Created ${created} variations successfully` }
+  const createdRows = response.data ?? []
+  const tempKeyToVariationId: Record<string, string> = {}
+  for (const row of createdRows) {
+    const meta = readChildSkuMeta(row.variation_metadata)
+    if (meta?.tempKey) tempKeyToVariationId[meta.tempKey] = row.id
+  }
+  return {
+    success: true,
+    variations_created: createdRows.length,
+    temp_key_to_variation_id: tempKeyToVariationId,
+    message: `Created ${createdRows.length} variations successfully`,
+  }
 }
 
 async function createListingAttributes(
@@ -646,6 +683,16 @@ export const listingPublishOrchestrator = {
           run: () => createMainListing(publishData, publishImmediately),
         },
         {
+          step: PUBLISH_STEPS.CATEGORIES,
+          run: () =>
+            assignListingCategories(publishResult.listing_id as string, publishData.categories, userId),
+        },
+        {
+          // Child SKUs before images so variant galleries can bind variation_id.
+          step: PUBLISH_STEPS.VARIATIONS,
+          run: () => createListingVariations(publishResult.listing_id as string, publishData.variations),
+        },
+        {
           step: PUBLISH_STEPS.IMAGES,
           critical: true,
           run: async () => {
@@ -653,21 +700,19 @@ export const listingPublishOrchestrator = {
             if (!publishData.images?.length) {
               return { success: true, images_processed: 0 }
             }
+            const variationStep = publishResult.detailed_results?.[PUBLISH_STEPS.VARIATIONS] as
+              | { temp_key_to_variation_id?: Record<string, string> }
+              | undefined
+            const tempMap = new Map(
+              Object.entries(variationStep?.temp_key_to_variation_id ?? {}),
+            )
             return processListingImages(
               publishResult.listing_id as string,
               publishData.images,
               userId,
+              tempMap,
             )
           },
-        },
-        {
-          step: PUBLISH_STEPS.CATEGORIES,
-          run: () =>
-            assignListingCategories(publishResult.listing_id as string, publishData.categories, userId),
-        },
-        {
-          step: PUBLISH_STEPS.VARIATIONS,
-          run: () => createListingVariations(publishResult.listing_id as string, publishData.variations),
         },
         {
           step: PUBLISH_STEPS.ATTRIBUTES,

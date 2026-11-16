@@ -81,10 +81,14 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import type { ListingLoaderResult } from '~/commerce/lib/listing-loader'
 import {
   buildListingSpecifications,
+  filterImagesForVariant,
   getDefaultVariantSelection,
   getSelectedVariations,
+  getVariantMrp,
   getVariantPrice,
+  getVariantPriceIncludesTax,
   getVariantStock,
+  getVariantTaxPercent,
   groupListingVariations,
 } from '~/commerce/lib/listing-detail'
 import {
@@ -308,12 +312,20 @@ export function ListingScreen({
     }
   }, [listing?.id, listing?.shop_id])
 
+  const selectedVariationsPreview = getSelectedVariations(variations, variantSelection)
+  const selectedVariantIdPreview = selectedVariationsPreview[0]?.id ?? null
+
   // ─── Memoized image sorting and gallery URLs ──────────────────────────────
   const sortedImages = useMemo(() => {
-    return [...images].sort(
+    const scoped = filterImagesForVariant(images, selectedVariantIdPreview)
+    return [...scoped].sort(
       (a, b) => (a.is_primary ? -1 : 0) - (b.is_primary ? -1 : 0) || a.display_order - b.display_order,
     )
-  }, [images])
+  }, [images, selectedVariantIdPreview])
+
+  useEffect(() => {
+    setActiveImageIndex(0)
+  }, [selectedVariantIdPreview, listing?.id])
 
   const galleryUrls = useMemo(() => sortedImages.map((image) => image.image_url), [sortedImages])
 
@@ -378,10 +390,16 @@ export function ListingScreen({
   }
 
   const currency = listing.shops?.shop_currency ?? 'INR'
-  const selectedVariations = getSelectedVariations(variations, variantSelection)
+  const selectedVariations = selectedVariationsPreview
   const displayPrice = getVariantPrice(listing.price, selectedVariations)
   const displayStock = getVariantStock(listing.stock, selectedVariations)
-  const selectedVariantId = selectedVariations[0]?.id ?? null
+  const displayMrp = getVariantMrp(listing.mrp, selectedVariations)
+  const displayTaxPercent = getVariantTaxPercent(listing.tax_percent, selectedVariations)
+  const displayPriceIncludesTax = getVariantPriceIncludesTax(
+    listing.price_includes_tax,
+    selectedVariations,
+  )
+  const selectedVariantId = selectedVariantIdPreview
   const listingMeta =
     listing.listing_metadata && typeof listing.listing_metadata === 'object'
       ? (listing.listing_metadata as Record<string, unknown>)
@@ -509,17 +527,20 @@ export function ListingScreen({
     })()
   }
 
+  const baseProductInfo = parseListingProductInfo(listing.product_info, listing.listing_metadata)
+  const childHsn = selectedVariations[0]?.hsn_code?.trim()
   const specifications = buildListingSpecifications({
     sku: selectedVariations[0]?.sku ?? listing.sku,
-    weight: listing.weight,
+    weight: selectedVariations[0]?.weight ?? listing.weight,
     dimensions: listing.dimensions,
     category: listing.category,
     listingType: listing.listing_type,
     attributes,
     tags: listing.tags,
-    productInfoSpecs: buildManufacturingSpecifications(
-      parseListingProductInfo(listing.product_info, listing.listing_metadata),
-    ),
+    productInfoSpecs: buildManufacturingSpecifications({
+      ...baseProductInfo,
+      ...(childHsn ? { hsnCode: childHsn } : {}),
+    }),
   })
 
   const shopAddressRaw = listing.shops?.shop_addresses
@@ -937,10 +958,10 @@ export function ListingScreen({
                 <YStack gap="$2">
                   <ListingPriceBlock
                     price={displayPrice}
-                    mrp={listing.mrp}
+                    mrp={displayMrp}
                     currency={currency}
-                    priceIncludesTax={listing.price_includes_tax}
-                    taxPercent={listing.tax_percent}
+                    priceIncludesTax={displayPriceIncludesTax}
+                    taxPercent={displayTaxPercent}
                     size="lg"
                   />
                   {fromCommunityPost && communityPostId && listing?.id ? (
@@ -986,9 +1007,9 @@ export function ListingScreen({
 
         <ListingMobileStickyBuyBar
           price={displayPrice}
-          mrp={listing.mrp}
-          priceIncludesTax={listing.price_includes_tax}
-          taxPercent={listing.tax_percent}
+          mrp={displayMrp}
+          priceIncludesTax={displayPriceIncludesTax}
+          taxPercent={displayTaxPercent}
           currency={currency}
           disabled={((outOfStock && !allowPreorder) && !showInCart) || purchaseLocked}
           isLoading={isAddingToCart}
@@ -1119,10 +1140,10 @@ export function ListingScreen({
         <YStack gap="$2" width="100%">
           <ListingPriceBlock
             price={displayPrice}
-            mrp={listing.mrp}
+            mrp={displayMrp}
             currency={currency}
-            priceIncludesTax={listing.price_includes_tax}
-            taxPercent={listing.tax_percent}
+            priceIncludesTax={displayPriceIncludesTax}
+            taxPercent={displayTaxPercent}
             size="lg"
           />
           {fromCommunityPost && communityPostId && listing?.id ? (

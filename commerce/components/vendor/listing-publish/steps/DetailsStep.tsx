@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { GeoSelectField } from '~/components/geo/GeoSelectField'
 import {
@@ -31,6 +32,16 @@ import {
   parseListingProductInfo,
   type ListingProductInfo,
 } from '~/commerce/lib/listing-product-info'
+import {
+  buildChildSkuMetadata,
+  cartesianAxes,
+  childSkuLabels,
+  childSkuTempKey,
+  parseVariationAxes,
+  withVariationAxes,
+  type VariationAxis,
+} from '~/commerce/lib/listing-variant-skus'
+import type { ListingImageDraft, ListingVariationInsert } from '~/lib/listing/listing.type'
 
 import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
 import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
@@ -48,19 +59,27 @@ type DetailsStepProps = {
   onUpdateMetadata: (key: string, value: unknown) => void
 }
 
-const VARIATION_TYPES = ['Color', 'Size', 'Material', 'Style'] as const
+const AXIS_PRESETS = ['Color', 'Size', 'Material', 'Style'] as const
 
 export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }: DetailsStepProps) {
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
   const materials = formData.materials ?? []
   const variations = formData.variations ?? []
   const attributes = formData.attributes ?? []
+  const images = formData.images ?? []
   const isDigital = formData.listing_type === LISTING_TYPES.DIGITAL
   const productInfo = parseListingProductInfo(formData.product_info)
   const countryOptions = useMemo(() => getAllGeoCountries().map(countryToOption), [])
   const [showPackerImporter, setShowPackerImporter] = useState(
     Boolean(productInfo.packerName || productInfo.packerAddress || productInfo.importerName),
   )
+  const [axes, setAxes] = useState<VariationAxis[]>(() => {
+    const fromMeta = parseVariationAxes(formData.listing_metadata)
+    if (fromMeta.length) return fromMeta
+    return [{ name: 'Color', values: [] }]
+  })
+  const [axisValueDraft, setAxisValueDraft] = useState<Record<number, string>>({})
+  const [variantError, setVariantError] = useState<string | null>(null)
 
   function updateProductInfo(patch: Partial<ListingProductInfo>) {
     const next = patchListingProductInfo(formData.product_info, patch)
@@ -96,20 +115,131 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
     onUpdate('materials', materials.filter((_, i) => i !== index))
   }
 
-  function addVariation() {
-    onUpdate('variations', [
-      ...variations,
-      { variation_name: 'Color', variation_value: '', price_adjustment: 0, stock: 0 },
-    ])
+  function persistAxes(nextAxes: VariationAxis[]) {
+    setAxes(nextAxes)
+    const nextMeta = withVariationAxes(
+      (formData.listing_metadata ?? {}) as Record<string, unknown>,
+      nextAxes,
+    )
+    onUpdate('listing_metadata', nextMeta as ListingFormData['listing_metadata'])
+  }
+
+  function addAxis() {
+    const unused = AXIS_PRESETS.find((name) => !axes.some((axis) => axis.name === name))
+    persistAxes([...axes, { name: unused ?? `Option ${axes.length + 1}`, values: [] }])
+  }
+
+  function updateAxis(index: number, patch: Partial<VariationAxis>) {
+    persistAxes(axes.map((axis, i) => (i === index ? { ...axis, ...patch } : axis)))
+  }
+
+  function removeAxis(index: number) {
+    persistAxes(axes.filter((_, i) => i !== index))
+  }
+
+  function addAxisValue(index: number) {
+    const raw = (axisValueDraft[index] ?? '').trim()
+    if (!raw) return
+    const axis = axes[index]
+    if (!axis) return
+    if (axis.values.includes(raw)) {
+      setAxisValueDraft((current) => ({ ...current, [index]: '' }))
+      return
+    }
+    updateAxis(index, { values: [...axis.values, raw] })
+    setAxisValueDraft((current) => ({ ...current, [index]: '' }))
+  }
+
+  function generateChildSkus() {
+    const { combinations, error } = cartesianAxes(axes)
+    setVariantError(error)
+    if (!combinations.length) {
+      setVariantError(error ?? 'Add at least one axis with values, then generate SKUs.')
+      return
+    }
+
+    const basePrice = Number(formData.price) || 0
+    const baseMrp = Number(formData.mrp) || null
+    const baseTax = Number(formData.tax_percent) || null
+    const baseIncludes = Boolean(formData.price_includes_tax)
+    const baseHsn = productInfo.hsnCode ?? ''
+    const existingByKey = new Map(
+      variations.map((row) => {
+        const meta = row.variation_metadata as { tempKey?: string; options?: Record<string, string> } | null
+        const key =
+          meta?.tempKey ??
+          (meta?.options ? childSkuTempKey(meta.options) : `${row.variation_name}|${row.variation_value}`)
+        return [key, row] as const
+      }),
+    )
+
+    const next: Partial<ListingVariationInsert>[] = combinations.map((options, index) => {
+      const tempKey = childSkuTempKey(options)
+      const labels = childSkuLabels(options)
+      const prev = existingByKey.get(tempKey)
+      return {
+        ...(prev ?? {}),
+        variation_name: labels.variation_name,
+        variation_value: labels.variation_value,
+        price: prev?.price ?? basePrice,
+        mrp: prev?.mrp ?? baseMrp,
+        tax_percent: prev?.tax_percent ?? baseTax,
+        price_includes_tax:
+          typeof prev?.price_includes_tax === 'boolean' ? prev.price_includes_tax : baseIncludes,
+        hsn_code: prev?.hsn_code ?? baseHsn,
+        weight: prev?.weight ?? formData.weight ?? null,
+        stock: prev?.stock ?? 0,
+        sku: prev?.sku ?? '',
+        display_order: index,
+        is_available: prev?.is_available !== false,
+        variation_metadata: buildChildSkuMetadata(options, tempKey) as never,
+      }
+    })
+
+    onUpdate('variations', next)
+    const stockSum = next.reduce((sum, row) => sum + (Number(row.stock) || 0), 0)
+    onUpdate('stock', stockSum)
+    onUpdate('quantity', stockSum)
+    persistAxes(axes)
   }
 
   function updateVariation(index: number, patch: Record<string, unknown>) {
     const next = variations.map((row, i) => (i === index ? { ...row, ...patch } : row))
     onUpdate('variations', next)
+    if ('stock' in patch) {
+      const stockSum = next.reduce((sum, row) => sum + (Number(row.stock) || 0), 0)
+      onUpdate('stock', stockSum)
+      onUpdate('quantity', stockSum)
+    }
   }
 
   function removeVariation(index: number) {
-    onUpdate('variations', variations.filter((_, i) => i !== index))
+    const removed = variations[index]
+    const meta = removed?.variation_metadata as { tempKey?: string } | null
+    const tempKey = meta?.tempKey
+    onUpdate(
+      'variations',
+      variations.filter((_, i) => i !== index),
+    )
+    if (tempKey) {
+      onUpdate(
+        'images',
+        images.filter((img) => img.variant_temp_key !== tempKey),
+      )
+    }
+  }
+
+  function addVariantImages(tempKey: string, files: FileList | null) {
+    if (!files?.length) return
+    const drafts: ListingImageDraft[] = Array.from(files).map((file, index) => ({
+      blob: file,
+      mimeType: file.type || 'image/jpeg',
+      fileName: file.name,
+      display_order: images.length + index,
+      is_primary: false,
+      variant_temp_key: tempKey,
+    }))
+    onUpdate('images', [...images, ...drafts])
   }
 
   function addAttribute() {
@@ -235,67 +365,235 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
       {isDigital ? null : (
         <ListingPublishCard
           ui={ui}
-          title="Product Variations"
+          title="Variant SKUs"
           headerRight={
-            <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addVariation}>
-              + Add Variation
-            </Text>
+            <XStack gap="$3" alignItems="center">
+              <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addAxis}>
+                + Axis
+              </Text>
+              <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={generateChildSkus}>
+                Generate SKUs
+              </Text>
+            </XStack>
           }
         >
-          <ListingPublishFieldError ui={ui} message={errors.variations} />
-          <YStack gap="$2">
-            {variations.map((variation, index) => (
-              <XStack
-                key={`variation-${index}`}
+          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
+            Define options (Color, Size, …), generate combinations, then set price, tax, HSN, stock, and
+            images per child SKU — like Amazon parent/child listings.
+          </Text>
+          <ListingPublishFieldError ui={ui} message={errors.variations || variantError || undefined} />
+
+          <YStack gap="$3">
+            {axes.map((axis, axisIndex) => (
+              <YStack
+                key={`axis-${axisIndex}`}
                 gap="$2"
-                alignItems="flex-end"
-                flexWrap="wrap"
                 padding="$3"
                 borderRadius={12}
                 backgroundColor={ui.surfaceMuted}
               >
-                <Field label="Type" flex={1} minWidth={130}>
-                  <Select
-                    value={variation.variation_name ?? 'Color'}
-                    onValueChange={(value) => updateVariation(index, { variation_name: value })}
-                  >
-                    <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
-                      <Select.Value placeholder="Type" />
-                    </SelectTrigger>
-                    <SelectContent zIndex={300000}>
-                      <SelectViewport>
-                        {VARIATION_TYPES.map((type, typeIndex) => (
-                          <SelectItem key={type} index={typeIndex} value={type}>
-                            <Select.ItemText>{type}</Select.ItemText>
-                          </SelectItem>
-                        ))}
-                      </SelectViewport>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Value" flex={2} minWidth={140}>
-                  <Input
-                    value={variation.variation_value ?? ''}
-                    onChangeText={(value) => updateVariation(index, { variation_value: value })}
+                <XStack gap="$2" alignItems="flex-end" flexWrap="wrap">
+                  <Field label="Option name" flex={1} minWidth={140}>
+                    <Select
+                      value={axis.name}
+                      onValueChange={(value) => updateAxis(axisIndex, { name: value })}
+                    >
+                      <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
+                        <Select.Value placeholder="Option" />
+                      </SelectTrigger>
+                      <SelectContent zIndex={300000}>
+                        <SelectViewport>
+                          {AXIS_PRESETS.map((type, typeIndex) => (
+                            <SelectItem key={type} index={typeIndex} value={type}>
+                              <Select.ItemText>{type}</Select.ItemText>
+                            </SelectItem>
+                          ))}
+                        </SelectViewport>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Add value" flex={2} minWidth={160}>
+                    <Input
+                      value={axisValueDraft[axisIndex] ?? ''}
+                      onChangeText={(value) =>
+                        setAxisValueDraft((current) => ({ ...current, [axisIndex]: value }))
+                      }
+                      onSubmitEditing={() => addAxisValue(axisIndex)}
+                      placeholder="e.g. Red"
+                    />
+                  </Field>
+                  <Button tone="outline" size="$3" onPress={() => addAxisValue(axisIndex)}>
+                    Add
+                  </Button>
+                  <Button
+                    tone="ghost"
+                    size="$2"
+                    icon={<Icons.Trash2 size={14} />}
+                    onPress={() => removeAxis(axisIndex)}
                   />
-                </Field>
-                <Field label="Price Adj." flex={1} minWidth={100}>
-                  <Input
-                    value={String(variation.price_adjustment ?? 0)}
-                    onChangeText={(value) => updateVariation(index, { price_adjustment: value })}
-                    keyboardType="numeric"
-                  />
-                </Field>
-                <Field label="Stock" flex={1} minWidth={90}>
-                  <Input
-                    value={String(variation.stock ?? 0)}
-                    onChangeText={(value) => updateVariation(index, { stock: value })}
-                    keyboardType="numeric"
-                  />
-                </Field>
-                <Button tone="ghost" size="$2" icon={<Icons.X size={14} />} onPress={() => removeVariation(index)} />
-              </XStack>
+                </XStack>
+                <XStack gap="$2" flexWrap="wrap">
+                  {axis.values.map((value) => (
+                    <XStack
+                      key={`${axis.name}-${value}`}
+                      paddingHorizontal="$2.5"
+                      paddingVertical={4}
+                      borderRadius={999}
+                      backgroundColor={ui.surface}
+                      borderWidth={1}
+                      borderColor={ui.borderSubtle}
+                      alignItems="center"
+                      gap="$1.5"
+                    >
+                      <Text fontSize={12} fontWeight="600" color={ui.text}>
+                        {value}
+                      </Text>
+                      <Text
+                        fontSize={12}
+                        color={ui.textMuted}
+                        cursor="pointer"
+                        onPress={() =>
+                          updateAxis(axisIndex, {
+                            values: axis.values.filter((entry) => entry !== value),
+                          })
+                        }
+                      >
+                        ×
+                      </Text>
+                    </XStack>
+                  ))}
+                </XStack>
+              </YStack>
             ))}
+          </YStack>
+
+          <YStack gap="$3" marginTop="$2">
+            {variations.map((variation, index) => {
+              const meta = variation.variation_metadata as {
+                tempKey?: string
+                options?: Record<string, string>
+              } | null
+              const tempKey = meta?.tempKey ?? childSkuTempKey(meta?.options ?? {})
+              const childImages = images.filter((img) => img.variant_temp_key === tempKey)
+              return (
+                <YStack
+                  key={tempKey || `variation-${index}`}
+                  gap="$2.5"
+                  padding="$3"
+                  borderRadius={12}
+                  borderWidth={1}
+                  borderColor={ui.borderSubtle}
+                  backgroundColor={ui.surface}
+                >
+                  <XStack justifyContent="space-between" alignItems="center" gap="$2">
+                    <YStack flex={1} minWidth={0} gap={2}>
+                      <Text fontSize={14} fontWeight="800" color={ui.text}>
+                        {variation.variation_value || 'Child SKU'}
+                      </Text>
+                      <Text fontSize={11.5} color={ui.textMuted}>
+                        {variation.variation_name}
+                      </Text>
+                    </YStack>
+                    <Button
+                      tone="ghost"
+                      size="$2"
+                      icon={<Icons.X size={14} />}
+                      onPress={() => removeVariation(index)}
+                    />
+                  </XStack>
+
+                  <XStack gap="$2" flexWrap="wrap">
+                    <Field label="Price" flex={1} minWidth={110}>
+                      <Input
+                        value={String(variation.price ?? formData.price ?? 0)}
+                        onChangeText={(value) => updateVariation(index, { price: value })}
+                        keyboardType="numeric"
+                      />
+                    </Field>
+                    <Field label="MRP" flex={1} minWidth={110}>
+                      <Input
+                        value={String(variation.mrp ?? '')}
+                        onChangeText={(value) => updateVariation(index, { mrp: value })}
+                        keyboardType="numeric"
+                      />
+                    </Field>
+                    <Field label="Tax %" flex={1} minWidth={90}>
+                      <Input
+                        value={String(variation.tax_percent ?? formData.tax_percent ?? '')}
+                        onChangeText={(value) => updateVariation(index, { tax_percent: value })}
+                        keyboardType="numeric"
+                      />
+                    </Field>
+                    <Field label="Stock" flex={1} minWidth={90}>
+                      <Input
+                        value={String(variation.stock ?? 0)}
+                        onChangeText={(value) => updateVariation(index, { stock: value })}
+                        keyboardType="numeric"
+                      />
+                    </Field>
+                  </XStack>
+
+                  <XStack gap="$2" flexWrap="wrap" alignItems="center">
+                    <Field label="SKU" flex={1} minWidth={140}>
+                      <Input
+                        value={variation.sku ?? ''}
+                        onChangeText={(value) => updateVariation(index, { sku: value })}
+                        placeholder="Child SKU"
+                      />
+                    </Field>
+                    <Field label="HSN" flex={1} minWidth={120}>
+                      <Input
+                        value={variation.hsn_code ?? ''}
+                        onChangeText={(value) => updateVariation(index, { hsn_code: value })}
+                        placeholder="HSN / SAC"
+                      />
+                    </Field>
+                    <Field label="Weight (kg)" flex={1} minWidth={110}>
+                      <Input
+                        value={String(variation.weight ?? '')}
+                        onChangeText={(value) => updateVariation(index, { weight: value })}
+                        keyboardType="numeric"
+                      />
+                    </Field>
+                    <XStack alignItems="center" gap="$2" paddingTop="$4">
+                      <Switch
+                        checked={Boolean(
+                          variation.price_includes_tax ?? formData.price_includes_tax,
+                        )}
+                        onCheckedChange={(checked) =>
+                          updateVariation(index, { price_includes_tax: checked })
+                        }
+                      />
+                      <Text fontSize={12} color={ui.textSecondary}>
+                        Price includes tax
+                      </Text>
+                    </XStack>
+                  </XStack>
+
+                  <YStack gap="$1.5">
+                    <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
+                      Variant images ({childImages.length})
+                    </Text>
+                    {Platform.OS === 'web' ? (
+                      // eslint-disable-next-line react/forbid-elements -- web-only gallery picker
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(event) => {
+                          addVariantImages(tempKey, (event.target as HTMLInputElement).files)
+                          ;(event.target as HTMLInputElement).value = ''
+                        }}
+                      />
+                    ) : (
+                      <Text fontSize={12} color={ui.textMuted}>
+                        Add variant images from web publish for now.
+                      </Text>
+                    )}
+                  </YStack>
+                </YStack>
+              )
+            })}
           </YStack>
         </ListingPublishCard>
       )}
@@ -303,26 +601,45 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
       {isDigital ? null : (
         <ListingPublishCard ui={ui} title="Product information">
           <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-            Shown on the product page under Product details. Manufacturer and country of origin are
-            required for physical products.
+            Product details: brand, manufacturer, country of origin, and key features
+            are required before publish. Shown on the product page under Product details.
           </Text>
 
           <XStack gap="$3" flexWrap="wrap">
-            <Field label="Brand" flex={1} minWidth={160}>
+            <Field label="Brand" required flex={1} minWidth={160} error={errors.brand}>
               <Input
                 value={readProductInfoString(formData.product_info, 'brand')}
                 onChangeText={(value) => updateProductInfo({ brand: value })}
                 placeholder="Your brand name"
+                invalid={!!errors.brand}
               />
             </Field>
-            <Field label="Generic name" flex={1} minWidth={160}>
+            <Field label="Generic name" required flex={1} minWidth={160} error={errors.generic_name}>
               <Input
                 value={readProductInfoString(formData.product_info, 'generic_name')}
                 onChangeText={(value) => updateProductInfo({ genericName: value })}
                 placeholder="e.g. Handwoven cotton stole"
+                invalid={!!errors.generic_name}
               />
             </Field>
           </XStack>
+          <ListingPublishFieldError ui={ui} message={errors.brand || errors.generic_name} />
+
+          <Field label="Key features (one per line)" required error={errors.key_features}>
+            <TextArea
+              minHeight={110}
+              value={readProductInfoString(formData.product_info, 'key_features')}
+              onChangeText={(value) => updateProductInfo({ keyFeatures: value })}
+              placeholder={
+                'Handwoven on a traditional loom\n100% handloom cotton\nNatural vegetable dyes\n'
+              }
+              invalid={!!errors.key_features}
+            />
+          </Field>
+          <Text fontSize={11} color={ui.textMuted}>
+            Add at least 3 bullets. Buyers see these as product highlights.
+          </Text>
+          <ListingPublishFieldError ui={ui} message={errors.key_features} />
 
           <Field label="Manufacturer name" required error={errors.manufacturer_name}>
             <Input
@@ -334,14 +651,16 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
           </Field>
           <ListingPublishFieldError ui={ui} message={errors.manufacturer_name} />
 
-          <Field label="Manufacturer address">
+          <Field label="Manufacturer address" required error={errors.manufacturer_address}>
             <TextArea
               minHeight={72}
               value={readProductInfoString(formData.product_info, 'manufacturer_address')}
               onChangeText={(value) => updateProductInfo({ manufacturerAddress: value })}
               placeholder="Full manufacturing address"
+              invalid={!!errors.manufacturer_address}
             />
           </Field>
+          <ListingPublishFieldError ui={ui} message={errors.manufacturer_address} />
 
           <GeoSelectField
             label="Country of origin"

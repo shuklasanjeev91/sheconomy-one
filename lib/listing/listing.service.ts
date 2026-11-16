@@ -596,7 +596,17 @@ async function persistListingChildren(
   formData: Partial<ListingFormData>,
   userId: string,
 ): Promise<void> {
-  if (Array.isArray(formData.variations)) await replaceVariations(listingId, formData.variations)
+  const tempKeyToVariationId = new Map<string, string>()
+  if (Array.isArray(formData.variations)) {
+    const variationRes = await replaceVariations(listingId, formData.variations)
+    for (const row of variationRes.data ?? []) {
+      const meta = row.variation_metadata
+      if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
+        const tempKey = (meta as { tempKey?: unknown }).tempKey
+        if (typeof tempKey === 'string' && tempKey) tempKeyToVariationId.set(tempKey, row.id)
+      }
+    }
+  }
   if (Array.isArray(formData.attributes)) await replaceAttributes(listingId, formData.attributes)
   if (Array.isArray(formData.materials)) await replaceMaterials(listingId, formData.materials)
   if (Array.isArray(formData.categories) && formData.categories.length) {
@@ -604,11 +614,19 @@ async function persistListingChildren(
   }
   if (Array.isArray(formData.images)) {
     for (const [index, image] of formData.images.entries()) {
+      const variationId =
+        image.variation_id ??
+        (image.variant_temp_key ? tempKeyToVariationId.get(image.variant_temp_key) ?? null : null)
       if (image.blob && image.mimeType) {
         await uploadAndAttachImage(
           listingId,
           { blob: image.blob, mimeType: image.mimeType, fileName: image.fileName },
-          { alt_text: image.alt_text ?? null, is_primary: image.is_primary ?? index === 0, display_order: image.display_order ?? index },
+          {
+            alt_text: image.alt_text ?? null,
+            is_primary: image.is_primary ?? (index === 0 && !variationId),
+            display_order: image.display_order ?? index,
+            variation_id: variationId,
+          },
           userId,
         )
       } else if (image.image_url) {
@@ -617,12 +635,13 @@ async function persistListingChildren(
           {
             image_url: image.image_url,
             alt_text: image.alt_text ?? null,
-            is_primary: image.is_primary ?? index === 0,
+            is_primary: image.is_primary ?? (index === 0 && !variationId),
             display_order: image.display_order ?? index,
             width: image.width ?? null,
             height: image.height ?? null,
             file_size: image.file_size ?? null,
             image_type: image.image_type ?? null,
+            variation_id: variationId,
           },
           userId,
         )
@@ -786,6 +805,10 @@ export async function setListingStatus(
   status: ListingStatus,
   userId?: string | null,
 ): Promise<ListingServiceResponse<Listing>> {
+  if (status === LISTING_STATUS.ACTIVE) {
+    const quality = await assertListingMeetsQuality(listingId)
+    if (!quality.ok) return fail(quality.error)
+  }
   return updateListing(
     listingId,
     {
@@ -795,6 +818,47 @@ export async function setListingStatus(
     },
     userId,
   )
+}
+
+/**
+ * Gate activate / republish on listing quality (images, description,
+ * brand, manufacturer, key features). Drafts and pauses skip this check.
+ */
+async function assertListingMeetsQuality(
+  listingId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { validateListingQuality } = await import('~/lib/listing/listing-quality')
+  const { buildFormFromListingDetails } = await import(
+    '~/commerce/components/vendor/listing-publish/listing-publish.utils'
+  )
+  const { getImages } = await import('~/lib/listing/listing-images.service')
+  const { getMaterials } = await import('~/lib/listing/listing-materials.service')
+  const { getVariations } = await import('~/lib/listing/listing-variations.service')
+
+  const details = await getListingDetails({ listingId })
+  if (!details.success || !details.data) {
+    return { ok: false, error: details.error ?? 'Could not load listing for quality check.' }
+  }
+
+  const [imagesRes, materialsRes, variationsRes] = await Promise.all([
+    getImages(listingId),
+    getMaterials(listingId),
+    getVariations(listingId),
+  ])
+
+  const form = buildFormFromListingDetails(details.data, {
+    images: imagesRes.data ?? [],
+    materials: materialsRes.data ?? [],
+    variations: variationsRes.data ?? [],
+  })
+  const quality = validateListingQuality(form)
+  if (quality.isValid) return { ok: true }
+
+  const firstError = Object.values(quality.errors)[0] || 'Listing does not meet publish quality.'
+  return {
+    ok: false,
+    error: `${firstError} Open Edit listing and fix quality issues before going live.`,
+  }
 }
 
 export async function setListingActive(

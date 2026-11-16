@@ -27,12 +27,25 @@ function toNumber(value: unknown): number | null {
 function toVariationInsert(
   listingId: string,
   variation: Partial<ListingVariationInsert>,
+  listingBasePrice = 0,
 ): ListingVariationInsert {
+  const absolutePrice = toNumber(variation.price)
+  const adjustment =
+    absolutePrice != null
+      ? absolutePrice - listingBasePrice
+      : toNumber(variation.price_adjustment) ?? 0
+
   return {
     listing_id: listingId,
     variation_name: (variation.variation_name ?? '').trim(),
     variation_value: (variation.variation_value ?? '').trim(),
-    price_adjustment: toNumber(variation.price_adjustment) ?? 0,
+    price: absolutePrice,
+    mrp: toNumber(variation.mrp),
+    tax_percent: toNumber(variation.tax_percent),
+    price_includes_tax:
+      typeof variation.price_includes_tax === 'boolean' ? variation.price_includes_tax : null,
+    hsn_code: variation.hsn_code?.trim() || null,
+    price_adjustment: adjustment,
     stock: toNumber(variation.stock),
     sku: variation.sku?.trim() || null,
     weight: toNumber(variation.weight),
@@ -170,6 +183,13 @@ export async function replaceVariations(
   variations: Partial<ListingVariationInsert>[],
 ): Promise<ListingServiceResponse<ListingVariation[]>> {
   try {
+    const { data: listing } = await supabase
+      .from('listings')
+      .select('price')
+      .eq('id', listingId)
+      .maybeSingle()
+    const listingBasePrice = toNumber(listing?.price) ?? 0
+
     const { error: deleteError } = await supabase
       .from('listing_variations')
       .delete()
@@ -178,7 +198,9 @@ export async function replaceVariations(
 
     if (!variations.length) return ok([])
 
-    const rows = variations.map((variation) => toVariationInsert(listingId, variation))
+    const rows = variations.map((variation) =>
+      toVariationInsert(listingId, variation, listingBasePrice),
+    )
     const { data, error } = await supabase.from('listing_variations').insert(rows).select('*')
     if (error) return fail(error)
     return ok(data ?? [])

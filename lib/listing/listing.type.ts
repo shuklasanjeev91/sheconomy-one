@@ -136,6 +136,10 @@ export type ListingImageDraft = {
   height?: number | null
   file_size?: number | null
   image_type?: string | null
+  /** Child-SKU gallery binding (null/undefined = parent listing gallery). */
+  variation_id?: string | null
+  /** Matches child SKU tempKey before the variation row is persisted. */
+  variant_temp_key?: string | null
   /** Present only for a not-yet-uploaded file. */
   blob?: Blob | File
   mimeType?: string
@@ -339,7 +343,8 @@ export const DIMENSION_UNITS: readonly { value: string; label: string }[] = [
 /** Field length / count limits shared by validation + form UIs. No magic numbers in code. */
 export const LISTING_VALIDATION = {
   TITLE: { MIN_LENGTH: 3, MAX_LENGTH: 200 },
-  DESCRIPTION: { MAX_LENGTH: 2000 },
+  /** Description must be substantive before going live. */
+  DESCRIPTION: { MIN_LENGTH: 50, MAX_LENGTH: 2000 },
   SKU: { MAX_LENGTH: 100 },
   META_TITLE: { MAX_LENGTH: 60 },
   META_DESCRIPTION: { MAX_LENGTH: 160 },
@@ -351,12 +356,23 @@ export const LISTING_VALIDATION = {
   MAX_ATTENDEES: { MIN: 1 },
   CATEGORIES: { MAX_SELECTED: 10 },
   DIGITAL_FILE_TYPE: { MAX_LENGTH: 50 },
+  /** Key-feature bullets (physical products). */
+  KEY_FEATURES: { MIN_COUNT: 3, MAX_COUNT: 5, MIN_LENGTH: 10, MAX_LENGTH: 500 },
 } as const
 
-/** Image upload constraints. */
+/** Image upload constraints for publish quality. */
 export const LISTING_IMAGE_CONSTRAINTS = {
   MAX_SIZE_BYTES: 10 * 1024 * 1024,
   ALLOWED_MIME_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'] as const,
+  /** Hard gate to publish — at least 3 product images. */
+  MIN_COUNT_PUBLISH: 3,
+  /** Soft recommendation for lifestyle / detail shots. */
+  MIN_COUNT_RECOMMENDED: 5,
+  MAX_COUNT: 9,
+  /** Longest edge must be ≥ 1000px when dimensions are known. */
+  MIN_LONG_EDGE_PX: 1000,
+  /** Guidance target for crisp zooms. */
+  RECOMMENDED_LONG_EDGE_PX: 1600,
 } as const
 
 /** Default page size for public/seller/admin listing feeds. */

@@ -1,14 +1,33 @@
 import type { Json } from '~/lib/supabase'
+import {
+  axisGroupsFromChildSkus,
+  getChildMrp,
+  getChildPriceIncludesTax,
+  getChildStock,
+  getChildTaxPercent,
+  getChildUnitPrice,
+  isChildSkuMode,
+  readChildSkuMeta,
+  resolveChildSku,
+  type ChildSkuLike,
+} from '~/commerce/lib/listing-variant-skus'
 
 export type ListingVariation = {
   id: string
   variation_name: string
   variation_value: string
   price_adjustment: number | null
+  price?: number | null
+  mrp?: number | null
+  tax_percent?: number | null
+  price_includes_tax?: boolean | null
+  hsn_code?: string | null
+  weight?: number | null
   stock: number | null
   sku: string | null
   is_available: boolean
   display_order: number
+  variation_metadata?: Json | null
 }
 
 export type ListingAttribute = {
@@ -25,7 +44,9 @@ export type ListingSpecification = {
 
 export type VariationGroup = {
   name: string
+  /** For child-SKU mode, option.id is the axis value; for legacy it is the variation row id. */
   options: ListingVariation[]
+  mode: 'child_sku' | 'legacy'
 }
 
 type DimensionsJson = {
@@ -36,6 +57,24 @@ type DimensionsJson = {
 }
 
 export function groupListingVariations(variations: ListingVariation[]): VariationGroup[] {
+  if (isChildSkuMode(variations as ChildSkuLike[])) {
+    const axes = axisGroupsFromChildSkus(variations as ChildSkuLike[])
+    return axes.map((axis) => ({
+      name: axis.name,
+      mode: 'child_sku' as const,
+      options: axis.values.map((value, index) => ({
+        id: value,
+        variation_name: axis.name,
+        variation_value: value,
+        price_adjustment: null,
+        stock: null,
+        sku: null,
+        is_available: true,
+        display_order: index,
+      })),
+    }))
+  }
+
   const groups = new Map<string, ListingVariation[]>()
 
   for (const variation of [...variations].sort((a, b) => a.display_order - b.display_order)) {
@@ -46,7 +85,11 @@ export function groupListingVariations(variations: ListingVariation[]): Variatio
     groups.set(variation.variation_name, options)
   }
 
-  return [...groups.entries()].map(([name, options]) => ({ name, options }))
+  return [...groups.entries()].map(([name, options]) => ({
+    name,
+    options,
+    mode: 'legacy' as const,
+  }))
 }
 
 export function getDefaultVariantSelection(groups: VariationGroup[]): Record<string, string> {
@@ -64,16 +107,32 @@ export function getSelectedVariations(
   variations: ListingVariation[],
   selection: Record<string, string>,
 ): ListingVariation[] {
+  if (isChildSkuMode(variations as ChildSkuLike[])) {
+    const child = resolveChildSku(variations as ChildSkuLike[], selection)
+    return child ? [child as ListingVariation] : []
+  }
+
   const byId = new Map(variations.map((variation) => [variation.id, variation]))
   return Object.values(selection)
     .map((id) => byId.get(id))
     .filter((variation): variation is ListingVariation => !!variation)
 }
 
+export function getResolvedChildSku(
+  variations: ListingVariation[],
+  selection: Record<string, string>,
+): ListingVariation | null {
+  const selected = getSelectedVariations(variations, selection)
+  return selected[0] ?? null
+}
+
 export function getVariantPrice(
   basePrice: number,
   selected: ListingVariation[],
 ): number {
+  if (selected.length === 1 && selected[0]?.price != null) {
+    return getChildUnitPrice(basePrice, selected[0])
+  }
   const adjustment = selected.reduce((sum, variation) => sum + (variation.price_adjustment ?? 0), 0)
   return basePrice + adjustment
 }
@@ -84,12 +143,52 @@ export function getVariantStock(
 ): number | null {
   if (!selected.length) return listingStock ?? null
 
+  if (selected.length === 1) {
+    return getChildStock(listingStock, selected[0])
+  }
+
   const stocks = selected
     .map((variation) => variation.stock)
     .filter((stock): stock is number => stock != null)
 
   if (!stocks.length) return listingStock ?? null
   return Math.min(...stocks)
+}
+
+export function getVariantMrp(
+  listingMrp: number | null | undefined,
+  selected: ListingVariation[],
+): number | null {
+  if (selected.length === 1) return getChildMrp(listingMrp, selected[0])
+  return listingMrp ?? null
+}
+
+export function getVariantTaxPercent(
+  listingTax: number | null | undefined,
+  selected: ListingVariation[],
+): number | null {
+  if (selected.length === 1) return getChildTaxPercent(listingTax, selected[0])
+  return listingTax ?? null
+}
+
+export function getVariantPriceIncludesTax(
+  listingFlag: boolean | null | undefined,
+  selected: ListingVariation[],
+): boolean {
+  if (selected.length === 1) return getChildPriceIncludesTax(listingFlag, selected[0])
+  return Boolean(listingFlag)
+}
+
+export function filterImagesForVariant<T extends { variation_id?: string | null }>(
+  images: T[],
+  variantId: string | null,
+): T[] {
+  if (!variantId) {
+    return images.filter((image) => !image.variation_id)
+  }
+  const childImages = images.filter((image) => image.variation_id === variantId)
+  if (childImages.length) return childImages
+  return images.filter((image) => !image.variation_id)
 }
 
 export function buildListingSpecifications(input: {
@@ -156,3 +255,5 @@ export function buildListingSpecifications(input: {
 
   return specs
 }
+
+export { readChildSkuMeta, isChildSkuMode }

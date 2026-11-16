@@ -5797,6 +5797,7 @@ export type Database = {
           is_primary: boolean
           listing_id: string
           updated_at: string
+          variation_id: string | null
           width: number | null
         }
         Insert: {
@@ -5812,6 +5813,7 @@ export type Database = {
           is_primary?: boolean
           listing_id: string
           updated_at?: string
+          variation_id?: string | null
           width?: number | null
         }
         Update: {
@@ -5827,6 +5829,7 @@ export type Database = {
           is_primary?: boolean
           listing_id?: string
           updated_at?: string
+          variation_id?: string | null
           width?: number | null
         }
         Relationships: [
@@ -6833,12 +6836,17 @@ export type Database = {
         Row: {
           created_at: string
           display_order: number
+          hsn_code: string | null
           id: string
           is_available: boolean
           listing_id: string
+          mrp: number | null
+          price: number | null
           price_adjustment: number | null
+          price_includes_tax: boolean | null
           sku: string | null
           stock: number | null
+          tax_percent: number | null
           updated_at: string
           variation_metadata: Json
           variation_name: string
@@ -6848,12 +6856,17 @@ export type Database = {
         Insert: {
           created_at?: string
           display_order?: number
+          hsn_code?: string | null
           id?: string
           is_available?: boolean
           listing_id: string
+          mrp?: number | null
+          price?: number | null
           price_adjustment?: number | null
+          price_includes_tax?: boolean | null
           sku?: string | null
           stock?: number | null
+          tax_percent?: number | null
           updated_at?: string
           variation_metadata?: Json
           variation_name: string
@@ -6863,12 +6876,17 @@ export type Database = {
         Update: {
           created_at?: string
           display_order?: number
+          hsn_code?: string | null
           id?: string
           is_available?: boolean
           listing_id?: string
+          mrp?: number | null
+          price?: number | null
           price_adjustment?: number | null
+          price_includes_tax?: boolean | null
           sku?: string | null
           stock?: number | null
+          tax_percent?: number | null
           updated_at?: string
           variation_metadata?: Json
           variation_name?: string

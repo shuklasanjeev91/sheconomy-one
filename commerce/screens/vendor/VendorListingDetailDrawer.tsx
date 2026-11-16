@@ -48,7 +48,13 @@ const DETAIL_TABS: { id: DetailTab; label: string; icon: (typeof Icons)[keyof ty
   { id: 'media', label: 'Media', icon: Icons.Image },
 ]
 
-type ParsedImage = { url: string; alt?: string; isPrimary?: boolean; displayOrder?: number }
+type ParsedImage = {
+  url: string
+  alt?: string
+  isPrimary?: boolean
+  displayOrder?: number
+  variationId?: string | null
+}
 type ParsedAttribute = { name: string; value: string }
 type ParsedVariation = {
   id?: string
@@ -56,8 +62,15 @@ type ParsedVariation = {
   value: string
   sku?: string | null
   stock?: number | null
+  price?: number | null
+  mrp?: number | null
+  taxPercent?: number | null
+  priceIncludesTax?: boolean | null
+  hsnCode?: string | null
+  weight?: number | null
   priceAdjustment?: number | null
   isAvailable?: boolean | null
+  childSku?: boolean
 }
 type ParsedMaterial = {
   id?: string
@@ -641,6 +654,7 @@ function TabContent({
       <VariationsPanel
         ui={ui}
         variations={variations}
+        images={images}
         basePrice={listing.price}
         formatAmount={formatAmount}
         shopCurrency={shopCurrency}
@@ -736,17 +750,20 @@ function TabContent({
 function VariationsPanel({
   ui,
   variations,
+  images,
   basePrice,
   formatAmount,
   shopCurrency,
 }: {
   ui: AppUiTokens
   variations: ParsedVariation[]
+  images: ParsedImage[]
   basePrice: number | null | undefined
   formatAmount: ReturnType<typeof useVendorCurrency>['formatAmount']
   shopCurrency: string
 }) {
   const base = Number(basePrice ?? 0)
+  const childMode = variations.some((row) => row.childSku)
 
   return (
     <YStack
@@ -758,7 +775,7 @@ function VariationsPanel({
     >
       <XStack padding="$3" backgroundColor="#FFF8EE" justifyContent="space-between" alignItems="center">
         <Text fontSize={13} fontWeight="800" color={ui.text}>
-          Variations ({variations.length})
+          {childMode ? 'Child SKUs' : 'Variations'} ({variations.length})
         </Text>
         <Text fontSize={11.5} fontWeight="600" color={ui.textMuted}>
           Base price: {base === 0 ? 'Free' : formatAmount(base, { showCode: true })} · {shopCurrency}
@@ -772,7 +789,11 @@ function VariationsPanel({
       ) : (
         variations.map((variation, index) => {
           const adjustment = Number(variation.priceAdjustment ?? 0)
-          const finalPrice = base + (Number.isFinite(adjustment) ? adjustment : 0)
+          const absolute = variation.price != null ? Number(variation.price) : null
+          const finalPrice =
+            absolute != null && Number.isFinite(absolute)
+              ? absolute
+              : base + (Number.isFinite(adjustment) ? adjustment : 0)
           const priceLabel =
             finalPrice === 0 && base === 0
               ? 'Free'
@@ -781,6 +802,9 @@ function VariationsPanel({
             adjustment === 0
               ? '—'
               : `${adjustment > 0 ? '+' : ''}${formatAmount(adjustment, { showCode: true })}`
+          const variantImages = variation.id
+            ? images.filter((image) => image.variationId === variation.id)
+            : []
 
           return (
             <YStack
@@ -809,14 +833,53 @@ function VariationsPanel({
               </XStack>
 
               <XStack gap="$3" flexWrap="wrap">
-                <VariationStat ui={ui} label="Final price" value={priceLabel} />
-                <VariationStat ui={ui} label="Price adjustment" value={adjustmentLabel} />
+                <VariationStat ui={ui} label="Price" value={priceLabel} />
+                {!childMode ? (
+                  <VariationStat ui={ui} label="Price adjustment" value={adjustmentLabel} />
+                ) : null}
+                {childMode ? (
+                  <>
+                    <VariationStat
+                      ui={ui}
+                      label="MRP"
+                      value={
+                        variation.mrp != null
+                          ? formatAmount(Number(variation.mrp), { showCode: true })
+                          : '—'
+                      }
+                    />
+                    <VariationStat
+                      ui={ui}
+                      label="Tax %"
+                      value={
+                        variation.taxPercent != null
+                          ? `${variation.taxPercent}%${
+                              variation.priceIncludesTax ? ' (incl.)' : ''
+                            }`
+                          : '—'
+                      }
+                    />
+                    <VariationStat ui={ui} label="HSN" value={variation.hsnCode?.trim() || '—'} />
+                    <VariationStat
+                      ui={ui}
+                      label="Weight"
+                      value={variation.weight != null ? `${variation.weight} kg` : '—'}
+                    />
+                  </>
+                ) : null}
                 <VariationStat
                   ui={ui}
                   label="Stock"
                   value={variation.stock != null ? String(variation.stock) : '—'}
                 />
                 <VariationStat ui={ui} label="SKU" value={variation.sku?.trim() || '—'} />
+                {childMode ? (
+                  <VariationStat
+                    ui={ui}
+                    label="Images"
+                    value={variantImages.length ? String(variantImages.length) : 'Parent gallery'}
+                  />
+                ) : null}
               </XStack>
             </YStack>
           )
@@ -1066,6 +1129,7 @@ function parseImageRows(
         alt: typeof row[altKey] === 'string' ? row[altKey] : undefined,
         isPrimary: Boolean(row.is_primary ?? row.isPrimary),
         displayOrder: readNumber(row.display_order ?? row.displayOrder) ?? undefined,
+        variationId: readString(row.variation_id ?? row.variationId),
       }
     })
     .filter((item): item is ParsedImage => Boolean(item))
@@ -1101,17 +1165,29 @@ function parseVariationArray(raw: unknown): ParsedVariation[] {
       const name = readString(row.variation_name ?? row.name)
       const value = readString(row.variation_value ?? row.value)
       if (!name && !value) return null
+      const meta = asRecord(row.variation_metadata ?? row.variationMetadata)
+      const childSku = meta?.mode === 'child_sku'
       return {
         id: readString(row.id) ?? undefined,
         name: name || 'Option',
         value: value || '—',
         sku: readString(row.sku),
         stock: readNumber(row.stock),
+        price: readNumber(row.price),
+        mrp: readNumber(row.mrp),
+        taxPercent: readNumber(row.tax_percent ?? row.taxPercent),
+        priceIncludesTax:
+          row.price_includes_tax === undefined && row.priceIncludesTax === undefined
+            ? null
+            : Boolean(row.price_includes_tax ?? row.priceIncludesTax),
+        hsnCode: readString(row.hsn_code ?? row.hsnCode),
+        weight: readNumber(row.weight),
         priceAdjustment: readNumber(row.price_adjustment ?? row.priceAdjustment),
         isAvailable:
           row.is_available === undefined && row.isAvailable === undefined
             ? null
             : Boolean(row.is_available ?? row.isAvailable),
+        childSku,
       }
     })
     .filter((item): item is ParsedVariation => Boolean(item))

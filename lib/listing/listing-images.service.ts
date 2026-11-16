@@ -303,6 +303,7 @@ export async function addImage(
       width: image.width ?? null,
       height: image.height ?? null,
       image_type: image.image_type ?? null,
+      variation_id: image.variation_id ?? null,
     }
 
     const { data, error } = await supabase
@@ -325,7 +326,12 @@ export async function addImage(
 export async function uploadAndAttachImage(
   listingId: string,
   file: ListingImageUpload,
-  options: { alt_text?: string | null; is_primary?: boolean; display_order?: number } = {},
+  options: {
+    alt_text?: string | null
+    is_primary?: boolean
+    display_order?: number
+    variation_id?: string | null
+  } = {},
   userId?: string | null,
 ): Promise<ListingServiceResponse<ListingImage>> {
   const uploadResult = await uploadImage(file, listingId)
@@ -340,6 +346,7 @@ export async function uploadAndAttachImage(
       display_order: options.display_order ?? 0,
       file_size: uploadResult.data.fileSize,
       image_type: uploadResult.data.fileType,
+      variation_id: options.variation_id ?? null,
     },
     userId,
   )

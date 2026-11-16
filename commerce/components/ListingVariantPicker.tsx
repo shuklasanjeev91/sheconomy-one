@@ -78,6 +78,7 @@ export function ListingVariantPicker({
               const isSelected = selection[group.name] === option.id
               const adjustment = option.price_adjustment ?? 0
               const optionPrice = basePrice + adjustment
+              const showAdjustment = group.mode !== 'child_sku' && adjustment !== 0
 
               return (
                 <XStack
@@ -97,7 +98,7 @@ export function ListingVariantPicker({
                     <Text fontSize={13} color={ui.text} fontWeight={isSelected ? '600' : '400'}>
                       {option.variation_value}
                     </Text>
-                    {adjustment !== 0 ? (
+                    {showAdjustment ? (
                       <Text fontSize={11} color={ui.textSecondary}>
                         {formatCurrency(optionPrice, currency)}
                       </Text>

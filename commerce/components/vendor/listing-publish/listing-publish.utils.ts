@@ -12,13 +12,17 @@ import type {
 import { LISTING_TYPES } from '~/lib/listing/listing.type'
 import { generateListingSlug } from '~/lib/listing/listing.utils'
 import {
+  validateListingQuality,
+  validateListingImagesQuality,
+  validatePhysicalProductInfoQuality,
+} from '~/lib/listing/listing-quality'
+import {
   validateCategoryData,
   validateListingData,
   validateListingField,
 } from '~/lib/listing/listing.validation'
 import type { PublishListingData } from '~/lib/listing/listing-publish.orchestrator'
 import {
-  normalizeProductInfoDate,
   parseListingProductInfo,
   serializeListingProductInfo,
   type ListingProductInfo,
@@ -97,6 +101,7 @@ export function listingImagesToDrafts(images: ListingImage[]): ListingImageDraft
       height: img.height,
       file_size: img.file_size,
       image_type: img.image_type,
+      variation_id: img.variation_id ?? null,
     }))
 }
 
@@ -253,18 +258,12 @@ export function validatePublishStep(
         if (formData.stock === '' || formData.stock === null || formData.stock === undefined) {
           errors.stock = 'Stock quantity is required for physical products.'
         }
-        const productInfo = parseListingProductInfo(formData.product_info)
-        if (!productInfo.manufacturerName) {
-          errors.manufacturer_name = 'Manufacturer name is required for physical products.'
-        }
-        if (!productInfo.countryOfOrigin) {
-          errors.country_of_origin = 'Country of origin is required for physical products.'
-        }
-        const manufactured = normalizeProductInfoDate(productInfo.manufacturingDate)
-        const expiry = normalizeProductInfoDate(productInfo.expiryDate)
-        if (manufactured && expiry && expiry < manufactured) {
-          errors.expiry_date = 'Best before must be on or after the manufacturing date.'
-        }
+        const productQuality = validatePhysicalProductInfoQuality(
+          formData.product_info,
+          formData.listing_metadata,
+        )
+        Object.assign(errors, productQuality.errors)
+        warnings.push(...productQuality.warnings)
       }
       if (formData.listing_type === LISTING_TYPES.DIGITAL) {
         if (!formData.digital_file_url?.trim()) {
@@ -288,14 +287,9 @@ export function validatePublishStep(
       break
     }
     case LISTING_PUBLISH_STEP_IDS.IMAGES: {
-      const count = formData.images?.length ?? 0
-      if (count < LISTING_PUBLISH_IMAGE_HINTS.MIN_REQUIRED_PUBLISH) {
-        errors.images = 'At least one image is required to save or publish.'
-      } else if (count < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED) {
-        warnings.push(
-          `Upload at least ${LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED} images for best results.`,
-        )
-      }
+      const imageQuality = validateListingImagesQuality(formData.images)
+      Object.assign(errors, imageQuality.errors)
+      warnings.push(...imageQuality.warnings)
       break
     }
     case LISTING_PUBLISH_STEP_IDS.SEO: {
@@ -328,18 +322,9 @@ export function validateDraftForm(formData: ListingFormData): StepValidationResu
 
 export function validateFullPublishForm(formData: ListingFormData): StepValidationResult {
   const result = validateListingData(formData)
-  const errors = { ...result.errors }
-  const warnings: string[] = []
-  const imageCount = formData.images?.length ?? 0
-  // The publish pipeline rejects image-less listings server-side; catch it here
-  // so the vendor is pointed at the images step instead of a generic failure.
-  if (imageCount < LISTING_PUBLISH_IMAGE_HINTS.MIN_REQUIRED_PUBLISH) {
-    errors.images = 'At least one image is required to publish.'
-  } else if (imageCount < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED) {
-    warnings.push(
-      `Upload at least ${LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED} images for best conversion.`,
-    )
-  }
+  const quality = validateListingQuality(formData)
+  const errors = { ...result.errors, ...quality.errors }
+  const warnings = [...quality.warnings]
   return { isValid: Object.keys(errors).length === 0, errors, warnings }
 }
 
@@ -354,7 +339,13 @@ const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
   quantity: LISTING_PUBLISH_STEP_IDS.DETAILS,
   weight: LISTING_PUBLISH_STEP_IDS.DETAILS,
   manufacturer_name: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  manufacturer_address: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  brand: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  generic_name: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  key_features: LISTING_PUBLISH_STEP_IDS.DETAILS,
   country_of_origin: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  net_quantity: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  hsn_code: LISTING_PUBLISH_STEP_IDS.DETAILS,
   expiry_date: LISTING_PUBLISH_STEP_IDS.DETAILS,
   manufacturing_date: LISTING_PUBLISH_STEP_IDS.DETAILS,
   digital_file_url: LISTING_PUBLISH_STEP_IDS.DETAILS,

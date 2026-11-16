@@ -44,6 +44,12 @@ export function PricingStep({
     <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
       <YStack flex={1} minWidth={280} gap="$4">
         <ListingPublishCard ui={ui} title="Core Pricing">
+          {(formData.variations?.length ?? 0) > 0 ? (
+            <ListingPublishTip ui={ui}>
+              These values seed new child SKUs. Edit each variant’s price, tax, and HSN under Details →
+              Variant SKUs.
+            </ListingPublishTip>
+          ) : null}
           <Field label={`Selling price (${currencySymbol})`} error={errors.price}>
             <XStack alignItems="center" gap="$2">
               <Text fontSize={16} fontWeight="700" color={ui.textMuted}>
