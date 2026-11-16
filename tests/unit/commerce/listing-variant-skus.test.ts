@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest'
 
 import {
   cartesianAxes,
+  defaultTaxFromMap,
   getChildUnitPrice,
   isChildSkuMode,
+  normalizeTaxByCountry,
   resolveChildSku,
+  resolveChildTaxPercent,
+  seedTaxByCountry,
+  upsertCountryTax,
 } from '~/commerce/lib/listing-variant-skus'
+import { getVariantTaxPercent } from '~/commerce/lib/listing-detail'
 import {
   filterImagesForVariant,
   getVariantPrice,
@@ -59,6 +65,48 @@ describe('listing-variant-skus', () => {
 
   it('falls back to listing price + adjustment when child price missing', () => {
     expect(getChildUnitPrice(200, { price_adjustment: 25 })).toBe(225)
+  })
+
+  it('normalizes and seeds tax_by_country', () => {
+    expect(normalizeTaxByCountry({ in: '18', US: 0, xx: 'nope' })).toEqual({ IN: 18, US: 0 })
+    expect(seedTaxByCountry(18)).toEqual({ IN: 18 })
+    expect(defaultTaxFromMap({ US: 0, IN: 18 })).toBe(18)
+    expect(upsertCountryTax({ IN: 18 }, 'us', 0)).toEqual({ IN: 18, US: 0 })
+  })
+
+  it('resolves child tax by country with fallbacks', () => {
+    const child = {
+      tax_percent: 12,
+      variation_metadata: {
+        mode: 'child_sku',
+        options: { Size: 'M' },
+        tax_by_country: { IN: 18, US: 0 },
+      },
+    }
+    expect(resolveChildTaxPercent(child, 'US', 5)).toBe(0)
+    expect(resolveChildTaxPercent(child, 'IN', 5)).toBe(18)
+    expect(resolveChildTaxPercent(child, 'DE', 5)).toBe(12)
+    expect(resolveChildTaxPercent({ tax_percent: null }, 'IN', 5)).toBe(5)
+    expect(
+      getVariantTaxPercent(5, [
+        {
+          id: '1',
+          variation_name: 'Size',
+          variation_value: 'M',
+          price_adjustment: null,
+          tax_percent: 12,
+          stock: 1,
+          sku: null,
+          is_available: true,
+          display_order: 0,
+          variation_metadata: {
+            mode: 'child_sku',
+            options: { Size: 'M' },
+            tax_by_country: { IN: 18, US: 0 },
+          },
+        },
+      ], 'US'),
+    ).toBe(0)
   })
 })
 

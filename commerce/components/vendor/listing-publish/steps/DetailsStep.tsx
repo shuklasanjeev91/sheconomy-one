@@ -37,8 +37,17 @@ import {
   cartesianAxes,
   childSkuLabels,
   childSkuTempKey,
+  DEFAULT_TAX_COUNTRY,
+  defaultTaxFromMap,
+  MAX_TAX_COUNTRIES,
+  normalizeTaxByCountry,
   parseVariationAxes,
+  removeCountryTax,
+  seedTaxByCountry,
+  upsertCountryTax,
+  withChildTaxByCountry,
   withVariationAxes,
+  type TaxByCountry,
   type VariationAxis,
 } from '~/commerce/lib/listing-variant-skus'
 import type { ListingImageDraft, ListingVariationInsert } from '~/lib/listing/listing.type'
@@ -60,6 +69,19 @@ type DetailsStepProps = {
 }
 
 const AXIS_PRESETS = ['Color', 'Size', 'Material', 'Style'] as const
+const GST_PRESETS = ['0', '5', '12', '18', '28'] as const
+
+function readVariationTaxMap(
+  variation: Partial<ListingVariationInsert>,
+  listingTax: number | string | null | undefined,
+): TaxByCountry {
+  const meta = variation.variation_metadata as { tax_by_country?: unknown } | null
+  const fromMeta = normalizeTaxByCountry(meta?.tax_by_country)
+  if (Object.keys(fromMeta).length) return fromMeta
+  const rate = Number(variation.tax_percent ?? listingTax)
+  if (Number.isFinite(rate)) return seedTaxByCountry(rate, DEFAULT_TAX_COUNTRY)
+  return {}
+}
 
 export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }: DetailsStepProps) {
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
@@ -177,13 +199,18 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
       const tempKey = childSkuTempKey(options)
       const labels = childSkuLabels(options)
       const prev = existingByKey.get(tempKey)
+      const prevTaxMap = readVariationTaxMap(prev ?? {}, baseTax)
+      const taxMap = Object.keys(prevTaxMap).length
+        ? prevTaxMap
+        : seedTaxByCountry(baseTax, DEFAULT_TAX_COUNTRY)
+      const activeTax = defaultTaxFromMap(taxMap, baseTax)
       return {
         ...(prev ?? {}),
         variation_name: labels.variation_name,
         variation_value: labels.variation_value,
         price: prev?.price ?? basePrice,
         mrp: prev?.mrp ?? baseMrp,
-        tax_percent: prev?.tax_percent ?? baseTax,
+        tax_percent: prev?.tax_percent ?? activeTax,
         price_includes_tax:
           typeof prev?.price_includes_tax === 'boolean' ? prev.price_includes_tax : baseIncludes,
         hsn_code: prev?.hsn_code ?? baseHsn,
@@ -192,7 +219,7 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
         sku: prev?.sku ?? '',
         display_order: index,
         is_available: prev?.is_available !== false,
-        variation_metadata: buildChildSkuMetadata(options, tempKey) as never,
+        variation_metadata: buildChildSkuMetadata(options, tempKey, taxMap) as never,
       }
     })
 
@@ -211,6 +238,53 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
       onUpdate('stock', stockSum)
       onUpdate('quantity', stockSum)
     }
+  }
+
+  function setVariationTaxMap(index: number, taxMap: TaxByCountry) {
+    const row = variations[index]
+    if (!row) return
+    const activeTax = defaultTaxFromMap(taxMap, Number(formData.tax_percent) || null)
+    updateVariation(index, {
+      tax_percent: activeTax,
+      variation_metadata: withChildTaxByCountry(row.variation_metadata, taxMap),
+    })
+  }
+
+  function updateVariationCountryTax(index: number, countryCode: string, taxPercent: number) {
+    const map = readVariationTaxMap(variations[index] ?? {}, formData.tax_percent)
+    setVariationTaxMap(index, upsertCountryTax(map, countryCode, taxPercent))
+  }
+
+  function renameVariationCountryTax(index: number, fromCode: string, toCode: string) {
+    const map = readVariationTaxMap(variations[index] ?? {}, formData.tax_percent)
+    const rate = map[fromCode]
+    if (rate == null) return
+    let next = removeCountryTax(map, fromCode)
+    next = upsertCountryTax(next, toCode, rate)
+    setVariationTaxMap(index, next)
+  }
+
+  function addVariationCountryTax(index: number) {
+    const map = readVariationTaxMap(variations[index] ?? {}, formData.tax_percent)
+    if (Object.keys(map).length >= MAX_TAX_COUNTRIES) {
+      setVariantError(`Max ${MAX_TAX_COUNTRIES} country tax rows per child SKU.`)
+      return
+    }
+    const used = new Set(Object.keys(map))
+    const nextCountry =
+      countryOptions.find((option) => !used.has(option.value))?.value ?? DEFAULT_TAX_COUNTRY
+    if (used.has(nextCountry)) {
+      setVariantError('All common countries already have a tax rate on this SKU.')
+      return
+    }
+    const seedRate =
+      defaultTaxFromMap(map, Number(formData.tax_percent) || 18) ?? 18
+    setVariationTaxMap(index, upsertCountryTax(map, nextCountry, seedRate))
+  }
+
+  function removeVariationCountryTax(index: number, countryCode: string) {
+    const map = readVariationTaxMap(variations[index] ?? {}, formData.tax_percent)
+    setVariationTaxMap(index, removeCountryTax(map, countryCode))
   }
 
   function removeVariation(index: number) {
@@ -517,13 +591,6 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
                         keyboardType="numeric"
                       />
                     </Field>
-                    <Field label="Tax %" flex={1} minWidth={90}>
-                      <Input
-                        value={String(variation.tax_percent ?? formData.tax_percent ?? '')}
-                        onChangeText={(value) => updateVariation(index, { tax_percent: value })}
-                        keyboardType="numeric"
-                      />
-                    </Field>
                     <Field label="Stock" flex={1} minWidth={90}>
                       <Input
                         value={String(variation.stock ?? 0)}
@@ -531,44 +598,153 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
                         keyboardType="numeric"
                       />
                     </Field>
-                  </XStack>
-
-                  <XStack gap="$2" flexWrap="wrap" alignItems="center">
-                    <Field label="SKU" flex={1} minWidth={140}>
+                    <Field label="SKU" flex={1} minWidth={120}>
                       <Input
                         value={variation.sku ?? ''}
                         onChangeText={(value) => updateVariation(index, { sku: value })}
                         placeholder="Child SKU"
                       />
                     </Field>
-                    <Field label="HSN" flex={1} minWidth={120}>
+                    <Field label="HSN" flex={1} minWidth={110}>
                       <Input
                         value={variation.hsn_code ?? ''}
                         onChangeText={(value) => updateVariation(index, { hsn_code: value })}
                         placeholder="HSN / SAC"
                       />
                     </Field>
-                    <Field label="Weight (kg)" flex={1} minWidth={110}>
+                    <Field label="Weight (kg)" flex={1} minWidth={100}>
                       <Input
                         value={String(variation.weight ?? '')}
                         onChangeText={(value) => updateVariation(index, { weight: value })}
                         keyboardType="numeric"
                       />
                     </Field>
-                    <XStack alignItems="center" gap="$2" paddingTop="$4">
-                      <Switch
-                        checked={Boolean(
-                          variation.price_includes_tax ?? formData.price_includes_tax,
-                        )}
-                        onCheckedChange={(checked) =>
-                          updateVariation(index, { price_includes_tax: checked })
-                        }
-                      />
-                      <Text fontSize={12} color={ui.textSecondary}>
-                        Price includes tax
-                      </Text>
-                    </XStack>
                   </XStack>
+
+                  {(() => {
+                    const taxMap = readVariationTaxMap(variation, formData.tax_percent)
+                    const taxCountries = Object.keys(taxMap).sort()
+                    const defaultCountry = taxCountries.includes(DEFAULT_TAX_COUNTRY)
+                      ? DEFAULT_TAX_COUNTRY
+                      : taxCountries[0]
+                    return (
+                      <YStack
+                        gap="$2"
+                        padding="$2.5"
+                        borderRadius={10}
+                        backgroundColor={ui.surfaceMuted}
+                      >
+                        <XStack justifyContent="space-between" alignItems="center" gap="$2">
+                          <Text fontSize={12} fontWeight="800" color={ui.text}>
+                            Tax by country
+                          </Text>
+                          <XStack alignItems="center" gap="$2">
+                            <Switch
+                              checked={Boolean(
+                                variation.price_includes_tax ?? formData.price_includes_tax,
+                              )}
+                              onCheckedChange={(checked) =>
+                                updateVariation(index, { price_includes_tax: checked })
+                              }
+                            />
+                            <Text fontSize={11.5} color={ui.textSecondary}>
+                              Includes tax
+                            </Text>
+                          </XStack>
+                        </XStack>
+
+                        {defaultCountry ? (
+                          <XStack gap="$1.5" flexWrap="wrap">
+                            {GST_PRESETS.map((preset) => (
+                              <Button
+                                key={`${tempKey}-gst-${preset}`}
+                                tone={
+                                  String(taxMap[defaultCountry] ?? '') === preset
+                                    ? 'primary'
+                                    : 'outline'
+                                }
+                                size="$2"
+                                borderRadius={999}
+                                onPress={() =>
+                                  updateVariationCountryTax(index, defaultCountry, Number(preset))
+                                }
+                              >
+                                {preset}%
+                              </Button>
+                            ))}
+                          </XStack>
+                        ) : null}
+
+                        {taxCountries.map((countryCode) => (
+                          <XStack
+                            key={`${tempKey}-tax-${countryCode}`}
+                            gap="$2"
+                            alignItems="flex-end"
+                            flexWrap="wrap"
+                          >
+                            <GeoSelectField
+                              label="Country"
+                              value={resolveCountryCode(countryCode) ?? countryCode}
+                              displayValue={getCountryName(countryCode) ?? countryCode}
+                              placeholder="Country"
+                              options={countryOptions}
+                              sheetTitle="Tax country"
+                              searchPlaceholder="Search country"
+                              showFlags
+                              flex={1}
+                              minWidth={160}
+                              onChange={(value) => {
+                                const nextCode = resolveCountryCode(value) ?? value
+                                if (nextCode === countryCode) return
+                                if (taxMap[nextCode] != null) {
+                                  setVariantError(`${nextCode} already has a tax rate on this SKU.`)
+                                  return
+                                }
+                                renameVariationCountryTax(index, countryCode, nextCode)
+                              }}
+                            />
+                            <Field label="Tax %" flex={1} minWidth={90}>
+                              <Input
+                                value={String(taxMap[countryCode] ?? '')}
+                                onChangeText={(value) => {
+                                  const rate = Number(value)
+                                  if (!Number.isFinite(rate) && value.trim() !== '') return
+                                  updateVariationCountryTax(
+                                    index,
+                                    countryCode,
+                                    value.trim() === '' ? 0 : rate,
+                                  )
+                                }}
+                                keyboardType="decimal-pad"
+                                placeholder="18"
+                              />
+                            </Field>
+                            <Button
+                              tone="ghost"
+                              size="$2"
+                              icon={<Icons.Trash2 size={14} />}
+                              onPress={() => removeVariationCountryTax(index, countryCode)}
+                              disabled={taxCountries.length <= 1}
+                            />
+                          </XStack>
+                        ))}
+
+                        <Text
+                          fontSize={12}
+                          fontWeight="700"
+                          color={
+                            taxCountries.length >= MAX_TAX_COUNTRIES ? ui.textMuted : ui.brand
+                          }
+                          cursor={
+                            taxCountries.length >= MAX_TAX_COUNTRIES ? 'default' : 'pointer'
+                          }
+                          onPress={() => addVariationCountryTax(index)}
+                        >
+                          + Add country
+                        </Text>
+                      </YStack>
+                    )
+                  })()}
 
                   <YStack gap="$1.5">
                     <Text fontSize={12} fontWeight="700" color={ui.textMuted}>

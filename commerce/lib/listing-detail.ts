@@ -4,11 +4,11 @@ import {
   getChildMrp,
   getChildPriceIncludesTax,
   getChildStock,
-  getChildTaxPercent,
   getChildUnitPrice,
   isChildSkuMode,
   readChildSkuMeta,
   resolveChildSku,
+  resolveChildTaxPercent,
   type ChildSkuLike,
 } from '~/commerce/lib/listing-variant-skus'
 
@@ -166,8 +166,11 @@ export function getVariantMrp(
 export function getVariantTaxPercent(
   listingTax: number | null | undefined,
   selected: ListingVariation[],
+  countryCode?: string | null,
 ): number | null {
-  if (selected.length === 1) return getChildTaxPercent(listingTax, selected[0])
+  if (selected.length === 1) {
+    return resolveChildTaxPercent(selected[0], countryCode, listingTax)
+  }
   return listingTax ?? null
 }
 

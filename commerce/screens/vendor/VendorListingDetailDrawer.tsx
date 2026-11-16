@@ -27,6 +27,7 @@ import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
+import { formatTaxByCountrySummary } from '~/commerce/lib/listing-variant-skus'
 import { VendorListingWarehouseStock } from '~/commerce/components/vendor/VendorListingWarehouseStock'
 import {
   listingSkuFallback,
@@ -65,6 +66,7 @@ type ParsedVariation = {
   price?: number | null
   mrp?: number | null
   taxPercent?: number | null
+  taxByCountrySummary?: string | null
   priceIncludesTax?: boolean | null
   hsnCode?: string | null
   weight?: number | null
@@ -850,13 +852,17 @@ function VariationsPanel({
                     />
                     <VariationStat
                       ui={ui}
-                      label="Tax %"
+                      label="Tax"
                       value={
-                        variation.taxPercent != null
-                          ? `${variation.taxPercent}%${
-                              variation.priceIncludesTax ? ' (incl.)' : ''
+                        variation.taxByCountrySummary
+                          ? `${variation.taxByCountrySummary}${
+                              variation.priceIncludesTax ? ' · incl.' : ''
                             }`
-                          : '—'
+                          : variation.taxPercent != null
+                            ? `${variation.taxPercent}%${
+                                variation.priceIncludesTax ? ' (incl.)' : ''
+                              }`
+                            : '—'
                       }
                     />
                     <VariationStat ui={ui} label="HSN" value={variation.hsnCode?.trim() || '—'} />
@@ -1176,6 +1182,7 @@ function parseVariationArray(raw: unknown): ParsedVariation[] {
         price: readNumber(row.price),
         mrp: readNumber(row.mrp),
         taxPercent: readNumber(row.tax_percent ?? row.taxPercent),
+        taxByCountrySummary: formatTaxByCountrySummary(meta?.tax_by_country),
         priceIncludesTax:
           row.price_includes_tax === undefined && row.priceIncludesTax === undefined
             ? null

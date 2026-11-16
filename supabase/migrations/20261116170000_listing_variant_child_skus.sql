@@ -43,7 +43,12 @@ COMMENT ON COLUMN public.listing_images.variation_id IS
   'Optional child-SKU gallery. NULL = parent/listing gallery.';
 
 -- 4-arg kept for legacy callers; 5-arg prefers absolute child price.
-CREATE OR REPLACE FUNCTION public.commerce_cart_line_unit_price(
+-- DROP first: CREATE OR REPLACE cannot remove/change parameter defaults
+-- (a prior 5-arg overload may already exist with DEFAULT NULL).
+DROP FUNCTION IF EXISTS public.commerce_cart_line_unit_price(jsonb, numeric, numeric, numeric, numeric);
+DROP FUNCTION IF EXISTS public.commerce_cart_line_unit_price(jsonb, numeric, numeric, numeric);
+
+CREATE FUNCTION public.commerce_cart_line_unit_price(
   p_metadata jsonb,
   p_cart_unit numeric,
   p_listing_price numeric,
@@ -59,12 +64,12 @@ AS $$
   END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.commerce_cart_line_unit_price(
+CREATE FUNCTION public.commerce_cart_line_unit_price(
   p_metadata jsonb,
   p_cart_unit numeric,
   p_listing_price numeric,
   p_variant_adj numeric,
-  p_variant_price numeric
+  p_variant_price numeric DEFAULT NULL
 )
 RETURNS numeric
 LANGUAGE sql

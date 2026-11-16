@@ -394,7 +394,15 @@ export function ListingScreen({
   const displayPrice = getVariantPrice(listing.price, selectedVariations)
   const displayStock = getVariantStock(listing.stock, selectedVariations)
   const displayMrp = getVariantMrp(listing.mrp, selectedVariations)
-  const displayTaxPercent = getVariantTaxPercent(listing.tax_percent, selectedVariations)
+  const shopAddressForTax = listing.shops?.shop_addresses
+  const shopCountryForTax = Array.isArray(shopAddressForTax)
+    ? shopAddressForTax[0]?.country
+    : shopAddressForTax?.country
+  const displayTaxPercent = getVariantTaxPercent(
+    listing.tax_percent,
+    selectedVariations,
+    shopCountryForTax ?? 'IN',
+  )
   const displayPriceIncludesTax = getVariantPriceIncludesTax(
     listing.price_includes_tax,
     selectedVariations,

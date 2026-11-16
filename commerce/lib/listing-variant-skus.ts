@@ -6,6 +6,8 @@ import type { Json } from '~/lib/supabase'
 
 export const CHILD_SKU_MODE = 'child_sku' as const
 export const MAX_CHILD_SKUS = 100
+export const MAX_TAX_COUNTRIES = 8
+export const DEFAULT_TAX_COUNTRY = 'IN'
 
 export type VariationAxis = {
   name: string
@@ -14,11 +16,16 @@ export type VariationAxis = {
 
 export type ChildSkuOptions = Record<string, string>
 
+/** ISO2 country code → tax percent. */
+export type TaxByCountry = Record<string, number>
+
 export type ChildSkuMeta = {
   mode: typeof CHILD_SKU_MODE
   options: ChildSkuOptions
   /** Client-only key before the row is persisted. */
   tempKey?: string
+  /** Country-wise tax rates for display / invoice metadata. */
+  tax_by_country?: TaxByCountry
 }
 
 export type ChildSkuLike = {
@@ -135,6 +142,77 @@ export function childSkuLabels(options: ChildSkuOptions): {
   }
 }
 
+export function normalizeCountryCode(code: string | null | undefined): string {
+  return String(code ?? '')
+    .trim()
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+export function normalizeTaxByCountry(raw: unknown): TaxByCountry {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out: TaxByCountry = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const cc = normalizeCountryCode(key)
+    const rate = Number(value)
+    if (!cc || cc.length !== 2 || !Number.isFinite(rate)) continue
+    out[cc] = rate
+  }
+  return out
+}
+
+export function upsertCountryTax(
+  map: TaxByCountry | null | undefined,
+  countryCode: string,
+  taxPercent: number,
+): TaxByCountry {
+  const cc = normalizeCountryCode(countryCode)
+  const rate = Number(taxPercent)
+  if (!cc || cc.length !== 2 || !Number.isFinite(rate)) {
+    return normalizeTaxByCountry(map)
+  }
+  return { ...normalizeTaxByCountry(map), [cc]: rate }
+}
+
+export function removeCountryTax(
+  map: TaxByCountry | null | undefined,
+  countryCode: string,
+): TaxByCountry {
+  const cc = normalizeCountryCode(countryCode)
+  const next = { ...normalizeTaxByCountry(map) }
+  if (cc) delete next[cc]
+  return next
+}
+
+/** Active/default rate from the map — prefer IN, else first sorted country. */
+export function defaultTaxFromMap(
+  map: TaxByCountry | null | undefined,
+  fallback: number | null | undefined = null,
+): number | null {
+  const cleaned = normalizeTaxByCountry(map)
+  if (cleaned[DEFAULT_TAX_COUNTRY] != null) return cleaned[DEFAULT_TAX_COUNTRY]
+  const first = Object.keys(cleaned).sort()[0]
+  if (first) return cleaned[first]!
+  if (fallback != null && Number.isFinite(Number(fallback))) return Number(fallback)
+  return null
+}
+
+export function seedTaxByCountry(
+  taxPercent: number | null | undefined,
+  countryCode: string = DEFAULT_TAX_COUNTRY,
+): TaxByCountry {
+  const rate = taxPercent != null && Number.isFinite(Number(taxPercent)) ? Number(taxPercent) : null
+  if (rate == null) return {}
+  return upsertCountryTax({}, countryCode, rate)
+}
+
+export function formatTaxByCountrySummary(map: TaxByCountry | null | undefined): string | null {
+  const cleaned = normalizeTaxByCountry(map)
+  const keys = Object.keys(cleaned).sort()
+  if (!keys.length) return null
+  return keys.map((cc) => `${cc} ${cleaned[cc]}%`).join(' · ')
+}
+
 export function readChildSkuMeta(metadata: Json | null | undefined): ChildSkuMeta | null {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
   const row = metadata as Record<string, unknown>
@@ -148,19 +226,43 @@ export function readChildSkuMeta(metadata: Json | null | undefined): ChildSkuMet
     if (name && val) options[name] = val
   }
   if (!Object.keys(options).length) return null
+  const taxByCountry = normalizeTaxByCountry(row.tax_by_country)
   return {
     mode: CHILD_SKU_MODE,
     options,
     tempKey: typeof row.tempKey === 'string' ? row.tempKey : undefined,
+    ...(Object.keys(taxByCountry).length ? { tax_by_country: taxByCountry } : {}),
   }
 }
 
-export function buildChildSkuMetadata(options: ChildSkuOptions, tempKey?: string): ChildSkuMeta {
+export function buildChildSkuMetadata(
+  options: ChildSkuOptions,
+  tempKey?: string,
+  taxByCountry?: TaxByCountry | null,
+): ChildSkuMeta {
+  const cleanedTax = normalizeTaxByCountry(taxByCountry)
   return {
     mode: CHILD_SKU_MODE,
     options,
     ...(tempKey ? { tempKey } : {}),
+    ...(Object.keys(cleanedTax).length ? { tax_by_country: cleanedTax } : {}),
   }
+}
+
+/** Merge tax_by_country into existing child metadata without dropping options/tempKey. */
+export function withChildTaxByCountry(
+  metadata: Json | null | undefined,
+  taxByCountry: TaxByCountry | null | undefined,
+): Record<string, unknown> {
+  const base =
+    metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? { ...(metadata as Record<string, unknown>) }
+      : { mode: CHILD_SKU_MODE, options: {} }
+  const cleaned = normalizeTaxByCountry(taxByCountry)
+  if (Object.keys(cleaned).length) base.tax_by_country = cleaned
+  else delete base.tax_by_country
+  if (base.mode !== CHILD_SKU_MODE) base.mode = CHILD_SKU_MODE
+  return base
 }
 
 export function isChildSkuMode(variations: ChildSkuLike[]): boolean {
@@ -230,9 +332,33 @@ export function getChildTaxPercent(
   listingTax: number | null | undefined,
   child: ChildSkuLike | null | undefined,
 ): number | null {
+  return resolveChildTaxPercent(child, null, listingTax)
+}
+
+/**
+ * Prefer country-specific rate from variation_metadata.tax_by_country,
+ * then child.tax_percent, then listing fallback.
+ */
+export function resolveChildTaxPercent(
+  child: ChildSkuLike | null | undefined,
+  countryCode: string | null | undefined,
+  listingTax: number | null | undefined = null,
+): number | null {
+  const meta = readChildSkuMeta(child?.variation_metadata)
+  const map = normalizeTaxByCountry(
+    meta?.tax_by_country ??
+      (child?.variation_metadata &&
+      typeof child.variation_metadata === 'object' &&
+      !Array.isArray(child.variation_metadata)
+        ? (child.variation_metadata as Record<string, unknown>).tax_by_country
+        : null),
+  )
+  const cc = normalizeCountryCode(countryCode)
+  if (cc && map[cc] != null) return map[cc]!
   if (child?.tax_percent != null && Number.isFinite(Number(child.tax_percent))) {
     return Number(child.tax_percent)
   }
+  if (Object.keys(map).length) return defaultTaxFromMap(map, listingTax)
   return listingTax ?? null
 }
 
