@@ -78,13 +78,13 @@ export function warehouseToFormState(row: WarehouseRow): WarehouseFormState {
   }
 }
 
-/** Active default/primary warehouse, else latest active for the shop. */
-export async function fetchDefaultWarehouse(
+/** All active warehouses for a shop (default/primary first). */
+export async function fetchActiveWarehouses(
   shopId: string,
-): Promise<{ warehouse: WarehouseRow | null; error: string | null }> {
-  if (!shopId) return { warehouse: null, error: 'Shop id is required.' }
+): Promise<{ warehouses: WarehouseRow[]; error: string | null }> {
+  if (!shopId) return { warehouses: [], error: 'Shop id is required.' }
 
-  const { data: defaults, error: defaultError } = await supabase
+  const { data, error } = await supabase
     .from('warehouses')
     .select(WAREHOUSE_SELECT)
     .eq('shop_id', shopId)
@@ -92,14 +92,18 @@ export async function fetchDefaultWarehouse(
     .order('is_default', { ascending: false })
     .order('is_primary', { ascending: false })
     .order('updated_at', { ascending: false })
-    .limit(1)
 
-  if (defaultError) {
-    return { warehouse: null, error: defaultError.message }
-  }
+  if (error) return { warehouses: [], error: error.message }
+  return { warehouses: (data as WarehouseRow[] | null) ?? [], error: null }
+}
 
-  const row = (defaults?.[0] as WarehouseRow | undefined) ?? null
-  return { warehouse: row, error: null }
+/** Active default/primary warehouse, else latest active for the shop. */
+export async function fetchDefaultWarehouse(
+  shopId: string,
+): Promise<{ warehouse: WarehouseRow | null; error: string | null }> {
+  const { warehouses, error } = await fetchActiveWarehouses(shopId)
+  if (error) return { warehouse: null, error }
+  return { warehouse: warehouses[0] ?? null, error: null }
 }
 
 /**

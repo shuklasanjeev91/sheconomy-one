@@ -30,6 +30,7 @@ import type { VendorCurrencyInfo } from '~/lib/shop/current-shop-utils'
 import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
+import { VendorListingWarehouseStock } from '~/commerce/components/vendor/VendorListingWarehouseStock'
 import { bulkUpdateVendorListings } from '~/commerce/lib/vendor-operations'
 
 import {
@@ -233,9 +234,13 @@ export function VendorListingsProductsTab({
     }
   }
 
+  const [stockEditorId, setStockEditorId] = useState<string | null>(null)
+
   const rowActions = {
     onView: onOpenListing,
     onEdit: (listingId: string) => navigateApp(vendorRoutes.editListing(listingId)),
+    onManageStock: (listingId: string) =>
+      setStockEditorId((current) => (current === listingId ? null : listingId)),
     onStatusChange: changeStatus,
     onDelete: (row: ShopListingRow) => setDeleteTarget(row),
   }
@@ -446,29 +451,53 @@ export function VendorListingsProductsTab({
             </XStack>
 
             {rows.map((row) => (
-              <ProductTableRow
-                key={row.id}
-                ui={ui}
-                row={row}
-                currencyInfo={currencyInfo}
-                selected={selectedIds.has(row.id)}
-                statusColors={statusColors}
-                onToggleSelect={() => toggleOne(row.id)}
-                actions={rowActions}
-              />
+              <YStack key={row.id} gap="$2">
+                <ProductTableRow
+                  ui={ui}
+                  row={row}
+                  currencyInfo={currencyInfo}
+                  selected={selectedIds.has(row.id)}
+                  statusColors={statusColors}
+                  onToggleSelect={() => toggleOne(row.id)}
+                  actions={rowActions}
+                />
+                {stockEditorId === row.id && row.listing_type === LISTING_TYPES.PHYSICAL ? (
+                  <YStack paddingHorizontal="$2" paddingBottom="$2">
+                    <VendorListingWarehouseStock
+                      ui={ui}
+                      shopId={shopId}
+                      listingId={row.id}
+                      listingQuantity={row.quantity}
+                      compact
+                      onSaved={() => void fetchPage()}
+                    />
+                  </YStack>
+                ) : null}
+              </YStack>
             ))}
           </YStack>
         ) : (
           <YStack gap="$3">
             {rows.map((row) => (
-              <ProductMobileCard
-                key={row.id}
-                ui={ui}
-                row={row}
-                currencyInfo={currencyInfo}
-                statusColors={statusColors}
-                actions={rowActions}
-              />
+              <YStack key={row.id} gap="$2">
+                <ProductMobileCard
+                  ui={ui}
+                  row={row}
+                  currencyInfo={currencyInfo}
+                  statusColors={statusColors}
+                  actions={rowActions}
+                />
+                {stockEditorId === row.id && row.listing_type === LISTING_TYPES.PHYSICAL ? (
+                  <VendorListingWarehouseStock
+                    ui={ui}
+                    shopId={shopId}
+                    listingId={row.id}
+                    listingQuantity={row.quantity}
+                    compact
+                    onSaved={() => void fetchPage()}
+                  />
+                ) : null}
+              </YStack>
             ))}
           </YStack>
         )}
@@ -520,6 +549,7 @@ export function VendorListingsProductsTab({
 type ProductRowActions = {
   onView: (listingId: string) => void
   onEdit: (listingId: string) => void
+  onManageStock: (listingId: string) => void
   onStatusChange: (listingId: string, status: ListingStatus) => void
   onDelete: (row: ShopListingRow) => void
 }
@@ -572,6 +602,14 @@ function ProductListingActionsMenu({
             icon={<Icons.Pencil size={16} color={ui.textSecondary} />}
             onPress={() => runAction(() => actions.onEdit(row.id))}
           />
+          {row.listing_type === LISTING_TYPES.PHYSICAL ? (
+            <MenuActionRow
+              ui={ui}
+              label="Manage stock"
+              icon={<Icons.Package size={16} color={ui.textSecondary} />}
+              onPress={() => runAction(() => actions.onManageStock(row.id))}
+            />
+          ) : null}
 
           <Separator marginVertical="$1.5" borderColor={ui.borderSubtle} />
 

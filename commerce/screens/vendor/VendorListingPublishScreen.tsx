@@ -71,6 +71,7 @@ import {
   validateFullPublishForm,
   validatePublishStep,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
+import { seedDefaultWarehouseFromListing } from '~/commerce/lib/warehouse-inventory'
 import { BasicInfoStep } from '~/commerce/components/vendor/listing-publish/steps/BasicInfoStep'
 import { CategoriesStep } from '~/commerce/components/vendor/listing-publish/steps/CategoriesStep'
 import { DetailsStep } from '~/commerce/components/vendor/listing-publish/steps/DetailsStep'
@@ -515,6 +516,11 @@ function VendorListingPublishContent() {
         await dispatch(
           updateListingWithDetails({ listingId: editListingId, formData: payload }),
         ).unwrap()
+        void seedDefaultWarehouseFromListing({
+          shopId: shop.id,
+          listingId: editListingId,
+          quantity: formData.quantity,
+        })
         setLastSavedAt(new Date().toISOString())
         toast.show('Draft saved', { tone: 'success', message: 'Your listing changes were saved.' })
         return
@@ -532,6 +538,14 @@ function VendorListingPublishContent() {
             ? result.error_details
             : 'Could not save draft.',
         )
+      }
+
+      if (result.listing_id) {
+        void seedDefaultWarehouseFromListing({
+          shopId: shop.id,
+          listingId: result.listing_id,
+          quantity: formData.quantity,
+        })
       }
 
       setLastSavedAt(new Date().toISOString())
@@ -590,6 +604,11 @@ function VendorListingPublishContent() {
         await dispatch(
           setListingStatus({ listingId: editListingId, status: LISTING_STATUS.ACTIVE }),
         ).unwrap()
+        void seedDefaultWarehouseFromListing({
+          shopId: shop.id,
+          listingId: editListingId,
+          quantity: formData.quantity,
+        })
         toast.show('Published', { tone: 'success', message: 'Your listing is now live.' })
         router.push(vendorRoutes.products)
         return
@@ -607,6 +626,14 @@ function VendorListingPublishContent() {
             ? result.error_details
             : 'Publication failed.',
         )
+      }
+
+      if (result.listing_id) {
+        void seedDefaultWarehouseFromListing({
+          shopId: shop.id,
+          listingId: result.listing_id,
+          quantity: formData.quantity,
+        })
       }
 
       toast.show('Published', { tone: 'success', message: 'Your listing is now live.' })

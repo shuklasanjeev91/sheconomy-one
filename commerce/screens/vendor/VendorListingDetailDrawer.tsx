@@ -27,11 +27,13 @@ import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
+import { VendorListingWarehouseStock } from '~/commerce/components/vendor/VendorListingWarehouseStock'
 import {
   listingSkuFallback,
   listingStatusLabel,
   listingTypeLabel,
 } from '~/commerce/screens/vendor/vendor-listings-shared'
+import { LISTING_TYPES } from '~/lib/listing/listing.type'
 
 const PANEL_WIDTH = 720
 
@@ -538,6 +540,15 @@ function TabContent({
             { label: 'Updated', value: formatDateTime(listing.updated_at) },
           ]}
         />
+
+        {listing.listing_type === LISTING_TYPES.PHYSICAL && listing.shop_id && listing.id ? (
+          <VendorListingWarehouseStock
+            ui={ui}
+            shopId={listing.shop_id}
+            listingId={listing.id}
+            listingQuantity={listing.quantity ?? listing.stock}
+          />
+        ) : null}
 
         {(listing.meta_title || listing.meta_description) ? (
           <DetailGrid
