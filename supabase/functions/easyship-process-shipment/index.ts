@@ -123,23 +123,34 @@ Deno.serve(async (request) => {
   if (itemsError) return jsonResponse({ error: itemsError.message }, 500)
   if (!items?.length) return jsonResponse({ error: 'No shippable items for this shop/order' }, 400)
 
-  const { data: order } = await admin
+  // Avoid embedding profiles via orders.user_id — that column has two FKs
+  // (auth.users + profiles), so PostgREST returns an embed error and data=null,
+  // which previously surfaced as a misleading "Order not found".
+  const { data: order, error: orderError } = await admin
     .from('orders')
-    .select(
-      `
-      id, order_number, user_id, shipping_amount, currency, order_metadata,
-      shipping_address:addresses!shipping_address_id (
-        address_line_1, address_line_2, city, state, country, postal_code, phone, full_name
-      ),
-      profiles:user_id ( full_name, email, phone )
-    `,
-    )
+    .select('id, order_number, user_id, shipping_amount, currency, order_metadata, shipping_address_id')
     .eq('id', body.orderId)
     .maybeSingle()
+  if (orderError) return jsonResponse({ error: orderError.message }, 500)
   if (!order) return jsonResponse({ error: 'Order not found' }, 404)
 
-  const shipping = asAddress(order.shipping_address)
-  const profile = asAddress(order.profiles)
+  let shipping: Record<string, unknown> = {}
+  if (order.shipping_address_id) {
+    const { data: addr } = await admin
+      .from('addresses')
+      .select('address_line_1, address_line_2, city, state, country, postal_code, phone, full_name')
+      .eq('id', order.shipping_address_id)
+      .maybeSingle()
+    shipping = asAddress(addr)
+  }
+
+  const { data: profileRow } = await admin
+    .from('profiles')
+    .select('full_name, email, phone')
+    .eq('id', order.user_id)
+    .maybeSingle()
+  const profile = asAddress(profileRow)
+
   const destCountry = countryAlpha2(shipping.country, 'US')
   const originCountry = countryAlpha2(shopAddress.country, 'IN')
 
@@ -219,8 +230,8 @@ Deno.serve(async (request) => {
     state: str(shipping.state, ''),
     postal_code: str(shipping.postal_code, ''),
     country_alpha2: destCountry,
-    contact_name: str(profile.full_name, 'Buyer'),
-    contact_phone: str(profile.phone, '+10000000000'),
+    contact_name: str(shipping.full_name || profile.full_name, 'Buyer'),
+    contact_phone: str(shipping.phone || profile.phone, '+10000000000'),
     contact_email: str(profile.email, 'buyer@example.com'),
   }
 
