@@ -321,8 +321,18 @@ export function ListingFiltersShell({
     />
   )
 
+  // `flex={1}` is only safe beside the sticky filter sidebar (row axis = width).
+  // In the stacked column host it becomes `flex: 1 1 0px`, collapses height to 0,
+  // and the listing grid overflows under the commerce footer mid-page.
   const resultsColumn = (
-    <YStack flex={1} minWidth={0} width="100%" gap="$3">
+    <YStack
+      width="100%"
+      minWidth={0}
+      flexGrow={useSidebar ? 1 : undefined}
+      flexShrink={useSidebar ? 1 : 0}
+      flexBasis={useSidebar ? 0 : undefined}
+      gap="$3"
+    >
       {toolbar}
       {chips}
       {children}
