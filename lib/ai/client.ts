@@ -1,5 +1,16 @@
 import { AI_NAME } from '~/config/brand'
+import { getAiLanguagePrefs } from '~/lib/ai/language'
 import { invokeOwnedAssist } from '~/lib/ai/owned-service'
+
+/** Until the owned SHERPA host is redeployed, nudge the model via the user turn. */
+function withLanguageReplyHint(message: string): string {
+  const text = message.trim()
+  if (!text) return message
+  const prefs = getAiLanguagePrefs()
+  if (!prefs.languageCode || prefs.languageCode === 'en') return text
+  if (/\breply in\b/i.test(text)) return text
+  return `${text}\n\n(Please reply in ${prefs.languageLabel}.)`
+}
 
 import type {
   AiFeedbackParams,
@@ -61,7 +72,7 @@ export async function sendAiMessage(params: SendAiMessageParams): Promise<SendAi
   const result = await invokeAiAssist<SendAiMessageResult>({
     action: 'chat',
     product: params.product,
-    message: params.message,
+    message: withLanguageReplyHint(params.message),
     sessionId: params.sessionId ?? null,
     contextPage: params.contextPage,
     context: {
@@ -148,7 +159,7 @@ export async function draftMeetingWithAi(
   const result = await invokeAiAssist<MeetingDraftResult>({
     action: 'meeting_draft',
     product: 'cowork',
-    message: params.prompt,
+    message: withLanguageReplyHint(params.prompt),
     context: {
       time_zone: params.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
@@ -179,9 +190,10 @@ export async function draftShopWithAi(params: ShopDraftParams = {}): Promise<Sho
   const result = await invokeAiAssist<ShopDraftResult>({
     action: 'shop_draft',
     product: 'shop',
-    message:
+    message: withLanguageReplyHint(
       params.prompt?.trim() ||
-      'Suggest shop names and a short description for a women-owned storefront',
+        'Suggest shop names and a short description for a women-owned storefront',
+    ),
     context: {
       categories: Array.isArray(params.categories) ? params.categories : [],
       current_name: params.currentName?.trim() || null,
@@ -213,7 +225,7 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
   const result = await invokeAiAssist<PostDraftResult>({
     action: 'post_draft',
     product: 'community',
-    message: params.prompt,
+    message: withLanguageReplyHint(params.prompt),
     context: {
       compose_mode: params.mode ?? 'text',
       photo_count: params.photoCount ?? 0,
