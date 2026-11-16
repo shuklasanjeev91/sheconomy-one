@@ -1,26 +1,30 @@
 import { useMemo, useState } from 'react'
-import { Platform } from 'react-native'
 
 import { GeoSelectField } from '~/components/geo/GeoSelectField'
 import {
   Button,
   Field,
   Icons,
+  Image,
   Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectViewport,
+  Spinner,
   Switch,
   Text,
   TextArea,
   XStack,
   YStack,
+  useAppToast,
 } from '~/components/ui'
 import { DIGITAL_FILE_TYPES, LISTING_TYPES } from '~/lib/listing/listing.type'
-import type { ListingFormData } from '~/lib/listing/listing.type'
+import type { ListingFormData, ListingImageDraft } from '~/lib/listing/listing.type'
 import { detectFileTypeFromExtension } from '~/lib/listing/listing.utils'
+import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
+import type { PickedImage } from '~/lib/media/pick-image'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 import {
   countryToOption,
@@ -50,7 +54,7 @@ import {
   type TaxByCountry,
   type VariationAxis,
 } from '~/commerce/lib/listing-variant-skus'
-import type { ListingImageDraft, ListingVariationInsert } from '~/lib/listing/listing.type'
+import type { ListingVariationInsert } from '~/lib/listing/listing.type'
 
 import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
 import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
@@ -84,6 +88,7 @@ function readVariationTaxMap(
 }
 
 export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }: DetailsStepProps) {
+  const toast = useAppToast()
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
   const materials = formData.materials ?? []
   const variations = formData.variations ?? []
@@ -92,6 +97,7 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
   const isDigital = formData.listing_type === LISTING_TYPES.DIGITAL
   const productInfo = parseListingProductInfo(formData.product_info)
   const countryOptions = useMemo(() => getAllGeoCountries().map(countryToOption), [])
+  const [pickingVariantKey, setPickingVariantKey] = useState<string | null>(null)
   const [showPackerImporter, setShowPackerImporter] = useState(
     Boolean(productInfo.packerName || productInfo.packerAddress || productInfo.importerName),
   )
@@ -303,17 +309,36 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
     }
   }
 
-  function addVariantImages(tempKey: string, files: FileList | null) {
-    if (!files?.length) return
-    const drafts: ListingImageDraft[] = Array.from(files).map((file, index) => ({
-      blob: file,
-      mimeType: file.type || 'image/jpeg',
-      fileName: file.name,
-      display_order: images.length + index,
-      is_primary: false,
-      variant_temp_key: tempKey,
-    }))
-    onUpdate('images', [...images, ...drafts])
+  async function pickVariantImages(tempKey: string) {
+    if (pickingVariantKey) return
+    setPickingVariantKey(tempKey)
+    try {
+      const picked = await pickImagesWithCrop({
+        multiple: true,
+        maxCount: 8,
+        aspect: 'listing',
+        cropTitle: 'Crop variant photo',
+      })
+      if (!picked.length) return
+      const drafts: ListingImageDraft[] = picked.map((file, index) =>
+        pickedVariantToDraft(file, images.length + index, tempKey),
+      )
+      onUpdate('images', [...images, ...drafts])
+    } catch (error) {
+      toast.show('Could not add variant images', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Try again with JPG, PNG, or WebP.',
+      })
+    } finally {
+      setPickingVariantKey(null)
+    }
+  }
+
+  function removeVariantImage(imageIndex: number) {
+    onUpdate(
+      'images',
+      images.filter((_, i) => i !== imageIndex),
+    )
   }
 
   function addAttribute() {
@@ -653,81 +678,81 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
                           </XStack>
                         </XStack>
 
-                        {defaultCountry ? (
-                          <XStack gap="$1.5" flexWrap="wrap">
-                            {GST_PRESETS.map((preset) => (
-                              <Button
-                                key={`${tempKey}-gst-${preset}`}
-                                tone={
-                                  String(taxMap[defaultCountry] ?? '') === preset
-                                    ? 'primary'
-                                    : 'outline'
-                                }
-                                size="$2"
-                                borderRadius={999}
-                                onPress={() =>
-                                  updateVariationCountryTax(index, defaultCountry, Number(preset))
-                                }
-                              >
-                                {preset}%
-                              </Button>
-                            ))}
-                          </XStack>
-                        ) : null}
-
-                        {taxCountries.map((countryCode) => (
-                          <XStack
-                            key={`${tempKey}-tax-${countryCode}`}
-                            gap="$2"
-                            alignItems="flex-end"
-                            flexWrap="wrap"
-                          >
-                            <GeoSelectField
-                              label="Country"
-                              value={resolveCountryCode(countryCode) ?? countryCode}
-                              displayValue={getCountryName(countryCode) ?? countryCode}
-                              placeholder="Country"
-                              options={countryOptions}
-                              sheetTitle="Tax country"
-                              searchPlaceholder="Search country"
-                              showFlags
-                              flex={1}
-                              minWidth={160}
-                              onChange={(value) => {
-                                const nextCode = resolveCountryCode(value) ?? value
-                                if (nextCode === countryCode) return
-                                if (taxMap[nextCode] != null) {
-                                  setVariantError(`${nextCode} already has a tax rate on this SKU.`)
-                                  return
-                                }
-                                renameVariationCountryTax(index, countryCode, nextCode)
-                              }}
-                            />
-                            <Field label="Tax %" flex={1} minWidth={90}>
-                              <Input
-                                value={String(taxMap[countryCode] ?? '')}
-                                onChangeText={(value) => {
-                                  const rate = Number(value)
-                                  if (!Number.isFinite(rate) && value.trim() !== '') return
-                                  updateVariationCountryTax(
-                                    index,
-                                    countryCode,
-                                    value.trim() === '' ? 0 : rate,
-                                  )
+                        {taxCountries.map((countryCode) => {
+                          const rateValue = String(taxMap[countryCode] ?? '')
+                          const selectValue = GST_PRESETS.includes(
+                            rateValue as (typeof GST_PRESETS)[number],
+                          )
+                            ? rateValue
+                            : rateValue || String(defaultCountry === countryCode ? 18 : 0)
+                          return (
+                            <XStack
+                              key={`${tempKey}-tax-${countryCode}`}
+                              gap="$2"
+                              alignItems="flex-end"
+                              flexWrap="wrap"
+                            >
+                              <GeoSelectField
+                                label="Country"
+                                value={resolveCountryCode(countryCode) ?? countryCode}
+                                displayValue={getCountryName(countryCode) ?? countryCode}
+                                placeholder="Country"
+                                options={countryOptions}
+                                sheetTitle="Tax country"
+                                searchPlaceholder="Search country"
+                                showFlags
+                                flex={2}
+                                minWidth={160}
+                                onChange={(value) => {
+                                  const nextCode = resolveCountryCode(value) ?? value
+                                  if (nextCode === countryCode) return
+                                  if (taxMap[nextCode] != null) {
+                                    setVariantError(
+                                      `${nextCode} already has a tax rate on this SKU.`,
+                                    )
+                                    return
+                                  }
+                                  renameVariationCountryTax(index, countryCode, nextCode)
                                 }}
-                                keyboardType="decimal-pad"
-                                placeholder="18"
                               />
-                            </Field>
-                            <Button
-                              tone="ghost"
-                              size="$2"
-                              icon={<Icons.Trash2 size={14} />}
-                              onPress={() => removeVariationCountryTax(index, countryCode)}
-                              disabled={taxCountries.length <= 1}
-                            />
-                          </XStack>
-                        ))}
+                              <Field label="Tax %" flex={1} minWidth={120}>
+                                <Select
+                                  value={selectValue}
+                                  onValueChange={(value) =>
+                                    updateVariationCountryTax(index, countryCode, Number(value))
+                                  }
+                                >
+                                  <SelectTrigger
+                                    width="100%"
+                                    iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}
+                                  >
+                                    <Select.Value placeholder="Select %" />
+                                  </SelectTrigger>
+                                  <SelectContent zIndex={300000}>
+                                    <SelectViewport>
+                                      {GST_PRESETS.map((preset, presetIndex) => (
+                                        <SelectItem
+                                          key={`${tempKey}-${countryCode}-${preset}`}
+                                          index={presetIndex}
+                                          value={preset}
+                                        >
+                                          <Select.ItemText>{preset}%</Select.ItemText>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectViewport>
+                                  </SelectContent>
+                                </Select>
+                              </Field>
+                              <Button
+                                tone="ghost"
+                                size="$2"
+                                icon={<Icons.Trash2 size={14} />}
+                                onPress={() => removeVariationCountryTax(index, countryCode)}
+                                disabled={taxCountries.length <= 1}
+                              />
+                            </XStack>
+                          )
+                        })}
 
                         <Text
                           fontSize={12}
@@ -746,25 +771,102 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
                     )
                   })()}
 
-                  <YStack gap="$1.5">
-                    <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
-                      Variant images ({childImages.length})
-                    </Text>
-                    {Platform.OS === 'web' ? (
-                      // eslint-disable-next-line react/forbid-elements -- web-only gallery picker
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={(event) => {
-                          addVariantImages(tempKey, (event.target as HTMLInputElement).files)
-                          ;(event.target as HTMLInputElement).value = ''
-                        }}
-                      />
-                    ) : (
-                      <Text fontSize={12} color={ui.textMuted}>
-                        Add variant images from web publish for now.
+                  <YStack gap="$2">
+                    <XStack justifyContent="space-between" alignItems="center" gap="$2">
+                      <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
+                        Variant images ({childImages.length})
                       </Text>
+                      <Button
+                        tone="outline"
+                        size="$2"
+                        borderRadius={999}
+                        disabled={pickingVariantKey === tempKey}
+                        icon={
+                          pickingVariantKey === tempKey ? (
+                            <Spinner size="small" color={ui.brand} />
+                          ) : (
+                            <Icons.ImagePlus size={14} color={ui.brand} />
+                          )
+                        }
+                        onPress={() => void pickVariantImages(tempKey)}
+                      >
+                        {pickingVariantKey === tempKey ? 'Uploading…' : 'Upload media'}
+                      </Button>
+                    </XStack>
+
+                    {childImages.length ? (
+                      <XStack gap="$2" flexWrap="wrap">
+                        {childImages.map((image) => {
+                          const globalIndex = images.indexOf(image)
+                          const uri = image.image_url || ''
+                          return (
+                            <YStack
+                              key={`${tempKey}-img-${globalIndex}-${uri || image.fileName || globalIndex}`}
+                              width={72}
+                              height={72}
+                              borderRadius={10}
+                              overflow="hidden"
+                              backgroundColor={ui.surfaceMuted}
+                              borderWidth={1}
+                              borderColor={ui.borderSubtle}
+                              position="relative"
+                            >
+                              {uri ? (
+                                <Image
+                                  source={{ uri }}
+                                  width={72}
+                                  height={72}
+                                  borderRadius={10}
+                                />
+                              ) : (
+                                <YStack flex={1} alignItems="center" justifyContent="center">
+                                  <Icons.Image size={18} color={ui.textMuted} />
+                                </YStack>
+                              )}
+                              <XStack
+                                position="absolute"
+                                top={4}
+                                right={4}
+                                width={22}
+                                height={22}
+                                borderRadius={999}
+                                alignItems="center"
+                                justifyContent="center"
+                                backgroundColor="rgba(0,0,0,0.55)"
+                                cursor="pointer"
+                                onPress={() => {
+                                  if (globalIndex >= 0) removeVariantImage(globalIndex)
+                                }}
+                              >
+                                <Icons.X size={12} color="#fff" />
+                              </XStack>
+                            </YStack>
+                          )
+                        })}
+                      </XStack>
+                    ) : (
+                      <XStack
+                        gap="$2"
+                        padding="$3"
+                        borderRadius={10}
+                        borderWidth={1}
+                        borderStyle="dashed"
+                        borderColor={ui.borderSubtle}
+                        alignItems="center"
+                        cursor="pointer"
+                        hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
+                        onPress={() => void pickVariantImages(tempKey)}
+                      >
+                        <Icons.ImagePlus size={18} color={ui.brand} />
+                        <YStack flex={1} gap={2}>
+                          <Text fontSize={13} fontWeight="700" color={ui.text}>
+                            Add photos for this SKU
+                          </Text>
+                          <Text fontSize={11.5} color={ui.textMuted}>
+                            Optional — buyers see these when this variant is selected.
+                          </Text>
+                        </YStack>
+                      </XStack>
                     )}
                   </YStack>
                 </YStack>
@@ -1132,4 +1234,21 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
       )}
     </YStack>
   )
+}
+
+function pickedVariantToDraft(
+  picked: PickedImage,
+  order: number,
+  tempKey: string,
+): ListingImageDraft {
+  return {
+    image_url: picked.uri,
+    mimeType: picked.mimeType,
+    fileName: picked.fileName,
+    blob: picked.file,
+    is_primary: false,
+    display_order: order,
+    file_size: picked.file?.size ?? null,
+    variant_temp_key: tempKey,
+  }
 }
