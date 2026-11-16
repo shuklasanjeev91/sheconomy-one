@@ -16,7 +16,7 @@ import { MeetingInvitePicker } from '~/co-work/components/MeetingInvitePicker'
 import { CalendarConnectionsPanel } from '~/co-work/components/CalendarConnectionsPanel'
 import { createMeeting, fetchMeetingById, fetchMyMeetingRole, updateMeetingSchedule } from '~/co-work/lib/meetings'
 import { canEditOrCancelMeetingForUser } from '~/co-work/lib/meeting-role-permissions'
-import { sendMeetingInvites, buildInviteMailtoLink, emailToInvitee } from '~/co-work/lib/invites'
+import { sendMeetingInvites } from '~/co-work/lib/invites'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { Meeting, MeetingInvitee, MeetingRepeat } from '~/co-work/lib/types'
@@ -33,7 +33,6 @@ import {
   rebaseUtcIsoWallClock,
   resolveDeviceIanaTimeZone,
 } from '~/lib/calendar/timezone'
-import { openMailtoLink } from '~/lib/platform/openMailto'
 import { useProfile } from '~/hooks/useProfile'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -513,18 +512,9 @@ export function ScheduleMeetingScreen() {
             invitees,
           })
 
-          if (result.mailtoLinks?.length) {
-            const hostName = profile?.full_name || profile?.username || 'You'
-            for (const link of result.mailtoLinks) {
-              const email = link.replace('mailto:', '')
-              const mailto = buildInviteMailtoLink(meeting, emailToInvitee(email), hostName)
-              await openMailtoLink(mailto)
-            }
-          }
-
           toast.show('Invites sent', {
             tone: 'success',
-            message: `${result.notifications ?? 0} in-app · ${result.emailsSent ?? 0} email`,
+            message: `${result.notifications ?? 0} in-app · ${result.emailsSent ?? 0} email via Resend`,
           })
         } catch {
           toast.show('Meeting scheduled — open the lobby to resend invites', { tone: 'info' })

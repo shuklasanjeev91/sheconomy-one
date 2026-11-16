@@ -169,7 +169,7 @@ type InviteResponse = {
   invited?: number
   notifications?: number
   emailsSent?: number
-  mailtoLinks?: string[]
+  emailErrors?: string[]
 }
 
 /** Send invites via sheconomy_db edge function (in-app + email when configured). */

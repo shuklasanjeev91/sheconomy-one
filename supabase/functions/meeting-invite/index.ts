@@ -172,9 +172,16 @@ Deno.serve(async (req) => {
     const joinUrl = `${appBaseUrl()}/co-work/meeting/${meeting.meeting_code}`
     let notifications = 0
     let emailsSent = 0
-    const mailtoLinks: string[] = []
+    const emailErrors: string[] = []
     const resendKey = Deno.env.get('RESEND_API_KEY')
     const roomId = meeting.meeting_code
+
+    if (!resendKey) {
+      return new Response(JSON.stringify({ error: 'Email delivery is not configured (RESEND_API_KEY).' }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     for (const invitee of invitees) {
       const key = inviteeKey(invitee)
@@ -242,32 +249,40 @@ Deno.serve(async (req) => {
         // ignore
       }
 
-      if (resendKey) {
-        try {
-          const sent = await sendCalendarInviteEmail({
-            resendKey,
-            to: email,
-            inviteeName: invitee.name,
-            hostName,
-            meeting,
-            joinUrl,
-            message,
-            inviteeTimeZone: invitee.timeZone || invitee.timezone || null,
-            profileTimeZone,
-            locale: invitee.locale || profileLocale || 'en',
-          })
-          if (sent) emailsSent += 1
-          else throw new Error('send failed')
-        } catch {
-          await service.from('meeting_invite_deliveries').delete()
-            .eq('meeting_id', meeting.id).eq('invitee_key', key).eq('channel', 'email')
-          mailtoLinks.push(`mailto:${email}`)
-        }
-      } else {
+      try {
+        await sendCalendarInviteEmail({
+          resendKey,
+          to: email,
+          inviteeName: invitee.name,
+          hostName,
+          meeting,
+          joinUrl,
+          message,
+          inviteeTimeZone: invitee.timeZone || invitee.timezone || null,
+          profileTimeZone,
+          locale: invitee.locale || profileLocale || 'en',
+        })
+        emailsSent += 1
+      } catch (sendError) {
+        const detail = sendError instanceof Error ? sendError.message : String(sendError)
+        console.error('meeting-invite Resend failed', email, detail)
         await service.from('meeting_invite_deliveries').delete()
           .eq('meeting_id', meeting.id).eq('invitee_key', key).eq('channel', 'email')
-        mailtoLinks.push(`mailto:${email}`)
+        emailErrors.push(`${email}: ${detail}`)
       }
+    }
+
+    if (emailErrors.length > 0 && emailsSent === 0 && notifications === 0) {
+      return new Response(
+        JSON.stringify({
+          error: `Failed to send invite email via Resend. ${emailErrors[0]}`,
+          emailErrors,
+        }),
+        {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      )
     }
 
     return new Response(
@@ -276,7 +291,7 @@ Deno.serve(async (req) => {
         invited: invitees.length,
         notifications,
         emailsSent,
-        mailtoLinks,
+        emailErrors: emailErrors.length ? emailErrors : undefined,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
@@ -309,7 +324,7 @@ async function sendCalendarInviteEmail(input: {
   inviteeTimeZone?: string | null
   profileTimeZone?: string | null
   locale?: string
-}): Promise<boolean> {
+}): Promise<void> {
   const subject = `Join Co-Work: ${input.meeting.title}`
   const startAt = input.meeting.scheduled_at || new Date().toISOString()
   const endAt = input.meeting.scheduled_end_at || new Date(Date.parse(startAt) + 3600000).toISOString()
@@ -378,13 +393,14 @@ async function sendCalendarInviteEmail(input: {
   const html = buildMeetingInviteEmailHtml(emailInput)
   const text = buildMeetingInviteEmailText(emailInput)
 
+  // Use verified noreply@ domain (same as dispatch-notifications). cowork@ was
+  // rejected by Resend and silently fell back to mailto on the client.
   await sendResendEmail(input.resendKey, {
     to: input.to,
     subject,
     html,
     text,
-    from: `${BRAND_COWORK_LABEL} <cowork@sheconomy.com>`,
+    from: `${BRAND_COWORK_LABEL} <noreply@sheconomy.com>`,
     attachments: [{ filename: `sheconomy-${input.meeting.meeting_code}.ics`, content: base64Utf8(ics) }],
   })
-  return true
 }

@@ -2,13 +2,10 @@ import { useState } from 'react'
 
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
 import { Button, Icons, Input, ScrollView, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { openMailtoLink } from '~/lib/platform/openMailto'
 import { CoWorkPanelShell, CoWorkSectionLabel } from '~/co-work/components/CoWorkUi'
 import { MeetingInvitePicker } from '~/co-work/components/MeetingInvitePicker'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import {
-  buildInviteMailtoLink,
-  emailToInvitee,
   mergeInvitees,
   sendMeetingInvites,
 } from '~/co-work/lib/invites'
@@ -29,7 +26,7 @@ type MeetingInvitePanelProps = {
 export function MeetingInvitePanel({
   meeting,
   hostId,
-  hostName,
+  hostName: _hostName,
   onClose,
   fullWidth,
   onInviteesUpdated,
@@ -64,12 +61,12 @@ export function MeetingInvitePanel({
       setSelected(updated)
       onInviteesUpdated?.(updated)
 
-      if (result.mailtoLinks?.length) {
-        for (const link of result.mailtoLinks) {
-          const email = link.replace('mailto:', '')
-          const mailto = buildInviteMailtoLink(meeting, emailToInvitee(email), hostName)
-          await openMailtoLink(mailto)
-        }
+      if (result.emailErrors?.length && !(result.emailsSent && result.emailsSent > 0)) {
+        toast.show('Could not send invite email', {
+          tone: 'error',
+          message: result.emailErrors[0],
+        })
+        return
       }
 
       toast.show('Invites sent', {
@@ -77,9 +74,7 @@ export function MeetingInvitePanel({
         message:
           result.emailsSent && result.emailsSent > 0
             ? `${result.notifications ?? 0} in-app · ${result.emailsSent} email via Resend`
-            : result.mailtoLinks?.length
-              ? `${result.notifications ?? 0} in-app · open email app for ${result.mailtoLinks.length} guest(s)`
-              : `${result.notifications ?? 0} in-app`,
+            : `${result.notifications ?? 0} in-app`,
       })
     } catch (sendError) {
       toast.show('Could not send invites', {
