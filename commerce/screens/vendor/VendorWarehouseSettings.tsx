@@ -118,27 +118,26 @@ export function VendorWarehouseSettings({
 
   return (
     <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
+      {/*
+        Match Connect/General: one natural-height content stack, then sticky save.
+        A flex:1 content wrapper forces the save bar mid-viewport over tall forms.
+      */}
       <YStack
-        gap="$2"
-        paddingHorizontal={isDesktop ? '$6' : '$4'}
-        paddingTop={isDesktop ? '$6' : '$4'}
-        paddingBottom="$3"
-      >
-        <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
-          Warehouse & ship-from
-        </Text>
-        <Text fontSize={14} color={ui.textSecondary} maxWidth={640} lineHeight={20}>
-          Set the fulfillment address EasyShip uses when you buy shipping labels. This is your
-          warehouse / pick-up origin — separate from the public shop address under Contact.
-        </Text>
-      </YStack>
-
-      <YStack
-        flex={1}
         gap="$4"
         paddingHorizontal={isDesktop ? '$6' : '$4'}
-        paddingBottom={safeBottom + 88}
+        paddingTop={isDesktop ? '$6' : '$4'}
+        paddingBottom="$5"
       >
+        <YStack gap="$2">
+          <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
+            Warehouse & ship-from
+          </Text>
+          <Text fontSize={14} color={ui.textSecondary} maxWidth={640} lineHeight={20}>
+            Set the fulfillment address EasyShip uses when you buy shipping labels. This is your
+            warehouse / pick-up origin — separate from the public shop address under Contact.
+          </Text>
+        </YStack>
+
         {isLoading ? (
           <YStack padding="$6" alignItems="center">
             <Spinner size="large" />
