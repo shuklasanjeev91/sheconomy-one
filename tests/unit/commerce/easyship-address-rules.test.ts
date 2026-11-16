@@ -45,6 +45,7 @@ describe('easyship address rules', () => {
       const e = err as ShipAddressError
       expect(e.code).toBe('seller_origin_incomplete')
       expect(e.setupPath).toBe(EASYSHIP_SELLER_ORIGIN_SETUP_PATH)
+      expect(EASYSHIP_SELLER_ORIGIN_SETUP_PATH).toContain('section=warehouse')
       expect(e.message).toMatch(/street/)
       expect(e.message).toMatch(/postal_code/)
     }

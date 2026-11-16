@@ -346,7 +346,7 @@ Deno.serve(async (request) => {
     return jsonResponse({
       ...basePayload,
       rates_error:
-        'Seller fulfillment address is incomplete. Live courier rates unlock once the shop sets Connect → Address.',
+        'Seller fulfillment address is incomplete. Live courier rates unlock once the shop sets Fulfillment → Warehouse.',
     })
   }
 

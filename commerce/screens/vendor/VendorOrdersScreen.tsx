@@ -312,10 +312,10 @@ export function VendorOrdersScreen() {
             tone: 'warning',
             message:
               result.error ??
-              'Add your warehouse / shipping origin under Connect → Address, then try again.',
+              'Add your warehouse / shipping origin under Fulfillment → Warehouse, then try again.',
           })
           router.push(
-            (result.setupPath || vendorRoutes.settingsSection('connect')) as never,
+            (result.setupPath || vendorRoutes.settingsSection('warehouse')) as never,
           )
           return
         }

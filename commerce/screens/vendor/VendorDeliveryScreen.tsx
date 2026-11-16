@@ -140,15 +140,27 @@ export function VendorDeliveryScreen() {
               ? VENDOR_SHIPPING_UI_COPY.providersSubtitleCompact
               : VENDOR_SHIPPING_UI_COPY.providersSubtitle}
           </Text>
-          <Button
-            tone="primary"
-            size="$3"
-            alignSelf="flex-start"
-            borderRadius={999}
-            onPress={() => router.push(vendorRoutes.wallet)}
-          >
-            Open wallet
-          </Button>
+          <XStack gap="$2" flexWrap="wrap">
+            <Button
+              tone="primary"
+              size="$3"
+              alignSelf="flex-start"
+              borderRadius={999}
+              onPress={() => router.push(vendorRoutes.wallet)}
+            >
+              Open wallet
+            </Button>
+            <Button
+              tone="secondary"
+              size="$3"
+              alignSelf="flex-start"
+              borderRadius={999}
+              icon={<Icons.Building2 size={15} />}
+              onPress={() => router.push(vendorRoutes.settingsSection('warehouse'))}
+            >
+              Warehouse & ship-from
+            </Button>
+          </XStack>
         </YStack>
 
         <YStack

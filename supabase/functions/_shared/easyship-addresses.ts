@@ -6,7 +6,7 @@ import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 
 import type { EasyshipAddress } from './easyship.ts'
 
-export const EASYSHIP_SELLER_ORIGIN_SETUP_PATH = '/vendor/settings?section=connect'
+export const EASYSHIP_SELLER_ORIGIN_SETUP_PATH = '/vendor/settings?section=warehouse'
 
 export type ShipAddressErrorCode =
   | 'seller_origin_incomplete'
@@ -112,7 +112,7 @@ export function assertShipAddressComplete(
   if (kind === 'origin') {
     throw new ShipAddressError(
       'seller_origin_incomplete',
-      `Seller fulfillment address is incomplete (missing ${missing.join(', ')}). Update Connect → Address / warehouse.`,
+      `Seller fulfillment address is incomplete (missing ${missing.join(', ')}). Update Fulfillment → Warehouse.`,
       EASYSHIP_SELLER_ORIGIN_SETUP_PATH,
     )
   }
@@ -195,7 +195,7 @@ export async function resolveSellerOrigin(
   if (!shopAddressId) {
     throw new ShipAddressError(
       'seller_origin_incomplete',
-      'No seller warehouse or shop fulfillment address is set. Add your shipping origin under Connect → Address.',
+      'No seller warehouse or shop fulfillment address is set. Add your shipping origin under Fulfillment → Warehouse.',
       EASYSHIP_SELLER_ORIGIN_SETUP_PATH,
     )
   }
@@ -211,7 +211,7 @@ export async function resolveSellerOrigin(
   if (!addr) {
     throw new ShipAddressError(
       'seller_origin_incomplete',
-      'Shop fulfillment address was not found. Update Connect → Address.',
+      'Shop fulfillment address was not found. Update Fulfillment → Warehouse.',
       EASYSHIP_SELLER_ORIGIN_SETUP_PATH,
     )
   }

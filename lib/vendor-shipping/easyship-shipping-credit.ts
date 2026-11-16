@@ -60,7 +60,7 @@ export async function fetchEasyshipShippingCredit(
   }
 }
 
-export const EASYSHIP_SELLER_ORIGIN_SETUP_PATH = '/vendor/settings?section=connect'
+export const EASYSHIP_SELLER_ORIGIN_SETUP_PATH = '/vendor/settings?section=warehouse'
 
 export async function processEasyshipShipment(input: {
   shopId: string

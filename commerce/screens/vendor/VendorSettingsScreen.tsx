@@ -59,6 +59,7 @@ import {
   type SettingsSectionId,
 } from '~/commerce/components/vendor/settings-nav'
 import { VendorConnectSettings } from '~/commerce/screens/vendor/VendorConnectSettings'
+import { VendorWarehouseSettings } from '~/commerce/screens/vendor/VendorWarehouseSettings'
 import { VendorPaymentSettings } from '~/commerce/screens/vendor/VendorPaymentSettings'
 import { VendorReturnPolicySettings } from '~/commerce/screens/vendor/VendorReturnPolicySettings'
 import { VendorShippingPolicySettings } from '~/commerce/screens/vendor/VendorShippingPolicySettings'
@@ -194,6 +195,17 @@ export function VendorSettingsScreen() {
     )
   }
 
+  if (section.id === 'warehouse') {
+    return (
+      <VendorWarehouseSettings
+        ui={ui}
+        shop={shop}
+        isDesktop={isDesktop}
+        safeBottom={safeBottom}
+      />
+    )
+  }
+
   if (section.id === 'returns') {
     return (
       <VendorReturnPolicySettings
@@ -282,6 +294,11 @@ const HUB_GROUPS: {
     title: 'Policies',
     blurb: 'Shipping rates and return rules buyers see at checkout.',
     sectionIds: ['shipping', 'returns'],
+  },
+  {
+    title: 'Fulfillment',
+    blurb: 'Ship-from warehouse used when you buy EasyShip labels.',
+    sectionIds: ['warehouse'],
   },
   {
     title: 'Team',

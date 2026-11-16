@@ -13,6 +13,7 @@ export type SettingsSectionId =
   | 'notifications'
   | 'security'
   | 'shipping'
+  | 'warehouse'
   | 'returns'
 
 export type SettingsSection = {
@@ -76,6 +77,13 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     label: 'Shipping policies',
     description: 'Delivery fees, free-shipping thresholds, and zone rates.',
     icon: Icons.Truck,
+    ready: true,
+  },
+  {
+    id: 'warehouse',
+    label: 'Warehouse & ship-from',
+    description: 'Fulfillment address EasyShip uses for shipping labels.',
+    icon: Icons.Building2,
     ready: true,
   },
   {

@@ -153,6 +153,14 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         ready: true,
       },
       {
+        id: 'settings-warehouse',
+        label: 'Warehouse & ship-from',
+        description: 'Fulfillment address for EasyShip labels.',
+        icon: Icons.Building2,
+        href: settingsHref('warehouse'),
+        ready: true,
+      },
+      {
         id: 'settings-shipping',
         label: 'Shipping policies',
         description: 'Delivery fees, free-shipping thresholds, and zones.',
@@ -282,6 +290,7 @@ export const VENDOR_SETTINGS_SECTION_IDS = [
   'notifications',
   'security',
   'shipping',
+  'warehouse',
   'returns',
 ] as const
 

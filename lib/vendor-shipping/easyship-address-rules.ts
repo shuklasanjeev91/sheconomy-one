@@ -3,7 +3,7 @@
  * Edge resolvers live in supabase/functions/_shared/easyship-addresses.ts.
  */
 
-export const EASYSHIP_SELLER_ORIGIN_SETUP_PATH = '/vendor/settings?section=connect'
+export const EASYSHIP_SELLER_ORIGIN_SETUP_PATH = '/vendor/settings?section=warehouse'
 
 export type ShipAddressErrorCode =
   | 'seller_origin_incomplete'
@@ -63,7 +63,7 @@ export function assertShipAddressComplete(
   if (kind === 'origin') {
     throw new ShipAddressError(
       'seller_origin_incomplete',
-      `Seller fulfillment address is incomplete (missing ${missing.join(', ')}). Update Connect → Address / warehouse.`,
+      `Seller fulfillment address is incomplete (missing ${missing.join(', ')}). Update Fulfillment → Warehouse.`,
       EASYSHIP_SELLER_ORIGIN_SETUP_PATH,
     )
   }
