@@ -165,17 +165,24 @@ export function AppShell({ children }: AppShellProps) {
           land Maximize on Join Meeting.
         */}
         <YStack
-          flex={1}
+          // Document-scroll commerce pages must NOT use flex:1 + minHeight:0 — that
+          // collapses to 0px inside an auto-height parent, so the footer paints over
+          // the listing grid and the window cannot grow/scroll.
+          flex={documentDesktop && !useChromelessLayout ? undefined : 1}
+          flexGrow={documentDesktop && !useChromelessLayout ? 1 : undefined}
+          flexShrink={documentDesktop && !useChromelessLayout ? 0 : undefined}
           width="100%"
           maxWidth="100%"
           position="relative"
-          minHeight={0}
+          minHeight={documentDesktop && !useChromelessLayout ? undefined : 0}
           // Give absolute overlays (InstantMeetingHost) a real viewport box on web
           // document-scroll pages when a live meeting is open / chromeless.
           style={
             Platform.OS === 'web' && useChromelessLayout
               ? ({ minHeight: '100dvh', height: '100dvh', overflow: 'hidden' } as const)
-              : undefined
+              : documentDesktop
+                ? ({ flex: '1 0 auto', minHeight: '100dvh' } as const)
+                : undefined
           }
         >
           {useChromelessLayout ? (

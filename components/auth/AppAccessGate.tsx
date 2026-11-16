@@ -20,11 +20,19 @@ function Shell({ children, documentScroll }: { children: ReactNode; documentScro
   return (
     <YStack
       flex={documentScroll ? undefined : 1}
+      flexGrow={documentScroll ? 1 : undefined}
+      flexShrink={documentScroll ? 0 : undefined}
       width="100%"
       maxWidth="100%"
       alignSelf="stretch"
       minHeight={documentScroll ? undefined : 0}
       overflow={documentScroll ? 'visible' : 'hidden'}
+      // Grow with page content on desktop web — avoid flex-basis 0 collapse.
+      style={
+        documentScroll
+          ? ({ flex: '1 0 auto', minHeight: '100dvh' } as const)
+          : undefined
+      }
     >
       {children}
     </YStack>
