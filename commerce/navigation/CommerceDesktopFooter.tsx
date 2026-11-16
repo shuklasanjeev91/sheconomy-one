@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { Href } from 'one'
 import { Platform } from 'react-native'
 
@@ -13,6 +14,15 @@ import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 
 import { COMMERCE_FOOTER_COLUMNS, COMMERCE_FOOTER_LEGAL } from '~/commerce/navigation/config'
+
+const webFooterStyle: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  flex: '0 0 auto',
+  marginTop: 'auto',
+  position: 'relative',
+  zIndex: 2,
+}
 
 /** Marketplace footer: link columns + dark locale/legal bar. */
 export function CommerceDesktopFooter() {
@@ -30,16 +40,8 @@ export function CommerceDesktopFooter() {
     ? commerceRoutes.manageShop(primaryShopId)
     : commerceRoutes.createShop
 
-  return (
-    <YStack
-      width="100%"
-      flexShrink={0}
-      position="relative"
-      zIndex={2}
-      // Document-scroll sticky footer: sit after content, or at the bottom of
-      // short pages when the shell is at least one viewport tall.
-      style={Platform.OS === 'web' ? ({ marginTop: 'auto' } as const) : undefined}
-    >
+  const content = (
+    <>
       <YStack
         backgroundColor={ui.surfaceMuted}
         borderTopWidth={1}
@@ -108,13 +110,7 @@ export function CommerceDesktopFooter() {
         flexWrap="wrap"
         gap="$3"
       >
-        <XStack
-          flex={1}
-          minWidth={220}
-          alignItems="center"
-          gap="$3"
-          flexWrap="wrap"
-        >
+        <XStack flex={1} minWidth={220} alignItems="center" gap="$3" flexWrap="wrap">
           <RegionPreferencesTrigger variant="footerBar" />
           <Text fontSize={12} color={barMuted}>
             © {new Date().getFullYear()} {BRAND_NAME}
@@ -136,6 +132,20 @@ export function CommerceDesktopFooter() {
           ))}
         </XStack>
       </XStack>
+    </>
+  )
+
+  if (Platform.OS === 'web') {
+    return (
+      <footer data-commerce-footer="true" style={webFooterStyle}>
+        {content}
+      </footer>
+    )
+  }
+
+  return (
+    <YStack width="100%" flexShrink={0} position="relative" zIndex={2}>
+      {content}
     </YStack>
   )
 }

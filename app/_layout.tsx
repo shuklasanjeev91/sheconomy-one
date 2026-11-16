@@ -129,6 +129,37 @@ body {
     flex-direction: column;
     flex: 1 0 auto;
   }
+  /* Hard guarantees — never let Yoga/Tamagui clamp document pages or float the footer. */
+  [data-app-shell-document="true"] {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 0 auto !important;
+    min-height: 100dvh !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  [data-app-shell-main="true"] {
+    flex: 1 0 auto !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+  [data-commerce-footer="true"],
+  footer[data-commerce-footer="true"] {
+    position: relative !important;
+    flex: 0 0 auto !important;
+    margin-top: auto !important;
+    width: 100% !important;
+    z-index: 2;
+  }
+  [data-listing-grid="true"],
+  [data-shop-grid="true"] {
+    display: grid !important;
+    width: 100% !important;
+    align-content: start !important;
+  }
 }
 ::selection {
   background: rgba(216, 27, 96, 0.22);

@@ -127,8 +127,6 @@ export function AppShell({ children }: AppShellProps) {
   const lockViewport = isChatPath(pathname) || isCommunityPath(pathname)
   /** Desktop web document pages: window scroll; main column flexes on short pages. */
   const documentDesktop = Platform.OS === 'web' && isDesktopWeb && !lockViewport
-  const documentDesktopFlex =
-    Platform.OS === 'web' && documentDesktop ? ({ flex: '1 0 auto' } as const) : undefined
   const stretchMainContent =
     lockViewport || Platform.OS !== 'web' || !isDesktopWeb
   const clipShellOverflow =
@@ -201,22 +199,64 @@ export function AppShell({ children }: AppShellProps) {
             >
               {children}
             </ScreenFill>
+          ) : documentDesktop ? (
+            // Plain DOM column — Tamagui/Yoga flex shells can under-measure wrapped
+            // grids and park the footer mid-page over product cards.
+            <AppBarScrollProvider>
+              <DesktopScrollTracker />
+              <div
+                data-app-shell-document="true"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flex: '1 0 auto',
+                  width: '100%',
+                  maxWidth: '100%',
+                  minHeight: '100dvh',
+                  height: 'auto',
+                  maxHeight: 'none',
+                  overflow: 'visible',
+                  position: 'relative',
+                  backgroundColor: ui.background,
+                }}
+              >
+                {isDesktop ? <AppDesktopHeader /> : null}
+                <ProfileOnboardingNudge />
+                <div
+                  data-app-shell-main="true"
+                  style={{
+                    flex: '1 0 auto',
+                    width: '100%',
+                    maxWidth: '100%',
+                    minHeight: 'auto',
+                    height: 'auto',
+                    maxHeight: 'none',
+                    overflow: 'visible',
+                    position: 'relative',
+                    zIndex: 0,
+                  }}
+                >
+                  {children}
+                </div>
+                <WarmTopTabRoutes />
+                {showCommerceFooter ? <CommerceDesktopFooter /> : null}
+                <CommunityComposerHost />
+                <ChatActionsHost />
+              </div>
+            </AppBarScrollProvider>
           ) : (
             <AppBarScrollProvider>
               <DesktopScrollTracker />
               <ScreenFill
                 flex={stretchMainContent ? 1 : undefined}
-                flexGrow={documentDesktop ? 1 : undefined}
-                flexShrink={documentDesktop ? 0 : undefined}
                 flexDirection="column"
                 position="relative"
                 backgroundColor={ui.background}
                 overflow={clipShellOverflow ? 'hidden' : 'visible'}
                 paddingBottom={Platform.OS !== 'web' ? keyboardHeight : 0}
-                style={{
-                  ...(lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)),
-                  ...documentDesktopFlex,
-                }}
+                style={
+                  lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)
+                }
               >
                 {isDesktop ? <AppDesktopHeader /> : null}
                 {!isDesktop && !hideMobileHeader ? (
@@ -230,20 +270,15 @@ export function AppShell({ children }: AppShellProps) {
                   width="100%"
                   maxWidth="100%"
                   minHeight={stretchMainContent ? 0 : undefined}
-                  // Keep page content in normal flow above the footer — never
-                  // absolute/overlay. Document desktop grows with listings.
                   position="relative"
                   zIndex={0}
-                  style={documentDesktopFlex}
                 >
                   {children}
                 </YStack>
                 <WarmTopTabRoutes />
-                {showCommerceFooter ? <CommerceDesktopFooter /> : null}
                 {!isDesktop && !chatConversationMobile && !isSellerLanding ? (
                   <AppMobileBottomTabs />
                 ) : null}
-                {/* Section overlays — not session-critical across chrome flips. */}
                 <CommunityComposerHost />
                 <ChatActionsHost />
               </ScreenFill>

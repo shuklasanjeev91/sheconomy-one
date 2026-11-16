@@ -1,8 +1,9 @@
+import { type CSSProperties } from 'react'
 import { Platform } from 'react-native'
 
 import { ShopSpotlightCard } from '~/commerce/components/ShopSpotlightCard'
 import type { ShopSummary } from '~/commerce/lib/commerce'
-import { XStack, YStack } from '~/components/ui'
+import { XStack } from '~/components/ui'
 
 type ShopGridProps = {
   shops: ShopSummary[]
@@ -30,25 +31,22 @@ export function ShopGrid({ shops, columns = 4 }: ShopGridProps) {
               : '100%'
 
   if (Platform.OS === 'web') {
+    const gridStyle: CSSProperties = {
+      display: 'grid',
+      gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+      gap: GRID_GAP,
+      width: '100%',
+      alignContent: 'start',
+      alignItems: 'stretch',
+    }
     return (
-      <YStack
-        width="100%"
-        style={
-          {
-            display: 'grid',
-            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-            gap: GRID_GAP,
-            alignContent: 'start',
-            alignItems: 'stretch',
-          } as const
-        }
-      >
+      <div data-shop-grid="true" style={gridStyle}>
         {shops.map((shop) => (
-          <YStack key={shop.id} width="100%" minWidth={0} alignSelf="stretch">
+          <div key={shop.id} style={{ width: '100%', minWidth: 0, alignSelf: 'stretch' }}>
             <ShopSpotlightCard shop={shop} fill />
-          </YStack>
+          </div>
         ))}
-      </YStack>
+      </div>
     )
   }
 
