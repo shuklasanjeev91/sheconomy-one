@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
           to: normalizedEmail,
           subject,
           html,
-          from: `${BRAND_NAME} Community <community@sheconomy.com>`,
+          from: `${BRAND_NAME} Community <community@sheconomy.in>`,
         })
         emailsSent = 1
       } catch (error) {

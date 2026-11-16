@@ -1,6 +1,7 @@
 import { resolvePublicAppOrigin } from './app-url.ts'
 
-const DEFAULT_FROM = 'SHEconomy <noreply@sheconomy.com>'
+// Resend verified domain is sheconomy.in (sheconomy.com is not verified).
+const DEFAULT_FROM = 'SHEconomy <noreply@sheconomy.in>'
 
 export async function sendResendEmail(
   apiKey: string,

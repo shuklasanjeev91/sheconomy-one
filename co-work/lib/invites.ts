@@ -7,6 +7,7 @@ import {
 } from '~/lib/calendar/meeting-invite-email'
 import { buildCalendarLinks } from '~/lib/calendar/ics'
 import { supabase } from '~/lib/supabase/client'
+import { readSupabaseFunctionError } from '~/lib/supabase/function-error'
 
 import { getMeetingShareUrl } from '~/co-work/lib/meetings'
 import { BRAND_COWORK_LABEL } from '~/config/brand'
@@ -192,10 +193,8 @@ export async function sendMeetingInvites(input: {
   })
 
   const payload = (data ?? {}) as InviteResponse
-  if (payload.error) throw new Error(payload.error)
-  if (error) {
-    // FunctionsHttpError often only says "non-2xx" — prefer body error when present.
-    throw new Error(payload.error || error.message || 'Failed to send invites')
+  if (payload.error || error) {
+    throw new Error(await readSupabaseFunctionError(error, data, 'Failed to send invites'))
   }
 
   invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)

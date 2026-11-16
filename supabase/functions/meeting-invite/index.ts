@@ -393,14 +393,13 @@ async function sendCalendarInviteEmail(input: {
   const html = buildMeetingInviteEmailHtml(emailInput)
   const text = buildMeetingInviteEmailText(emailInput)
 
-  // Use verified noreply@ domain (same as dispatch-notifications). cowork@ was
-  // rejected by Resend and silently fell back to mailto on the client.
+  // Resend verified domain is sheconomy.in — .com returns 403 validation_error.
   await sendResendEmail(input.resendKey, {
     to: input.to,
     subject,
     html,
     text,
-    from: `${BRAND_COWORK_LABEL} <noreply@sheconomy.com>`,
+    from: `${BRAND_COWORK_LABEL} <noreply@sheconomy.in>`,
     attachments: [{ filename: `sheconomy-${input.meeting.meeting_code}.ics`, content: base64Utf8(ics) }],
   })
 }

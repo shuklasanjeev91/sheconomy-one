@@ -63,7 +63,7 @@ async function sendResendEmail(apiKey: string, payload: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: `${BRAND_NAME} <noreply@sheconomy.com>`,
+      from: `${BRAND_NAME} <noreply@sheconomy.in>`,
       to: [payload.to],
       subject: payload.subject,
       html: payload.html,
