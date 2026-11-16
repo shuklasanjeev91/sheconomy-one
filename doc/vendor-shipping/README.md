@@ -18,6 +18,8 @@ Vendor delivery (`/vendor/delivery`) — **Easyship only** labels funded by per-
 
 **Policy:** Seller-direct charges only. See [`COMPLIANCE.md`](../../COMPLIANCE.md).
 
+**Partner account:** See [`easyship-partner.md`](./easyship-partner.md) (company `CIN1056135`, partner application, OAuth next steps).
+
 **UI:** `/vendor/wallet` (Shipping credit), order drawer **Process via Easyship**.
 
 ## Returns

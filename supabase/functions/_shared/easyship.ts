@@ -6,6 +6,8 @@
 export type EasyshipConfig = {
   token: string
   baseUrl: string
+  /** Platform / parent company id (e.g. CIN1056135). Used for partner child routing. */
+  companyId?: string | null
 }
 
 export function resolveEasyshipConfig(): EasyshipConfig | null {
@@ -14,15 +16,30 @@ export function resolveEasyshipConfig(): EasyshipConfig | null {
   const baseUrl = (
     Deno.env.get('EASYSHIP_BASE_URL')?.trim() || 'https://public-api.easyship.com/2024-09'
   ).replace(/\/$/, '')
-  return { token, baseUrl }
+  const companyId =
+    Deno.env.get('EASYSHIP_COMPANY_ID')?.trim() ||
+    Deno.env.get('EASYSHIP_PLATFORM_COMPANY_ID')?.trim() ||
+    null
+  return { token, baseUrl, companyId }
 }
 
 /** Cloudflare rejects bare Deno UA from some edges with 403/1010. */
-function easyshipHeaders(token: string, extra?: Record<string, string>): Record<string, string> {
+function easyshipHeaders(
+  config: EasyshipConfig | string,
+  extra?: Record<string, string>,
+  companyIdOverride?: string | null,
+): Record<string, string> {
+  const token = typeof config === 'string' ? config : config.token
+  const companyId =
+    companyIdOverride?.trim() ||
+    (typeof config === 'string' ? null : config.companyId?.trim()) ||
+    null
   return {
     Authorization: `Bearer ${token}`,
     Accept: 'application/json',
     'User-Agent': 'SHEconomyOne/1.0 (Supabase Edge; Easyship)',
+    // Enterprise / partner child-company routing (ignored by Public API when unused).
+    ...(companyId ? { 'X-EASYSHIP-COMPANY-ID': companyId } : {}),
     ...extra,
   }
 }
@@ -117,7 +134,7 @@ export async function requestDdpRates(
 
   const res = await fetch(`${config.baseUrl}/rates`, {
     method: 'POST',
-    headers: easyshipHeaders(config.token, { 'Content-Type': 'application/json' }),
+    headers: easyshipHeaders(config, { 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   })
 
@@ -190,7 +207,7 @@ export type EasyshipAccountCredit = {
 export async function getAccountCredit(config: EasyshipConfig): Promise<EasyshipAccountCredit> {
   const res = await fetch(`${config.baseUrl}/account`, {
     method: 'GET',
-    headers: easyshipHeaders(config.token),
+    headers: easyshipHeaders(config),
   })
   const json = (await res.json().catch(() => ({}))) as {
     account?: {
@@ -256,7 +273,7 @@ export async function createShipment(
 
   const res = await fetch(`${config.baseUrl}/shipments`, {
     method: 'POST',
-    headers: easyshipHeaders(config.token, { 'Content-Type': 'application/json' }),
+    headers: easyshipHeaders(config, { 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
   })
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
