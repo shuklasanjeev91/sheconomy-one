@@ -42,16 +42,11 @@ import {
   childSkuLabels,
   childSkuTempKey,
   DEFAULT_TAX_COUNTRY,
-  defaultTaxFromMap,
-  MAX_TAX_COUNTRIES,
-  normalizeTaxByCountry,
+  normalizeCountryCode,
   parseVariationAxes,
-  removeCountryTax,
   seedTaxByCountry,
-  upsertCountryTax,
   withChildTaxByCountry,
   withVariationAxes,
-  type TaxByCountry,
   type VariationAxis,
 } from '~/commerce/lib/listing-variant-skus'
 import type { ListingVariationInsert } from '~/lib/listing/listing.type'
@@ -68,6 +63,8 @@ type DetailsStepProps = {
   ui: AppUiTokens
   formData: ListingFormData
   errors: Record<string, string>
+  /** Shop / ship-from country (ISO2). Tax is stored for this country automatically. */
+  sellerCountryCode?: string | null
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
 }
@@ -75,19 +72,14 @@ type DetailsStepProps = {
 const AXIS_PRESETS = ['Color', 'Size', 'Material', 'Style'] as const
 const GST_PRESETS = ['0', '5', '12', '18', '28'] as const
 
-function readVariationTaxMap(
-  variation: Partial<ListingVariationInsert>,
-  listingTax: number | string | null | undefined,
-): TaxByCountry {
-  const meta = variation.variation_metadata as { tax_by_country?: unknown } | null
-  const fromMeta = normalizeTaxByCountry(meta?.tax_by_country)
-  if (Object.keys(fromMeta).length) return fromMeta
-  const rate = Number(variation.tax_percent ?? listingTax)
-  if (Number.isFinite(rate)) return seedTaxByCountry(rate, DEFAULT_TAX_COUNTRY)
-  return {}
-}
-
-export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }: DetailsStepProps) {
+export function DetailsStep({
+  ui,
+  formData,
+  errors,
+  sellerCountryCode,
+  onUpdate,
+  onUpdateMetadata,
+}: DetailsStepProps) {
   const toast = useAppToast()
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
   const materials = formData.materials ?? []
@@ -98,6 +90,11 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
   const productInfo = parseListingProductInfo(formData.product_info)
   const countryOptions = useMemo(() => getAllGeoCountries().map(countryToOption), [])
   const [pickingVariantKey, setPickingVariantKey] = useState<string | null>(null)
+  const taxCountry =
+    normalizeCountryCode(sellerCountryCode) ||
+    normalizeCountryCode(resolveCountryCode(readProductInfoString(formData.product_info, 'country_of_origin'))) ||
+    DEFAULT_TAX_COUNTRY
+  const taxCountryLabel = getCountryName(taxCountry) || taxCountry
   const [showPackerImporter, setShowPackerImporter] = useState(
     Boolean(productInfo.packerName || productInfo.packerAddress || productInfo.importerName),
   )
@@ -205,18 +202,18 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
       const tempKey = childSkuTempKey(options)
       const labels = childSkuLabels(options)
       const prev = existingByKey.get(tempKey)
-      const prevTaxMap = readVariationTaxMap(prev ?? {}, baseTax)
-      const taxMap = Object.keys(prevTaxMap).length
-        ? prevTaxMap
-        : seedTaxByCountry(baseTax, DEFAULT_TAX_COUNTRY)
-      const activeTax = defaultTaxFromMap(taxMap, baseTax)
+      const activeTax =
+        prev?.tax_percent != null && Number.isFinite(Number(prev.tax_percent))
+          ? Number(prev.tax_percent)
+          : baseTax
+      const taxMap = seedTaxByCountry(activeTax, taxCountry)
       return {
         ...(prev ?? {}),
         variation_name: labels.variation_name,
         variation_value: labels.variation_value,
         price: prev?.price ?? basePrice,
         mrp: prev?.mrp ?? baseMrp,
-        tax_percent: prev?.tax_percent ?? activeTax,
+        tax_percent: activeTax,
         price_includes_tax:
           typeof prev?.price_includes_tax === 'boolean' ? prev.price_includes_tax : baseIncludes,
         hsn_code: prev?.hsn_code ?? baseHsn,
@@ -246,51 +243,16 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
     }
   }
 
-  function setVariationTaxMap(index: number, taxMap: TaxByCountry) {
+  function updateVariationTax(index: number, taxPercent: number) {
     const row = variations[index]
     if (!row) return
-    const activeTax = defaultTaxFromMap(taxMap, Number(formData.tax_percent) || null)
     updateVariation(index, {
-      tax_percent: activeTax,
-      variation_metadata: withChildTaxByCountry(row.variation_metadata, taxMap),
+      tax_percent: taxPercent,
+      variation_metadata: withChildTaxByCountry(
+        row.variation_metadata,
+        seedTaxByCountry(taxPercent, taxCountry),
+      ),
     })
-  }
-
-  function updateVariationCountryTax(index: number, countryCode: string, taxPercent: number) {
-    const map = readVariationTaxMap(variations[index] ?? {}, formData.tax_percent)
-    setVariationTaxMap(index, upsertCountryTax(map, countryCode, taxPercent))
-  }
-
-  function renameVariationCountryTax(index: number, fromCode: string, toCode: string) {
-    const map = readVariationTaxMap(variations[index] ?? {}, formData.tax_percent)
-    const rate = map[fromCode]
-    if (rate == null) return
-    let next = removeCountryTax(map, fromCode)
-    next = upsertCountryTax(next, toCode, rate)
-    setVariationTaxMap(index, next)
-  }
-
-  function addVariationCountryTax(index: number) {
-    const map = readVariationTaxMap(variations[index] ?? {}, formData.tax_percent)
-    if (Object.keys(map).length >= MAX_TAX_COUNTRIES) {
-      setVariantError(`Max ${MAX_TAX_COUNTRIES} country tax rows per child SKU.`)
-      return
-    }
-    const used = new Set(Object.keys(map))
-    const nextCountry =
-      countryOptions.find((option) => !used.has(option.value))?.value ?? DEFAULT_TAX_COUNTRY
-    if (used.has(nextCountry)) {
-      setVariantError('All common countries already have a tax rate on this SKU.')
-      return
-    }
-    const seedRate =
-      defaultTaxFromMap(map, Number(formData.tax_percent) || 18) ?? 18
-    setVariationTaxMap(index, upsertCountryTax(map, nextCountry, seedRate))
-  }
-
-  function removeVariationCountryTax(index: number, countryCode: string) {
-    const map = readVariationTaxMap(variations[index] ?? {}, formData.tax_percent)
-    setVariationTaxMap(index, removeCountryTax(map, countryCode))
   }
 
   function removeVariation(index: number) {
@@ -646,130 +608,53 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
                     </Field>
                   </XStack>
 
-                  {(() => {
-                    const taxMap = readVariationTaxMap(variation, formData.tax_percent)
-                    const taxCountries = Object.keys(taxMap).sort()
-                    const defaultCountry = taxCountries.includes(DEFAULT_TAX_COUNTRY)
-                      ? DEFAULT_TAX_COUNTRY
-                      : taxCountries[0]
-                    return (
-                      <YStack
-                        gap="$2"
-                        padding="$2.5"
-                        borderRadius={10}
-                        backgroundColor={ui.surfaceMuted}
+                  <XStack gap="$2" flexWrap="wrap" alignItems="flex-end">
+                    <Field label={`Tax % (${taxCountryLabel})`} flex={1} minWidth={140}>
+                      <Select
+                        value={String(
+                          variation.tax_percent ?? formData.tax_percent ?? '18',
+                        )}
+                        onValueChange={(value) => updateVariationTax(index, Number(value))}
                       >
-                        <XStack justifyContent="space-between" alignItems="center" gap="$2">
-                          <Text fontSize={12} fontWeight="800" color={ui.text}>
-                            Tax by country
-                          </Text>
-                          <XStack alignItems="center" gap="$2">
-                            <Switch
-                              checked={Boolean(
-                                variation.price_includes_tax ?? formData.price_includes_tax,
-                              )}
-                              onCheckedChange={(checked) =>
-                                updateVariation(index, { price_includes_tax: checked })
-                              }
-                            />
-                            <Text fontSize={11.5} color={ui.textSecondary}>
-                              Includes tax
-                            </Text>
-                          </XStack>
-                        </XStack>
-
-                        {taxCountries.map((countryCode) => {
-                          const rateValue = String(taxMap[countryCode] ?? '')
-                          const selectValue = GST_PRESETS.includes(
-                            rateValue as (typeof GST_PRESETS)[number],
-                          )
-                            ? rateValue
-                            : rateValue || String(defaultCountry === countryCode ? 18 : 0)
-                          return (
-                            <XStack
-                              key={`${tempKey}-tax-${countryCode}`}
-                              gap="$2"
-                              alignItems="flex-end"
-                              flexWrap="wrap"
-                            >
-                              <GeoSelectField
-                                label="Country"
-                                value={resolveCountryCode(countryCode) ?? countryCode}
-                                displayValue={getCountryName(countryCode) ?? countryCode}
-                                placeholder="Country"
-                                options={countryOptions}
-                                sheetTitle="Tax country"
-                                searchPlaceholder="Search country"
-                                showFlags
-                                flex={2}
-                                minWidth={160}
-                                onChange={(value) => {
-                                  const nextCode = resolveCountryCode(value) ?? value
-                                  if (nextCode === countryCode) return
-                                  if (taxMap[nextCode] != null) {
-                                    setVariantError(
-                                      `${nextCode} already has a tax rate on this SKU.`,
-                                    )
-                                    return
-                                  }
-                                  renameVariationCountryTax(index, countryCode, nextCode)
-                                }}
-                              />
-                              <Field label="Tax %" flex={1} minWidth={120}>
-                                <Select
-                                  value={selectValue}
-                                  onValueChange={(value) =>
-                                    updateVariationCountryTax(index, countryCode, Number(value))
-                                  }
-                                >
-                                  <SelectTrigger
-                                    width="100%"
-                                    iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}
-                                  >
-                                    <Select.Value placeholder="Select %" />
-                                  </SelectTrigger>
-                                  <SelectContent zIndex={300000}>
-                                    <SelectViewport>
-                                      {GST_PRESETS.map((preset, presetIndex) => (
-                                        <SelectItem
-                                          key={`${tempKey}-${countryCode}-${preset}`}
-                                          index={presetIndex}
-                                          value={preset}
-                                        >
-                                          <Select.ItemText>{preset}%</Select.ItemText>
-                                        </SelectItem>
-                                      ))}
-                                    </SelectViewport>
-                                  </SelectContent>
-                                </Select>
-                              </Field>
-                              <Button
-                                tone="ghost"
-                                size="$2"
-                                icon={<Icons.Trash2 size={14} />}
-                                onPress={() => removeVariationCountryTax(index, countryCode)}
-                                disabled={taxCountries.length <= 1}
-                              />
-                            </XStack>
-                          )
-                        })}
-
-                        <Text
-                          fontSize={12}
-                          fontWeight="700"
-                          color={
-                            taxCountries.length >= MAX_TAX_COUNTRIES ? ui.textMuted : ui.brand
-                          }
-                          cursor={
-                            taxCountries.length >= MAX_TAX_COUNTRIES ? 'default' : 'pointer'
-                          }
-                          onPress={() => addVariationCountryTax(index)}
+                        <SelectTrigger
+                          width="100%"
+                          iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}
                         >
-                          + Add country
-                        </Text>
-                      </YStack>
-                    )
-                  })()}
+                          <Select.Value placeholder="Select %" />
+                        </SelectTrigger>
+                        <SelectContent zIndex={300000}>
+                          <SelectViewport>
+                            {GST_PRESETS.map((preset, presetIndex) => (
+                              <SelectItem
+                                key={`${tempKey}-tax-${preset}`}
+                                index={presetIndex}
+                                value={preset}
+                              >
+                                <Select.ItemText>{preset}%</Select.ItemText>
+                              </SelectItem>
+                            ))}
+                          </SelectViewport>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <XStack alignItems="center" gap="$2" paddingBottom="$2" minWidth={140}>
+                      <Switch
+                        checked={Boolean(
+                          variation.price_includes_tax ?? formData.price_includes_tax,
+                        )}
+                        onCheckedChange={(checked) =>
+                          updateVariation(index, { price_includes_tax: checked })
+                        }
+                      />
+                      <Text fontSize={12} color={ui.textSecondary}>
+                        Includes tax
+                      </Text>
+                    </XStack>
+                  </XStack>
+                  <Text fontSize={11.5} color={ui.textMuted}>
+                    Applied for your shop location ({taxCountryLabel}). Buyers see this rate
+                    automatically.
+                  </Text>
 
                   <YStack gap="$2">
                     <XStack justifyContent="space-between" alignItems="center" gap="$2">

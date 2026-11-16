@@ -71,6 +71,7 @@ import {
   validateFullPublishForm,
   validatePublishStep,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
+import { fetchShopAddressDetails } from '~/commerce/lib/shop-address'
 import { seedDefaultWarehouseFromListing } from '~/commerce/lib/warehouse-inventory'
 import { BasicInfoStep } from '~/commerce/components/vendor/listing-publish/steps/BasicInfoStep'
 import { CategoriesStep } from '~/commerce/components/vendor/listing-publish/steps/CategoriesStep'
@@ -78,6 +79,7 @@ import { DetailsStep } from '~/commerce/components/vendor/listing-publish/steps/
 import { ImagesStep } from '~/commerce/components/vendor/listing-publish/steps/ImagesStep'
 import { PricingStep } from '~/commerce/components/vendor/listing-publish/steps/PricingStep'
 import { SeoStep } from '~/commerce/components/vendor/listing-publish/steps/SeoStep'
+import { resolveCountryCode } from '~/lib/geo'
 
 function pickedToDraft(picked: PickedImage, order: number): ListingImageDraft {
   return {
@@ -162,6 +164,21 @@ function VendorListingPublishContent() {
   const [typeConfirmed, setTypeConfirmed] = useState(isEditMode)
   // The form seeds a physical listing, but nothing is "chosen" until the vendor says so.
   const [typePicked, setTypePicked] = useState(isEditMode)
+  const [sellerCountryCode, setSellerCountryCode] = useState(
+    shop?.shop_currency === 'INR' ? 'IN' : 'IN',
+  )
+
+  useEffect(() => {
+    if (!shop?.id) return
+    let cancelled = false
+    void fetchShopAddressDetails(shop.id).then(({ address }) => {
+      if (cancelled || !address?.country) return
+      setSellerCountryCode(resolveCountryCode(address.country) || 'IN')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [shop?.id])
 
   const stepIndex = useMemo(
     () => Math.max(0, LISTING_PUBLISH_STEPS.findIndex((step) => step.id === activeStep)),
@@ -800,6 +817,7 @@ function VendorListingPublishContent() {
               ui={ui}
               formData={formData}
               errors={displayErrors}
+              sellerCountryCode={sellerCountryCode}
               onUpdate={updateField}
               onUpdateMetadata={updateMetadata}
             />
