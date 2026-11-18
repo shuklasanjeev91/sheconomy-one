@@ -20,6 +20,7 @@ const DEFAULT_PREFS: CommerceNotificationPrefs = {
 
 const BUYER_PROMO_TYPES = [
   'cart_abandoned_customer',
+  'checkout_abandoned_customer',
   'product_back_in_stock',
   'wishlist_sale',
 ] as const
