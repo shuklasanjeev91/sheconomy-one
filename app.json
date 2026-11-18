@@ -199,7 +199,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 223,
+      "versionCode": 224,
       "softwareKeyboardLayoutMode": "resize",
       "largeHeap": true,
       "adaptiveIcon": {
@@ -214,12 +214,21 @@
           "data": [
             {
               "scheme": "https",
-              "host": "sheconomy.in",
+              "host": "www.sheconomy.in",
               "pathPrefix": "/"
-            },
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
             {
               "scheme": "https",
-              "host": "www.sheconomy.in",
+              "host": "sheconomy.in",
               "pathPrefix": "/"
             }
           ],
