@@ -4,6 +4,11 @@
  *
  * Expo's ios.supportsTablet alone can be dropped on prebuild; this plugin
  * forces UIDeviceFamily + TARGETED_DEVICE_FAMILY on every native generation.
+ *
+ * Also marks non-essential Android hardware features as optional so Play does
+ * not filter out Phone / Tablet / Desktop / XR devices (see Play Console
+ * "Required hardware feature declarations are restricting your app's
+ * availability").
  */
 const {
   AndroidConfig,
@@ -19,6 +24,49 @@ const IPAD_ORIENTATIONS = [
   'UIInterfaceOrientationLandscapeLeft',
   'UIInterfaceOrientationLandscapeRight',
 ]
+
+/**
+ * Features Play (and libraries) often treat as required because an activity
+ * locks orientation, or a permission implies the hardware. None of these are
+ * hard requirements for SHEconomy — meetings / checkout still work without them.
+ */
+const OPTIONAL_ANDROID_FEATURES = [
+  'android.hardware.screen.portrait',
+  'android.hardware.screen.landscape',
+  'android.hardware.wifi',
+  'android.hardware.camera',
+  'android.hardware.camera.autofocus',
+  'android.hardware.microphone',
+  'android.hardware.location',
+  'android.hardware.location.gps',
+  'android.hardware.location.network',
+  'android.hardware.bluetooth',
+  'android.hardware.bluetooth_le',
+  'android.hardware.telephony',
+  'android.hardware.touchscreen',
+]
+
+function ensureOptionalUsesFeature(manifest, featureName) {
+  if (!Array.isArray(manifest['uses-feature'])) {
+    manifest['uses-feature'] = []
+  }
+
+  const existing = manifest['uses-feature'].find(
+    (entry) => entry?.$?.['android:name'] === featureName,
+  )
+
+  if (existing) {
+    existing.$['android:required'] = 'false'
+    return
+  }
+
+  manifest['uses-feature'].push({
+    $: {
+      'android:name': featureName,
+      'android:required': 'false',
+    },
+  })
+}
 
 function withIosUniversalDevices(config) {
   config = withInfoPlist(config, (mod) => {
@@ -94,6 +142,10 @@ function withAndroidTabletSupport(config) {
     )
     mainActivity.$['android:configChanges'] = [...merged].join('|')
 
+    for (const featureName of OPTIONAL_ANDROID_FEATURES) {
+      ensureOptionalUsesFeature(manifest, featureName)
+    }
+
     return mod
   })
 }
@@ -107,5 +159,5 @@ function withUniversalDeviceSupport(config) {
 module.exports = createRunOncePlugin(
   withUniversalDeviceSupport,
   'with-universal-device-support',
-  '1.1.0',
+  '1.2.0',
 )
