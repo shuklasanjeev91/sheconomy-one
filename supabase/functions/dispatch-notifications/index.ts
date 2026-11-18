@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { resolvePublicAppOrigin, toCanonicalPublicUrl } from '../_shared/app-url.ts'
+import { sendResendEmail } from '../_shared/resend.ts'
 import { sendTwilioMessage } from '../_shared/twilio.ts'
 
 const BRAND_NAME = 'SHEconomy'
@@ -49,29 +50,6 @@ function channelDone(
   channel: DeliveryChannel,
 ) {
   return status?.[channel]?.status === 'sent' || status?.[channel]?.status === 'skipped'
-}
-
-async function sendResendEmail(apiKey: string, payload: {
-  to: string
-  subject: string
-  html: string
-}) {
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: `${BRAND_NAME} <noreply@sheconomy.in>`,
-      to: [payload.to],
-      subject: payload.subject,
-      html: payload.html,
-    }),
-  })
-  if (!response.ok) {
-    throw new Error((await response.text()) || 'Resend error')
-  }
 }
 
 /** OneSignal requires absolute http(s) URLs for web_url / app_url. */
@@ -325,8 +303,14 @@ Deno.serve(async (req) => {
       const channels = (notification.channels ?? []).map((c) => c.toLowerCase()) as DeliveryChannel[]
       let delivery = notification.delivery_status ?? {}
       const publicActionUrl = toCanonicalPublicUrl(notification.action_url) ?? ''
+      const dataVars = (notification.data ?? {}) as Record<string, unknown>
+      const displayName =
+        dataVars.customer_name ?? dataVars.user_name ?? dataVars.recipient_name ?? null
       const vars = {
-        ...(notification.data ?? {}),
+        ...dataVars,
+        // Alias common greeting keys so older templates (user_name) still resolve.
+        customer_name: displayName ?? dataVars.customer_name,
+        user_name: displayName ?? dataVars.user_name,
         title: notification.title,
         message: notification.message,
         action_url: publicActionUrl,
