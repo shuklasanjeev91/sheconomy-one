@@ -20,7 +20,7 @@ type ScheduleTimezoneFieldProps = {
   label?: string
 }
 
-/** Zoom-style searchable global timezone picker for schedule / edit forms. */
+/** Co-Work searchable global timezone picker for schedule / edit forms. */
 export function ScheduleTimezoneField({
   value,
   onChange,

@@ -9,7 +9,7 @@ import type { SharePayload } from '~/lib/share'
 
 type ShareButtonProps = {
   payload?: SharePayload
-  /** When set, opens the Zoom-style meeting share sheet (calendar + social). */
+  /** When set, opens the Co-Work meeting share sheet (calendar + social). */
   meeting?: Meeting
   label?: string
   variant?: 'icon' | 'outline' | 'ghost'

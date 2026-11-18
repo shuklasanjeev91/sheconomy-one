@@ -37,7 +37,7 @@ function cameraTrack(
   } as MeetingStageTrack
 }
 
-describe('Zoom parity batch 3 — hide non-video, nonverbal, sounds, shortcuts', () => {
+describe('meeting parity batch 3 — hide non-video, nonverbal, sounds, shortcuts', () => {
   it('hides camera-off remotes from gallery when hideNonVideoParticipants is on', () => {
     const tracks = [
       cameraTrack('host', { cameraOn: true }),

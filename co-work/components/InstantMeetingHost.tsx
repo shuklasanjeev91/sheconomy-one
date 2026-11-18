@@ -16,7 +16,7 @@ import { useGlobalSession } from '~/lib/session/global-session'
 const INSTANT_MEETING_FULLSCREEN_Z = 96_000
 
 /**
- * Cross-platform instant meeting overlay (web + iOS + Android) — Zoom-style.
+ * Cross-platform instant meeting overlay (web + iOS + Android) — Co-Work.
  *
  * Fullscreen is edge-to-edge. When the global session is minimized/pip, the
  * Media room stays mounted but parked off-screen so audio continues and

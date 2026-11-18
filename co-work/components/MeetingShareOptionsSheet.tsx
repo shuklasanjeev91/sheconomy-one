@@ -36,7 +36,7 @@ type ShareListItem = {
 }
 
 /**
- * Zoom-style Share sheet — primary green Screen action + content list.
+ * Co-Work Share sheet — primary green Screen action + content list.
  */
 export function MeetingShareOptionsSheet({
   open,

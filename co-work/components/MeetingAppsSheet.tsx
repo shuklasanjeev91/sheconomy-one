@@ -17,7 +17,7 @@ type MeetingAppsSheetProps = {
   actions: MeetingAppsSheetAction[]
 }
 
-/** Zoom-style Apps bottom sheet — Polls / Q&A / Whiteboard / Breakouts. */
+/** Co-Work Apps bottom sheet — Polls / Q&A / Whiteboard / Breakouts. */
 export function MeetingAppsSheet({ open, onClose, actions }: MeetingAppsSheetProps) {
   const { ui } = useCoWorkTheme()
 

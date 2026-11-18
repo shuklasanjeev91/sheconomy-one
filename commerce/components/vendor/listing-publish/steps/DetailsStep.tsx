@@ -654,7 +654,7 @@ export function DetailsStep({
         >
           <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
             Parent SKU identifies the listing; generate child SKUs from options (Color, Size, …) with
-            price, tax, HSN, stock, and images per combination — Amazon parent/child style.
+            price, tax, HSN, stock, and images per combination.
           </Text>
 
           <Field label="Parent SKU">

@@ -106,7 +106,7 @@ function HostToolsRow({
 }
 
 /**
- * Zoom-style Host tools sheet for host + co-host.
+ * Co-Work Host tools sheet for host + co-host.
  * Participant permission toggles are host-only; co-hosts can navigate and manage people.
  */
 export function MeetingHostToolsPanel({

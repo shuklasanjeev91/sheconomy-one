@@ -15,7 +15,8 @@ import {
   createPayuChildMerchant,
   findPayuChildForShop,
   getPayuHubToken,
-  resolvePayuHubConfig,
+  payuHubNotConfiguredMessage,
+  resolvePayuHubConfigAsync,
   updatePayuChildBank,
   uploadPayuKycDocument,
 } from '../_shared/payu-hub.ts'
@@ -72,25 +73,31 @@ Deno.serve(async (request) => {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader) return jsonResponse({ error: 'Unauthorized' }, 401)
 
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-  const {
-    data: { user },
-  } = await userClient.auth.getUser()
-  if (!user) return jsonResponse({ error: 'Unauthorized' }, 401)
-
   const admin = createClient(supabaseUrl, serviceRole, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle()
-  if (profile?.role !== 'A') return jsonResponse({ error: 'Forbidden' }, 403)
+  const isService = authHeader === `Bearer ${serviceRole}`
+  let userId: string | null = null
+  let isAdmin = false
+
+  if (!isService) {
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const {
+      data: { user },
+    } = await userClient.auth.getUser()
+    if (!user) return jsonResponse({ error: 'Unauthorized' }, 401)
+    userId = user.id
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle()
+    isAdmin = profile?.role === 'A'
+  }
 
   let shopId = ''
   try {
@@ -101,8 +108,20 @@ Deno.serve(async (request) => {
   }
   if (!shopId) return jsonResponse({ error: 'shopId is required' }, 400)
 
-  const hub = resolvePayuHubConfig()
-  if (!hub) return jsonResponse({ error: 'PayU Hub is not configured' }, 503)
+  if (!isService && !isAdmin) {
+    const { data: owned } = await admin
+      .from('shops')
+      .select('id')
+      .eq('id', shopId)
+      .eq('user_id', userId!)
+      .maybeSingle()
+    if (!owned) return jsonResponse({ error: 'Forbidden' }, 403)
+  }
+
+  const hub = await resolvePayuHubConfigAsync(admin)
+  if (!hub) {
+    return jsonResponse({ error: payuHubNotConfiguredMessage() }, 503)
+  }
 
   const { data: kyc } = await admin
     .from('shop_payu_kyc')
@@ -123,13 +142,14 @@ Deno.serve(async (request) => {
     .update({
       status: 'payu_pending',
       payu_error: null,
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
+      ...(isAdmin && userId
+        ? { reviewed_by: userId, reviewed_at: new Date().toISOString() }
+        : {}),
     })
     .eq('shop_id', shopId)
 
   try {
-    const token = await getPayuHubToken(hub, 'refer_child_merchant')
+    const token = await getPayuHubToken(hub, 'refer_child_merchant', admin)
     let uuid = row.payu_product_account_uuid?.trim() || ''
     let createdMid = ''
     let onboardingStatus: string | null = null
@@ -256,7 +276,7 @@ Deno.serve(async (request) => {
       docErrors.push('Child MID not available yet for document upload')
     }
 
-    const listToken = await getPayuHubToken(hub, 'fetch_child_merchants')
+    const listToken = await getPayuHubToken(hub, 'fetch_child_merchants', admin)
     const child = await findPayuChildForShop(hub, listToken, {
       shopId,
       email: row.email,

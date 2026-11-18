@@ -18,7 +18,7 @@ const meeting = {
 } as Meeting
 
 describe('instant meeting session', () => {
-  it('defaults to autoJoin for Zoom-style one-tap entry', () => {
+  it('defaults to autoJoin for Co-Work one-tap entry', () => {
     closeInstantMeetingSession()
     openInstantMeetingSession({ code: 'ABC 123 XYZ', meeting })
     expect(peekInstantMeetingSession()).toEqual({

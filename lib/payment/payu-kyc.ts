@@ -142,7 +142,10 @@ export type EntityKycRequirements = {
   requiresRegistrationNumber: boolean
   /** Keep legal name synced with PAN name while typing (person entities). */
   syncLegalWithPan: boolean
-  /** Soft nudge that companies often need GST. */
+  /**
+   * Soft nudge only — GST is never mandatory.
+   * Companies/firms are prompted but can declare not registered.
+   */
   suggestGst: boolean
   /** Admin-only docs required before submit. */
   requiredAdminDocs: Array<{
@@ -156,10 +159,58 @@ export type EntityKycRequirements = {
   }>
 }
 
+/** GST declaration on seller KYC. */
+export const PAYU_GST_ENROLLMENTS = [
+  {
+    id: 'registered',
+    label: 'I have a GSTIN',
+    hint: 'We verify it on the tax registry and autofill PAN, legal name, and business type.',
+  },
+  {
+    id: 'not_registered',
+    label: 'Not registered under GST',
+    hint: 'Allowed when turnover is below the GST threshold, the category is exempt, or GSTIN is still pending.',
+  },
+] as const
+
+export type PayuGstEnrollment = (typeof PAYU_GST_ENROLLMENTS)[number]['id']
+
+export const PAYU_GST_EXEMPTION_REASONS = [
+  {
+    id: 'below_threshold',
+    label: 'Turnover below GST threshold',
+    hint: 'Typically ₹40 lakh (goods) / ₹20 lakh (services) — declare honestly.',
+  },
+  {
+    id: 'exempt_category',
+    label: 'Exempt / not required under GST law',
+    hint: 'Category or supply is exempt from GST registration.',
+  },
+  {
+    id: 'applied_awaiting',
+    label: 'Applied for GSTIN — awaiting registration',
+    hint: 'You can add the GSTIN later once it is issued.',
+  },
+] as const
+
+export type PayuGstExemptionReason = (typeof PAYU_GST_EXEMPTION_REASONS)[number]['id']
+
+export function gstEnrollmentLabel(value: string | null | undefined): string {
+  return PAYU_GST_ENROLLMENTS.find((row) => row.id === value)?.label ?? 'Not declared'
+}
+
+export function gstExemptionReasonLabel(value: string | null | undefined): string {
+  return (
+    PAYU_GST_EXEMPTION_REASONS.find((row) => row.id === value)?.label ??
+    (value && value.trim() ? value : '—')
+  )
+}
+
 function baseCompanyReqs(
   entityId: number,
   summary: string,
   legalHint: string,
+  cinPlaceholder = 'U12345MH2020PTC123456',
 ): EntityKycRequirements {
   return {
     entityId,
@@ -171,12 +222,13 @@ function baseCompanyReqs(
     tradeNameLabel: 'Trade / brand name',
     tradeNameHint: 'Name buyers see on the storefront. Not a trademark certificate.',
     tradeNamePlaceholder: 'Shop or brand name',
-    panNameHint: 'Exact company name printed on the company PAN.',
-    bankHolderHint: 'Must match company PAN name or trade name.',
+    panNameHint: 'Exact company name printed on the company PAN (4th letter C).',
+    bankHolderHint: 'Must match company PAN name (company current account preferred).',
     registrationSectionTitle: 'Company registration',
-    registrationSectionHint: 'CIN and COI are for SHEconomy admin review.',
+    registrationSectionHint:
+      'CIN + Certificate of Incorporation are required. GSTIN is optional if you are not registered under GST.',
     cinLabel: 'CIN',
-    cinPlaceholder: 'L12345MH2020PLC123456',
+    cinPlaceholder,
     llpinLabel: 'LLPIN',
     llpinPlaceholder: 'AAA-1234',
     registrationNumberLabel: 'Registration number',
@@ -186,8 +238,13 @@ function baseCompanyReqs(
     requiresRegistrationNumber: false,
     syncLegalWithPan: false,
     suggestGst: true,
-    requiredAdminDocs: [{ kind: 'incorporation', label: 'Certificate of Incorporation' }],
-    optionalAdminDocs: [],
+    requiredAdminDocs: [
+      { kind: 'incorporation', label: 'Certificate of Incorporation' },
+      { kind: 'id_front', label: 'Authorized signatory government ID' },
+    ],
+    optionalAdminDocs: [
+      { kind: 'ownership', label: 'Board resolution / authorization letter (optional)' },
+    ],
   }
 }
 
@@ -279,7 +336,7 @@ const ENTITY_REQUIREMENTS: Record<number, EntityKycRequirements> = {
   3: {
     entityId: 3,
     group: 'firm',
-    summary: 'Partnership firm — PAN 4th letter F. Deed required for admin.',
+    summary: 'Partnership firm — PAN 4th letter F. Deed for admin. GSTIN only if registered.',
     legalNameLabel: 'Firm legal name',
     legalNameHint: 'Firm name as on the partnership deed (PayU account name).',
     legalNamePlaceholder: 'Name on partnership deed',
@@ -307,7 +364,7 @@ const ENTITY_REQUIREMENTS: Record<number, EntityKycRequirements> = {
   6: {
     entityId: 6,
     group: 'firm',
-    summary: 'LLP — needs LLPIN and LLP agreement for admin review.',
+    summary: 'LLP — LLPIN + LLP agreement for admin. GSTIN only if registered.',
     legalNameLabel: 'LLP registered name',
     legalNameHint: 'LLP name as on MCA records (PayU account name).',
     legalNamePlaceholder: 'Registered LLP name',
@@ -334,26 +391,27 @@ const ENTITY_REQUIREMENTS: Record<number, EntityKycRequirements> = {
   },
   4: baseCompanyReqs(
     4,
-    'Private Limited — CIN + Certificate of Incorporation for admin.',
+    'Private Limited — company PAN (C), CIN (U…PTC…), COI, and authorized signatory ID. GSTIN only if registered.',
     'Company name exactly as on the Certificate of Incorporation (PayU account name).',
+    'U12345MH2020PTC123456',
   ),
   5: {
     ...baseCompanyReqs(
       5,
-      'Public Limited / Corporation — CIN starts with L; COI required for admin.',
+      'Public Limited / Corporation — CIN starts with L; COI + signatory ID. GSTIN only if registered.',
       'Corporation / public limited name exactly as on the Certificate of Incorporation.',
+      'L12345MH2020PLC123456',
     ),
     legalNameLabel: 'Corporation legal name',
-    cinPlaceholder: 'L12345MH2020PLC123456',
   },
   16: {
     ...baseCompanyReqs(
       16,
-      'One Person Company — CIN + Certificate of Incorporation for admin.',
+      'One Person Company — CIN (OPC), COI + signatory ID. GSTIN only if registered.',
       'OPC name exactly as on the Certificate of Incorporation (PayU account name).',
+      'U12345MH2020OPC123456',
     ),
     legalNameLabel: 'OPC legal name',
-    cinPlaceholder: 'U12345MH2020OPC123456',
   },
   1: {
     entityId: 1,
@@ -535,7 +593,10 @@ export type PayuKycInput = {
   email: string
   panNumber: string
   panName: string
+  /** @deprecated Prefer gstEnrollment. Kept for callers that still pass the toggle. */
   hasGst: boolean
+  gstEnrollment: PayuGstEnrollment | ''
+  gstExemptionReason: PayuGstExemptionReason | ''
   gstNumber: string
   businessName: string
   businessEntityId: number
@@ -554,6 +615,21 @@ export type PayuKycInput = {
   ownershipDocumentPath: string
   idFrontDocumentPath: string
   idBackDocumentPath: string
+}
+
+/** Resolve GST enrollment from new fields or legacy hasGst. */
+export function resolveGstEnrollment(input: {
+  gstEnrollment?: PayuGstEnrollment | '' | null
+  hasGst?: boolean
+}): PayuGstEnrollment | '' {
+  if (input.gstEnrollment === 'registered' || input.gstEnrollment === 'not_registered') {
+    return input.gstEnrollment
+  }
+  // Explicit empty string = form asked but user has not chosen yet.
+  if (input.gstEnrollment === '') return ''
+  if (input.hasGst === true) return 'registered'
+  if (input.hasGst === false) return 'not_registered'
+  return ''
 }
 
 export function normalizePersonName(value: string): string {
@@ -764,13 +840,22 @@ export function validatePayuKycInput(input: PayuKycInput): Record<string, string
     errors.registrationNumber = 'Enter the registration number.'
   }
 
-  if (input.hasGst) {
+  const gstEnrollment = resolveGstEnrollment(input)
+  if (!gstEnrollment) {
+    errors.gstEnrollment = 'Choose whether you have a GSTIN or are not registered under GST.'
+  } else if (gstEnrollment === 'registered') {
     const gst = verifyGstin(input.gstNumber)
     if (!gst.ok) errors.gstNumber = gst.error
     else if (normalizePan(input.panNumber) !== gst.pan) {
       errors.panNumber = 'PAN must match the PAN on this GSTIN.'
     }
     if (!input.gstDocumentPath.trim()) errors.gstDocumentPath = 'Upload the GST certificate.'
+  } else {
+    const reasonOk = PAYU_GST_EXEMPTION_REASONS.some((row) => row.id === input.gstExemptionReason)
+    if (!reasonOk) {
+      errors.gstExemptionReason =
+        'Select why you are not registered under GST (below threshold, exempt, or awaiting GSTIN).'
+    }
   }
   if (!ACCOUNT_RE.test(input.bankAccountNumber.replace(/\s+/g, ''))) {
     errors.bankAccountNumber = 'Enter a 9–18 digit account number.'
@@ -785,15 +870,19 @@ export function validatePayuKycInput(input: PayuKycInput): Record<string, string
     errors.scheduleCDocumentPath = 'Upload the signed Schedule C document.'
   }
 
-  const pathByKind: Record<string, string> = {
-    incorporation: input.incorporationDocumentPath,
-    ownership: input.ownershipDocumentPath,
-    id_front: input.idFrontDocumentPath,
-    id_back: input.idBackDocumentPath,
+  const pathByKind: Record<string, { path: string; errorKey: string }> = {
+    incorporation: {
+      path: input.incorporationDocumentPath,
+      errorKey: 'incorporationDocumentPath',
+    },
+    ownership: { path: input.ownershipDocumentPath, errorKey: 'ownershipDocumentPath' },
+    id_front: { path: input.idFrontDocumentPath, errorKey: 'idFrontDocumentPath' },
+    id_back: { path: input.idBackDocumentPath, errorKey: 'idBackDocumentPath' },
   }
   for (const doc of entity.requiredAdminDocs) {
-    if (!pathByKind[doc.kind]?.trim()) {
-      errors[`${doc.kind}DocumentPath`] = `Upload the ${doc.label.toLowerCase()}.`
+    const entry = pathByKind[doc.kind]
+    if (entry && !entry.path.trim()) {
+      errors[entry.errorKey] = `Upload the ${doc.label.toLowerCase()}.`
     }
   }
 
@@ -879,6 +968,8 @@ export type ShopPayuKycRow = {
   pan_number: string
   pan_name: string
   gst_number: string | null
+  gst_enrollment: PayuGstEnrollment | null
+  gst_exemption_reason: PayuGstExemptionReason | null
   business_name: string
   business_entity_id: number
   monthly_expected_volume: number

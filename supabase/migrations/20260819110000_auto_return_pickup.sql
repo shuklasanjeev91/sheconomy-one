@@ -1,6 +1,6 @@
 -- Auto reverse pickup + no buyer AWB.
 --
--- Returns/exchanges are now Amazon-style: on vendor approval the client auto-books
+-- Returns/exchanges: on vendor approval the client auto-books
 -- a reverse pickup through the platform Shiprocket account and records the AWB via
 -- assign_return_tracking with return_shipping_mode = 'auto'. Manual vendor paste
 -- ('vendor_arranged') stays as the fallback. The buyer never enters an AWB, so

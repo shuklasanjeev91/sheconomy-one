@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react'
+import { Image as RNImage, Platform } from 'react-native'
 
 import { listingImageDraftToDataUrl } from '~/commerce/lib/listing-image-data-url'
 import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { draftListingFromImage, type ListingDraftFromImageResult } from '~/lib/ai/client'
 import { type PickedImage } from '~/lib/media/pick-image'
 import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
-import type { ListingFormData, ListingImageDraft } from '~/lib/listing/listing.type'
+import { LISTING_IMAGE_CONSTRAINTS, type ListingFormData, type ListingImageDraft } from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
@@ -40,20 +41,44 @@ export function ImagesStep({
   const handlePick = useCallback(async () => {
     setIsPicking(true)
     try {
+      const remaining = Math.max(0, LISTING_PUBLISH_IMAGE_HINTS.MAX_COUNT - images.length)
+      if (remaining <= 0) {
+        toast.show(`Maximum ${LISTING_PUBLISH_IMAGE_HINTS.MAX_COUNT} images`, {
+          tone: 'info',
+          message: 'Remove an image before adding another (max images reached).',
+        })
+        return
+      }
       const picked = await pickImagesWithCrop({
         multiple: true,
-        maxCount: 12,
+        maxCount: remaining,
         aspect: 'listing',
         cropTitle: 'Crop listing photo',
       })
       if (!picked.length) return
 
       const next = [...images]
+      const rejected: string[] = []
       for (const file of picked) {
-        next.push(pickedToDraft(file, next.length))
+        const draft = await pickedToDraft(file, next.length)
+        const edge =
+          draft.width && draft.height ? Math.max(draft.width, draft.height) : null
+        if (edge != null && edge < LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX) {
+          rejected.push(
+            `${file.fileName || 'Photo'} is ${edge}px (need ≥${LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX}px)`,
+          )
+          continue
+        }
+        next.push(draft)
       }
       normalizePrimary(next)
       onChangeImages(next)
+      if (rejected.length) {
+        toast.show('Some photos were too small', {
+          tone: 'danger',
+          message: rejected.slice(0, 2).join(' · '),
+        })
+      }
     } catch (error) {
       toast.show('Could not add images', {
         tone: 'danger',
@@ -261,7 +286,39 @@ export function ImagesStep({
   )
 }
 
-function pickedToDraft(picked: PickedImage, order: number): ListingImageDraft {
+async function probeImageSize(uri: string): Promise<{ width: number; height: number } | null> {
+  if (!uri) return null
+  if (Platform.OS === 'web' && typeof createImageBitmap === 'function') {
+    try {
+      const response = await fetch(uri)
+      const blob = await response.blob()
+      const bitmap = await createImageBitmap(blob)
+      const size = { width: bitmap.width, height: bitmap.height }
+      bitmap.close?.()
+      return size
+    } catch {
+      // Fall through to Image() / RNImage.
+    }
+  }
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.Image === 'function') {
+    return new Promise((resolve) => {
+      const img = new window.Image()
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+      img.onerror = () => resolve(null)
+      img.src = uri
+    })
+  }
+  return new Promise((resolve) => {
+    RNImage.getSize(
+      uri,
+      (width, height) => resolve({ width, height }),
+      () => resolve(null),
+    )
+  })
+}
+
+async function pickedToDraft(picked: PickedImage, order: number): Promise<ListingImageDraft> {
+  const size = await probeImageSize(picked.uri)
   return {
     image_url: picked.uri,
     mimeType: picked.mimeType,
@@ -269,6 +326,9 @@ function pickedToDraft(picked: PickedImage, order: number): ListingImageDraft {
     blob: picked.file,
     is_primary: order === 0,
     display_order: order,
+    width: size?.width ?? null,
+    height: size?.height ?? null,
+    file_size: picked.file?.size ?? null,
   }
 }
 

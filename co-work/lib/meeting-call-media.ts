@@ -5,7 +5,7 @@ import type { MediasoupRoom } from '~/co-work/lib/mediasoup/mediasoup-room'
 /**
  * After app goes to true OS background (native only): pause local camera so
  * audio can keep running under OS background rules. Web keeps the camera on
- * across tab switches / in-app minimize (Zoom-style).
+ * across tab switches / in-app minimize (Co-Work).
  */
 export async function pauseMeetingCameraForBackground(room: MediasoupRoom): Promise<void> {
   try {

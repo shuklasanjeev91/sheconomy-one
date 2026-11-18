@@ -33,7 +33,7 @@ export type LiveCaptionPreferences = {
   targetLang: string
   /**
    * Speech-to-text language for this device.
-   * `auto` follows the device region language (Zoom: spoken language is independent
+   * `auto` follows the device region language (Co-Work: spoken language is independent
    * of the Show/caption language used for translation).
    */
   spokenLang: 'auto' | string
@@ -92,7 +92,7 @@ type UseLiveCaptionsOptions = {
   /** False while this participant's mic is muted — never caption audio that is not being sent. */
   speechEnabled?: boolean
   onFinalCaption?: (text: string, sourceLang: string) => void
-  /** Final + interim publish so peers see live Zoom-style captions. */
+  /** Final + interim publish so peers see live Co-Work captions. */
   onPublishCaption?: (text: string, sourceLang: string, isFinal: boolean) => void
 }
 
@@ -134,7 +134,7 @@ export function useLiveCaptions({
   const targetLang = preferences.targetLang
   const targetLangName = captionLanguageName(targetLang)
   // STT uses spoken language (device region by default). Display/translation uses
-  // targetLang so A can speak English while B reads Hindi captions — Zoom-style.
+  // targetLang so A can speak English while B reads Hindi captions — Co-Work.
   const spokenLangCode =
     preferences.spokenLang === 'auto' ? regionLanguage : preferences.spokenLang
   const speakLocale = speechRecognitionLocale(
@@ -500,7 +500,7 @@ export function useLiveCaptions({
   }, [stopRecognition])
 
   // Restart STT when the captions / spoken language changes so recognition
-  // actually follows the picker (Zoom-style language switch mid-meeting).
+  // actually follows the picker (Co-Work language switch mid-meeting).
   const prevSpeakLocaleRef = useRef(speakLocale)
   useEffect(() => {
     const previous = prevSpeakLocaleRef.current

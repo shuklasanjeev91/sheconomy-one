@@ -45,7 +45,7 @@ type MeetingLiveScreenProps = {
   /** When opening from Co-Work create/start, skip the code lookup. */
   initialMeeting?: Meeting | null
   /**
-   * Zoom-style: skip the second Join Meeting confirm when the caller already
+   * Co-Work: skip the second Join Meeting confirm when the caller already
    * previewed devices / granted permissions (instant start, lobby Join now).
    * Still shows confirm when a passcode is required or auto-join fails.
    */
@@ -283,7 +283,7 @@ function MeetingLiveScreenBody({
           : typeof initialVideoEnabled === 'boolean'
             ? initialVideoEnabled
             : true
-      // Host schedule: mute / video-off on join (Zoom-style) — guests only.
+      // Host schedule: mute / video-off on join (Co-Work) — guests only.
       const { applyMeetingJoinSecurityMedia } = await import('~/co-work/lib/meeting-join-enforcement')
       const secured = applyMeetingJoinSecurityMedia({
         audioEnabled: nextAudio,
@@ -355,7 +355,7 @@ function MeetingLiveScreenBody({
     void loadMeeting()
   }, [loadMeeting, normalizedCode])
 
-  // Zoom-style one-tap: after load, enter the room without a second Join click.
+  // Co-Work one-tap: after load, enter the room without a second Join click.
   // Resume path (minimize → maximize) already landed on ready with a display name.
   useEffect(() => {
     if ((shouldResumeRoom || resumedRoomRef.current) && meeting && phase !== 'ready' && phase !== 'error') {

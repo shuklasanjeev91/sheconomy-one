@@ -8,7 +8,7 @@ export type MeetingGalleryPrefs = {
   viewMode?: MeetingViewMode
   denseGallery?: boolean
   hideSelfView?: boolean
-  /** Zoom: hide participants whose camera is off from the gallery. */
+  /** Co-Work: hide participants whose camera is off from the gallery. */
   hideNonVideoParticipants?: boolean
   /** Prefer filmstrip beside the stage during speaker / screen-share (side-by-side). */
   sideBySideShare?: boolean

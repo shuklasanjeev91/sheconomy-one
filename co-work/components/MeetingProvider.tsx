@@ -97,7 +97,7 @@ export function MeetingProvider({ children }: { children: ReactNode }) {
     void import('~/co-work/lib/meeting-gallery-prefs').then(({ loadMeetingGalleryPrefs }) =>
       loadMeetingGalleryPrefs().then((prefs) => {
         if (cancelled) return
-        // Like Zoom, every meeting opens on the active speaker; views change by swiping.
+        // Every meeting opens on the active speaker; views change by swiping.
         if (typeof prefs.denseGallery === 'boolean') {
           dispatch({ type: 'SET_DENSE_GALLERY', enabled: prefs.denseGallery })
         }

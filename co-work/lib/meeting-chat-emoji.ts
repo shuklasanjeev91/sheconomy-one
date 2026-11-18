@@ -1,4 +1,4 @@
-/** Zoom-style chat emoji picker: tabbed categories, plus big emoji-only messages. */
+/** Co-Work chat emoji picker: tabbed categories, plus big emoji-only messages. */
 
 export type MeetingChatEmojiCategory = {
   id: string
@@ -124,7 +124,7 @@ const JOINERS = /[\u200d\ufe0f\ufe0e\u20e3\u{1f3fb}-\u{1f3ff}]/gu
 
 /**
  * Count of emoji when `text` is only emoji (1–3 of them), else 0.
- * Those messages render large without a bubble, like Zoom and WhatsApp.
+ * Those messages render large without a bubble, as large emoji messages.
  */
 export function meetingChatEmojiOnlyCount(text: string | null | undefined): number {
   const compact = (text ?? '').replace(/\s+/g, '')

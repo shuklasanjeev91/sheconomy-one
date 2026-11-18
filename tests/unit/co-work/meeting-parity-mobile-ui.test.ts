@@ -13,7 +13,7 @@ import {
   meetingToolbarPrimaryKeys,
 } from '~/co-work/lib/meeting-toolbar'
 
-describe('Zoom mobile UI branding helpers', () => {
+describe('Co-Work mobile UI branding helpers', () => {
   it('keeps Mute · Video · Share · Chat · Reactions · More · End on phone dock only', () => {
     expect(
       meetingToolbarPrimaryKeys({
@@ -93,7 +93,7 @@ describe('Zoom mobile UI branding helpers', () => {
     ).toContain('stop_record')
   })
 
-  it('builds Zoom-mobile More grid with Sheconomy-safe labels', () => {
+  it('builds Co-Work mobile More grid with Sheconomy-safe labels', () => {
     const keys = meetingMobileMoreGridKeys({
       viewerRole: 'host',
       supportsScreenShare: true,

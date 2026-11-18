@@ -113,8 +113,8 @@ export function resolveMeetingUiLayout(input: MeetingUiLayoutInput): MeetingUiLa
   })
   const policy = resolveMeetingOrientationPolicy(input)
   const isLandscape = meetingViewportIsLandscape(width, height)
-  // Zoom mobile (phones only): bottom sheets.
-  // Zoom desktop / iPad (tablet+) and Zoom web (laptop+): side panels.
+  // Co-Work mobile (phones only): bottom sheets.
+  // desktop / iPad (tablet+) and Co-Work desktop (laptop+): side panels.
   const panelPresentation =
     policy === 'portrait-phone' || policy === 'landscape-phone'
       ? 'bottom-sheet'
@@ -247,13 +247,13 @@ export function resolveMeetingUiLayout(input: MeetingUiLayoutInput): MeetingUiLa
   }
 }
 
-/** Usable stage box after UI insets + optional side filmstrip + Zoom-web side panel. */
+/** Usable stage box after UI insets + optional side filmstrip + Co-Work desktop side panel. */
 export function meetingStageContentBox(input: {
   viewportWidth: number
   viewportHeight: number
   layout: MeetingUiLayout
   filmstripExpanded: boolean
-  /** Extra trailing inset when a Zoom-web side panel (chat/people) is open. */
+  /** Extra trailing inset when a Co-Work desktop side panel (chat/people) is open. */
   stageTrailingInset?: number
 }): { width: number; height: number } {
   const layout = input.layout

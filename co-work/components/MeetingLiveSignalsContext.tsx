@@ -28,7 +28,7 @@ export type MeetingLiveSignalsValue = {
   handRaised: boolean
   raisedHands: Record<string, boolean>
   nonverbalByUserId: Record<string, MeetingNonverbalStatusId>
-  /** Zoom: hide remote camera video (show avatars) to save bandwidth. */
+  /** Co-Work: hide remote camera video (show avatars) to save bandwidth. */
   stopIncomingVideo: boolean
   setStopIncomingVideo: (stopped: boolean) => void
   /** Participant identity → meeting role for tile badges. */
@@ -40,8 +40,8 @@ export type MeetingLiveSignalsValue = {
   blockVideoSurfaces: boolean
   setExtraSurfaceBlock: (blocked: boolean) => void
   /**
-   * Zoom-web side panel width (+ gap) so the stage reflows instead of sitting
-   * under Chat/People. Zero on Zoom-mobile sheets.
+   * Co-Work desktop side panel width (+ gap) so the stage reflows instead of sitting
+   * under Chat/People. Zero on Co-Work mobile sheets.
    */
   stageTrailingInset: number
   setStageTrailingInset: (inset: number) => void
@@ -61,7 +61,7 @@ export type MeetingLiveSignalsValue = {
   setStageHandlesTaps: (handles: boolean) => void
   setStageTapHandler: (handler: (() => void) | null) => void
   triggerStageTap: () => void
-  /** Zoom phone: swiping right past active speaker opens safe driving mode. */
+  /** phone: swiping right past active speaker opens safe driving mode. */
   safeDrivingAvailable: boolean
   setSafeDrivingHandler: (handler: (() => void) | null) => void
   openSafeDriving: () => void

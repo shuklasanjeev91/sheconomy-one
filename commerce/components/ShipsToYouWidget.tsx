@@ -37,7 +37,7 @@ type ShipsToYouWidgetProps = {
   initialZip?: string
   compact?: boolean
   /**
-   * `pdp` = Amazon-style buy-box (Get it by + Deliver to).
+   * `pdp` = Marketplace buy-box (Get it by + Deliver to).
    * `card` = bordered Ships to you panel (cart / fallback).
    */
   variant?: 'pdp' | 'card'
@@ -73,7 +73,7 @@ function destinationFromAddress(address: UserAddress): DestinationHint {
   }
 }
 
-/** Delivery estimate + Amazon-style deliver-to on PDP (or card elsewhere). */
+/** Delivery estimate + Marketplace deliver-to on PDP (or card elsewhere). */
 export function ShipsToYouWidget({
   listingId,
   origin = null,
@@ -469,7 +469,7 @@ export function ShipsToYouWidget({
     </AppBottomSheet>
   )
 
-  // ─── Amazon-style PDP buy-box ───────────────────────────────────────────────
+  // ─── Marketplace PDP buy-box ───────────────────────────────────────────────
   if (isPdp) {
     return (
       <YStack gap="$2.5" width="100%">

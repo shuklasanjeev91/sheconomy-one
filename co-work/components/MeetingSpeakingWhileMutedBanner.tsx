@@ -5,7 +5,7 @@ import { useCoWorkTheme } from '~/co-work/lib/theme'
 type MeetingSpeakingWhileMutedBannerProps = {
   visible: boolean
   topOffset?: number
-  /** Zoom-style Unmute CTA — when provided, the banner becomes interactive. */
+  /** Co-Work Unmute CTA — when provided, the banner becomes interactive. */
   onUnmute?: () => void
 }
 

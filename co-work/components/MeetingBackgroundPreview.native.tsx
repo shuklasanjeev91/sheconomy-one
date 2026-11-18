@@ -53,7 +53,7 @@ type MeetingBackgroundPreviewProps = {
    */
   active?: boolean
   videoOverlay?: ReactNode
-  /** Zoom join chrome: side VB + flip icons; picker opens on demand. */
+  /** Co-Work join chrome: side VB + flip icons; picker opens on demand. */
   joinChrome?: boolean
 }
 

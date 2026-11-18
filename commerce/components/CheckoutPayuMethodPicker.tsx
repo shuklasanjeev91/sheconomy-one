@@ -30,7 +30,7 @@ type CheckoutPayuMethodPickerProps = {
   collapsed?: boolean
   /** Live / fallback accordion sections from PayU get_checkout_details. */
   sections?: PayuCheckoutSection[]
-  /** When set, COD appears in the same Amazon-style list */
+  /** When set, COD appears in the same payment method list */
   cod?: {
     selected: boolean
     onSelect: () => void
@@ -48,7 +48,7 @@ function selectedLabel(mode: PayuPaymentModeId, sections: PayuCheckoutSection[])
 }
 
 /**
- * Amazon-style payment method list — one frame, radio rows, inline expansion.
+ * Payment method list — one frame, radio rows, inline expansion.
  * Sections come from PayU get_checkout_details (with static fallback).
  */
 export function CheckoutPayuMethodPicker({

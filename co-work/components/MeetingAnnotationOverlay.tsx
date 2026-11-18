@@ -22,7 +22,7 @@ type MeetingAnnotationOverlayProps = {
 const COLORS = ['#EF4444', '#22C55E', '#3B82F6', '#F59E0B', '#FFFFFF']
 
 /**
- * Lightweight screen-share annotation canvas (Zoom-style markup).
+ * Lightweight screen-share annotation canvas (Co-Work markup).
  * Local strokes publish via onStroke; remote strokes render from presence sync.
  */
 export function MeetingAnnotationOverlay({

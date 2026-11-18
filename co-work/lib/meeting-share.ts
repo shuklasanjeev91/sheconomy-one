@@ -19,7 +19,7 @@ export type MeetingShareSchedule = {
   inferred: boolean
 }
 
-/** Resolve a shareable start/end even for live instant meetings (Zoom-style). */
+/** Resolve a shareable start/end even for live instant meetings (Co-Work). */
 export function resolveMeetingShareSchedule(meeting: Meeting, now = new Date()): MeetingShareSchedule {
   const startsRaw = meeting.scheduled_at ?? meeting.started_at
   if (startsRaw) {
@@ -134,7 +134,7 @@ type MeetingInvitationOptions = {
   includeJoinUrl?: boolean
 }
 
-/** Zoom-style invitation block used for social / email / copy invitation. */
+/** Co-Work invitation block used for social / email / copy invitation. */
 export function buildMeetingInvitationText(
   meeting: Meeting,
   options: MeetingInvitationOptions = {},
@@ -171,7 +171,7 @@ export function buildMeetingInvitationText(
 }
 
 /**
- * Zoom-style meeting invitation for the share sheet.
+ * Co-Work meeting invitation for the share sheet.
  * The share layer appends `url` once for destinations that need a link.
  * Calendar add is via sheet icons — not raw Google/Outlook URLs in the message.
  */

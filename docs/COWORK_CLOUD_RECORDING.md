@@ -1,6 +1,6 @@
 # Co-Work cloud meeting recordings
 
-Zoom-style recordings are produced on the **mediasoup server** (EC2): a recorder on the SFU host composes the room as a gallery/grid view with mixed room audio and encodes one MP4 with ffmpeg, so the result is identical on web, Android, and iOS. Device-local `MediaRecorder` / `expo-audio` are not used for production Co-Work recordings.
+Co-Work recordings are produced on the **mediasoup server** (EC2): a recorder on the SFU host composes the room as a gallery/grid view with mixed room audio and encodes one MP4 with ffmpeg, so the result is identical on web, Android, and iOS. Device-local `MediaRecorder` / `expo-audio` are not used for production Co-Work recordings.
 
 Recordings are stored in **Supabase Storage** — the private `meeting-recordings` bucket in the `sheconomy_db` project. The recorder uploads the finished MP4 through a short-lived signed upload URL issued by the `mediasoup-recording` function; playback/download links are short-lived Supabase signed URLs.
 

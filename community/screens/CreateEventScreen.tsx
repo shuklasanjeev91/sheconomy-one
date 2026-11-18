@@ -332,7 +332,7 @@ export function CreateEventScreen() {
           <ValidatedTextField
             label="Meeting link"
             field={form.fields.meetingUrl}
-            placeholder="https://zoom.us/..."
+            placeholder="https://sheconomy.in/co-work/..."
             required
           />
         ) : (

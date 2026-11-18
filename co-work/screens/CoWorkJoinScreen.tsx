@@ -97,7 +97,7 @@ export function CoWorkJoinScreen() {
         alignSelf="stretch"
         {...LAYOUT_STRETCH}
       >
-        {/* Zoom Join Window Card */}
+        {/* Co-Work Join Window Card */}
         <XStack
           width="100%"
           gap="$5"
@@ -183,7 +183,7 @@ export function CoWorkJoinScreen() {
               ) : null}
             </YStack>
 
-            {/* Checkboxes (Zoom-style) */}
+            {/* Checkboxes (Co-Work) */}
             <YStack gap="$2.5" paddingTop="$2">
               <XStack alignItems="center" gap="$2.5" cursor="pointer" onPress={() => setRememberName((v) => !v)}>
                 <Checkbox checked={rememberName} onCheckedChange={(c) => setRememberName(Boolean(c))} />

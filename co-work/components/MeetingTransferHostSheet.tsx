@@ -34,7 +34,7 @@ function participantName(participant: MeetingParticipant) {
 }
 
 /**
- * Zoom-like host transfer: pick a joined participant, confirm, then transfer.
+ * meeting host transfer: pick a joined participant, confirm, then transfer.
  */
 export function MeetingTransferHostSheet({
   open,

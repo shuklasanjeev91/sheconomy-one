@@ -19,13 +19,14 @@ SHEconomy does **not** operate seller Shiprocket connect, wallet mirrors, Shipro
 
 ## SHEPay (PayU) split payouts (commerce checkout)
 
-Marketplace buyer online payments are collected through the platform **PayU (SHEPay)** account, then passed through — SHEconomy fee is **0%**.
+Marketplace buyer online payments are collected through the platform **PayU (SHEPay)** account. SHEconomy takes **0% commission on item price**. The **PayU payment processing fee** (`platform_fee_rules.shepay_payment`, default **1.5%**) is deducted from the seller payout via Automate `aggregatorCharges`.
 
-1. PayU success webhook → mark orders paid via the checkout payment webhook (`shepay-payu-webhook`).
-2. Each shop’s **full amount** (item subtotal + shipping/DDP) is absolute-split to the seller’s PayU child merchant. `platform_fee_amount: 0`.
-3. Held settlements (`shepay_pending_settlements`) release only after delivery + return window + no open dispute (`shepay-release-settlement`).
-4. Label / RTO / return freight is debited from the seller’s `easyship_shipping_credits` wallet (seller-funded).
-5. Marketplace refunds go through PayU refunds (`process-refund`).
+1. Admin approves seller KYC → `shepay-create-child` creates the PayU sub-merchant; `shepay-sync-kyc` activates when PayU verifies docs.
+2. PayU success webhook → mark orders paid (`shepay-payu-webhook`).
+3. Each shop’s gross (item subtotal + shipping/DDP) is absolute-split: child gets `seller_amount`, parent gets `payment_fee_amount` as `aggregatorCharges` (PayU TDR comes from that share). `platform_fee_amount` (SHEconomy commission) stays **0**.
+4. Held settlements (`shepay_pending_settlements`) release only after delivery + return window + no open dispute (`shepay-release-settlement`).
+5. Label / RTO / return freight is debited from the seller’s `easyship_shipping_credits` wallet (seller-funded).
+6. Marketplace refunds go through PayU refunds (`process-refund`).
 
 See `doc/payment/payu/README.md`.
 

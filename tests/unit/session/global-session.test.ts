@@ -90,7 +90,7 @@ describe('global session presentation', () => {
 })
 
 describe('chromeless shell gating', () => {
-  it('uses chromeless for fullscreen Co-Work meetings (Zoom-style)', () => {
+  it('uses chromeless for fullscreen Co-Work meetings (Co-Work)', () => {
     expect(
       shouldUseChromelessShell({
         pathname: '/co-work/meeting/ABC/live',

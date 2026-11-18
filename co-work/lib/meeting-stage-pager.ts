@@ -1,7 +1,7 @@
 import type { MeetingViewMode } from '~/co-work/lib/meeting-state-machine'
 
 /**
- * Zoom-mobile stage pages, left → right — never more than three:
+ * Co-Work mobile stage pages, left → right — never more than three:
  * Tap to speak (safe driving) · Active speaker (or the shared screen) · Gallery
  * The gallery is one page; participants beyond the first screenful scroll
  * vertically inside it. Swiping left moves to the next page.
@@ -63,7 +63,7 @@ export function meetingStagePageIndex(
   return Math.max(0, main)
 }
 
-/** Someone new joined: Zoom lands back on the active speaker page. */
+/** Someone new joined: Co-Work lands back on the active speaker page. */
 export function meetingStageShouldReturnToSpeaker(input: {
   previousTiles: number
   participantTiles: number

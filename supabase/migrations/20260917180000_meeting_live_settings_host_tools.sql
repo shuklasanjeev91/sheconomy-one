@@ -1,4 +1,4 @@
--- Live mid-meeting security / participant permission patches (Zoom Host tools).
+-- Live mid-meeting security / participant permission patches (host tools).
 -- Host can change all keys. Co-host can open tools but cannot patch critical settings.
 
 CREATE OR REPLACE FUNCTION public.update_meeting_live_settings(

@@ -62,7 +62,7 @@ export function transcriptArchiveToPlainText(entry: MeetingTranscriptArchiveEntr
     .join('\n')
 }
 
-/** Copy / download helpers for Zoom-style transcript export. */
+/** Copy / download helpers for Co-Work transcript export. */
 export async function copyMeetingTranscriptText(text: string): Promise<boolean> {
   const value = text.trim()
   if (!value) return false

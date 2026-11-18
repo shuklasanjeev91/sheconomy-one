@@ -673,8 +673,8 @@ function MainColumn({
               {socialEntries.map(([platform, url]) => {
                 const key = platform.toLowerCase()
                 const Icon = SOCIAL_ICONS[key] ?? Icons.Link
-                // Keep icons; omit brand-name text for selected platforms.
-                const hideBrandLabel = key === 'facebook' || key === 'linkedin' || key === 'etsy' || key === 'amazon'
+                // Keep icons; omit platform-name text for icon-forward chips.
+                const hideBrandLabel = key === 'facebook' || key === 'linkedin'
                 return (
                   <XStack
                     key={platform}

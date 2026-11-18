@@ -139,21 +139,21 @@ type MeetingControlsProps = {
   onMinimize?: () => void
   /** OS Picture-in-Picture where supported. */
   onPictureInPicture?: () => void
-  /** Disconnect from conference audio (Zoom mobile). */
+  /** Disconnect from conference audio (Co-Work mobile). */
   onDisconnectAudio?: () => void
   /** Open meeting settings / audio panel. */
   onOpenSettings?: () => void
-  /** Enter Zoom-style safe driving mode. */
+  /** Enter Co-Work safe driving mode. */
   onOpenSafeDriving?: () => void
-  /** Zoom Docs dock control — share documents / files. */
+  /** Co-Work Docs dock control — share documents / files. */
   onOpenDocs?: () => void
-  /** Zoom Apps dock control — polls, Q&A, whiteboard, breakouts. */
+  /** Co-Work Apps dock control — polls, Q&A, whiteboard, breakouts. */
   onOpenApps?: () => void
   /** Orientation policy can force compact dock (e.g. landscape phone). */
   forceCompact?: boolean
   /**
    * Fired when More / device / security flyouts or the reaction tray open/close
-   * so the room can pause chrome auto-hide (Zoom keeps sheets up).
+   * so the room can pause chrome auto-hide (Co-Work keeps sheets up).
    */
   onOverlayOpenChange?: (open: boolean) => void
 }
@@ -301,7 +301,7 @@ function ControlButton({
   icon: typeof Icons.Mic
   variant: ControlVariant
   onPress: () => void
-  /** Zoom-style caret / long-press for the button's options. */
+  /** Co-Work caret / long-press for the button's options. */
   onMore?: () => void
   moreLabel?: string
   compact?: boolean
@@ -646,7 +646,7 @@ export function MeetingControls({
   const compact = forceCompact || (isMobile && !isTablet && !isDesktop)
   const roomy = !forceCompact && (isTablet || isDesktop)
   const bottomPad = (forceCompact ? 6 : 8) + insets.bottom
-  // Zoom web ≥861 / Zoom mobile (phone, tablet, native) — see meetingToolbarMode.
+  // Co-Work desktop ≥861 / Co-Work mobile (phone, tablet, native) — see meetingToolbarMode.
   const toolbarMode = meetingToolbarMode({ compact })
   const [flyout, setFlyout] = useState<FlyoutKind>('none')
   const [endDialogOpen, setEndDialogOpen] = useState(false)
@@ -1430,7 +1430,7 @@ export function MeetingControls({
         }))
         .filter((section) => section.items.length > 0)
 
-  // Zoom iPad: single floating pill row. Phone: mic/cam left · tools center · leave right.
+  // tablet: single floating pill row. Phone: mic/cam left · tools center · leave right.
   const centerKeys = roomy
     ? mediaKeys
     : mediaKeys.filter((key) => key !== 'mic' && key !== 'camera')
@@ -1555,7 +1555,7 @@ export function MeetingControls({
           }}
         />
 
-        {/* Zoom iPad: one floating pill. Phone: equal Mute · Video · Chat · More · End. */}
+        {/* tablet: one floating pill. Phone: equal Mute · Video · Chat · More · End. */}
         <XStack width="100%" alignItems="center" gap="$1">
           {roomy ? (
             <>

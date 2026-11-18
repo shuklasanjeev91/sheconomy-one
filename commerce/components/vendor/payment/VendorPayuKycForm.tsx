@@ -21,6 +21,8 @@ import { PhoneInput } from '~/components/forms/PhoneInput'
 import { radius } from '~/config/tokens'
 import {
   PAYU_BUSINESS_ENTITY_GROUPS,
+  PAYU_GST_ENROLLMENTS,
+  PAYU_GST_EXEMPTION_REASONS,
   entitiesInGroup,
   getEntityKycRequirements,
   inferEntityFromGstConstitution,
@@ -35,6 +37,8 @@ import {
   verifyGstin,
   verifyPanForEntity,
   type GstRegistryResult,
+  type PayuGstEnrollment,
+  type PayuGstExemptionReason,
   type PayuKycDocKind,
   type PayuKycStatus,
   type ShopPayuKycRow,
@@ -42,6 +46,7 @@ import {
 import { updateShopGst } from '~/lib/shop/shop.store'
 import { useAppDispatch } from '~/lib/store/hooks'
 import { supabase } from '~/lib/supabase'
+import { readSupabaseFunctionError } from '~/lib/supabase/function-error'
 import { uploadShopKycDocument } from '~/lib/supabase/storage-upload'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
@@ -110,10 +115,12 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
   const [email, setEmail] = useState('')
   const [panNumber, setPanNumber] = useState('')
   const [panName, setPanName] = useState('')
-  const [hasGst, setHasGst] = useState(false)
+  const [gstEnrollment, setGstEnrollment] = useState<PayuGstEnrollment | ''>('')
+  const [gstExemptionReason, setGstExemptionReason] = useState<PayuGstExemptionReason | ''>('')
   const [gstNumber, setGstNumber] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [businessEntityId, setBusinessEntityId] = useState(2)
+  const hasGst = gstEnrollment === 'registered'
   const [monthlyExpectedVolume, setMonthlyExpectedVolume] = useState('50000')
   const [bankAccountNumber, setBankAccountNumber] = useState('')
   const [bankHolderName, setBankHolderName] = useState('')
@@ -216,7 +223,18 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
       setEmail(kyc.email)
       setPanNumber(editable ? kyc.pan_number : maskSecret(kyc.pan_number))
       setPanName(kyc.pan_name)
-      setHasGst(Boolean(kyc.gst_number))
+      if (kyc.gst_enrollment === 'registered' || kyc.gst_enrollment === 'not_registered') {
+        setGstEnrollment(kyc.gst_enrollment)
+      } else {
+        setGstEnrollment(kyc.gst_number ? 'registered' : '')
+      }
+      setGstExemptionReason(
+        kyc.gst_exemption_reason === 'below_threshold' ||
+          kyc.gst_exemption_reason === 'exempt_category' ||
+          kyc.gst_exemption_reason === 'applied_awaiting'
+          ? kyc.gst_exemption_reason
+          : '',
+      )
       setGstNumber(kyc.gst_number ?? '')
       setBusinessName(kyc.business_name)
       setBusinessEntityId(kyc.business_entity_id)
@@ -269,8 +287,11 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
   useEffect(() => {
     if (locked) return
     const compact = normalizePan(gstNumber)
-    if (compact.length >= 15 && !hasGst) setHasGst(true)
-  }, [gstNumber, hasGst, locked])
+    if (compact.length >= 15 && gstEnrollment !== 'registered') {
+      setGstEnrollment('registered')
+      setGstExemptionReason('')
+    }
+  }, [gstNumber, gstEnrollment, locked])
 
   // Keep bank holder filled when PAN/legal name arrives from GST autofill.
   useEffect(() => {
@@ -394,6 +415,8 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
       panNumber,
       panName,
       hasGst,
+      gstEnrollment,
+      gstExemptionReason,
       gstNumber,
       businessName,
       businessEntityId,
@@ -437,6 +460,9 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
       pan_number: normalizePan(panNumber),
       pan_name: panName.trim(),
       gst_number: hasGst ? normalizePan(gstNumber) : null,
+      gst_enrollment: gstEnrollment || null,
+      gst_exemption_reason:
+        gstEnrollment === 'not_registered' ? gstExemptionReason || null : null,
       business_name: businessName.trim(),
       business_entity_id: businessEntityId,
       monthly_expected_volume: Math.round(Number(monthlyExpectedVolume)),
@@ -452,9 +478,13 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
       bank_document_path: bankDocumentPath,
       gst_document_path: hasGst ? gstDocumentPath : null,
       schedule_c_document_path: scheduleCDocumentPath,
-      gst_legal_name: registry?.legalName || null,
-      gst_trade_name: registry?.tradeName || null,
-      gst_status: registry?.status || (hasGst ? 'checksum' : null),
+      gst_legal_name: hasGst ? registry?.legalName || null : null,
+      gst_trade_name: hasGst ? registry?.tradeName || null : null,
+      gst_status: hasGst
+        ? registry?.status || 'checksum'
+        : gstEnrollment === 'not_registered'
+          ? 'not_registered'
+          : null,
       status: 'submitted' as const,
     }
     const { error } = await supabase.from('shop_payu_kyc').upsert(payload, { onConflict: 'shop_id' })
@@ -500,12 +530,28 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
         // KYC submit already succeeded; shop GST sync is best-effort.
       }
     }
-    setSaving(false)
     if (error) {
+      setSaving(false)
       toast.show('Could not submit payout details', { tone: 'danger', message: error.message })
       return
     }
-    toast.show('Verification submitted for review', { tone: 'success' })
+
+    // Auto-register PayU child merchant — no admin Approve required.
+    const { data: createData, error: createError } = await supabase.functions.invoke<{
+      ok?: boolean
+      error?: string
+    }>('shepay-create-child', { body: { shopId } })
+    setSaving(false)
+    if (createError || createData?.ok === false) {
+      const message = await readSupabaseFunctionError(
+        createError,
+        createData,
+        'Submitted — PayU registration will retry when connection is ready.',
+      )
+      toast.show('Verification submitted', { tone: 'warning', message })
+    } else {
+      toast.show('Verification submitted — registered with PayU', { tone: 'success' })
+    }
     onSubmitted?.()
     await load()
   }
@@ -538,8 +584,21 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
     entityReqs.requiresCin ||
     entityReqs.requiresLlpin ||
     entityReqs.requiresRegistrationNumber ||
-    entityReqs.requiredAdminDocs.length > 0
+    entityReqs.requiredAdminDocs.length > 0 ||
+    entityReqs.optionalAdminDocs.some((doc) => doc.kind === 'ownership')
   const sectionOffset = showEntityDetails ? 1 : 0
+
+  function pathForDocKind(kind: PayuKycDocKind): string {
+    if (kind === 'incorporation') return incorporationDocumentPath
+    if (kind === 'ownership') return ownershipDocumentPath
+    if (kind === 'id_front') return idFrontDocumentPath
+    if (kind === 'id_back') return idBackDocumentPath
+    if (kind === 'pan') return panDocumentPath
+    if (kind === 'bank') return bankDocumentPath
+    if (kind === 'gst') return gstDocumentPath
+    if (kind === 'schedule_c') return scheduleCDocumentPath
+    return ''
+  }
 
   return (
     <YStack gap="$4">
@@ -549,9 +608,9 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
             PayU submerchant KYC
           </Text>
           <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-            Paste a GSTIN to autofill PAN, names, and business type — or pick the type from the
-            dropdown. PayU receives PAN, bank, Schedule C, and GST only; entity docs stay with
-            SHEconomy admin.
+            Pick your legal structure, declare GST (or that you are not registered), then upload PAN,
+            bank, and entity docs. Private Limited needs CIN + Certificate of Incorporation —
+            GSTIN only if you have one.
           </Text>
         </YStack>
       ) : null}
@@ -606,55 +665,114 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
       </FormSection>
 
       <FormSection
-        title="2. GSTIN autofill"
-        hint="Paste GSTIN to fill PAN, legal name, trade name, and business type from the tax registry."
+        title="2. GST declaration"
+        hint="GSTIN is optional when you are not required to register under GST."
       >
-        <Field label="GSTIN" error={errors.gstNumber}>
-          <Input
-            value={gstNumber}
-            onChangeText={(value) => {
-              const next = value.toUpperCase()
-              setGstNumber(next)
-              if (normalizePan(next).length >= 15) setHasGst(true)
-            }}
-            editable={!locked}
-            autoCapitalize="characters"
-            placeholder="22AAAAA0000A1Z5"
-          />
+        <Field label="GST status" error={errors.gstEnrollment}>
+          <YStack gap="$2">
+            {PAYU_GST_ENROLLMENTS.map((option) => {
+              const active = gstEnrollment === option.id
+              return (
+                <Button
+                  key={option.id}
+                  size="$3"
+                  tone={active ? 'primary' : 'outline'}
+                  disabled={locked}
+                  justifyContent="flex-start"
+                  onPress={() => {
+                    setGstEnrollment(option.id)
+                    if (option.id === 'registered') {
+                      setGstExemptionReason('')
+                    } else {
+                      setGstNumber('')
+                      setGstDocumentPath('')
+                      setRegistry(null)
+                      setGstHint(null)
+                      if (!gstExemptionReason) setGstExemptionReason('below_threshold')
+                    }
+                  }}
+                >
+                  {option.label}
+                </Button>
+              )
+            })}
+          </YStack>
         </Field>
-        {gstHint ? (
-          <Text
-            fontSize={12}
-            color={
-              gstHint.startsWith('Active') || gstHint.startsWith('GSTIN verified')
-                ? '#15803D'
-                : ui.textSecondary
-            }
-          >
-            {gstHint}
+        {gstEnrollment ? (
+          <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+            {PAYU_GST_ENROLLMENTS.find((row) => row.id === gstEnrollment)?.hint}
           </Text>
         ) : null}
-        <Button
-          size="$3"
-          tone={hasGst ? 'outline' : 'primary'}
-          disabled={locked}
-          onPress={() => {
-            if (hasGst) {
-              setHasGst(false)
-              setGstNumber('')
-              setRegistry(null)
-              setGstHint(null)
-            } else {
-              setHasGst(true)
-            }
-          }}
-        >
-          {hasGst ? 'Clear GSTIN / I don’t have one' : 'I have a GSTIN'}
-        </Button>
-        {entityReqs.suggestGst && !hasGst ? (
-          <Text fontSize={11} color={ui.textMuted}>
-            Companies and firms usually need a GSTIN — add it if you have one.
-          </Text>
+
+        {gstEnrollment === 'registered' ? (
+          <YStack gap="$2">
+            <Field label="GSTIN" error={errors.gstNumber}>
+              <Input
+                value={gstNumber}
+                onChangeText={(value) => setGstNumber(value.toUpperCase())}
+                editable={!locked}
+                autoCapitalize="characters"
+                placeholder="22AAAAA0000A1Z5"
+              />
+            </Field>
+            {gstHint ? (
+              <Text
+                fontSize={12}
+                color={
+                  gstHint.startsWith('Active') || gstHint.startsWith('GSTIN verified')
+                    ? '#15803D'
+                    : ui.textSecondary
+                }
+              >
+                {gstHint}
+              </Text>
+            ) : (
+              <Text fontSize={11} color={ui.textMuted}>
+                Paste GSTIN to autofill PAN, legal name, trade name, and business type.
+              </Text>
+            )}
+          </YStack>
+        ) : null}
+
+        {gstEnrollment === 'not_registered' ? (
+          <YStack gap="$2">
+            <Field label="Why are you not registered?" error={errors.gstExemptionReason}>
+              <Select
+                value={gstExemptionReason || undefined}
+                onValueChange={(value) =>
+                  setGstExemptionReason(value as PayuGstExemptionReason)
+                }
+                disabled={locked}
+              >
+                <SelectTrigger
+                  width="100%"
+                  opacity={locked ? 0.7 : 1}
+                  iconAfter={<Icons.ChevronDown size={16} color={ui.textMuted} />}
+                >
+                  <Select.Value placeholder="Select a reason" />
+                </SelectTrigger>
+                <SelectContent zIndex={300000}>
+                  <SelectViewport>
+                    {PAYU_GST_EXEMPTION_REASONS.map((reason, index) => (
+                      <SelectItem key={reason.id} index={index} value={reason.id}>
+                        <Select.ItemText>{reason.label}</Select.ItemText>
+                      </SelectItem>
+                    ))}
+                  </SelectViewport>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Text fontSize={11} color={ui.textMuted} lineHeight={16}>
+              {PAYU_GST_EXEMPTION_REASONS.find((row) => row.id === gstExemptionReason)?.hint ||
+                'Declare honestly. False GST declarations can lead to account suspension.'}
+            </Text>
+            {entityReqs.suggestGst ? (
+              <Text fontSize={11} color={ui.textMuted} lineHeight={16}>
+                Private Limited / firms can still sell without GSTIN when not required under GST
+                law — keep CIN / registration docs ready for admin review.
+              </Text>
+            ) : null}
+          </YStack>
         ) : null}
       </FormSection>
 
@@ -767,15 +885,15 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
             </Field>
           ) : null}
           {entityReqs.requiredAdminDocs.map((doc) => {
-            const path =
+            const path = pathForDocKind(doc.kind)
+            const errorKey =
               doc.kind === 'incorporation'
-                ? incorporationDocumentPath
+                ? 'incorporationDocumentPath'
                 : doc.kind === 'ownership'
-                  ? ownershipDocumentPath
+                  ? 'ownershipDocumentPath'
                   : doc.kind === 'id_front'
-                    ? idFrontDocumentPath
-                    : idBackDocumentPath
-            const errorKey = `${doc.kind}DocumentPath`
+                    ? 'idFrontDocumentPath'
+                    : 'idBackDocumentPath'
             if (locked) {
               return path ? (
                 <Text key={`reg-${doc.kind}`} fontSize={13} color={ui.textSecondary}>
@@ -793,6 +911,26 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
               />
             )
           })}
+          {entityReqs.optionalAdminDocs
+            .filter((doc) => doc.kind === 'ownership' || doc.kind === 'id_back')
+            .map((doc) => {
+              const path = pathForDocKind(doc.kind)
+              if (locked) {
+                return path ? (
+                  <Text key={`opt-${doc.kind}`} fontSize={13} color={ui.textSecondary}>
+                    {doc.label}: uploaded
+                  </Text>
+                ) : null
+              }
+              return (
+                <DocUploadButton
+                  key={`opt-${doc.kind}`}
+                  label={path ? `${doc.label} uploaded` : `Upload ${doc.label}`}
+                  done={Boolean(path)}
+                  onPress={() => void upload(doc.kind)}
+                />
+              )
+            })}
         </FormSection>
       ) : null}
 
@@ -871,17 +1009,19 @@ export function VendorPayuKycForm({ ui, shopId, embedded, onSubmitted }: VendorP
               onPress={() => void upload('gst')}
             />
           ) : null}
-          {entityReqs.optionalAdminDocs.map((doc) => {
-            const path = doc.kind === 'id_front' ? idFrontDocumentPath : idBackDocumentPath
-            return (
-              <DocUploadButton
-                key={doc.kind}
-                label={path ? `${doc.label} uploaded` : `Upload ${doc.label} (optional)`}
-                done={Boolean(path)}
-                onPress={() => void upload(doc.kind)}
-              />
-            )
-          })}
+          {entityReqs.optionalAdminDocs
+            .filter((doc) => doc.kind === 'id_front' || doc.kind === 'id_back')
+            .map((doc) => {
+              const path = pathForDocKind(doc.kind)
+              return (
+                <DocUploadButton
+                  key={doc.kind}
+                  label={path ? `${doc.label} uploaded` : `Upload ${doc.label} (optional)`}
+                  done={Boolean(path)}
+                  onPress={() => void upload(doc.kind)}
+                />
+              )
+            })}
           <Button size="$4" tone="primary" disabled={saving} onPress={() => void submit()}>
             {saving ? 'Submitting…' : 'Submit for PayU KYC review'}
           </Button>

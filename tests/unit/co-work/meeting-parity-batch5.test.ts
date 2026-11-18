@@ -16,8 +16,8 @@ import { participantRowActions } from '~/co-work/lib/meeting-participant-actions
 import { meetingShareContentItems } from '~/co-work/lib/meeting-share-content'
 import type { MeetingChatMessage } from '~/co-work/lib/types'
 
-describe('Zoom parity batch 5 — share options, chat export, waiting room, shortcuts', () => {
-  it('lists Zoom share content kinds with attachments above whiteboard', () => {
+describe('meeting parity batch 5 — share options, chat export, waiting room, shortcuts', () => {
+  it('lists share content kinds with attachments above whiteboard', () => {
     expect(meetingShareContentItems().map((item) => item.kind)).toEqual([
       'screen',
       'photos',

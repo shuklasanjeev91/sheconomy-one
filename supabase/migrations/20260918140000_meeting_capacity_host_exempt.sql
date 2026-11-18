@@ -1,4 +1,4 @@
--- Host is never blocked by meeting capacity (Zoom-like: host always gets in).
+-- Host is never blocked by meeting capacity (meeting: host always gets in).
 -- Guests still hit MEETING_FULL when admitted count >= max_participants.
 
 CREATE OR REPLACE FUNCTION public.enforce_meeting_capacity()

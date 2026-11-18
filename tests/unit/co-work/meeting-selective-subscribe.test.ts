@@ -8,7 +8,7 @@ import {
 } from '~/co-work/lib/meeting-selective-subscribe'
 
 describe('resolveSubscribeCameraIdentities', () => {
-  it('subscribes every remote when the room is small (1–N Zoom gallery)', () => {
+  it('subscribes every remote when the room is small (1–N gallery)', () => {
     const remotes = Array.from({ length: MEETING_SUBSCRIBE_ALL_BELOW }, (_, i) => `u${i}`)
     expect(
       resolveSubscribeCameraIdentities({

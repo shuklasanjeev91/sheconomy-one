@@ -29,6 +29,8 @@ const valid: PayuKycInput = {
   panNumber: 'ABQFA5416M',
   panName: 'Gauri Gupta',
   hasGst: true,
+  gstEnrollment: 'registered',
+  gstExemptionReason: '',
   gstNumber: '09ABQFA5416M1ZX',
   businessName: 'Gauri Gupta',
   businessEntityId: 3,
@@ -59,22 +61,30 @@ describe('vendor PayU KYC', () => {
     expect(errors.ownershipDocumentPath).toBeTruthy()
   })
 
-  it('requires CIN and Certificate of Incorporation for private limited and corporation', () => {
+  it('requires CIN, COI, and signatory ID for private limited; GST optional when not registered', () => {
     const company: PayuKycInput = {
       ...valid,
       panNumber: 'ABCCA5416M',
       gstNumber: '',
       hasGst: false,
+      gstEnrollment: 'not_registered',
+      gstExemptionReason: 'below_threshold',
       gstDocumentPath: '',
       businessEntityId: 4,
       ownershipDocumentPath: '',
       cin: 'U12345MH2020PTC123456',
       incorporationDocumentPath: 'user/shops/shop/kyc/coi.pdf',
+      idFrontDocumentPath: 'user/shops/shop/kyc/signatory.pdf',
     }
     expect(validatePayuKycInput(company)).toEqual({})
     expect(validatePayuKycInput({ ...company, cin: '' }).cin).toBeTruthy()
     expect(
       validatePayuKycInput({ ...company, incorporationDocumentPath: '' }).incorporationDocumentPath,
+    ).toBeTruthy()
+    expect(validatePayuKycInput({ ...company, idFrontDocumentPath: '' }).idFrontDocumentPath).toBeTruthy()
+    expect(
+      validatePayuKycInput({ ...company, gstEnrollment: 'not_registered', gstExemptionReason: '' })
+        .gstExemptionReason,
     ).toBeTruthy()
 
     const corp: PayuKycInput = {
@@ -85,6 +95,7 @@ describe('vendor PayU KYC', () => {
     expect(validatePayuKycInput(corp)).toEqual({})
     expect(verifyPanForEntity('ABCCA5416M', 5)).toBeNull()
     expect(getEntityKycRequirements(5).legalNameLabel).toContain('Corporation')
+    expect(getEntityKycRequirements(4).cinPlaceholder).toContain('PTC')
   })
 
   it('supports HUF and NGO entity packs', () => {
@@ -93,6 +104,8 @@ describe('vendor PayU KYC', () => {
       panNumber: 'ABCHA5416M',
       businessEntityId: 10,
       hasGst: false,
+      gstEnrollment: 'not_registered',
+      gstExemptionReason: 'exempt_category',
       gstDocumentPath: '',
       ownershipDocumentPath: '',
     }
@@ -104,6 +117,8 @@ describe('vendor PayU KYC', () => {
       panNumber: 'ABCTA5416M',
       businessEntityId: 15,
       hasGst: false,
+      gstEnrollment: 'not_registered',
+      gstExemptionReason: 'below_threshold',
       gstDocumentPath: '',
       registrationNumber: 'NGO/2020/12',
       ownershipDocumentPath: 'user/shops/shop/kyc/ngo.pdf',
@@ -118,6 +133,8 @@ describe('vendor PayU KYC', () => {
       ownershipDocumentPath: 'user/shops/shop/kyc/llp.pdf',
       llpin: 'AAA-1234',
       hasGst: false,
+      gstEnrollment: 'not_registered',
+      gstExemptionReason: 'below_threshold',
       gstDocumentPath: '',
     }
     expect(validatePayuKycInput(llp)).toEqual({})
@@ -130,6 +147,8 @@ describe('vendor PayU KYC', () => {
       panNumber: 'ABCTA5416M',
       businessEntityId: 7,
       hasGst: false,
+      gstEnrollment: 'not_registered',
+      gstExemptionReason: 'exempt_category',
       gstDocumentPath: '',
       registrationNumber: 'TRUST/2020/12',
       ownershipDocumentPath: 'user/shops/shop/kyc/trust.pdf',
@@ -152,12 +171,28 @@ describe('vendor PayU KYC', () => {
       panNumber: 'ABCPA5416M',
       businessEntityId: 2,
       hasGst: false,
+      gstEnrollment: 'not_registered',
+      gstExemptionReason: 'below_threshold',
       gstDocumentPath: '',
       ownershipDocumentPath: '',
     }
     expect(validatePayuKycInput(sole)).toEqual({})
     expect(getEntityKycRequirements(2).optionalAdminDocs[0]?.kind).toBe('id_front')
     expect(getEntityKycRequirements(14).requiredAdminDocs).toEqual([])
+  })
+
+  it('requires a GST enrollment declaration', () => {
+    expect(validatePayuKycInput({ ...valid, gstEnrollment: '' }).gstEnrollment).toBeTruthy()
+    expect(
+      validatePayuKycInput({
+        ...valid,
+        hasGst: false,
+        gstEnrollment: 'not_registered',
+        gstExemptionReason: 'applied_awaiting',
+        gstNumber: '',
+        gstDocumentPath: '',
+      }),
+    ).toEqual({})
   })
 
   it('rejects a holder name that matches neither PAN nor trade name', () => {

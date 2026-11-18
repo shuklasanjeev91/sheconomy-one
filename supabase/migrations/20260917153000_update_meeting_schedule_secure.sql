@@ -1,4 +1,4 @@
--- Allow hosts to edit scheduled / instant meeting details (Zoom-style edit).
+-- Allow hosts to edit scheduled / instant meeting details (Co-Work edit).
 CREATE OR REPLACE FUNCTION public.update_meeting_schedule_secure(
   meeting_id_input uuid,
   title_input text,

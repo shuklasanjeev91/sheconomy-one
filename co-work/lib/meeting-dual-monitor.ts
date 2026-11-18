@@ -1,5 +1,5 @@
 /**
- * Dual-monitor / pop-out helpers for Zoom-web-style secondary windows.
+ * Dual-monitor / pop-out helpers for Co-Work desktop-style secondary windows.
  * Native platforms no-op (single window).
  */
 
@@ -11,7 +11,7 @@ export function meetingPopoutQueryFlag(): string {
   return 'popout'
 }
 
-/** True when this window should render Zoom-style secondary-monitor stage layout. */
+/** True when this window should render Co-Work secondary-monitor stage layout. */
 export function isMeetingPopoutMode(search?: string): boolean {
   try {
     const raw =

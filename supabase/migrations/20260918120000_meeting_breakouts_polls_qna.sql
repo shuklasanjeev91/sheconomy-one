@@ -1,4 +1,4 @@
--- Meeting large-room features: breakouts, polls, Q&A (Zoom-like Co-Work pack B)
+-- Meeting large-room features: breakouts, polls, Q&A (meeting Co-Work pack B)
 -- Host/co-host checks use public.is_meeting_host_or_co_host (no meeting_participants.role).
 
 -- ---------------------------------------------------------------------------

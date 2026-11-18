@@ -48,7 +48,7 @@ type MeetingLiveCaptionsProps = {
   topOffset?: number
   bottomOffset?: number
   sideInset?: number
-  /** Extra inset on the trailing edge when a Zoom-web side panel is open. */
+  /** Extra inset on the trailing edge when a Co-Work desktop side panel is open. */
   trailingInset?: number
   onTargetLangChange?: (language: string) => void
   onSpokenLangChange?: (language: string) => void
@@ -74,7 +74,7 @@ const CAPTION_MUTED = '#FCE7F3'
 const CAPTION_SPEAKER = '#F9A8D4'
 
 /**
- * Zoom-style captions for web + iOS + Android.
+ * Co-Work captions for web + iOS + Android.
  * Draggable overlay; shows only the latest live line (replaces previous).
  */
 export function MeetingLiveCaptions({

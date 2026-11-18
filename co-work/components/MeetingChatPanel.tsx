@@ -92,7 +92,7 @@ type MeetingChatPanelProps = {
   participantChatWith?: MeetingParticipantChatWith | null
   canManageChat?: boolean
   participantDisplayNames?: Record<string, string>
-  /** Used for Zoom-style Save chat export filename. */
+  /** Used for Co-Work Save chat export filename. */
   meetingId?: string
   /** Uploads a picked file and posts it to the chosen chat audience. */
   onSendAttachment?: (
@@ -438,7 +438,7 @@ export function MeetingChatPanel({
   return (
     <KeyboardAvoidedByParentContext.Provider value>
     <CoWorkPanelShell fullWidth={fullWidth}>
-      {/* Zoom Mobile Header & Channel Selector (Image 1) */}
+      {/* Co-Work Mobile Header & Channel Selector (Image 1) */}
       {fullWidth ? (
         <YStack width="100%" backgroundColor={coworkUi.meetingBarElevated}>
           {/* Top handle bar */}
@@ -1505,7 +1505,7 @@ export function MeetingChatPanel({
             </Button>
           </XStack>
         ) : null}
-        {/* Zoom composer: attachment · input · emoji · send — always contrast-safe. */}
+        {/* Co-Work composer: attachment · input · emoji · send — always contrast-safe. */}
         <View
           collapsable={false}
           pointerEvents="auto"

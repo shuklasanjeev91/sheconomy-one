@@ -18,7 +18,7 @@ export function compareMeetingNames(left: string, right: string): number {
 }
 
 /**
- * Zoom ordering: whoever is talking, then unmuted, then camera on;
+ * Co-Work ordering: whoever is talking, then unmuted, then camera on;
  * everyone inside a tier (and everyone inactive) sorted A→Z by name, with "you" first.
  */
 export function compareMeetingActivity(

@@ -73,7 +73,7 @@ export function NativeMeetingVideoStageView<T extends MeetingStageTrack>({
   onVisibleIdentities: (identities: Set<string>) => void
   tileKey: (trackRef: T) => string
   renderTile: (props: NativeStageTileProps<T>) => ReactNode
-  /** Zoom's red Stop Share on the presenter's banner. */
+  /** the red Stop Share on the presenter's banner. */
   onStopScreenShare?: () => void
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
@@ -637,7 +637,7 @@ export function NativeMeetingVideoStageView<T extends MeetingStageTrack>({
   )
 }
 
-/** Zoom-style 1:1 self-view: drag to any corner without promoting it into the stage. */
+/** Co-Work 1:1 self-view: drag to any corner without promoting it into the stage. */
 function NativeFloatingVideoTile<T extends MeetingStageTrack>({
   trackRef,
   areaWidth,

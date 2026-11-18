@@ -1,10 +1,10 @@
 /**
  * Meeting responsive breakpoints (web + native viewport width).
  *
- * Zoom mapping:
- * - phone only (<661 web, native shortest <600) → Zoom mobile UI
+ * Co-Work mapping:
+ * - phone only (<661 web, native shortest <600) → Co-Work mobile UI
  *   (bottom sheets, compact Mute·Video·Chat·More·End dock)
- * - tablet / iPad + laptop+ (≥661 web, native tablet) → Zoom desktop / tablet UI
+ * - tablet / iPad + laptop+ (≥661 web, native tablet) → desktop / tablet UI
  *   (side panels, roomy Mute·Video·Participants·Chat·Share·Reactions·More·Leave dock)
  */
 
@@ -18,7 +18,7 @@ export type MeetingBreakpoint =
 export type MeetingPanelPresentation = 'bottom-sheet' | 'side'
 
 export const MEETING_BREAKPOINTS = {
-  /** ≥ tablet / iPad — Zoom desktop·tablet UI starts here */
+  /** ≥ tablet / iPad — desktop·tablet UI starts here */
   tablet: 661,
   /** ≥ laptop */
   laptop: 861,
@@ -51,7 +51,7 @@ export function resolveMeetingBreakpoint(
 ): MeetingBreakpoint {
   const w = Math.max(width, 1)
   if (options?.isNative) {
-    // Phones stay Zoom-mobile; native tablets (iPad) use Zoom desktop/tablet UI.
+    // Phones stay Co-Work mobile; native tablets (iPad) use desktop/tablet UI.
     const shortest = options.shortestSide ?? w
     return shortest >= 600 ? 'tablet' : 'mobile'
   }
@@ -74,8 +74,8 @@ export function meetingViewportIsLandscape(width: number, height: number): boole
 }
 
 /**
- * Zoom desktop / iPad side panels from tablet up.
- * Phones always use bottom sheets (Zoom mobile).
+ * desktop / iPad side panels from tablet up.
+ * Phones always use bottom sheets (Co-Work mobile).
  */
 export function meetingPanelPresentation(
   breakpoint: MeetingBreakpoint,
@@ -111,12 +111,12 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: 1,
         sidePanelMaxWidth: width,
         compactControls: true,
-        // Zoom phone gallery: 2×2 large tiles per screen, scroll for everyone else
+        // phone gallery: 2×2 large tiles per screen, scroll for everyone else
         // instead of shrinking tiles as people join.
         pageSize: isLandscape ? 6 : 4,
       }
     case 'tablet':
-      // Zoom desktop / tablet UI — side panels + roomy dock (not phone Mute·Chat·More).
+      // desktop / tablet UI — side panels + roomy dock (not phone Mute·Chat·More).
       return {
         breakpoint,
         panelPresentation: 'side',

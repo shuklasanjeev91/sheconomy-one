@@ -1,7 +1,7 @@
 import type { MeetingSecuritySettings } from '~/co-work/lib/types'
 
 /**
- * Zoom-style join enforcement: host schedule settings override guest intent.
+ * Co-Work join enforcement: host schedule settings override guest intent.
  * Hosts/co-hosts are not force-muted/video-off by these flags.
  */
 export function applyMeetingJoinSecurityMedia(input: {

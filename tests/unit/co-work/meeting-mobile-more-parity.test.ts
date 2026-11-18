@@ -5,8 +5,8 @@ import {
   meetingMobileMoreGridLabel,
 } from '~/co-work/lib/meeting-mobile-more'
 
-describe('meetingMobileMoreGridKeys & labels (Zoom mobile More parity)', () => {
-  it('shows Zoom core + Background / Whiteboard / Record / Safe driving', () => {
+describe('meetingMobileMoreGridKeys & labels (Co-Work mobile More parity)', () => {
+  it('shows Co-Work core + Background / Whiteboard / Record / Safe driving', () => {
     const hostWithAllCaps = meetingMobileMoreGridKeys({
       viewerRole: 'host',
       supportsScreenShare: true,

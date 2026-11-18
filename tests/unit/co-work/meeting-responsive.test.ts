@@ -42,14 +42,14 @@ describe('meeting responsive breakpoints', () => {
     ).toBe('bottom-sheet')
   })
 
-  it('uses Zoom desktop/tablet UI from tablet up (side panels + roomy dock)', () => {
+  it('uses desktop/tablet UI from tablet up (side panels + roomy dock)', () => {
     const tabletPortrait = resolveMeetingResponsiveLayout({ width: 800, height: 1024 })
     expect(tabletPortrait.breakpoint).toBe('tablet')
     expect(tabletPortrait.panelPresentation).toBe('side')
     expect(tabletPortrait.compactControls).toBe(false)
 
     const tabletLandscape = resolveMeetingResponsiveLayout({ width: 1024, height: 768 })
-    // Web width 1024 is desktop breakpoint — Zoom desktop.
+    // Web width 1024 is desktop breakpoint — desktop.
     expect(tabletLandscape.breakpoint).toBe('desktop')
     expect(tabletLandscape.panelPresentation).toBe('side')
 

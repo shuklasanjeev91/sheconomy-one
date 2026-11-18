@@ -174,7 +174,7 @@ export function MeetingParticipantsPanel({
   })
   const filteredWaiting = waiting.filter(matchesQuery)
 
-  // Zoom participants ordering: You at top, then hands raised, then hosts/cohosts,
+  // Co-Work participants ordering: You at top, then hands raised, then hosts/cohosts,
   // then talking → unmuted → video on, then everyone else alphabetically.
   const selfAdmitted = filteredAdmitted.find((p) => p.user_id === currentUserId)
   const otherAdmitted = filteredAdmitted.filter((p) => p.user_id !== currentUserId)
@@ -570,7 +570,7 @@ export function MeetingParticipantsPanel({
         </YStack>
       </RNScrollView>
 
-      {/* Permanently Docked Zoom Footer Toolbar */}
+      {/* Permanently Docked Co-Work Footer Toolbar */}
       <XStack
         alignItems="center"
         justifyContent="space-between"

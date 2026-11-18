@@ -39,7 +39,7 @@ export function meetingVideoTrackRemountKey(input: {
 }
 
 /**
- * Zoom-style camera fit: normal camera tiles fill the tile, but when the video
+ * Co-Work camera fit: normal camera tiles fill the tile, but when the video
  * orientation strongly disagrees with the tile orientation we preserve the full
  * camera frame instead of cropping a portrait feed into a landscape slot.
  */

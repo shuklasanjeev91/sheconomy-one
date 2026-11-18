@@ -39,7 +39,7 @@ function ownerDisplayName(owner: ShopOwnerProfile): string {
 }
 
 /**
- * Amazon-style sticky seller box — primary CTAs + short seller facts.
+ * Sticky seller box — primary CTAs + short seller facts.
  */
 export function ShopSellerBuyBox({
   shopId,

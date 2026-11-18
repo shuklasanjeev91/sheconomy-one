@@ -18,7 +18,7 @@ function row(
 }
 
 describe('transferHostCandidates', () => {
-  it('lists admitted non-host participants for Zoom-style transfer', () => {
+  it('lists admitted non-host participants for Co-Work transfer', () => {
     const host = row({
       id: '1',
       user_id: 'host',

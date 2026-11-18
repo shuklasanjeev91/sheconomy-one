@@ -14,7 +14,7 @@ export class ScreenShareCancelledError extends Error {
 }
 
 /**
- * Closing the share picker is not a failure (Zoom just stays put). Browsers report
+ * Closing the share picker is not a failure (stay on the current stage). Browsers report
  * it as AbortError or a bare NotAllowedError; an OS-level block ("denied by
  * system", macOS Screen Recording off) still needs the permission message.
  */

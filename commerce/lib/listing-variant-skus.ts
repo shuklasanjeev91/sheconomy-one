@@ -1,5 +1,5 @@
 /**
- * Amazon-style parent/child listing SKUs.
+ * Marketplace parent/child listing SKUs.
  * Child rows live in listing_variations with variation_metadata.mode = 'child_sku'.
  */
 import type { Json } from '~/lib/supabase'

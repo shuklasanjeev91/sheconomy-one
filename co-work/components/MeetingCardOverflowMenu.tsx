@@ -50,7 +50,7 @@ type MenuItem = {
 const isNative = Platform.OS !== 'web'
 
 /**
- * Zoom-style ⋮ menu on meeting cards: Start, Copy / Share invitation, Edit, Delete.
+ * Co-Work ⋮ menu on meeting cards: Start, Copy / Share invitation, Edit, Delete.
  * Opens an action sheet. A popover trigger toggles twice on the same press
  * (built-in toggle plus the button handler), so the menu never appears.
  *

@@ -94,7 +94,7 @@ Excluded: real PayU charge, Sign out, Delete account, LiveKit media stress
 | PASS | route | `/settings` | ok |  |
 | PASS | route | `/settings/account` | ok |  |
 | PASS | route | `/settings/security` | ok | Paste device code, Approve, Revoke |
-| PASS | route | `/settings/appearance` | ok | Update settings, Zoom out, Zoom in |
+| PASS | route | `/settings/appearance` | ok | Update settings, Co-Work out, Co-Work in |
 | PASS | route | `/settings/notifications` | ok |  |
 | PASS | route | `/settings/privacy` | ok |  |
 | PASS | route | `/settings/community` | ok |  |

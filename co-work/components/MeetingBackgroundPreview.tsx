@@ -42,7 +42,7 @@ type MeetingBackgroundPreviewProps = {
   videoOverlay?: ReactNode
   pickerOpen?: boolean
   onTogglePicker?: () => void
-  /** Zoom join chrome (native uses side VB + flip; web ignores). */
+  /** Co-Work join chrome (native uses side VB + flip; web ignores). */
   joinChrome?: boolean
 }
 

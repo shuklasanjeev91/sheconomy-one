@@ -3,14 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 const STORAGE_KEY = 'sheconomy.meeting.media-prefs.v1'
 
 export type MeetingMediaPrefs = {
-  /** Zoom "Original Sound" — relaxes noise suppression / AGC. */
+  /** Co-Work "Original Sound" — relaxes noise suppression / AGC. */
   originalSound?: boolean
   noiseSuppression?: boolean
   /** Prefer HIGH subscribe quality for remote cameras. */
   hdVideo?: boolean
   /** Fitzpatrick tone modifier for reactions ('' | '🏻' | '🏼' | '🏽' | '🏾' | '🏿'). */
   reactionTone?: string
-  /** Zoom: stop rendering remote camera video (avatars only) to save bandwidth. */
+  /** Co-Work: stop rendering remote camera video (avatars only) to save bandwidth. */
   stopIncomingVideo?: boolean
   /** Play a soft chime when someone joins or leaves. */
   enterExitSound?: boolean

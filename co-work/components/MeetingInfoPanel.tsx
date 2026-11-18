@@ -25,7 +25,7 @@ type MeetingInfoPanelProps = {
   onMirrorLocalVideoChange?: (enabled: boolean) => void
   hostLeaveBehavior?: 'end' | 'transfer_to_co_host' | null
   onHostLeaveBehaviorChange?: (behavior: 'end' | 'transfer_to_co_host') => void
-  /** Zoom-style: open joined-participant picker and transfer host now. */
+  /** Co-Work: open joined-participant picker and transfer host now. */
   onTransferHostPress?: () => void
   /** Open Participants so host can Make co-host from a person’s menu. */
   onOpenParticipants?: () => void

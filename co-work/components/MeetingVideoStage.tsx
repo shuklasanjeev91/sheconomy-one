@@ -119,7 +119,7 @@ export function MeetingVideoStageView<T extends MeetingStageTrack>({
   renderTiles: (tracks: T[], cameraQuality: MeetingVideoQuality) => ReactNode
   /** Remote cameras worth receiving: visible tiles, neighbouring pages, speakers. */
   onVisibleIdentities: (identities: Set<string>) => void
-  /** Zoom's red Stop Share on the presenter's banner. */
+  /** the red Stop Share on the presenter's banner. */
   onStopScreenShare?: () => void
 }) {
   const { isDesktop, isTablet, safeTop, safeBottom, safeLeft, safeRight } = useAppLayout()

@@ -9,7 +9,7 @@ type MeetingAskToUnmuteBannerProps = {
   onDismiss?: () => void
 }
 
-/** Zoom-style banner when a host asks you to unmute. */
+/** Co-Work banner when a host asks you to unmute. */
 export function MeetingAskToUnmuteBanner({
   visible,
   topOffset = 96,

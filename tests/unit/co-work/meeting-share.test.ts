@@ -34,7 +34,7 @@ const meeting: Meeting = {
 }
 
 describe('meeting sharing', () => {
-  it('includes Zoom-style details and passcode without raw calendar URLs', () => {
+  it('includes Co-Work details and passcode without raw calendar URLs', () => {
     const payload = buildMeetingSharePayload(meeting)
     const whatsappMessage = decodeURIComponent(
       buildShareTargetUrl('whatsapp', payload).split('?text=')[1] ?? '',

@@ -21,7 +21,7 @@ function openExternally(url: string | null) {
   if (url) void Linking.openURL(url).catch(() => {})
 }
 
-/** Zoom-style file badge colour by document type. */
+/** Co-Work file badge colour by document type. */
 function documentBadge(attachment: MeetingChatAttachment): { label: string; color: string } {
   const ext = meetingContentExtension(attachment.fileName)
   const label = (ext || meetingChatAttachmentKindLabel(attachment.kind)).toUpperCase().slice(0, 4)
@@ -157,7 +157,7 @@ function MediaCaption({ attachment }: { attachment: MeetingChatAttachment }) {
   )
 }
 
-/** Plays inside the bubble, like Zoom chat; native players mount only after a tap. */
+/** Plays inside the bubble; native players mount only after a tap. */
 function InlineMedia({ attachment, url }: { attachment: MeetingChatAttachment; url: string }) {
   const audio = attachment.kind === 'audio'
   const [started, setStarted] = useState(false)

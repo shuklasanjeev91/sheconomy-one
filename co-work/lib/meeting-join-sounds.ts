@@ -1,7 +1,7 @@
 import { Platform } from 'react-native'
 
 /**
- * Soft join/leave chimes (Zoom "play sound when someone joins/leaves").
+ * Soft join/leave chimes (optional join/leave chimes).
  * Web uses Web Audio; native is best-effort via a short oscillator when available.
  */
 

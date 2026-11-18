@@ -48,7 +48,7 @@ function kindIcon(item: MeetingContentItem | undefined) {
   return Icons.FileText
 }
 
-/** Zoom-style shared content on the stage: photos, documents and synced video. */
+/** Co-Work shared content on the stage: photos, documents and synced video. */
 export function MeetingContentShareStage({
   share,
   receivedAt,

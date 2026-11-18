@@ -23,7 +23,7 @@ export type VendorOrderAction = {
   /** Lucide icon name (without the `Icon` suffix). */
   icon: string
   /**
-   * `fulfill` = Amazon-style buy label + auto tracking (EasyShip).
+   * `fulfill` = buy label + auto tracking (EasyShip).
    * `status` = plain status transition.
    */
   kind?: VendorOrderActionKind
@@ -76,7 +76,7 @@ function primaryForwardStatus(current: OrderStatus): OrderStatus | null {
  * Build the list of actions for an item.
  * - Unpaid (`awaiting_payment`): no Accept — seller waits for payment (Reject only).
  * - COD `pending`: Accept / Reject.
- * - `processing`: Fulfill (buy label + auto-add tracking), Amazon-style.
+ * - `processing`: Fulfill (buy label + auto-add tracking).
  */
 export function getVendorOrderActions(
   status: OrderStatus | string | null | undefined,

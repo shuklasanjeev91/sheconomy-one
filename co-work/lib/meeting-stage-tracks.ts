@@ -165,7 +165,7 @@ export function composeMeetingStageTracks<T extends MeetingStageTrack>(
     cameras.find((track) => track.participant.identity === localIdentity) ?? null
   const remoteCameras = cameras.filter((track) => track.participant.identity !== localIdentity)
   const includeLocal = !hideSelfView && !!localCamera
-  // Gallery tiles must not reshuffle while people talk. Zoom-style active
+  // Gallery tiles must not reshuffle while people talk. Co-Work active
   // speaker feedback is a border/highlight on the existing tile; only explicit
   // user pins are promoted.
   const orderedRemoteCameras = [...remoteCameras].sort((left, right) =>
@@ -193,7 +193,7 @@ export function composeMeetingStageTracks<T extends MeetingStageTrack>(
     }
   }
 
-  // Zoom one-on-one: exactly one large tile and one floating tile; everyone else
+  // Co-Work one-on-one: exactly one large tile and one floating tile; everyone else
   // lives on the gallery page, never in a strip beside the stage.
   const remoteOrdered = orderedCameras.filter((track) => track.participant.identity !== localIdentity)
   const remoteSpeaker =

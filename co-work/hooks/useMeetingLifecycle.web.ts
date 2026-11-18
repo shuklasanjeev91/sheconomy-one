@@ -94,7 +94,7 @@ export function useMeetingLifecycle({
     const onVisibilityChange = () => {
       const hidden = document.visibilityState !== 'visible'
       if (hidden) {
-        // Zoom-style: keep publishing camera/mic while the tab is hidden.
+        // Co-Work: keep publishing camera/mic while the tab is hidden.
         // Unpublishing on visibilitychange made video look "paused" after tab
         // switches and after in-app minimize (document can briefly hide).
         intendedCameraRef.current = cameraEnabled

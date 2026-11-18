@@ -23,7 +23,7 @@ type MeetingSafeDrivingModeProps = {
 }
 
 /**
- * Zoom-style Safe driving mode — large push-to-talk, video stopped, Sheconomy layout.
+ * Co-Work Safe driving mode — large push-to-talk, video stopped, Sheconomy layout.
  */
 export function MeetingSafeDrivingMode({
   open,

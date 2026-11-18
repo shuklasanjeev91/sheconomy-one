@@ -12,7 +12,7 @@ import {
   meetingStageSwipeTarget,
 } from '~/co-work/lib/meeting-stage-pager'
 
-describe('Zoom-style stage pager', () => {
+describe('Co-Work stage pager', () => {
   it('has exactly three pages: tap to speak → active speaker → gallery', () => {
     expect(
       meetingStagePages({ participantTiles: 100, hasScreenShare: false, safeDriving: true }),

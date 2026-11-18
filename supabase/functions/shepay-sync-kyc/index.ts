@@ -12,7 +12,8 @@ import {
   fetchPayuProductAccount,
   findPayuChildForShop,
   getPayuHubToken,
-  resolvePayuHubConfig,
+  payuHubNotConfiguredMessage,
+  resolvePayuHubConfigAsync,
 } from '../_shared/payu-hub.ts'
 
 type PendingRow = {
@@ -87,12 +88,12 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: 'Unauthorized' }, 401)
   }
 
-  const hub = resolvePayuHubConfig()
-  if (!hub) return jsonResponse({ error: 'PayU Hub is not configured' }, 503)
-
   const admin = createClient(supabaseUrl, serviceRole, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
+
+  const hub = await resolvePayuHubConfigAsync(admin)
+  if (!hub) return jsonResponse({ error: payuHubNotConfiguredMessage() }, 503)
 
   const { data: pending, error } = await admin
     .from('shop_payu_kyc')
@@ -106,7 +107,7 @@ Deno.serve(async (request) => {
   const rows = (pending ?? []) as PendingRow[]
   if (rows.length === 0) return jsonResponse({ ok: true, checked: 0, activated: 0, rejected: 0 })
 
-  const token = await getPayuHubToken(hub, 'fetch_child_merchants')
+  const token = await getPayuHubToken(hub, 'fetch_child_merchants', admin)
   let activated = 0
   let rejected = 0
   const failures: Array<{ shopId: string; error: string }> = []

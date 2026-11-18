@@ -1,4 +1,4 @@
--- Amazon-style parent/child listing SKUs:
+-- Marketplace parent/child listing SKUs:
 -- listing_variations gains absolute price/tax/HSN; listing_images can bind to a child SKU.
 -- Legacy price_adjustment path remains for rows without absolute price.
 

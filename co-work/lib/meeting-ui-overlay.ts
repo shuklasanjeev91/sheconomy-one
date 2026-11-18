@@ -3,7 +3,7 @@ import type { MeetingViewMode } from '~/co-work/lib/meeting-state-machine'
 
 export type MeetingUiMode = 'normal' | 'maximized'
 
-/** Idle delay before meeting controls auto-hide (Zoom-style 5s). */
+/** Idle delay before meeting controls auto-hide (Co-Work 5s). */
 export const MEETING_CONTROLS_IDLE_MS = 5_000
 
 export type MeetingUiVisibilityInput = {
@@ -17,13 +17,13 @@ export type MeetingUiVisibilityInput = {
   controlsPinned?: boolean
   /**
    * More / Share / Settings / Reactions (or any meeting modal) is open.
-   * Zoom keeps chrome + sheets up until the user dismisses them.
+   * Co-Work keeps chrome + sheets up until the user dismisses them.
    */
   modalOpen?: boolean
 }
 
 /**
- * Auto-hide is standard Zoom behavior: header and bottom toolbar auto-hide
+ * Auto-hide is standard meeting behavior: header and bottom toolbar auto-hide
  * after inactivity and reveal on tap/move.
  * Never auto-hide while a panel/modal is open, someone is in the waiting room,
  * or exit is in progress.

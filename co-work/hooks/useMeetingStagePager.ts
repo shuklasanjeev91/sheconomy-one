@@ -12,7 +12,7 @@ import {
   type MeetingStageSwipeDirection,
 } from '~/co-work/lib/meeting-stage-pager'
 
-/** Zoom-mobile swipe pages for the meeting stage (web + native). */
+/** Co-Work mobile swipe pages for the meeting stage (web + native). */
 export function useMeetingStagePager(input: { cameraTiles: number; hasScreenShare: boolean }) {
   const { cameraTiles, hasScreenShare } = input
   const { state, dispatch } = useMeetingMachine()

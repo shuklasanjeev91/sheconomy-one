@@ -19,7 +19,7 @@ type MeetingSettingsSheetProps = {
 }
 
 /**
- * Zoom mobile Settings sheet — Meeting settings, Virtual background, Audio, Captions…
+ * Co-Work mobile Settings sheet — Meeting settings, Virtual background, Audio, Captions…
  */
 export function MeetingSettingsSheet({ open, onClose, actions }: MeetingSettingsSheetProps) {
   const { ui } = useCoWorkTheme()

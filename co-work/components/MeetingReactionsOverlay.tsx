@@ -12,7 +12,7 @@ type MeetingReactionsOverlayProps = {
   onExpire: (id: string) => void
 }
 
-/** Floating emoji reactions that rise across the meeting stage (Meet / Zoom style). */
+/** Floating emoji reactions that rise across the meeting stage (Co-Work style). */
 export function MeetingReactionsOverlay({ reactions, onExpire }: MeetingReactionsOverlayProps) {
   const overlayPosition = Platform.OS === 'web' ? ('fixed' as const) : ('absolute' as const)
 

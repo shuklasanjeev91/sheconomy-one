@@ -10,7 +10,7 @@ import { participantRowActions } from '~/co-work/lib/meeting-participant-actions
 import { togglePinnedIdentity } from '~/co-work/lib/meeting-stage-focus'
 import { resolveMeetingKeyboardAction } from '~/co-work/lib/meeting-keyboard-shortcuts'
 
-describe('Zoom parity batch 6 — tile menus, lower hand, security, badges', () => {
+describe('meeting parity batch 6 — tile menus, lower hand, security, badges', () => {
   it('builds tile menu actions for pin/spotlight/lower-hand', () => {
     expect(
       meetingTileMenuActions({

@@ -19,7 +19,7 @@ type MeetingAudioTestModalProps = {
 }
 
 /**
- * Zoom-style speaker + mic test.
+ * Co-Work speaker + mic test.
  * Portaled above InstantMeetingHost so Close / Yes / Finish stay tappable.
  */
 export function MeetingAudioTestModal({ open, onClose, onOpenChange }: MeetingAudioTestModalProps) {

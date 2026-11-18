@@ -23,7 +23,7 @@ export type MeetingRecordingSummary = {
 }
 
 export type MeetingRecordingComposition = {
-  /** Zoom-style gallery/grid composition, independent of the viewer's current stage mode. */
+  /** Co-Work gallery/grid composition, independent of the viewer's current stage mode. */
   layout: 'grid'
   /** Server-side audio mix of every audible participant into the MP4. */
   audio: 'mixed'

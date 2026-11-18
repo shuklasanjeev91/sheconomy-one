@@ -278,7 +278,7 @@ describe('meeting stage tracks', () => {
     expect(group.pipTrack).toBeNull()
   })
 
-  it('speaker view in 1:1 fills the stage with the other person and floats self-view (Zoom)', () => {
+  it('speaker view in 1:1 fills the stage with the other person and floats self-view (Co-Work)', () => {
     const localCamera = track('local', 'camera')
     const remoteCamera = track('remote', 'camera')
     const speaker = composeMeetingStageTracks(

@@ -221,7 +221,7 @@ type SheetSurfaceProps = {
   fitContent?: boolean
   /** Stretch a non-scrolling body to the sheet height (see `AppBottomSheet`). */
   fillBody?: boolean
-  /** Zoom More-style: grab handle only (no title / close row). */
+  /** Co-Work More-style: grab handle only (no title / close row). */
   hideHeader?: boolean
   /** Override sheet fill (e.g. Sheconomy meeting plum). */
   surfaceColor?: string
@@ -367,7 +367,7 @@ type AppBottomSheetProps = {
    * can run their own scroll area with a sticky footer (`flex: 1` children).
    */
   fillBody?: boolean
-  /** Grab handle only — skip title / close row (Zoom More style). */
+  /** Grab handle only — skip title / close row (More menu style). */
   hideHeader?: boolean
   /** Override sheet fill (Sheconomy meeting plum, etc.). */
   surfaceColor?: string

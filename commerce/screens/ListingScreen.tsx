@@ -870,7 +870,7 @@ export function ListingScreen({
     </YStack>
   )
 
-  // Physical PDP paints Get it by inside Amazon-style ShipsToYouWidget —
+  // Physical PDP paints Get it by inside Marketplace ShipsToYouWidget —
   // chip only when that block is absent (digital / unknown).
   const deliveryChipLabel =
     fulfillmentInfo?.kind === 'physical'
@@ -886,7 +886,7 @@ export function ListingScreen({
         .join(' · ')
     : null
 
-  // Physical: Amazon-style deliver-to in the buy box (no duplicate ZIP card).
+  // Physical: Marketplace deliver-to in the buy box (no duplicate ZIP card).
   // Digital: download panel only.
   const deliveryBlock =
     fulfillmentInfo?.kind === 'digital' ? (

@@ -24,7 +24,7 @@ describe('meeting recording client', () => {
     })
   })
 
-  it('starts recordings as Zoom-style grid video with mixed audio', async () => {
+  it('starts recordings as Co-Work grid video with mixed audio', async () => {
     await expect(
       startCloudRecording({ meetingId: 'meeting-1', roomName: 'room-1' }),
     ).resolves.toMatchObject({ ok: true, recordingId: 'rec-1' })

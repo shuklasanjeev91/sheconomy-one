@@ -302,7 +302,7 @@ export function formatScheduleTimeZoneLabel(timeZone: string): string {
   return `(${formatTimeZoneGmtOffset(zone)}) ${city}`
 }
 
-/** Common global IANA zones for the Zoom-style timezone picker. */
+/** Common global IANA zones for the Co-Work timezone picker. */
 export const SCHEDULE_TIMEZONE_OPTIONS: readonly ScheduleTimeZoneOption[] = [
   { value: 'Pacific/Honolulu', city: 'Honolulu', region: 'Pacific' },
   { value: 'America/Anchorage', city: 'Anchorage', region: 'Americas' },

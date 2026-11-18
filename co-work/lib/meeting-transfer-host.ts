@@ -1,7 +1,7 @@
 import { meetingRoleFromFlags } from '~/co-work/lib/meeting-role-permissions'
 import type { MeetingParticipant } from '~/co-work/lib/types'
 
-/** Admitted members who can receive host (Zoom-style transfer target list). */
+/** Admitted members who can receive host (Co-Work transfer target list). */
 export function transferHostCandidates(
   participants: MeetingParticipant[],
   currentUserId: string,

@@ -101,7 +101,7 @@ export function canViewerSeeMeetingChatMessage(input: {
   return false
 }
 
-/** Zoom-style thread: the open To: target is the only conversation on screen. */
+/** Co-Work thread: the open To: target is the only conversation on screen. */
 export function meetingChatMessageInSelectedChannel(input: {
   message: Pick<
     MeetingChatMessage,

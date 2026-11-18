@@ -1,4 +1,4 @@
-/** Zoom-style nonverbal feedback (sticky status under the video tile). */
+/** Co-Work nonverbal feedback (sticky status under the video tile). */
 
 export const MEETING_NONVERBAL_STATUSES = [
   { id: 'yes', label: 'Yes', emoji: '✅' },
@@ -25,5 +25,5 @@ export function meetingNonverbalEmoji(status: MeetingNonverbalStatusId | null | 
   return MEETING_NONVERBAL_STATUSES.find((row) => row.id === status)?.emoji ?? ''
 }
 
-/** Clear after this many ms unless refreshed (Zoom clears sticky feedback on clear). */
+/** Clear after this many ms unless refreshed (sticky feedback clears on clear). */
 export const MEETING_NONVERBAL_TTL_MS = 5 * 60_000

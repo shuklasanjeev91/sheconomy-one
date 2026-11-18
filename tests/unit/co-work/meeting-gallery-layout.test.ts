@@ -12,7 +12,7 @@ import {
 } from '~/co-work/lib/meeting-gallery-layout'
 import { participantDisplayName } from '~/co-work/lib/participant-avatar'
 
-describe('Zoom-style meeting gallery', () => {
+describe('Co-Work meeting gallery', () => {
   it('uses a balanced 2x2 gallery for three cameras on portrait devices', () => {
     expect(meetingGalleryLayout(3, { width: 366, height: 560 })).toEqual({
       columns: 2,
@@ -39,7 +39,7 @@ describe('Zoom-style meeting gallery', () => {
     })
   })
 
-  it('uses Zoom-style grids for 2 / 4 / 6 / 9 participants', () => {
+  it('uses Co-Work grids for 2 / 4 / 6 / 9 participants', () => {
     expect(meetingGalleryLayout(2, { width: 900, height: 600 })).toEqual({ columns: 2, rows: 1 })
     expect(meetingGalleryLayout(4, { width: 700, height: 700 })).toEqual({ columns: 2, rows: 2 })
     expect(meetingGalleryLayout(6, { width: 800, height: 700 })).toEqual({ columns: 3, rows: 2 })

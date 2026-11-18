@@ -9,7 +9,7 @@ import {
 import { formatPersonalMeetingDisplayCode } from '~/co-work/lib/meeting-pmi'
 import { initialMeetingMachineState } from '~/co-work/lib/meeting-state-machine'
 
-describe('Zoom parity batch — reactions, media, PMI, gallery prefs', () => {
+describe('meeting parity batch — reactions, media, PMI, gallery prefs', () => {
   it('applies skin tone modifiers to toneable reactions only', () => {
     expect(applyMeetingReactionTone('👍', '🏽')).toBe('👍🏽')
     expect(applyMeetingReactionTone('❤️', '🏽')).toBe('❤️')

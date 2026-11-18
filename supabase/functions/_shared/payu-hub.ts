@@ -1,8 +1,14 @@
 /**
  * PayU Hub (accounts.payu.in) OAuth + onboarding APIs for child merchants.
+ *
+ * Architecture: ONE platform Hub OAuth client (SHEconomy aggregator) creates and
+ * manages unlimited seller child merchants. Sellers never receive Hub credentials.
+ *
  * @see https://docs.payu.in/reference/get-client-token-api
  * @see https://docs.payu.in/reference/sub-account-listing-api
  */
+
+import { decryptSecret } from './encryption.ts'
 
 export type PayuHubConfig = {
   clientId: string
@@ -11,7 +17,15 @@ export type PayuHubConfig = {
   parentMid: string
   hubBaseUrl: string
   onboardingBaseUrl: string
+  /** Where credentials came from — env wins over DB for ops overrides. */
+  source: 'env' | 'database'
 }
+
+export type PayuHubScope = 'fetch_child_merchants' | 'refer_child_merchant'
+
+/** Service-role Supabase client (loose typing — Edge shared helper). */
+// deno-lint-ignore no-explicit-any
+type HubAdminClient = { from: (table: string) => any }
 
 export type PayuChildMerchant = {
   mid: string
@@ -23,6 +37,26 @@ export type PayuChildMerchant = {
   uuid: string | null
 }
 
+function hubBaseUrls() {
+  return {
+    hubBaseUrl:
+      Deno.env.get('PAYU_HUB_BASE_URL')?.replace(/\/$/, '').trim() || 'https://accounts.payu.in',
+    onboardingBaseUrl:
+      Deno.env.get('PAYU_ONBOARDING_BASE_URL')?.replace(/\/$/, '').trim() ||
+      'https://onboarding.payu.in',
+  }
+}
+
+function parentMidFromEnv(): string {
+  return (
+    Deno.env.get('PAYU_LIVE_MID')?.trim() ||
+    Deno.env.get('PAYU_PARENT_MID')?.trim() ||
+    Deno.env.get('PAYU_MERCHANT_MID')?.trim() ||
+    ''
+  )
+}
+
+/** Sync resolve from Edge secrets only (legacy call sites). Prefer resolvePayuHubConfigAsync. */
 export function resolvePayuHubConfig(): PayuHubConfig | null {
   const clientId =
     Deno.env.get('PAYU_HUB_CLIENT_ID')?.trim() ||
@@ -32,29 +66,63 @@ export function resolvePayuHubConfig(): PayuHubConfig | null {
     Deno.env.get('PAYU_HUB_CLIENT_SECRET')?.trim() ||
     Deno.env.get('PAYU_CLIENT_SECRET')?.trim() ||
     ''
-  const parentMid =
-    Deno.env.get('PAYU_LIVE_MID')?.trim() ||
-    Deno.env.get('PAYU_PARENT_MID')?.trim() ||
-    Deno.env.get('PAYU_MERCHANT_MID')?.trim() ||
-    ''
+  const parentMid = parentMidFromEnv()
   if (!clientId || !clientSecret || !parentMid) return null
 
   return {
     clientId,
     clientSecret,
     parentMid,
-    hubBaseUrl:
-      Deno.env.get('PAYU_HUB_BASE_URL')?.replace(/\/$/, '').trim() || 'https://accounts.payu.in',
-    onboardingBaseUrl:
-      Deno.env.get('PAYU_ONBOARDING_BASE_URL')?.replace(/\/$/, '').trim() ||
-      'https://onboarding.payu.in',
+    ...hubBaseUrls(),
+    source: 'env',
   }
 }
 
-export async function getPayuHubToken(
-  config: PayuHubConfig,
-  scope: 'fetch_child_merchants' | 'refer_child_merchant' = 'fetch_child_merchants',
-): Promise<string> {
+/**
+ * Platform Hub credentials: Edge env (ops override) OR encrypted singleton row.
+ * One client_id/secret serves every seller — never per-shop Hub apps.
+ */
+export async function resolvePayuHubConfigAsync(
+  admin?: HubAdminClient | null,
+): Promise<PayuHubConfig | null> {
+  const fromEnv = resolvePayuHubConfig()
+  if (fromEnv) return fromEnv
+  if (!admin) return null
+
+  const { data } = await admin.from('platform_payu_hub_config').select('*').eq('id', 1).maybeSingle()
+  if (!data) return null
+
+  const clientId = typeof data.client_id === 'string' ? data.client_id.trim() : ''
+  const ciphertext = typeof data.client_secret_ciphertext === 'string' ? data.client_secret_ciphertext : ''
+  const iv = typeof data.client_secret_iv === 'string' ? data.client_secret_iv : ''
+  const tag = typeof data.client_secret_tag === 'string' ? data.client_secret_tag : ''
+  const parentMid =
+    (typeof data.parent_mid === 'string' && data.parent_mid.trim()) || parentMidFromEnv()
+  if (!clientId || !ciphertext || !iv || !tag || !parentMid) return null
+
+  try {
+    const clientSecret = (await decryptSecret(ciphertext, iv, tag)).trim()
+    if (!clientSecret) return null
+    return {
+      clientId,
+      clientSecret,
+      parentMid,
+      ...hubBaseUrls(),
+      source: 'database',
+    }
+  } catch {
+    return null
+  }
+}
+
+export function payuHubNotConfiguredMessage(): string {
+  return 'PayU connection is not configured. Add Hub client id and secret under Admin → Payout KYC, then sellers will register automatically.'
+}
+
+async function mintPayuHubToken(config: PayuHubConfig, scope: PayuHubScope): Promise<{
+  token: string
+  expiresIn: number
+}> {
   const body = new URLSearchParams({
     client_id: config.clientId,
     client_secret: config.clientSecret,
@@ -73,7 +141,52 @@ export async function getPayuHubToken(
       String(json.error_description ?? json.error ?? `PayU Hub token failed (${res.status})`),
     )
   }
-  return token
+  const expiresIn =
+    typeof json.expires_in === 'number' && Number.isFinite(json.expires_in)
+      ? Math.max(60, Math.floor(json.expires_in))
+      : 3600
+  return { token, expiresIn }
+}
+
+/**
+ * Mint (or reuse cached) Hub token. Pass the service-role client so Approve/sync
+ * for thousands of sellers reuse one bearer token until near expiry.
+ */
+export async function getPayuHubToken(
+  config: PayuHubConfig,
+  scope: PayuHubScope = 'fetch_child_merchants',
+  admin?: HubAdminClient | null,
+): Promise<string> {
+  const skewMs = 5 * 60 * 1000
+  if (admin) {
+    const nowIso = new Date(Date.now() + skewMs).toISOString()
+    const { data } = await admin
+      .from('platform_payu_hub_tokens')
+      .select('access_token, expires_at')
+      .eq('scope', scope)
+      .gt('expires_at', nowIso)
+      .maybeSingle()
+    const cached =
+      data && typeof data.access_token === 'string' ? data.access_token.trim() : ''
+    if (cached) return cached
+  }
+
+  const minted = await mintPayuHubToken(config, scope)
+
+  if (admin) {
+    const expiresAt = new Date(Date.now() + minted.expiresIn * 1000).toISOString()
+    await admin.from('platform_payu_hub_tokens').upsert(
+      {
+        scope,
+        access_token: minted.token,
+        expires_at: expiresAt,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'scope' },
+    )
+  }
+
+  return minted.token
 }
 
 function parseChild(row: Record<string, unknown>): PayuChildMerchant | null {

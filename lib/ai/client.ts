@@ -152,7 +152,7 @@ export async function fetchCommentSuggestions(
     : []
 }
 
-/** Zoom/Google-like natural-language meeting draft for Co-Work schedule. */
+/** Natural-language natural-language meeting draft for Co-Work schedule. */
 export async function draftMeetingWithAi(
   params: MeetingDraftParams,
 ): Promise<MeetingDraftResult> {

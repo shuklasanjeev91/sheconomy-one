@@ -5,11 +5,15 @@ import { Badge, Button, Input, Spinner, Text, XStack, YStack, useAppToast } from
 import { radius } from '~/config/tokens'
 import {
   entityLabel,
+  gstEnrollmentLabel,
+  gstExemptionReasonLabel,
   type PayuKycDocKind,
   type PayuKycStatus,
   type ShopPayuKycRow,
 } from '~/lib/payment/payu-kyc'
+import { AdminPayuHubSetup } from '~/app/admin/components/AdminPayuHubSetup'
 import { supabase } from '~/lib/supabase'
+import { readSupabaseFunctionError } from '~/lib/supabase/function-error'
 import { getKycDocumentSignedUrl } from '~/lib/supabase/storage-upload'
 
 type QueueRow = ShopPayuKycRow & {
@@ -154,14 +158,19 @@ export function AdminPayuKycQueue() {
     )
     setBusyId(null)
     if (error || data?.ok === false) {
+      const message = await readSupabaseFunctionError(
+        error,
+        data,
+        'Could not create the PayU child merchant. Try again.',
+      )
       toast.show('Payout setup did not finish', {
         tone: 'danger',
-        message: data?.error || error?.message || 'Try again.',
+        message,
       })
       await load()
       return
     }
-    toast.show('Sent to PayU — pending verification', { tone: 'success' })
+    toast.show('Registered with PayU — pending verification', { tone: 'success' })
     await load()
   }
 
@@ -195,10 +204,12 @@ export function AdminPayuKycQueue() {
           Payout KYC queue
         </Text>
         <Text color="$color10">
-          Review seller verification and entity documents. Approval creates the PayU child merchant
-          (PAN / bank / Schedule C / GST only).
+          Sellers register as PayU child merchants automatically on submit. Use this queue to review
+          entity docs, request changes, or retry failed registrations.
         </Text>
       </YStack>
+
+      <AdminPayuHubSetup />
 
       <XStack gap="$2" flexWrap="wrap">
         {FILTERS.map((item) => {
@@ -261,6 +272,13 @@ export function AdminPayuKycQueue() {
               <Text>
                 PAN {row.pan_number} · IFSC {row.ifsc}
               </Text>
+              <Text>
+                GST: {gstEnrollmentLabel(row.gst_enrollment)}
+                {row.gst_number ? ` · ${row.gst_number}` : ''}
+                {row.gst_enrollment === 'not_registered'
+                  ? ` · ${gstExemptionReasonLabel(row.gst_exemption_reason)}`
+                  : ''}
+              </Text>
               {row.cin ? <Text>CIN: {row.cin}</Text> : null}
               {row.llpin ? <Text>LLPIN: {row.llpin}</Text> : null}
               {row.registration_number ? (
@@ -312,7 +330,7 @@ export function AdminPayuKycQueue() {
                     disabled={busy}
                     onPress={() => void approve(row.shop_id)}
                   >
-                    {row.payu_error ? 'Retry Approve' : 'Approve'}
+                    {row.payu_error ? 'Retry registration' : 'Register with PayU'}
                   </Button>
                 ) : null}
                 {row.status === 'submitted' ? (

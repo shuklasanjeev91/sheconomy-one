@@ -1,5 +1,5 @@
 /**
- * Persist Zoom-style "Always show this preview when joining" preference.
+ * Persist Co-Work "Always show this preview when joining" preference.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage'

@@ -8,7 +8,7 @@ import {
 
 type MeetingKeyboardHandlers = Partial<Record<MeetingKeyboardAction, () => void>>
 
-/** Web-only Zoom-style Alt+ shortcuts while a meeting is live. */
+/** Web-only Co-Work Alt+ shortcuts while a meeting is live. */
 export function useMeetingKeyboardShortcuts(
   enabled: boolean,
   handlers: MeetingKeyboardHandlers,

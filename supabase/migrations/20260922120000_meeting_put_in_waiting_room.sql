@@ -1,4 +1,4 @@
--- Zoom-style: host/co-host can send an admitted participant back to the waiting room.
+-- Co-Work: host/co-host can send an admitted participant back to the waiting room.
 
 ALTER TABLE public.meeting_control_events
   DROP CONSTRAINT IF EXISTS meeting_control_events_action_check;

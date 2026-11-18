@@ -1,5 +1,5 @@
 /**
- * Zoom-style meeting keyboard shortcuts (web).
+ * Co-Work meeting keyboard shortcuts (web).
  * Ignores events while typing in inputs / contenteditable.
  */
 

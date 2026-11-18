@@ -75,7 +75,7 @@ export function MeetingWaitingRoom({
       justifyContent="center"
       padding="$5"
     >
-      {/* Zoom Centered Waiting Box */}
+      {/* Co-Work Centered Waiting Box */}
       <YStack
         width="100%"
         maxWidth="100%"
@@ -174,7 +174,7 @@ export function MeetingWaitingRoom({
           Meeting ID: {meetingCode}
         </Text>
 
-        {/* Zoom Waiting Room Action Buttons */}
+        {/* Co-Work Waiting Room Action Buttons */}
         <YStack width="100%" gap="$2.5" paddingTop="$2">
           {/* Test Computer Audio Button */}
           <Button

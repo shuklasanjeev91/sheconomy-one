@@ -154,7 +154,7 @@ export const COURIER_RULES: Record<string, CourierRule> = {
   [COURIER_SLUGS.INDIA_POST]: rule('India Post', [/^[A-Z]{2}\d{9}[A-Z]{2}$/, /^\d{13}$/, /^R[A-Z]\d{9}IN$/], ['2 letters + 9 digits + IN'], ['EA123456789IN']),
   [COURIER_SLUGS.XPRESSBEES]: rule('Xpressbees', [/^\d{11,15}$/, /^[A-Z]{2}\d{9,12}$/], ['11–15 digits'], ['123456789012']),
   [COURIER_SLUGS.PROFESSIONAL_COURIERS]: rule('Professional Couriers', [/^\d{10,14}$/, /^[A-Z]{2}\d{8,12}$/], ['10–14 digits'], ['1234567890']),
-  [COURIER_SLUGS.EKART]: rule('Ekart (Flipkart)', [/^[A-Z0-9]{10,30}$/, /^FMPC[A-Z0-9]+$/], ['FMPC… or alphanumeric'], ['FMPC1234567890']),
+  [COURIER_SLUGS.EKART]: rule('Ekart', [/^[A-Z0-9]{10,30}$/, /^FMPC[A-Z0-9]+$/], ['FMPC… or alphanumeric'], ['FMPC1234567890']),
   [COURIER_SLUGS.SHADOWFAX]: rule('Shadowfax', [/^[A-Z0-9]{8,30}$/], ['8–30 alphanumeric'], ['SF123456789']),
   [COURIER_SLUGS.GATI]: rule('Gati', [/^\d{9,14}$/, /^[A-Z0-9]{8,20}$/], ['9–14 digits'], ['123456789012']),
   [COURIER_SLUGS.SAFEEXPRESS]: rule('Safexpress', [/^\d{9,14}$/, /^[A-Z0-9]{8,20}$/], ['9–14 digits'], ['123456789012']),

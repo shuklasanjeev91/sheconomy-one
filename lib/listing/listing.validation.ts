@@ -16,10 +16,7 @@ import {
   type ListingType,
   type ListingValidationResult,
 } from '~/lib/listing/listing.type'
-import {
-  normalizeProductInfoDate,
-  parseListingProductInfo,
-} from '~/commerce/lib/listing-product-info'
+import { validateListingQuality } from '~/lib/listing/listing-quality'
 import { z } from '~/lib/zod'
 
 // ============= SHARED PRIMITIVES =============
@@ -56,9 +53,16 @@ export const listingTitleValidator: Validator = compose(
   ),
 )
 
-export const listingDescriptionValidator: Validator = maxLength(
-  LISTING_VALIDATION.DESCRIPTION.MAX_LENGTH,
-  `Description must be less than ${LISTING_VALIDATION.DESCRIPTION.MAX_LENGTH} characters.`,
+export const listingDescriptionValidator: Validator = compose(
+  required('Description is required.'),
+  minLength(
+    LISTING_VALIDATION.DESCRIPTION.MIN_LENGTH,
+    `Description must be at least ${LISTING_VALIDATION.DESCRIPTION.MIN_LENGTH} characters.`,
+  ),
+  maxLength(
+    LISTING_VALIDATION.DESCRIPTION.MAX_LENGTH,
+    `Description must be less than ${LISTING_VALIDATION.DESCRIPTION.MAX_LENGTH} characters.`,
+  ),
 )
 
 export const listingPriceValidator: Validator = compose(
@@ -143,12 +147,15 @@ const baseListingSchema = z.object({
     ),
   description: z
     .string()
+    .trim()
+    .min(
+      LISTING_VALIDATION.DESCRIPTION.MIN_LENGTH,
+      `Description must be at least ${LISTING_VALIDATION.DESCRIPTION.MIN_LENGTH} characters.`,
+    )
     .max(
       LISTING_VALIDATION.DESCRIPTION.MAX_LENGTH,
       `Description must be less than ${LISTING_VALIDATION.DESCRIPTION.MAX_LENGTH} characters.`,
-    )
-    .optional()
-    .default(''),
+    ),
   listing_type: z.enum([LISTING_TYPES.PHYSICAL, LISTING_TYPES.DIGITAL, LISTING_TYPES.SERVICE], {
     message: 'Please select a listing type.',
   }),
@@ -197,57 +204,21 @@ export const listingSchema = baseListingSchema
     materials: z.array(z.unknown()).optional(),
     variations: z.array(z.unknown()).optional(),
     categories: z.array(z.unknown()).optional(),
+    /** Keep product_info so manufacturer/brand quality rules can see it. */
+    product_info: z.record(z.string(), z.unknown()).optional().default({}),
+    listing_metadata: z.record(z.string(), z.unknown()).optional().default({}),
+    images: z.array(z.unknown()).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.listing_type === LISTING_TYPES.PHYSICAL) {
-      if (data.stock === null || data.stock === undefined) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['stock'],
-          message: 'Stock quantity is required for physical products.',
-        })
-      }
-      if (!Array.isArray(data.materials) || data.materials.length === 0) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['materials'],
-          message: 'At least one material is required for physical products.',
-        })
-      }
-      if (!Array.isArray(data.variations) || data.variations.length === 0) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['variations'],
-          message: 'At least one product variation is required for physical products.',
-        })
-      }
-
-      const productInfo = parseListingProductInfo(
-        (data as Partial<ListingFormData>).product_info,
-      )
-      if (!productInfo.manufacturerName) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['manufacturer_name'],
-          message: 'Manufacturer name is required for physical products.',
-        })
-      }
-      if (!productInfo.countryOfOrigin) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['country_of_origin'],
-          message: 'Country of origin is required for physical products.',
-        })
-      }
-      const manufactured = normalizeProductInfoDate(productInfo.manufacturingDate)
-      const expiry = normalizeProductInfoDate(productInfo.expiryDate)
-      if (manufactured && expiry && expiry < manufactured) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['expiry_date'],
-          message: 'Best before must be on or after the manufacturing date.',
-        })
-      }
+    // Listing quality (images, brand, manufacturer, key features, description).
+    const quality = validateListingQuality(data as Partial<ListingFormData>)
+    for (const issue of quality.issues) {
+      if (issue.severity !== 'error') continue
+      ctx.addIssue({
+        code: 'custom',
+        path: [issue.field],
+        message: issue.message,
+      })
     }
 
     if (data.listing_type === LISTING_TYPES.DIGITAL) {

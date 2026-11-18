@@ -1,5 +1,5 @@
 /**
- * Zoom-style content share: a presenter puts a file (photos, PDF, Office
+ * Co-Work content share: a presenter puts a file (photos, PDF, Office
  * document, video) on everyone's stage. The file is uploaded once and every
  * client renders it from the same URL; page, slide and playback position
  * follow the presenter over realtime broadcast.
@@ -203,7 +203,7 @@ export function emptyMeetingContentState(): MeetingContentState {
 }
 
 /**
- * One share at a time, like Zoom: a newer share from anyone replaces the
+ * One share at a time, like Co-Work: a newer share from anyone replaces the
  * current one, and a stop only ends the share it names.
  */
 export function applyMeetingContentEvent(

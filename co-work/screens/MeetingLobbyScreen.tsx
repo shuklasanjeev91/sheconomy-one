@@ -437,7 +437,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
         paddingHorizontal={wide ? '$4' : '$3'}
         {...LAYOUT_STRETCH}
       >
-        {/* Centered Zoom Video Preview Window */}
+        {/* Centered Co-Work Video Preview Window */}
         <YStack
           width="100%"
           maxWidth="100%"
@@ -452,7 +452,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
             boxShadow: coworkShadows.panel,
           }}
         >
-          {/* Zoom Window Header Bar (Image 3: Cancel on top-left) */}
+          {/* Co-Work Window Header Bar (Image 3: Cancel on top-left) */}
           <XStack
             alignItems="center"
             justifyContent="space-between"
@@ -604,7 +604,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
             </YStack>
           ) : null}
 
-          {/* Video preview + join panel — Zoom-style preview card */}
+          {/* Video preview + join panel — Co-Work preview card */}
           {joinReady ? (() => {
             const previewOverlayControls = (
               <YStack
@@ -847,7 +847,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
                     </XStack>
                   )}
 
-                  {/* Zoom Start / Join CTA button */}
+                  {/* Co-Work Start / Join CTA button */}
                   <Button
                     width="100%"
                     height={JOIN_BUTTON_HEIGHT}

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { hostBulkActions, participantRowActions } from '../../../co-work/lib/meeting-participant-actions'
 
 describe('meeting participant actions', () => {
-  it('exposes Zoom-style row actions for hosts moderating participants', () => {
+  it('exposes Co-Work row actions for hosts moderating participants', () => {
     expect(
       participantRowActions({
         viewerRole: 'host',

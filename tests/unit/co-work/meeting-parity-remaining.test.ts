@@ -10,7 +10,7 @@ import {
 import { isMeetingPopoutMode, meetingPopoutQueryFlag } from '~/co-work/lib/meeting-dual-monitor'
 import type { LiveCaptionLine } from '~/co-work/lib/live-captions'
 
-describe('remaining Zoom parity helpers', () => {
+describe('remaining meeting parity helpers', () => {
   it('enforces mute/video-off on join for guests only', () => {
     expect(
       applyMeetingJoinSecurityMedia({

@@ -4,12 +4,15 @@ import { Badge, Button, Input, Text, XStack, YStack, useAppToast } from '~/compo
 import { radius } from '~/config/tokens'
 import {
   entityLabel,
+  gstEnrollmentLabel,
+  gstExemptionReasonLabel,
   kycAllowsStorefront,
   type PayuKycDocKind,
   type PayuKycStatus,
   type ShopPayuKycRow,
 } from '~/lib/payment/payu-kyc'
 import { supabase } from '~/lib/supabase'
+import { readSupabaseFunctionError } from '~/lib/supabase/function-error'
 import { getKycDocumentSignedUrl } from '~/lib/supabase/storage-upload'
 
 const STATUS_LABEL: Record<PayuKycStatus, string> = {
@@ -129,14 +132,19 @@ export function AdminShopPayuKycPanel({
     )
     setBusy(false)
     if (error || data?.ok === false) {
+      const message = await readSupabaseFunctionError(
+        error,
+        data,
+        'Could not create the PayU child merchant. Try again.',
+      )
       toast.show('Payout setup did not finish', {
         tone: 'danger',
-        message: data?.error || error?.message || 'Try again.',
+        message,
       })
       await load()
       return
     }
-    toast.show('Sent to PayU — pending verification', { tone: 'success' })
+    toast.show('Registered with PayU — pending verification', { tone: 'success' })
     await load()
   }
 
@@ -168,7 +176,11 @@ export function AdminShopPayuKycPanel({
       <Text>
         PAN: {row.pan_number} ({row.pan_name})
       </Text>
-      <Text>GST: {row.gst_number || 'Not provided'}</Text>
+      <Text>GST enrollment: {gstEnrollmentLabel(row.gst_enrollment)}</Text>
+      {row.gst_enrollment === 'not_registered' ? (
+        <Text>GST reason: {gstExemptionReasonLabel(row.gst_exemption_reason)}</Text>
+      ) : null}
+      <Text>GSTIN: {row.gst_number || 'Not provided'}</Text>
       {row.gst_status ? <Text>GST status: {row.gst_status}</Text> : null}
       {row.gst_legal_name ? <Text>GST legal name: {row.gst_legal_name}</Text> : null}
       {row.gst_trade_name ? <Text>GST trade name: {row.gst_trade_name}</Text> : null}
@@ -198,7 +210,7 @@ export function AdminShopPayuKycPanel({
           <Input value={note} onChangeText={setNote} placeholder="Note for the vendor" />
           <XStack gap="$2" flexWrap="wrap">
             <Button size="$3" tone="primary" disabled={busy} onPress={() => void approve()}>
-              Approve and set up payouts
+              Register with PayU
             </Button>
             <Button
               size="$3"

@@ -16,10 +16,10 @@ import type { MeetingStageTrack } from '~/co-work/lib/meeting-stage-tracks'
 
 /**
  * Cross-platform Co-Work feature matrix (web + iOS + Android).
- * Pure helpers only — no media SDK/DOM. Guards Zoom-like 1–N room behavior.
+ * Pure helpers only — no media SDK/DOM. Guards meeting 1–N room behavior.
  */
 describe('co-work feature matrix (web + native)', () => {
-  it('exposes host primary controls including share, more, end on Zoom dock', () => {
+  it('exposes host primary controls including share, more, end on Co-Work dock', () => {
     const keys = meetingToolbarPrimaryKeys({
       viewerRole: 'host',
       supportsVideo: true,

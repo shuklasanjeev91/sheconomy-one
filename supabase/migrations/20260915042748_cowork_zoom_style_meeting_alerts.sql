@@ -1,4 +1,4 @@
--- Zoom-style Co-Work alerts:
+-- Co-Work Co-Work alerts:
 -- 1) Scheduled reminders at 3h / 2h / 1h / 30min / 15min (keep 5min)
 -- 2) Host notified of waiting-room join requests
 -- 3) Admit / deny notices to the requester

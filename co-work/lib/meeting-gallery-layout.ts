@@ -13,7 +13,7 @@ export type GalleryLayoutOptions = {
 }
 
 /**
- * Responsive gallery grid — Zoom / Meet style equal tiles.
+ * Responsive gallery grid — Co-Work style equal tiles.
  *
  * Examples (portrait-friendly defaults):
  * - 2 → two large tiles (side-by-side when wide enough, else stacked)
@@ -73,7 +73,7 @@ export function meetingGalleryLayout(
   }
 
   if (count <= 25) {
-    // Zoom-style 5×5 dense page on wide desktops.
+    // Co-Work 5×5 dense page on wide desktops.
     if (width >= 1020) return { columns: 5, rows: 5 }
     if (width >= 900) return { columns: 5, rows: Math.ceil(count / 5) }
     return { columns: 4, rows: Math.ceil(count / 4) }
@@ -197,12 +197,12 @@ export function meetingGalleryScrollLayout(
 }
 
 /**
- * Zoom-style max tiles per gallery page. Larger rooms still paginate;
+ * Co-Work max tiles per gallery page. Larger rooms still paginate;
  * desktop dense mode can show a full 5×5 page.
  */
 export const MEETING_GALLERY_MAX_VISIBLE = 25
 
-/** Dense gallery page sizes by breakpoint (Zoom-style). */
+/** Dense gallery page sizes by breakpoint (Co-Work). */
 export const MEETING_DENSE_GALLERY_PAGE_SIZE = 25
 export const MEETING_DENSE_GALLERY_PAGE_SIZE_TABLET = 16
 export const MEETING_DENSE_GALLERY_PAGE_SIZE_MOBILE = 12
@@ -280,7 +280,7 @@ export function meetingGalleryPageForIndex(index: number, pageSize: number): num
   return Math.floor(Math.max(0, Math.floor(index)) / size)
 }
 
-/** Slice every page for a swipeable Zoom-style gallery pager. */
+/** Slice every page for a swipeable Co-Work gallery pager. */
 export function meetingGalleryPages<T>(items: T[], pageSize: number): T[][] {
   const size = Math.max(1, Math.floor(pageSize))
   if (items.length === 0) return [[]]

@@ -1,5 +1,5 @@
 /**
- * Zoom-style stage focus helpers: host spotlight (room-wide) + local pin.
+ * Co-Work stage focus helpers: host spotlight (room-wide) + local pin.
  */
 
 export const MEETING_MAX_PINNED = 3

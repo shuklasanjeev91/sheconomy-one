@@ -53,7 +53,7 @@ const COPY: Record<
       },
       {
         heading: 'Third parties',
-        body: 'We do not sell your personal information. We use service providers that process data on our behalf under contractual protections comparable to this policy, including hosting and auth (Supabase), push notifications (OneSignal), real-time meetings (our media servers hosted on Amazon Web Services), payment processors for checkout, analytics (for example Microsoft Clarity where enabled), and Apple/Google for sign-in and store distribution. We may disclose information if required by law or to protect rights and safety.',
+        body: 'We do not sell your personal information. We use service providers that process data on our behalf under contractual protections comparable to this policy, including hosting and auth (Supabase), push notifications (OneSignal), real-time meetings (our media servers hosted on AWS), payment processors for checkout, analytics (for example Microsoft Clarity where enabled), and Apple/Google for sign-in and store distribution. We may disclose information if required by law or to protect rights and safety.',
       },
       {
         heading: 'Data security',

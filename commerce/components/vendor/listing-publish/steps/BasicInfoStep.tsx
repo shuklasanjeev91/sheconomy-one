@@ -165,7 +165,7 @@ export function BasicInfoStep({
         title="Description"
         headerRight={
           <Text fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.4}>
-            {wordCount} WORDS
+            {wordCount} WORDS · MIN {LISTING_VALIDATION.DESCRIPTION.MIN_LENGTH} CHARS
           </Text>
         }
       >
@@ -175,7 +175,7 @@ export function BasicInfoStep({
             minHeight={140}
             value={formData.description ?? ''}
             onChangeText={(value) => onUpdate('description', value)}
-            placeholder="Describe materials, craftsmanship, and what makes this piece unique..."
+            placeholder="Describe materials, craftsmanship, and what makes this piece unique (50+ characters)..."
             maxLength={LISTING_VALIDATION.DESCRIPTION.MAX_LENGTH}
             invalid={!!errors.description}
           />

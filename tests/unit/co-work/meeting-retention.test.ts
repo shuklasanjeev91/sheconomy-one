@@ -53,7 +53,7 @@ describe('meetings stay joinable until the host cancels', () => {
   })
 })
 
-describe('scheduled meeting wait (Zoom-style)', () => {
+describe('scheduled meeting wait (Co-Work)', () => {
   const upcoming = {
     status: 'scheduled' as const,
     scheduled_at: '2026-09-19T10:30:00.000Z',

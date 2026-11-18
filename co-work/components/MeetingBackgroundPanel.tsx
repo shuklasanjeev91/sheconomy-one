@@ -34,7 +34,7 @@ type MeetingBackgroundPanelProps = {
   effects: MeetingVideoEffects
   onClose: () => void
   fullWidth?: boolean
-  /** Zoom-style: turn camera on before applying blur/image if needed. */
+  /** Co-Work: turn camera on before applying blur/image if needed. */
   onEnsureCamera?: () => void | Promise<void>
   cameraEnabled?: boolean
 }

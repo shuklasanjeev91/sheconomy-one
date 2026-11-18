@@ -25,7 +25,7 @@ export function buildMeetingChatArchive(
       .filter((row) => {
         const text = String(row.message_text || '').trim()
         if (!text) return false
-        // Keep system lines (join/leave) in the archive — Zoom saves them too.
+        // Keep system lines (join/leave) in the archive — Co-Work saves them too.
         return true
       })
       .map((row) => {

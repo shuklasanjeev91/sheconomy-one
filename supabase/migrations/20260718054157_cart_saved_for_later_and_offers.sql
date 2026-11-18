@@ -1,4 +1,4 @@
--- Amazon-style Save for later: cart lines can leave checkout totals while staying on the cart.
+-- Save for later: cart lines can leave checkout totals while staying on the cart.
 
 ALTER TABLE public.cart_items
   ADD COLUMN IF NOT EXISTS saved_for_later boolean NOT NULL DEFAULT false;

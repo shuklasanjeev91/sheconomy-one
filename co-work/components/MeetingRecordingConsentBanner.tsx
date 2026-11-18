@@ -14,7 +14,7 @@ type MeetingRecordingConsentBannerProps = {
 }
 
 /**
- * Recording consent notice — sticky while recording continues (Zoom-style).
+ * Recording consent notice — sticky while recording continues (Co-Work).
  * Participants can dismiss the banner or leave the meeting.
  */
 export function MeetingRecordingConsentBanner({

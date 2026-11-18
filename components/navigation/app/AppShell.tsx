@@ -49,7 +49,7 @@ function useChromelessRoute() {
   const pathname = usePathname()
   const instantMeeting = useInstantMeetingSession()
   const globalSession = useGlobalSession()
-  // Full-screen meeting lobby + live room — no app header/tabs (Zoom-style).
+  // Full-screen meeting lobby + live room — no app header/tabs (Co-Work).
   // Minimized / PiP sessions keep normal chrome so other tabs stay usable.
   const embedPayuReturn =
     Platform.OS === 'web' &&

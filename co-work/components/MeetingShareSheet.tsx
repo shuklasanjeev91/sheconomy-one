@@ -25,7 +25,7 @@ type MeetingShareSheetProps = {
 }
 
 /**
- * Zoom-style meeting share sheet: social destinations + calendar (default /
+ * Co-Work meeting share sheet: social destinations + calendar (default /
  * Google / Outlook / ICS) + copy invitation.
  */
 export function MeetingShareSheet({

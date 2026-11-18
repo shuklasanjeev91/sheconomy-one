@@ -16,10 +16,24 @@ describe('publish wizard step validation', () => {
   it('lets the basic step pass before a price has been entered', () => {
     const result = validatePublishStep(
       LISTING_PUBLISH_STEP_IDS.BASIC,
-      form({ title: 'Handwoven cotton scarf', description: 'Soft and warm.', price: '' }),
+      form({
+        title: 'Handwoven cotton scarf',
+        description:
+          'Soft handwoven cotton scarf with natural dyes, ideal for everyday wear across seasons.',
+        price: '',
+      }),
     )
     expect(result.isValid).toBe(true)
     expect(result.errors).toEqual({})
+  })
+
+  it('requires a substantive description length on the basic step', () => {
+    const result = validatePublishStep(
+      LISTING_PUBLISH_STEP_IDS.BASIC,
+      form({ title: 'Handwoven cotton scarf', description: 'Too short', price: '' }),
+    )
+    expect(result.isValid).toBe(false)
+    expect(result.errors.description).toBeTruthy()
   })
 
   it('blocks the basic step when the title is missing', () => {

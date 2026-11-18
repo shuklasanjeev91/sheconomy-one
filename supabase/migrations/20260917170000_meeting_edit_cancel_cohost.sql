@@ -1,4 +1,4 @@
--- Allow co-hosts to edit meeting details and cancel meetings (Zoom-style).
+-- Allow co-hosts to edit meeting details and cancel meetings (Co-Work).
 -- Prefer is_meeting_host_or_co_host so co-hosts work from My Meetings without
 -- needing an admitted participant row (meeting_actor_role requires admitted).
 

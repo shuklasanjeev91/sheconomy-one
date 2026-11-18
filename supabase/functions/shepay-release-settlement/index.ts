@@ -13,6 +13,11 @@ import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import { resolvePayuCredentials } from '../_shared/payu.ts'
 import { childFromAccountMetadata } from '../_shared/payu-child.ts'
 import {
+  computePayuPaymentFee,
+  formatPayuMoney,
+  loadPayuPaymentFeeRule,
+} from '../_shared/payu-payment-fee.ts'
+import {
   createAbsolutePaymentSplit,
   releasePayuSettlement,
 } from '../_shared/payu-split.ts'
@@ -29,6 +34,8 @@ type PendingRow = {
   order_id: string | null
   payu_id: string
   amount: number
+  payment_fee_amount: number | null
+  seller_amount: number | null
   currency: string | null
   status: string
   hold_reason: string | null
@@ -39,8 +46,7 @@ type PendingRow = {
 }
 
 function formatAmount(value: number | string): string {
-  const n = typeof value === 'number' ? value : Number(value)
-  return (Math.round((Number.isFinite(n) ? n : 0) * 100) / 100).toFixed(2)
+  return formatPayuMoney(value)
 }
 
 Deno.serve(async (request) => {
@@ -74,11 +80,12 @@ Deno.serve(async (request) => {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
+  const feeRule = await loadPayuPaymentFeeRule(admin)
   const limit = Math.min(Math.max(body.limit ?? 50, 1), 100)
   let query = admin
     .from('shepay_pending_settlements')
     .select(
-      'id, shop_id, order_id, payu_id, amount, currency, status, hold_reason, split_status, child_merchant_key, child_mid, sub_txn_id',
+      'id, shop_id, order_id, payu_id, amount, payment_fee_amount, seller_amount, currency, status, hold_reason, split_status, child_merchant_key, child_mid, sub_txn_id',
     )
     .in('status', ['pending', 'failed'])
     .neq('hold_reason', 'refunded')
@@ -89,7 +96,7 @@ Deno.serve(async (request) => {
     query = admin
       .from('shepay_pending_settlements')
       .select(
-        'id, shop_id, order_id, payu_id, amount, currency, status, hold_reason, split_status, child_merchant_key, child_mid, sub_txn_id',
+        'id, shop_id, order_id, payu_id, amount, payment_fee_amount, seller_amount, currency, status, hold_reason, split_status, child_merchant_key, child_mid, sub_txn_id',
       )
       .eq('id', body.settlementId)
       .limit(1)
@@ -196,7 +203,16 @@ Deno.serve(async (request) => {
       })
       .eq('id', row.id)
 
-    const amount = formatAmount(row.amount)
+    const fee =
+      row.seller_amount != null && row.payment_fee_amount != null
+        ? {
+            grossAmount: Number(row.amount),
+            feeAmount: Number(row.payment_fee_amount),
+            sellerAmount: Number(row.seller_amount),
+          }
+        : computePayuPaymentFee(Number(row.amount), feeRule)
+    const sellerAmount = formatAmount(fee.sellerAmount)
+    const feeAmount = formatAmount(fee.feeAmount)
     if (splitStatus !== 'split') {
       subTxnId =
         subTxnId ||
@@ -206,7 +222,8 @@ Deno.serve(async (request) => {
           merchantKey: childKey,
           childMid,
           subTxnId,
-          amount,
+          amount: sellerAmount,
+          charges: fee.feeAmount > 0 ? feeAmount : undefined,
         },
       ])
       if (!split.ok) {
@@ -222,6 +239,8 @@ Deno.serve(async (request) => {
             sub_txn_id: subTxnId,
             child_merchant_key: childKey,
             child_mid: childMid,
+            payment_fee_amount: fee.feeAmount,
+            seller_amount: fee.sellerAmount,
             updated_at: new Date().toISOString(),
           })
           .eq('id', row.id)
@@ -236,6 +255,8 @@ Deno.serve(async (request) => {
           split_at: new Date().toISOString(),
           split_payload: { split },
           sub_txn_id: subTxnId,
+          payment_fee_amount: fee.feeAmount,
+          seller_amount: fee.sellerAmount,
           updated_at: new Date().toISOString(),
         })
         .eq('id', row.id)
@@ -283,11 +304,14 @@ Deno.serve(async (request) => {
       status: 'completed',
       provider: 'payu',
       transaction_id: row.payu_id,
-      amount: Number(amount),
+      amount: fee.sellerAmount,
       currency: row.currency ?? 'INR',
       payload: {
         released_after_delivery_window: true,
         platform_fee_amount: 0,
+        payment_fee_amount: fee.feeAmount,
+        seller_amount: fee.sellerAmount,
+        gross_amount: fee.grossAmount,
         order_id: row.order_id,
         child_mid: childMid,
         sub_txn_id: subTxnId,

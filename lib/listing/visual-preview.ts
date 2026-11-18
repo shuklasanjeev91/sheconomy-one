@@ -1,5 +1,5 @@
 /**
- * Visual commerce preview eligibility: fashion try-on vs Amazon-style view-in-space.
+ * Visual commerce preview eligibility: fashion try-on vs view-in-space.
  * The listing category decides the mode. Title and tags only suggest wall, floor, or table.
  * listing_metadata.visual_preview can still force a mode on one listing.
  */
@@ -133,7 +133,7 @@ const VIEW_IN_SPACE_KEYWORDS = [
   'console',
 ]
 
-/** Products that typically hang / mount on a wall (Amazon “View in your room”). */
+/** Products that typically hang / mount on a wall (view in your room). */
 const WALL_KEYWORDS = [
   'tv',
   'television',
@@ -257,7 +257,7 @@ export function resolveVisualPreviewMode(
 }
 
 /**
- * Amazon-style default placement for view-in-space products.
+ * Default placement for view-in-space products.
  * Fashion try-on ignores this.
  */
 export function suggestVisualPreviewPlacement(
@@ -274,7 +274,7 @@ export function suggestVisualPreviewPlacement(
   // Table accents before floor — otherwise “table lamp” matches the floor “table” keyword.
   if (matchesKeywords(haystack, TABLE_KEYWORDS)) return 'table'
   if (matchesKeywords(haystack, FLOOR_KEYWORDS)) return 'floor'
-  // Sensible Amazon-like default for generic home/electronics.
+  // Sensible default for generic home/electronics.
   if (matchesKeywords(haystack, ['tv', 'television', 'art', 'mirror', 'frame'])) return 'wall'
   return 'floor'
 }
@@ -297,7 +297,7 @@ export function visualPreviewPrompt(
 
   if (mode === 'try_on') {
     return [
-      'Create a photorealistic virtual try-on preview for an online fashion store (like Amazon Try On).',
+      'Create a photorealistic virtual try-on preview for an online fashion store.',
       'Image 1 is the shopper. Image 2 is the fashion product to wear.',
       productHint ? `Product context: ${productHint}.` : '',
       'Generate one image of the person from Image 1 wearing the garment/accessory from Image 2.',
@@ -318,7 +318,7 @@ export function visualPreviewPrompt(
         : 'Place the product on a table, shelf, or surface with realistic scale, perspective, and contact shadow.'
 
   return [
-    'Create a photorealistic “View in your room” preview for an online store (like Amazon View in your room).',
+    'Create a photorealistic “View in your room” preview for an online store.',
     'Image 1 is the customer’s room / wall photo. Image 2 is the product.',
     productHint ? `Product context: ${productHint}.` : '',
     'Composite the product from Image 2 into Image 1 so it looks physically present.',

@@ -1,5 +1,7 @@
 /**
- * PayU Automate absolute split + release (100% to child merchants, 0% platform fee).
+ * PayU Automate absolute split + release.
+ * Child receives aggregatorSubAmt; optional aggregatorCharges (PayU payment fee)
+ * settle to the parent MID (PayU TDR is taken from that share).
  * @see https://docs.payu.in/docs/absolute-split-after-transaction-integration
  * @see https://docs.payu.in/reference/release_settlement_api
  */
@@ -11,7 +13,10 @@ export type PayuSplitChild = {
   /** PayU child MID — required for release_settlement var2 */
   childMid: string
   subTxnId: string
+  /** Net amount to the child (aggregatorSubAmt). */
   amount: string
+  /** PayU / SHEPay payment fee withheld for the parent (aggregatorCharges). */
+  charges?: string
 }
 
 export async function payuCommandHash(
@@ -56,12 +61,24 @@ export async function createAbsolutePaymentSplit(
 ): Promise<{ ok: boolean; body: string; json: Record<string, unknown> | null; error?: string }> {
   if (!children.length) return { ok: true, body: 'no_children', json: null }
 
-  const splitInfo: Record<string, { aggregatorSubTxnId: string; aggregatorSubAmt: string }> = {}
+  const splitInfo: Record<
+    string,
+    { aggregatorSubTxnId: string; aggregatorSubAmt: string; aggregatorCharges?: string }
+  > = {}
   for (const child of children) {
-    splitInfo[child.merchantKey] = {
+    const entry: {
+      aggregatorSubTxnId: string
+      aggregatorSubAmt: string
+      aggregatorCharges?: string
+    } = {
       aggregatorSubTxnId: child.subTxnId,
       aggregatorSubAmt: child.amount,
     }
+    const charges = String(child.charges ?? '').trim()
+    if (charges && Number(charges) > 0) {
+      entry.aggregatorCharges = charges
+    }
+    splitInfo[child.merchantKey] = entry
   }
 
   const var1 = JSON.stringify({

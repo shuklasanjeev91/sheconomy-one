@@ -56,7 +56,7 @@ export function getMeetingAnchorAt(meeting: MeetingTimeFields): Date | null {
 }
 
 /**
- * Zoom-style availability: a meeting stays open to the host and participants
+ * Co-Work availability: a meeting stays open to the host and participants
  * past its scheduled time and past a first `ended`, because the host can always
  * restart it. Cancelling is the only thing that closes it for good.
  */
@@ -97,7 +97,7 @@ export function isUpcomingMeeting(meeting: UpcomingMeetingFields, now = Date.now
 type ScheduledStartFields = Pick<Meeting, 'status' | 'scheduled_at' | 'started_at'>
 
 /**
- * Guests should wait (Zoom-style) until the scheduled start. Hosts can start
+ * Guests should wait (Co-Work) until the scheduled start. Hosts can start
  * early. Once the host has started (`started_at` or live status), anyone can join.
  */
 export function isWaitingForScheduledStart(
@@ -843,7 +843,7 @@ export async function removeMeetingParticipant(
   if (error) throw new Error(error.message)
 }
 
-/** Send an admitted participant back to the waiting room (Zoom-style). */
+/** Send an admitted participant back to the waiting room (Co-Work). */
 export async function putMeetingParticipantInWaitingRoom(
   meetingId: string,
   targetUserId: string,
@@ -878,7 +878,7 @@ export async function cancelMeeting(meetingId: string): Promise<void> {
   invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
 }
 
-/** Patch live security / room options mid-meeting (Zoom Host tools). Host only. */
+/** Patch live security / room options mid-meeting (host tools). Host only. */
 export async function updateMeetingLiveSettings(
   meetingId: string,
   patch: {

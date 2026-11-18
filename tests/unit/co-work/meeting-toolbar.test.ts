@@ -12,14 +12,14 @@ import {
 } from '../../../co-work/lib/meeting-toolbar'
 
 describe('meeting toolbar layout', () => {
-  it('maps compact → Zoom mobile UI and roomy → Zoom web', () => {
+  it('maps compact → Co-Work mobile UI and roomy → Co-Work desktop', () => {
     expect(meetingToolbarMode({ compact: true })).toBe('mobile')
     expect(meetingToolbarMode({ compact: false })).toBe('web')
     expect(meetingToolbarMode({ mode: 'mobile' })).toBe('mobile')
     expect(meetingToolbarMode({ mode: 'web', compact: true })).toBe('web')
   })
 
-  it('keeps a lean Zoom iPad/large primary dock', () => {
+  it('keeps a lean tablet/large primary dock', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'participant',
@@ -44,7 +44,7 @@ describe('meeting toolbar layout', () => {
     ])
   })
 
-  it('adds End for hosts on Zoom iPad/large dock (Security/Record in More)', () => {
+  it('adds End for hosts on tablet/large dock (Security/Record in More)', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -87,7 +87,7 @@ describe('meeting toolbar layout', () => {
     ).not.toContain('record')
   })
 
-  it('shows Reactions on the Zoom mobile primary dock', () => {
+  it('shows Reactions on the Co-Work mobile primary dock', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -139,7 +139,7 @@ describe('meeting toolbar layout', () => {
     ).not.toContain('share_screen')
   })
 
-  it('keeps Stop recording on the Zoom mobile primary dock while recording', () => {
+  it('keeps Stop recording on the Co-Work mobile primary dock while recording', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -163,7 +163,7 @@ describe('meeting toolbar layout', () => {
     ])
   })
 
-  it('puts Record in More (not primary dock) for host and co-host on Zoom iPad/large', () => {
+  it('puts Record in More (not primary dock) for host and co-host on tablet/large', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
@@ -195,7 +195,7 @@ describe('meeting toolbar layout', () => {
     ).toContain('record')
   })
 
-  it('shortens Zoom mobile dock captions', () => {
+  it('shortens Co-Work mobile dock captions', () => {
     expect(
       meetingToolbarPrimaryLabel('camera', { mode: 'mobile', videoEnabled: true }),
     ).toBe('Stop video')
@@ -210,7 +210,7 @@ describe('meeting toolbar layout', () => {
     expect(meetingToolbarPrimaryLabel('apps', { mode: 'web' })).toBe('Apps')
   })
 
-  it('orders Zoom mobile More: Meeting (chat) → AV → View → Apps → Host', () => {
+  it('orders Co-Work mobile More: Meeting (chat) → AV → View → Apps → Host', () => {
     const sections = meetingToolbarMoreSections({
       viewerRole: 'host',
       supportsRecording: true,
@@ -305,7 +305,7 @@ describe('meeting toolbar layout', () => {
     ).not.toContain('chat')
   })
 
-  it('keeps Security flyout slim and groups Zoom web More without duplicate reactions', () => {
+  it('keeps Security flyout slim and groups Co-Work desktop More without duplicate reactions', () => {
     expect(meetingToolbarSecurityKeys('host')).toEqual([
       'lock_meeting',
       'waiting_room',
@@ -416,7 +416,7 @@ describe('meeting toolbar layout', () => {
     ])
   })
 
-  it('surfaces polls, Q&A, breakouts, and dense gallery in Zoom web More', () => {
+  it('surfaces polls, Q&A, breakouts, and dense gallery in Co-Work desktop More', () => {
     expect(
       meetingToolbarMoreKeys({
         viewerRole: 'host',

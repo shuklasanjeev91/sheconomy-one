@@ -17,6 +17,11 @@ import { captureEdgeException } from '../_shared/sentry.ts'
 import { resolvePayuCredentials } from '../_shared/payu.ts'
 import { childFromAccountMetadata } from '../_shared/payu-child.ts'
 import {
+  computePayuPaymentFee,
+  formatPayuMoney,
+  loadPayuPaymentFeeRule,
+} from '../_shared/payu-payment-fee.ts'
+import {
   createAbsolutePaymentSplit,
   releasePayuSettlement,
 } from '../_shared/payu-split.ts'
@@ -35,8 +40,7 @@ type Body = {
 const STAFF = new Set(['A', 'F', 'S', 'L'])
 
 function formatAmount(value: number | string): string {
-  const n = typeof value === 'number' ? value : Number(value)
-  return (Math.round((Number.isFinite(n) ? n : 0) * 100) / 100).toFixed(2)
+  return formatPayuMoney(value)
 }
 
 async function audit(
@@ -229,7 +233,7 @@ Deno.serve(async (request) => {
       const { data: row, error } = await admin
         .from('shepay_pending_settlements')
         .select(
-          'id, shop_id, order_id, payu_id, amount, currency, status, hold_reason, split_status, child_merchant_key, child_mid, sub_txn_id',
+          'id, shop_id, order_id, payu_id, amount, payment_fee_amount, seller_amount, currency, status, hold_reason, split_status, child_merchant_key, child_mid, sub_txn_id',
         )
         .eq('id', settlementId)
         .maybeSingle()
@@ -252,7 +256,17 @@ Deno.serve(async (request) => {
         return jsonResponse({ error: 'Shop missing PayU child credentials' }, 400)
       }
 
-      const amount = formatAmount(row.amount)
+      const feeRule = await loadPayuPaymentFeeRule(admin)
+      const fee =
+        row.seller_amount != null && row.payment_fee_amount != null
+          ? {
+              grossAmount: Number(row.amount),
+              feeAmount: Number(row.payment_fee_amount),
+              sellerAmount: Number(row.seller_amount),
+            }
+          : computePayuPaymentFee(Number(row.amount), feeRule)
+      const sellerAmount = formatAmount(fee.sellerAmount)
+      const feeAmount = formatAmount(fee.feeAmount)
       const subTxnId = row.sub_txn_id || `sub_${row.id.replace(/-/g, '').slice(0, 20)}`
 
       if (action === 'retry_split' || row.split_status !== 'success') {
@@ -261,7 +275,8 @@ Deno.serve(async (request) => {
             merchantKey,
             childMid,
             subTxnId,
-            amount,
+            amount: sellerAmount,
+            charges: fee.feeAmount > 0 ? feeAmount : undefined,
           },
         ])
         if (!split.ok) {
@@ -270,6 +285,8 @@ Deno.serve(async (request) => {
             .update({
               status: 'failed',
               error_message: split.error ?? 'payment_split failed',
+              payment_fee_amount: fee.feeAmount,
+              seller_amount: fee.sellerAmount,
               updated_at: new Date().toISOString(),
             })
             .eq('id', row.id)
@@ -290,6 +307,8 @@ Deno.serve(async (request) => {
             child_merchant_key: merchantKey,
             child_mid: childMid,
             split_at: new Date().toISOString(),
+            payment_fee_amount: fee.feeAmount,
+            seller_amount: fee.sellerAmount,
             error_message: null,
             updated_at: new Date().toISOString(),
           })

@@ -640,7 +640,7 @@ export function useMeetingPresence({
       }
       // Moderation controls are intentionally not trusted from broadcast
       // payloads. Only server-authorized meeting_control_events are applied.
-      // Live captions: accept finals + interim so peers see Zoom-style live text.
+      // Live captions: accept finals + interim so peers see Co-Work live text.
       if (payload.type === 'caption' && payload.from !== userId) {
         // Stable interim id per speaker so viewers can cache/translate without
         // cancelling work on every STT partial (timestamp churn).

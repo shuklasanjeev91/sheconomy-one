@@ -105,7 +105,7 @@ export function CheckoutPayuMethodIcon({
   return <BadgeMark badge={badge} size={size} />
 }
 
-/** Mini logo strip shown on accordion section headers (Amazon-style). */
+/** Mini logo strip shown on accordion section headers. */
 export function CheckoutPayuSectionIcons({
   sectionId,
   size = 22,

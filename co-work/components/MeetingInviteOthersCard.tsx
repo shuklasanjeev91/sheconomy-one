@@ -11,7 +11,7 @@ type MeetingInviteOthersCardProps = {
 }
 
 /**
- * Zoom invite tip — floating white pill on iPad/large, rose card on phone.
+ * Co-Work invite tip — floating white pill on iPad/large, rose card on phone.
  */
 export function MeetingInviteOthersCard({
   visible,

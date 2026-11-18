@@ -1878,7 +1878,7 @@ Deno.serve(async (req) => {
 
       const fallback = fallbackMeetingDraft(prompt, timeZone)
       const systemPrompt = [
-        'You draft professional video-meeting details like Zoom / Google Calendar AI.',
+        'You draft professional video-meeting details for SHEconomy Co-Work meetings.',
         'Return ONLY JSON with keys: title (string), description (string), scheduledAt (ISO 8601 string or null), maxParticipants (number or null), agenda (string array).',
         'Prefer practical titles. Agenda should be 3 short bullets.',
         languageDirective(context, body),
@@ -2015,7 +2015,7 @@ Deno.serve(async (req) => {
       let meetingDraft: ReturnType<typeof fallbackMeetingDraft> | null = null
       if (scheduleRequested) {
         const draftSystem = [
-          'You draft professional video-meeting details like Zoom / Google Calendar AI.',
+          'You draft professional video-meeting details for SHEconomy Co-Work meetings.',
           'Return ONLY JSON with keys: title (string), description (string), scheduledAt (ISO 8601 string or null), maxParticipants (number or null), agenda (string array).',
           'Prefer practical titles. Agenda should be 3 short bullets.',
           `User timezone: ${timeZone}. Current time UTC: ${new Date().toISOString()}.`,
@@ -2221,7 +2221,7 @@ Deno.serve(async (req) => {
       }
 
       const systemPrompt = [
-        'You are a live meeting caption translator (Zoom / Google Meet style).',
+        'You are a live meeting caption translator (Co-Work style).',
         'Detect the source language automatically unless source is provided.',
         `ALWAYS translate the caption into ${targetLabel} (language code: ${targetBase}).`,
         'Never leave the text in the source language when the target differs.',

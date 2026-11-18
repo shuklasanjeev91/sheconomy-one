@@ -102,7 +102,7 @@ function buildPrompt(
 
   if (mode === 'try_on') {
     return [
-      'Create a photorealistic virtual try-on preview for an online fashion store (like Amazon Try On).',
+      'Create a photorealistic virtual try-on preview for an online fashion store.',
       'Image 1 is the shopper. Image 2 is the fashion product to wear.',
       productHint ? `Product context: ${productHint}.` : '',
       'Generate one image of the person from Image 1 wearing the garment/accessory from Image 2.',
@@ -123,7 +123,7 @@ function buildPrompt(
         : 'Place the product on a table, shelf, or surface with realistic scale, perspective, and contact shadow.'
 
   return [
-    'Create a photorealistic “View in your room” preview for an online store (like Amazon View in your room).',
+    'Create a photorealistic “View in your room” preview for an online store.',
     'Image 1 is the customer’s room / wall photo. Image 2 is the product.',
     productHint ? `Product context: ${productHint}.` : '',
     'Composite the product from Image 2 into Image 1 so it looks physically present.',

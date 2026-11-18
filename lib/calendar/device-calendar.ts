@@ -59,7 +59,7 @@ export function pickDeviceWritableCalendar<T extends WritableCalendarCandidate>(
 }
 
 /**
- * Prefer saving directly into the device default calendar (Zoom-style).
+ * Prefer saving directly into the device default calendar (Co-Work).
  * Falls back to the system event editor, then ICS / Google Calendar.
  */
 export async function addMeetingToDeviceCalendar(

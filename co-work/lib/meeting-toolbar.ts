@@ -7,13 +7,13 @@ import {
 } from '~/co-work/lib/meeting-role-permissions'
 
 /**
- * Toolbar mode mirrors Zoom product surfaces:
- * - `web` → Zoom iPad / desktop dock (tablet+ and laptop+)
- * - `mobile` → Zoom phone dock only
+ * Toolbar mode mirrors Co-Work product surfaces:
+ * - `web` → tablet / desktop dock (tablet+ and laptop+)
+ * - `mobile` → phone dock only
  */
 export type MeetingToolbarMode = 'web' | 'mobile'
 
-/** Primary dock controls — lean Zoom-style set; everything else lives in More. */
+/** Primary dock controls — lean Co-Work set; everything else lives in More. */
 export type MeetingToolbarPrimaryKey =
   | 'mic'
   | 'camera'
@@ -98,12 +98,12 @@ export function meetingToolbarMode(input: {
 }
 
 /**
- * Zoom primary dock:
+ * Co-Work primary dock:
  *
- * Mobile (Zoom phone — Sheconomy branded):
+ * Mobile (phone — Sheconomy branded):
  *   Mute · Video · Share · Chat · Reactions · More · End
  *
- * iPad / large (Zoom tablet & desktop):
+ * iPad / large (tablet & desktop):
  *   Mute · Stop Video · Participants · Chat · Reactions · Start Share ·
  *   Captions · Whiteboard · Docs · Apps · More · End
  */
@@ -112,9 +112,9 @@ export function meetingToolbarPrimaryKeys(input: {
   supportsVideo?: boolean
   supportsScreenShare?: boolean
   supportsLiveCaptions?: boolean
-  /** @deprecated Minimize always lives in More (Zoom-style). */
+  /** @deprecated Minimize always lives in More (Co-Work). */
   hasBrowse?: boolean
-  /** Phone only → Zoom mobile UI. Tablet/desktop use web UI. */
+  /** Phone only → Co-Work mobile UI. Tablet/desktop use web UI. */
   compact?: boolean
   /** Explicit mode override (tests / special surfaces). */
   mode?: MeetingToolbarMode
@@ -142,7 +142,7 @@ export function meetingToolbarPrimaryKeys(input: {
     return keys
   }
 
-  // Zoom iPad / large dock — Security & Record live under More / Host tools.
+  // tablet / large dock — Security & Record live under More / Host tools.
   keys.push('participants', 'chat')
   if (input.hasReactions !== false) keys.push('reactions')
   if (input.hasRaiseHand !== false) keys.push('raise_hand')
@@ -168,7 +168,7 @@ export function meetingToolbarWideMoreKeys(input: {
   hasVideoEffects?: boolean
   hasDisconnectAudio?: boolean
   hasRaiseHand?: boolean
-  /** Record (host) or request-to-record (participant), as in Zoom's More. */
+  /** Record (host) or request-to-record (participant), as in Co-Work's More. */
   supportsRecording?: boolean
 }): MeetingToolbarOverflowKey[] {
   const keys: MeetingToolbarOverflowKey[] = []
@@ -241,7 +241,7 @@ export function meetingToolbarMoreKeys(input: {
   return meetingToolbarMoreSections(input).flatMap((section) => section.keys)
 }
 
-/** Grouped More menu sections — Zoom web vs Zoom mobile hierarchy. */
+/** Grouped More menu sections — Co-Work desktop vs Co-Work mobile hierarchy. */
 export function meetingToolbarMoreSections(input: {
   viewerRole: MeetingRole
   supportsRecording?: boolean
@@ -280,7 +280,7 @@ export function meetingToolbarMoreSections(input: {
 
   const view: MeetingToolbarOverflowKey[] = []
   if (input.hasViewControls !== false) {
-    // Gallery / speaker / shared screen are stage pages reached by swiping (Zoom mobile).
+    // Gallery / speaker / shared screen are stage pages reached by swiping (Co-Work mobile).
     view.push('mirror_video', 'hide_self_view')
     if (isMobile) {
       view.push('hide_non_video', 'stop_incoming_video', 'hd_video')
@@ -346,7 +346,7 @@ export function meetingToolbarMoreSections(input: {
 
   const sections: MeetingToolbarMoreSection[] = []
   if (isMobile) {
-    // Zoom mobile More: Meeting grid actions + captions live here; Share is on the dock.
+    // Co-Work mobile More: Meeting grid actions + captions live here; Share is on the dock.
     const mobileMeeting: MeetingToolbarOverflowKey[] = ['meeting_info', 'manage_participants']
     if (input.raiseHandOnPrimary !== true) mobileMeeting.push('raise_hand')
     if (input.reactionsOnPrimary !== true) mobileMeeting.push('reactions')
@@ -374,7 +374,7 @@ export function meetingToolbarMoreSections(input: {
     sections.push({ title: 'Browse', keys: ['minimize'] })
   }
 
-  // Zoom web More: View → Audio & video → Apps → Meeting → Host
+  // Co-Work desktop More: View → Audio & video → Apps → Meeting → Host
   // Raise/react/captions already on primary when reactionsOnPrimary — meeting list stays info/share.
   const webMeeting = meeting.filter(
     (key) => key !== 'raise_hand' && key !== 'reactions' && key !== 'captions' && key !== 'record',
@@ -396,7 +396,7 @@ export function meetingToolbarMoreSections(input: {
   return sections
 }
 
-/** Short dock labels for Zoom mobile (icon + caption under control). */
+/** Short dock labels for Co-Work mobile (icon + caption under control). */
 export function meetingToolbarPrimaryLabel(
   key: MeetingToolbarPrimaryKey,
   input: {

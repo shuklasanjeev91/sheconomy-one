@@ -8,7 +8,7 @@ export type InstantMeetingSession = {
   meeting: Meeting | null
   /**
    * Skip the second Join Meeting confirm screen and enter the room once
-   * identity / passcode / lock checks pass (Zoom-style one-tap).
+   * identity / passcode / lock checks pass (Co-Work one-tap).
    */
   autoJoin: boolean
   /**
@@ -64,12 +64,12 @@ export function instantMeetingCodesMatch(a: string, b: string) {
 export function openInstantMeetingSession(input: {
   code: string
   meeting?: Meeting | null
-  /** Defaults to true for Zoom-style entry. */
+  /** Defaults to true for Co-Work entry. */
   autoJoin?: boolean
   /** Mark that the caller is already in the live room (minimize handoff). */
   enteredRoom?: boolean
   /**
-   * Force the Zoom floating bubble to expand into the live overlay.
+   * Force the Co-Work floating bubble to expand into the live overlay.
    * Minimize handoff passes `enteredRoom` without `expand` so presentation
    * can stay minimized; bubble Maximize passes `expand: true`.
    */

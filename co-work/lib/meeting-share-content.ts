@@ -1,5 +1,5 @@
 /**
- * Zoom-style share content kinds shown above share options (screen / photos / video / files / whiteboard).
+ * Co-Work share content kinds shown above share options (screen / photos / video / files / whiteboard).
  */
 
 export type MeetingShareContentKind = 'screen' | 'photos' | 'video' | 'files' | 'whiteboard'

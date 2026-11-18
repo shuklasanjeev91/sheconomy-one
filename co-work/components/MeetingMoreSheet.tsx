@@ -45,7 +45,7 @@ export type MeetingMoreSheetProps = {
 const QUICK_REACTIONS = ['🎉', '👍', '❤️'] as const
 
 /**
- * Meeting More — always shows every Zoom More grid option
+ * Meeting More — always shows every Co-Work More grid option
  * (Participants · Start share · Show captions · Apps · Disconnect audio ·
  * Meeting info · Host tools · Settings) plus raise hand / quick reactions.
  */

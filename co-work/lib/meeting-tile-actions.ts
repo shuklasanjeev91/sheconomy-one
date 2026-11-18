@@ -1,5 +1,5 @@
 /**
- * Zoom-style per-tile menu actions (profile / pin / spotlight / lower hand).
+ * Co-Work per-tile menu actions (profile / pin / spotlight / lower hand).
  * Profile lives here because a plain tap on a tile toggles the meeting controls.
  */
 

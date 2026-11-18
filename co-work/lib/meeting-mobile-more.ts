@@ -1,7 +1,7 @@
 /**
- * Zoom-mobile More sheet grid — Sheconomy branded, fuller than stock Zoom.
+ * Co-Work mobile More sheet grid — Sheconomy branded, with SHEconomy branding.
  *
- * Zoom core row + Virtual background / Whiteboard / Record / Safe driving so
+ * Co-Work core row + Virtual background / Whiteboard / Record / Safe driving so
  * hosts are not stuck hunting under Settings for everyday controls.
  */
 
@@ -21,7 +21,7 @@ export function meetingMobileMoreGridKeys(input: {
   hasBackground?: boolean
   hasSafeDriving?: boolean
 }): MeetingToolbarOverflowKey[] {
-  // Share is a one-tap button on the phone dock (Zoom), not a More item.
+  // Share is a one-tap button on the phone dock (Co-Work), not a More item.
   const keys: MeetingToolbarOverflowKey[] = [
     'manage_participants',
     'captions',

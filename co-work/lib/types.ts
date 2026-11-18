@@ -21,7 +21,7 @@ export type MeetingSecuritySettings = {
   /** Direct participant-to-participant chat when meeting chat is on. */
   allowPrivateChat?: boolean
   /**
-   * Who participants may chat with (Zoom-style).
+   * Who participants may chat with (Co-Work).
    * Hosts/co-hosts always keep full chat composer options.
    */
   participantChatWith?: MeetingParticipantChatWith
@@ -244,7 +244,7 @@ export type SignalPayload =
   | { type: 'caption-wanted'; from: string; wanted: boolean; timestamp: number }
   | { type: 'chat'; from: string; message: MeetingChatMessage }
   | { type: 'reaction'; from: string; emoji: string; name: string; timestamp: number }
-  /** Zoom nonverbal feedback — sticky yes/no/slow/faster/break/away. */
+  /** Co-Work nonverbal feedback — sticky yes/no/slow/faster/break/away. */
   | {
       type: 'nonverbal-feedback'
       from: string
@@ -284,7 +284,7 @@ export type SignalPayload =
   /** Request remote control of a screen share (ack is UI-only). */
   | { type: 'remote-control-request'; from: string; to: string; name?: string; timestamp: number }
   | { type: 'remote-control-response'; from: string; to: string; accepted: boolean; timestamp: number }
-  /** Zoom-style "Request recording permission" from a participant to the host/co-hosts. */
+  /** Co-Work "Request recording permission" from a participant to the host/co-hosts. */
   | { type: 'recording-request'; from: string; name?: string; timestamp: number }
   | { type: 'recording-response'; from: string; to: string; accepted: boolean; timestamp: number }
   /** Live interpretation channel hint (UI routing). */

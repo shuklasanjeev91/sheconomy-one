@@ -15,7 +15,7 @@ import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import {
   findPayuChildForShop,
   getPayuHubToken,
-  resolvePayuHubConfig,
+  resolvePayuHubConfigAsync,
 } from '../_shared/payu-hub.ts'
 
 type Body = {
@@ -95,7 +95,7 @@ Deno.serve(async (request) => {
   const webhookUrl = platformWebhookUrl(supabaseUrl)
   const onboardingUrl =
     Deno.env.get('PAYU_ONBOARDING_URL')?.trim() || 'https://onboarding.payu.in'
-  const hub = resolvePayuHubConfig()
+  const hub = await resolvePayuHubConfigAsync(admin)
   const shopCode = shopId.replace(/-/g, '').slice(0, 16)
 
   const preview = {
@@ -130,7 +130,7 @@ Deno.serve(async (request) => {
   }
 
   try {
-    const token = await getPayuHubToken(hub, 'fetch_child_merchants')
+    const token = await getPayuHubToken(hub, 'fetch_child_merchants', admin)
     const child = await findPayuChildForShop(hub, token, { shopId, email, phone })
     if (!child) {
       return jsonResponse(

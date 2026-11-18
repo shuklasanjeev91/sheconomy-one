@@ -37,9 +37,9 @@ export type MeetingMachineState = {
   mirrorLocalVideo: boolean
   /** Local virtual background — an image background disables self-view mirroring. */
   localBackgroundMode: 'off' | 'blur' | 'image'
-  /** Zoom-style: hide the local camera tile from gallery / filmstrip. */
+  /** Co-Work: hide the local camera tile from gallery / filmstrip. */
   hideSelfView: boolean
-  /** Zoom: hide participants with camera off from the gallery stage. */
+  /** Co-Work: hide participants with camera off from the gallery stage. */
   hideNonVideoParticipants: boolean
   /** Force side-by-side filmstrip during speaker / screen-share. */
   sideBySideShare: boolean
@@ -388,7 +388,7 @@ export function meetingStateReducer(
         viewMode: state.lifecycle === 'SCREEN_SHARING' ? state.viewMode : 'screen-share',
         uiMode: state.lifecycle === 'SCREEN_SHARING' ? state.uiMode : 'maximized',
         controlsVisible: true,
-        // Keep the participant strip visible so others stay reachable (Zoom-style).
+        // Keep the participant strip visible so others stay reachable (Co-Work).
         participantStripMinimized: false,
       }
     }

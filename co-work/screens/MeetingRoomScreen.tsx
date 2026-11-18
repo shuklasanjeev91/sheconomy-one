@@ -784,7 +784,7 @@ function MeetingRoomOverlay({
   const [controlsOverlayOpen, setControlsOverlayOpen] = useState(false)
   const [infoModalOpen, setInfoModalOpen] = useState(false)
   const [whiteboardHidden, setWhiteboardHidden] = useState(false)
-  /** Viewer hid this content share (Zoom "hide"); a new share shows again. */
+  /** Viewer hid this content share (hide); a new share shows again. */
   const [contentHiddenId, setContentHiddenId] = useState<string | null>(null)
   const [contentUploadLabel, setContentUploadLabel] = useState<string | null>(null)
   const [audioTestOpen, setAudioTestOpen] = useState(false)
@@ -822,7 +822,7 @@ function MeetingRoomOverlay({
     )
   }, [setStopIncomingVideo])
 
-  // Zoom join/leave chime when admitted participant count changes.
+  // Co-Work join/leave chime when admitted participant count changes.
   useEffect(() => {
     const admitted = meetingLiveAdmittedCount(liveParticipants)
     const previous = presenceCountRef.current
@@ -963,7 +963,7 @@ function MeetingRoomOverlay({
   const admittedCount = meetingLiveAdmittedCount(liveParticipants)
   const inviteNudgeShownRef = useRef(false)
 
-  // Zoom-like: nudge the host to share the join code when they are alone in the room.
+  // meeting: nudge the host to share the join code when they are alone in the room.
   useEffect(() => {
     if (!isAuthoritativeHost || inviteNudgeShownRef.current) return
     if (admittedCount !== 1 || presence.isWaiting || presence.isConnecting) return
@@ -1045,7 +1045,7 @@ function MeetingRoomOverlay({
     meeting.meeting_options?.captionsEnabled,
   ])
 
-  // Notify the assignee when they become co-host / host mid-meeting (Zoom-style).
+  // Notify the assignee when they become co-host / host mid-meeting (Co-Work).
   useEffect(() => {
     const previous = prevSelfRoleRef.current
     const next = presence.selfRole
@@ -1365,7 +1365,7 @@ function MeetingRoomOverlay({
     confirmMeetingAction({
       title: 'Start recording?',
       message:
-        'A Zoom-style grid recording will start with the room audio mixed into one MP4. Everyone in the meeting will see a recording notice.',
+        'A Co-Work grid recording will start with the room audio mixed into one MP4. Everyone in the meeting will see a recording notice.',
       confirmLabel: 'Start recording',
       destructive: true,
       onConfirm: run,
@@ -1442,7 +1442,7 @@ function MeetingRoomOverlay({
       return
     }
 
-    // One tap like Zoom: go straight to the OS / browser capture picker with saved options.
+    // One tap like Co-Work: go straight to the OS / browser capture picker with saved options.
     // Content (whiteboard, files) and screen options live in the Docs share sheet.
     if (!callMedia.screenSharing && !options) options = quickShareOptionsRef.current
 
@@ -1496,7 +1496,7 @@ function MeetingRoomOverlay({
     }
   }, [allowScreenShare, canModerate, callMedia, meetingState.meeting_code, presence, supportsScreenBroadcast, toast, webCapabilities])
 
-  /** Zoom "share a file": upload once, then it plays on everyone's stage. */
+  /** Co-Work "share a file": upload once, then it plays on everyone's stage. */
   const shareContent = useCallback(
     async (kind: 'photos' | 'video' | 'files') => {
       if (!allowScreenShare && !canModerate) {
@@ -1575,7 +1575,7 @@ function MeetingRoomOverlay({
   const presentingContent = presence.contentShare?.from === userId
   const stopContentShare = presence.stopContentShare
 
-  // One share at a time, like Zoom: whoever starts sharing takes over the stage.
+  // One share at a time, like Co-Work: whoever starts sharing takes over the stage.
   const remoteContentShareId =
     presence.contentShare && !presentingContent ? presence.contentShare.id : null
   const remoteScreenPresenter = callMedia?.screenShareIdentity ?? null
@@ -2298,7 +2298,7 @@ function MeetingRoomOverlay({
           speakerOn={callMedia?.speakerOn ?? true}
           onBack={() => minimizeMeeting()}
           onMinimize={() => minimizeMeeting()}
-          // Zoom-style: header chevron / minimize → floating bubble.
+          // Co-Work: header chevron / minimize → floating bubble.
           // Browser full screen stays in More (onToggleFullscreen), not here —
           // Maximize2 in the header was confused with bubble Maximize.
           onToggleFullscreen={toggleFullscreen}
@@ -2357,7 +2357,7 @@ function MeetingRoomOverlay({
               : undefined
           }
           onSettings={() => {
-            // Header gear → Zoom meeting settings / host security.
+            // Header gear → Co-Work meeting settings / host security.
             if (canModerate) presence.togglePanel('host_tools')
             else presence.togglePanel('audio')
           }}
@@ -2370,7 +2370,7 @@ function MeetingRoomOverlay({
         />
         <MeetingStudioBanner studio={presence.studio} viewerName={displayName} />
 
-        {/* Zoom Mobile Top-Left Green Shield (Image 1 & Image 3) */}
+        {/* Co-Work Mobile Top-Left Green Shield (Image 1 & Image 3) */}
         {layout.compactControls && (controlsVisible || sheetPanelOpen) ? (
           <Pressable
             accessibilityRole="button"

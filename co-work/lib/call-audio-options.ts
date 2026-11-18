@@ -25,7 +25,7 @@ export function androidAudioTypeOptionsForCall(speechShare: CallSpeechShareLevel
 }
 
 /**
- * Zoom-style output pick.
+ * Co-Work output pick.
  * A connected Bluetooth speaker or headset wins unless the user explicitly
  * chose the built-in loudspeaker. Forcing the speaker overrides Bluetooth and
  * puts playback next to the mic, which is the echo you hear in the room.

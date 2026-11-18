@@ -36,8 +36,8 @@ const DEFAULT_SHEET_HEIGHT_PERCENT = 62
 
 /**
  * Host for Chat / Participants / Invite / etc.
- * Mobile + tablet: Zoom-mobile bottom sheet over the stage (matching Image 1 half-sheet).
- * Laptop+: Zoom-web right side dock above the toolbar (stage reflows).
+ * Mobile + tablet: Co-Work mobile bottom sheet over the stage (matching Image 1 half-sheet).
+ * Laptop+: Co-Work desktop right side dock above the toolbar (stage reflows).
  */
 export function MeetingResponsivePanel({
   open,
@@ -71,7 +71,7 @@ export function MeetingResponsivePanel({
           accessibilityRole="button"
           accessibilityLabel="Close panel"
         />
-        {/* Zoom mobile bottom half-sheet (Image 1) */}
+        {/* Co-Work mobile bottom half-sheet (Image 1) */}
         <View
           style={[
             nativeSheetStyles.halfSheet,

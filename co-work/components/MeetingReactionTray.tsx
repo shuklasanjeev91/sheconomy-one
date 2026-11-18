@@ -20,10 +20,10 @@ type MeetingReactionTrayProps = {
   onRequestClose?: () => void
 }
 
-/** Zoom-style “Send with effect” — same emoji, presented as effect chips. */
+/** Co-Work “Send with effect” — same emoji, presented as effect chips. */
 const SEND_WITH_EFFECT = ['🎈', '🚀', '👍', '🎉', '😂', '❤️'] as const
 
-/** Reactions + raise hand as a Zoom-mobile bottom sheet. */
+/** Reactions + raise hand as a Co-Work mobile bottom sheet. */
 export function MeetingReactionTray({
   open,
   onSelect,

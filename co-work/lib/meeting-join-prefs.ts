@@ -1,5 +1,5 @@
 /**
- * Carry Zoom-style join checkboxes from the Join Meeting page into the lobby.
+ * Carry Co-Work join checkboxes from the Join Meeting page into the lobby.
  * Session storage so a refresh does not silently re-join muted.
  */
 

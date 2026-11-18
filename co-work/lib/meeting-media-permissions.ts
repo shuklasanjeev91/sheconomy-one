@@ -198,7 +198,7 @@ export async function ensureMeetingMobilePermissions(options?: {
 
       const micDenial = denials.find((denial) => denial.kind === 'microphone')
       return {
-        // Web can always join muted when getUserMedia exists — Zoom-style.
+        // Web can always join muted when getUserMedia exists — Co-Work.
         ok: true,
         cameraGranted,
         microphoneGranted,

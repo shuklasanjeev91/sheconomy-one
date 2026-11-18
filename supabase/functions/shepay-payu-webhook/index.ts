@@ -6,6 +6,11 @@ import { timingSafeEqual } from '../_shared/crypto-safe.ts'
 import { payUResponseHash, resolvePayuCredentials, type PayuCredentials } from '../_shared/payu.ts'
 import { childFromAccountMetadata } from '../_shared/payu-child.ts'
 import {
+  computePayuPaymentFee,
+  formatPayuMoney,
+  loadPayuPaymentFeeRule,
+} from '../_shared/payu-payment-fee.ts'
+import {
   createAbsolutePaymentSplit,
   type PayuSplitChild,
 } from '../_shared/payu-split.ts'
@@ -54,8 +59,7 @@ function collectCredentialCandidates(): PayuCredentials[] {
 }
 
 function formatAmount(value: number | string): string {
-  const n = typeof value === 'number' ? value : Number(value)
-  return (Math.round((Number.isFinite(n) ? n : 0) * 100) / 100).toFixed(2)
+  return formatPayuMoney(value)
 }
 
 Deno.serve(async (request) => {
@@ -191,12 +195,14 @@ Deno.serve(async (request) => {
         })
       }
 
+      const feeRule = await loadPayuPaymentFeeRule(admin)
       const children: PayuSplitChild[] = []
       const childByShop = new Map<string, PayuSplitChild>()
       const pendingRows: Array<Record<string, unknown>> = []
 
       for (const alloc of shopAllocs) {
         if (!(alloc.amount > 0)) continue
+        const fee = computePayuPaymentFee(alloc.amount, feeRule)
         const { data: account } = await admin
           .from('shop_payment_accounts')
           .select('metadata, provider, status')
@@ -216,7 +222,8 @@ Deno.serve(async (request) => {
             merchantKey: child.merchantKey,
             childMid: child.childMid,
             subTxnId,
-            amount: formatAmount(alloc.amount),
+            amount: formatAmount(fee.sellerAmount),
+            charges: fee.feeAmount > 0 ? formatAmount(fee.feeAmount) : undefined,
           }
           children.push(splitChild)
           childByShop.set(alloc.shopId, splitChild)
@@ -227,7 +234,9 @@ Deno.serve(async (request) => {
             payment_step_id: udf1,
             payu_id: mihpayid,
             txnid,
-            amount: Number(formatAmount(alloc.amount)),
+            amount: fee.grossAmount,
+            payment_fee_amount: fee.feeAmount,
+            seller_amount: fee.sellerAmount,
             currency: 'INR',
             status: 'pending',
             hold_reason: 'awaiting_release_window',
@@ -244,7 +253,9 @@ Deno.serve(async (request) => {
             payment_step_id: udf1,
             payu_id: mihpayid,
             txnid,
-            amount: Number(formatAmount(alloc.amount)),
+            amount: fee.grossAmount,
+            payment_fee_amount: fee.feeAmount,
+            seller_amount: fee.sellerAmount,
             currency: 'INR',
             status: 'pending',
             hold_reason: 'awaiting_child',
@@ -284,11 +295,14 @@ Deno.serve(async (request) => {
             status: row.split_status === 'split_failed' ? 'failed' : 'pending',
             provider: 'payu',
             transaction_id: mihpayid,
-            amount: row.amount,
+            amount: row.seller_amount ?? row.amount,
             currency: row.currency,
             payload: {
               held: true,
               platform_fee_amount: 0,
+              payment_fee_amount: row.payment_fee_amount ?? 0,
+              seller_amount: row.seller_amount ?? row.amount,
+              gross_amount: row.amount,
               hold_reason: row.hold_reason,
               split_status: row.split_status,
               sub_txn_id: row.sub_txn_id ?? null,
@@ -308,12 +322,15 @@ Deno.serve(async (request) => {
           merchantKey: c.merchantKey,
           childMid: c.childMid,
           amount: c.amount,
+          charges: c.charges ?? '0.00',
           subTxnId: c.subTxnId,
         })),
         held: pendingRows.map((r) => ({
           shop_id: r.shop_id,
           order_id: r.order_id,
           amount: r.amount,
+          payment_fee_amount: r.payment_fee_amount,
+          seller_amount: r.seller_amount,
           hold_reason: r.hold_reason,
           split_status: r.split_status,
         })),

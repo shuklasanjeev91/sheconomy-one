@@ -12,7 +12,7 @@ export function canEditOrCancelMeeting(viewerRole: MeetingRole): boolean {
   return canManageMeeting(viewerRole)
 }
 
-/** Open Zoom-style Host tools sheet — host + co-host. */
+/** Open Co-Work Host tools sheet — host + co-host. */
 export function canOpenHostTools(viewerRole: MeetingRole): boolean {
   return canManageMeeting(viewerRole)
 }

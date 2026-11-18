@@ -1,4 +1,4 @@
-/** Zoom / Google Meet–style quick reactions for live Co-Work meetings. */
+/** Co-Work–style quick reactions for live Co-Work meetings. */
 
 export const MEETING_REACTIONS = [
   { emoji: '👍', label: 'Thumbs up', toneable: true },

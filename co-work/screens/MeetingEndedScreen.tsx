@@ -33,7 +33,7 @@ function formatDuration(startedAt: string | null | undefined): string | null {
   return `${s}s`
 }
 
-/** Shown after the host ends the meeting — full Zoom-style post-meeting summary. */
+/** Shown after the host ends the meeting — full Co-Work post-meeting summary. */
 export function MeetingEndedScreen({
   title = 'Meeting ended',
   reason = 'ended',
@@ -199,7 +199,7 @@ export function MeetingEndedScreen({
           </XStack>
         ) : null}
 
-        {/* Zoom-style post-meeting quality feedback */}
+        {/* Co-Work post-meeting quality feedback */}
         {reason === 'ended' ? (
           <YStack width="100%" gap="$2" alignItems="center">
             <Text fontSize={13} fontWeight="600" color={coworkUi.textSecondary}>

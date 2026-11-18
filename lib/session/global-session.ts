@@ -261,7 +261,7 @@ export function shouldUseChromelessShell(input: {
     pathname.startsWith('/cowork/meeting/') ||
     pathname === '/cowork/meeting'
 
-  // Dedicated meeting routes are always edge-to-edge (Zoom-style). Do not let a
+  // Dedicated meeting routes are always edge-to-edge (Co-Work). Do not let a
   // stale minimized/pip presentation keep SHE header + Co-Work tabs on /live.
   if (isMeetingRoute) return true
 

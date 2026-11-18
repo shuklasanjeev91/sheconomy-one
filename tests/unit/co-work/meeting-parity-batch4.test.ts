@@ -27,7 +27,7 @@ function cameraTrack(
   } as MeetingStageTrack
 }
 
-describe('Zoom parity batch 4 — host actions, speaking-muted, gallery filters', () => {
+describe('meeting parity batch 4 — host actions, speaking-muted, gallery filters', () => {
   it('shows speaking-while-muted only when muted and input is hot', () => {
     expect(
       shouldShowSpeakingWhileMuted({ muted: true, inputLevel: 0.4 }),
