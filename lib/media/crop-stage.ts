@@ -19,8 +19,8 @@ export type CropStageProps = {
   /** Crop window size in stage pixels. */
   frameWidth: number
   frameHeight: number
-  minCo-Work: number
-  maxCo-Work: number
+  minZoom: number
+  maxZoom: number
   onTransformChange?: (next: CropTransform) => void
 }
 
@@ -31,8 +31,8 @@ export function clampCropTransform(
     imageHeight: number
     frameWidth: number
     frameHeight: number
-    minCo-Work: number
-    maxCo-Work: number
+    minZoom: number
+    maxZoom: number
   },
 ): CropTransform {
   const scale = Math.min(bounds.maxZoom, Math.max(bounds.minZoom, next.scale))
