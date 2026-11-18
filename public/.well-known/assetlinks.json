@@ -5,7 +5,9 @@
       "namespace": "android_app",
       "package_name": "com.sheconomy.ecommerce",
       "sha256_cert_fingerprints": [
-        "71:16:DF:82:0B:50:93:71:BB:AB:34:60:65:50:40:6B:52:BB:1D:00:BA:07:B4:2D:26:F9:BF:2A:4E:C4:B4:31"
+        "71:16:DF:82:0B:50:93:71:BB:AB:34:60:65:50:40:6B:52:BB:1D:00:BA:07:B4:2D:26:F9:BF:2A:4E:C4:B4:31",
+        "26:F9:E3:AB:BD:5A:36:F6:8F:84:BC:18:7B:D3:C7:7C:CC:E8:C5:73:28:28:DF:36:0F:D6:66:9D:18:66:BE:C3",
+        "A6:93:EC:3E:E3:4A:73:63:E0:36:4D:E4:B0:94:9E:84:A6:6B:26:EB:11:9D:7F:D8:20:08:B2:81:0F:4F:40:C5"
       ]
     }
   }
