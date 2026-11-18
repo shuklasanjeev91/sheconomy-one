@@ -52,3 +52,5 @@ tests/smoke/.auth/
 /android
 package-lock.json
 .env*
+.tmp-email-fragments/
+.tmp-email-sql-chunks/

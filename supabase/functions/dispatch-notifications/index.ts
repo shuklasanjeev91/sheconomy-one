@@ -306,11 +306,13 @@ Deno.serve(async (req) => {
       const dataVars = (notification.data ?? {}) as Record<string, unknown>
       const displayName =
         dataVars.customer_name ?? dataVars.user_name ?? dataVars.recipient_name ?? null
+      const appOrigin = resolvePublicAppOrigin()
       const vars = {
         ...dataVars,
         // Alias common greeting keys so older templates (user_name) still resolve.
         customer_name: displayName ?? dataVars.customer_name,
         user_name: displayName ?? dataVars.user_name,
+        base_url: dataVars.base_url ?? appOrigin,
         title: notification.title,
         message: notification.message,
         action_url: publicActionUrl,
