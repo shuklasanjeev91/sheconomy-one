@@ -23,7 +23,7 @@ import {
   trackSponsoredEvent,
   type SponsoredCallToAction,
 } from '~/community/lib/sponsored-ads'
-import { REACTION_TYPES } from '~/community/lib/constants'
+import { REACTION_TYPES, topReactionTypes, type ReactionType } from '~/community/lib/constants'
 import type {
   CommunityPoll,
   CommunityPost,
@@ -120,6 +120,7 @@ export const FeedPostCard = memo(function FeedPostCard({
     post.id,
     post.like_count ?? 0,
     post.comment_count ?? 0,
+    post.reaction_counts,
   )
   const isSponsored = sponsoredPreview || !!sponsoredCampaignId
 
@@ -534,7 +535,7 @@ export const FeedPostCard = memo(function FeedPostCard({
                 cursor="pointer"
                 onPress={() => engagement.openSheet('reactions')}
               >
-                <ReactionIcons />
+                <ReactionIcons counts={engagement.reactionCounts} />
                 <Text fontSize={12} color={communityUi.textMuted} fontWeight="500">
                   {engagement.likeCount}
                 </Text>
@@ -632,11 +633,21 @@ export const FeedPostCard = memo(function FeedPostCard({
   )
 })
 
-function ReactionIcons() {
+function ReactionIcons({
+  counts,
+}: {
+  counts: Partial<Record<ReactionType, number>> | null | undefined
+}) {
   const communityUi = useCommunityUi()
+  const present = topReactionTypes(counts, 3)
+  // If totals exist but breakdown is missing, show a single Like — never fake 3 icons.
+  const icons = present.length
+    ? present
+    : [REACTION_TYPES.find((reaction) => reaction.type === 'like')!].filter(Boolean)
+
   return (
     <XStack>
-      {REACTION_TYPES.slice(0, 3).map((reaction, index) => (
+      {icons.map((reaction, index) => (
         <XStack
           key={reaction.type}
           width={18}

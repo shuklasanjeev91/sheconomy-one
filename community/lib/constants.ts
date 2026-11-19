@@ -23,3 +23,13 @@ export const REACTION_TYPES = [
 ] as const
 
 export type ReactionType = (typeof REACTION_TYPES)[number]['type']
+
+/** LinkedIn-style facepile: only reaction types that actually have counts, highest first. */
+export function topReactionTypes(
+  counts: Partial<Record<ReactionType, number>> | null | undefined,
+  limit = 3,
+): Array<(typeof REACTION_TYPES)[number]> {
+  return REACTION_TYPES.filter((reaction) => (counts?.[reaction.type] ?? 0) > 0)
+    .sort((a, b) => (counts?.[b.type] ?? 0) - (counts?.[a.type] ?? 0))
+    .slice(0, Math.max(0, limit))
+}

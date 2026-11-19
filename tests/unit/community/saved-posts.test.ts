@@ -63,6 +63,7 @@ function makePost(overrides: Partial<CommunityPost>): CommunityPost {
     company_id: null,
     group_id: null,
     like_count: 0,
+    reaction_counts: null,
     comment_count: 0,
     engagement_score: 0,
     total_reactions: 0,

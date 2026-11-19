@@ -118,6 +118,8 @@ export type CommunityPost = {
   comment_count: number | null
   engagement_score: number | null
   total_reactions: number | null
+  /** Per-type reaction counts from `posts_with_stats` (LinkedIn-style facepile). */
+  reaction_counts: Partial<Record<string, number>> | null
   author_verified: boolean | null
   author: CommunityAuthor | null
   company: PostCompanyContext | null
@@ -233,7 +235,7 @@ export type CreatePostInput = {
 
 /** Columns available on `posts_with_stats` (includes image_urls / video_urls from posts). */
 const POST_STATS_SELECT =
-  'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, total_comments, engagement_score, total_reactions, author_verified, author_name, author_headline, author_avatar, event_title, event_description, event_start_time, event_end_time, event_location, event_rsvp_enabled, original_post_id, repost_comment, is_pinned'
+  'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, love_count, celebrate_count, support_count, insightful_count, funny_count, total_comments, engagement_score, total_reactions, author_verified, author_name, author_headline, author_avatar, event_title, event_description, event_start_time, event_end_time, event_location, event_rsvp_enabled, original_post_id, repost_comment, is_pinned'
 
 type PostRow = {
   id: string
@@ -246,7 +248,13 @@ type PostRow = {
   created_at: string | null
   post_type: string | null
   user_id: string | null
+  /** Count of `like` reactions only (view column). */
   like_count: number | null
+  love_count?: number | null
+  celebrate_count?: number | null
+  support_count?: number | null
+  insightful_count?: number | null
+  funny_count?: number | null
   total_comments: number | null
   engagement_score: number | null
   total_reactions: number | null
@@ -265,7 +273,25 @@ type PostRow = {
   is_pinned?: boolean | null
 }
 
+function mapReactionCounts(row: PostRow): Partial<Record<string, number>> {
+  const counts: Partial<Record<string, number>> = {}
+  const pairs: Array<[string, number | null | undefined]> = [
+    ['like', row.like_count],
+    ['love', row.love_count],
+    ['celebrate', row.celebrate_count],
+    ['support', row.support_count],
+    ['insightful', row.insightful_count],
+    ['funny', row.funny_count],
+  ]
+  for (const [type, value] of pairs) {
+    const n = Number(value ?? 0)
+    if (n > 0) counts[type] = n
+  }
+  return counts
+}
+
 function mapPost(row: PostRow, username?: string | null): CommunityPost {
+  const reactionCounts = mapReactionCounts(row)
   return {
     id: row.id,
     content: row.content ?? '',
@@ -284,6 +310,7 @@ function mapPost(row: PostRow, username?: string | null): CommunityPost {
     comment_count: row.total_comments,
     engagement_score: row.engagement_score,
     total_reactions: row.total_reactions,
+    reaction_counts: Object.keys(reactionCounts).length ? reactionCounts : null,
     author_verified: row.author_verified,
     author: {
       full_name: row.author_name,

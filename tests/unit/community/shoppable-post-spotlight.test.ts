@@ -24,6 +24,7 @@ describe('buildShoppableSpotlightCards', () => {
         comment_count: 0,
         engagement_score: 0,
         total_reactions: 0,
+        reaction_counts: null,
         author_verified: false,
         author: {
           id: 'user-1',
@@ -83,6 +84,7 @@ describe('buildShoppableSpotlightCards', () => {
         comment_count: 0,
         engagement_score: 0,
         total_reactions: 0,
+        reaction_counts: null,
         author_verified: false,
         author: null,
         company: null,

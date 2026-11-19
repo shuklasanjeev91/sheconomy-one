@@ -47,6 +47,7 @@ function mapPost(row: PostRow): CommunityPost {
     comment_count: row.total_comments,
     engagement_score: null,
     total_reactions: row.like_count,
+    reaction_counts: null,
     author_verified: null,
     author: {
       full_name: row.author_name,
@@ -67,6 +68,7 @@ function mapPost(row: PostRow): CommunityPost {
     listing_id: null,
     celebration: null,
     product: null,
+    products: null,
     shop: null,
     link: null,
     article_title: null,

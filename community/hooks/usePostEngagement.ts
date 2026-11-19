@@ -30,14 +30,42 @@ export type PostSheetType =
   | 'delete-confirm'
   | null
 
+function reactionCountsFromList(
+  items: PostReaction[],
+): Partial<Record<ReactionType, number>> {
+  const counts: Partial<Record<ReactionType, number>> = {}
+  for (const item of items) {
+    const type = REACTION_TYPES.find((reaction) => reaction.type === item.reactionType)?.type
+    if (!type) continue
+    counts[type] = (counts[type] ?? 0) + 1
+  }
+  return counts
+}
+
+function normalizeInitialCounts(
+  initial?: Partial<Record<string, number>> | null,
+): Partial<Record<ReactionType, number>> {
+  if (!initial) return {}
+  const counts: Partial<Record<ReactionType, number>> = {}
+  for (const reaction of REACTION_TYPES) {
+    const n = Number(initial[reaction.type] ?? 0)
+    if (n > 0) counts[reaction.type] = n
+  }
+  return counts
+}
+
 export function usePostEngagement(
   postId: string,
   initialLikeCount: number,
   initialCommentCount: number,
+  initialReactionCounts?: Partial<Record<string, number>> | null,
 ) {
   const { user } = useSupabase()
   const [likeCount, setLikeCount] = useState(initialLikeCount)
   const [commentCount, setCommentCount] = useState(initialCommentCount)
+  const [reactionCounts, setReactionCounts] = useState<Partial<Record<ReactionType, number>>>(() =>
+    normalizeInitialCounts(initialReactionCounts),
+  )
   const [reactionId, setReactionId] = useState<string | null>(null)
   const [reactionType, setReactionType] = useState<string | null>(null)
   const [reactions, setReactions] = useState<PostReaction[]>([])
@@ -59,10 +87,13 @@ export function usePostEngagement(
   const commentDeleteInFlightRef = useRef(new Set<string>())
   const commentEditInFlightRef = useRef(new Set<string>())
 
+  const initialCountsKey = JSON.stringify(initialReactionCounts ?? {})
   useEffect(() => {
     setLikeCount(initialLikeCount)
     setCommentCount(initialCommentCount)
-  }, [initialLikeCount, initialCommentCount, postId])
+    setReactionCounts(normalizeInitialCounts(initialReactionCounts))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- key captures count payload
+  }, [initialLikeCount, initialCommentCount, initialCountsKey, postId])
 
   useEffect(() => {
     if (!user) {
@@ -94,6 +125,10 @@ export function usePostEngagement(
     setIsLoadingReactions(true)
     const result = await fetchPostReactions(postId)
     setReactions(result.items)
+    if (!result.error) {
+      setReactionCounts(reactionCountsFromList(result.items))
+      setLikeCount(result.items.length)
+    }
     setError(result.error)
     setIsLoadingReactions(false)
   }, [postId])
@@ -125,14 +160,41 @@ export function usePostEngagement(
 
       if (!result.error) {
         if (result.removed) {
+          const previous = reactionType
           setReactionId(null)
           setReactionType(null)
           setLikeCount((count) => Math.max(0, count - 1))
+          if (previous) {
+            setReactionCounts((current) => {
+              const next = { ...current }
+              const key = previous as ReactionType
+              const remaining = Math.max(0, (next[key] ?? 1) - 1)
+              if (remaining > 0) next[key] = remaining
+              else delete next[key]
+              return next
+            })
+          }
         } else if (reactionId) {
+          const previous = reactionType
           setReactionType(type)
+          if (previous && previous !== type) {
+            setReactionCounts((current) => {
+              const next = { ...current }
+              const prevKey = previous as ReactionType
+              const remaining = Math.max(0, (next[prevKey] ?? 1) - 1)
+              if (remaining > 0) next[prevKey] = remaining
+              else delete next[prevKey]
+              next[type] = (next[type] ?? 0) + 1
+              return next
+            })
+          }
         } else {
           setReactionType(type)
           setLikeCount((count) => count + 1)
+          setReactionCounts((current) => ({
+            ...current,
+            [type]: (current[type] ?? 0) + 1,
+          }))
           const reaction = await fetchUserPostReaction(user.id, postId)
           setReactionId(reaction?.id ?? null)
         }
@@ -342,6 +404,7 @@ export function usePostEngagement(
     isAuthenticated: !!user,
     likeCount,
     commentCount,
+    reactionCounts,
     reactionId,
     reactionType,
     reactionLabel,

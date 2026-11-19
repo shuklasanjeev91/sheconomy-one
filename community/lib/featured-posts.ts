@@ -3,7 +3,31 @@ import { hydrateCommunityPostMedia } from '~/community/lib/community'
 import { supabase } from '~/lib/supabase/client'
 
 const FEATURED_SELECT =
-  'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, total_comments, author_name, author_headline, author_avatar, is_pinned'
+  'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, love_count, celebrate_count, support_count, insightful_count, funny_count, total_reactions, total_comments, author_name, author_headline, author_avatar, is_pinned'
+
+function mapFeaturedReactionCounts(row: {
+  like_count: number | null
+  love_count?: number | null
+  celebrate_count?: number | null
+  support_count?: number | null
+  insightful_count?: number | null
+  funny_count?: number | null
+}): Partial<Record<string, number>> | null {
+  const counts: Partial<Record<string, number>> = {}
+  const pairs: Array<[string, number | null | undefined]> = [
+    ['like', row.like_count],
+    ['love', row.love_count],
+    ['celebrate', row.celebrate_count],
+    ['support', row.support_count],
+    ['insightful', row.insightful_count],
+    ['funny', row.funny_count],
+  ]
+  for (const [type, value] of pairs) {
+    const n = Number(value ?? 0)
+    if (n > 0) counts[type] = n
+  }
+  return Object.keys(counts).length ? counts : null
+}
 
 function mapFeatured(row: {
   id: string
@@ -17,6 +41,12 @@ function mapFeatured(row: {
   post_type: string | null
   user_id: string | null
   like_count: number | null
+  love_count?: number | null
+  celebrate_count?: number | null
+  support_count?: number | null
+  insightful_count?: number | null
+  funny_count?: number | null
+  total_reactions?: number | null
   total_comments: number | null
   author_name: string | null
   author_headline: string | null
@@ -37,10 +67,11 @@ function mapFeatured(row: {
     user_id: row.user_id,
     company_id: null,
     group_id: null,
-    like_count: row.like_count,
+    like_count: row.total_reactions ?? row.like_count,
     comment_count: row.total_comments,
     engagement_score: null,
-    total_reactions: row.like_count,
+    total_reactions: row.total_reactions ?? row.like_count,
+    reaction_counts: mapFeaturedReactionCounts(row),
     author_verified: null,
     author: {
       full_name: row.author_name,
@@ -61,6 +92,7 @@ function mapFeatured(row: {
     listing_id: null,
     celebration: null,
     product: null,
+    products: null,
     shop: null,
     link: null,
     article_title: null,
