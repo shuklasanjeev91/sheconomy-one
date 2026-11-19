@@ -147,11 +147,29 @@ function normalizeComposeText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+/** True when composer text is a writing instruction / topic note, not a finished post. */
+export function isComposeInstruction(text: string | null | undefined): boolean {
+  const value = text?.trim() ?? ''
+  if (!value) return false
+  if (
+    /^(write|create|make|draft|compose|generate|post about|tell|share about|help me)\b/i.test(value)
+  ) {
+    return true
+  }
+  // Short unfinished notes should expand; finished posts are usually longer.
+  return value.length < 80
+}
+
 /** True when a suggestion/draft is only a short instruction or repeats the seed. */
 export function isThinOrEchoPostDraft(draft: string, seed?: string | null): boolean {
   const body = draft.trim()
   if (!body) return true
   if (body.length < 80) return true
+  if (
+    /^(write|create|make|draft|compose|generate|post about|tell|share about|help me)\b/i.test(body)
+  ) {
+    return true
+  }
 
   const seedText = (seed ?? '').trim()
   if (!seedText) return false
@@ -160,8 +178,16 @@ export function isThinOrEchoPostDraft(draft: string, seed?: string | null): bool
   const normalizedSeed = normalizeComposeText(seedText)
   if (!normalizedSeed) return false
   if (normalizedBody === normalizedSeed) return true
-  if (normalizedBody.startsWith(normalizedSeed) && body.length < seedText.length + 40) return true
+  if (normalizedBody.startsWith(normalizedSeed) && body.length < seedText.length + 60) return true
   if (normalizedSeed.startsWith(normalizedBody)) return true
+  // Near-echo: chip kept most of the seed and only trimmed a hashtag/tail.
+  if (
+    normalizedBody.length >= 12 &&
+    (normalizedSeed.includes(normalizedBody) || normalizedBody.includes(normalizedSeed)) &&
+    Math.abs(normalizedBody.length - normalizedSeed.length) < 40
+  ) {
+    return true
+  }
   return false
 }
 
@@ -224,16 +250,33 @@ export function filterPostSuggestionChips<T extends { label: string; draft: stri
 ): T[] {
   const normalizedSeed = normalizeComposeText(seed ?? '')
   return chips.filter((chip) => {
-    // Labels are short by design — only reject when label/draft repeats the seed.
-    if (normalizedSeed) {
-      const label = normalizeComposeText(chip.label)
-      if (label && (label === normalizedSeed || normalizedSeed.startsWith(label) && label.length >= 12)) {
+    const label = normalizeComposeText(chip.label)
+    if (normalizedSeed && label) {
+      if (label === normalizedSeed) return false
+      if (normalizedSeed.startsWith(label) && label.length >= 12) return false
+      if (label.startsWith(normalizedSeed) && normalizedSeed.length >= 12) return false
+      if (
+        (normalizedSeed.includes(label) || label.includes(normalizedSeed)) &&
+        Math.abs(label.length - normalizedSeed.length) < 40
+      ) {
         return false
       }
     }
+    if (isComposeInstruction(chip.label) && isThinOrEchoPostDraft(chip.draft, seed)) return false
     if (isThinOrEchoPostDraft(chip.draft, seed)) return false
     return true
   })
+}
+
+/** Action chips shown while the composer still holds an instruction / short note. */
+export function composeExpansionChips(seed: string): Array<{ label: string; seed: string }> {
+  const topic = seed.trim()
+  if (!topic) return []
+  return [
+    { label: 'Expand into a post', seed: topic },
+    { label: 'Make it professional', seed: `Rewrite this as a polished professional post:\n${topic}` },
+    { label: 'Add a call to action', seed: `Turn this into a post with a clear call to action:\n${topic}` },
+  ]
 }
 
 /** Fallback draft when the AI edge action is unavailable. */

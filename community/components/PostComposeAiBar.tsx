@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 
 import {
   buildPostDraftPrompt,
+  composeExpansionChips,
   filterPostSuggestionChips,
   fallbackPostDraft,
+  isComposeInstruction,
   isThinOrEchoPostDraft,
   localPostComposeSuggestions,
   type ComposeModeHint,
@@ -44,14 +46,30 @@ export function PostComposeAiBar({
 
   const linkUrl = link?.url ?? ''
   const linkTitle = link?.title ?? ''
-  const canDraft =
-    Boolean(seedPrompt?.trim()) || photoCount > 0 || videoCount > 0 || Boolean(linkUrl)
+  const seed = seedPrompt?.trim() ?? ''
+  const instructionMode = isComposeInstruction(seed)
+  const canDraft = Boolean(seed) || photoCount > 0 || videoCount > 0 || Boolean(linkUrl)
 
   useEffect(() => {
     let cancelled = false
     const timer = setTimeout(() => {
       setLoadingChips(true)
       void (async () => {
+        // While the member is still writing an instruction, show expansion actions
+        // instead of SHERPA chips that often echo the prompt.
+        if (isComposeInstruction(seed)) {
+          if (!cancelled) {
+            setChips(
+              composeExpansionChips(seed).map((row) => ({
+                label: row.label,
+                draft: row.seed,
+              })),
+            )
+            setLoadingChips(false)
+          }
+          return
+        }
+
         let memberName = ''
         let headline = ''
         let location = ''
@@ -62,20 +80,18 @@ export function PostComposeAiBar({
           location = profile.data?.location?.trim() ?? ''
         }
         try {
-          // Pass a short topic hint — full composer text makes SHERPA echo the seed as a chip.
-          const topicHint = seedPrompt?.trim().slice(0, 160) || ''
           const rows = await fetchPostSuggestions({
             mode,
             memberName,
             headline,
             location,
-            prompt: topicHint,
+            prompt: seed.slice(0, 160),
             photoCount,
             videoCount,
             link: linkUrl ? { url: linkUrl, title: linkTitle } : null,
           })
           if (cancelled) return
-          const filtered = filterPostSuggestionChips(rows, seedPrompt)
+          const filtered = filterPostSuggestionChips(rows, seed)
           if (filtered.length > 0) {
             setChips(filtered)
             return
@@ -104,10 +120,10 @@ export function PostComposeAiBar({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [mode, user?.id, seedPrompt, photoCount, videoCount, linkUrl, linkTitle])
+  }, [mode, user?.id, seed, photoCount, videoCount, linkUrl, linkTitle])
 
-  async function generateDraft(seed?: string) {
-    const promptSeed = (seed ?? seedPrompt)?.trim() ?? ''
+  async function generateDraft(seedOverride?: string) {
+    const promptSeed = (seedOverride ?? seed).trim()
     if (!promptSeed && photoCount < 1 && videoCount < 1 && !link?.url) return
 
     setLoading(true)
@@ -126,17 +142,25 @@ export function PostComposeAiBar({
         link,
       })
       const returned = result.content.trim()
-      if (!returned || isThinOrEchoPostDraft(returned, promptSeed)) {
+      if (!returned || isThinOrEchoPostDraft(returned, promptSeed) || isThinOrEchoPostDraft(returned, seed)) {
         const fallback = fallbackPostDraft(promptSeed || link?.title || linkUrl || 'this update', mode)
         onApplyDraft({
           content: fallback.content,
           articleTitle: result.title ?? fallback.title ?? undefined,
+        })
+        toast.show('Draft ready', {
+          tone: 'success',
+          message: 'Expanded your notes into a full post. Edit anything before posting.',
         })
         return
       }
       onApplyDraft({
         content: returned,
         articleTitle: result.title ?? undefined,
+      })
+      toast.show('Draft ready', {
+        tone: 'success',
+        message: 'SHERPA wrote a complete post from your notes.',
       })
     } catch {
       const fallback = fallbackPostDraft(promptSeed || link?.title || linkUrl || 'this update', mode)
@@ -154,9 +178,14 @@ export function PostComposeAiBar({
   }
 
   function applyChip(chip: PostSuggestionChip) {
-    // Short / echo chips are instructions — expand them into a full post.
-    if (isThinOrEchoPostDraft(chip.draft, seedPrompt) || isThinOrEchoPostDraft(chip.draft, chip.label)) {
-      void generateDraft(chip.draft || chip.label || seedPrompt)
+    // Instruction chips and thin drafts must expand — never paste the prompt back.
+    if (
+      instructionMode ||
+      isComposeInstruction(chip.draft) ||
+      isThinOrEchoPostDraft(chip.draft, seed) ||
+      isThinOrEchoPostDraft(chip.draft, chip.label)
+    ) {
+      void generateDraft(chip.draft || chip.label || seed)
       return
     }
     onApplyDraft({ content: chip.draft })

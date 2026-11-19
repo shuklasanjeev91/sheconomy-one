@@ -102,10 +102,11 @@ const CELEBRATION_OCCASIONS: {
   { value: 'welcome', label: 'Welcome', emoji: '👋', placeholder: 'e.g. Welcome Priya to the team' },
 ]
 
-type Visibility = 'public' | 'connections'
+type Visibility = 'public' | 'connections' | 'private'
 const AUDIENCE: Record<Visibility, { label: string; description: string; icon: typeof Icons.Globe }> = {
   public: { label: 'Anyone', description: 'Anyone on and off the platform', icon: Icons.Globe },
   connections: { label: 'Connections only', description: 'Only your connections', icon: Icons.Users },
+  private: { label: 'Only me', description: 'Only you can see this post', icon: Icons.Lock },
 }
 
 type PostContext = 'profile' | 'company' | 'group'
@@ -169,6 +170,7 @@ export function CreatePostForm({
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [gifOpen, setGifOpen] = useState(false)
   const [audienceOpen, setAudienceOpen] = useState(false)
+  const [postAsOpen, setPostAsOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [visibility, setVisibility] = useState<Visibility>('public')
   const encodedContentRef = useRef('')
@@ -1043,6 +1045,15 @@ export function CreatePostForm({
               : 'What do you want to talk about?'
 
   const audience = AUDIENCE[visibility]
+  const selectedCompany =
+    postContext === 'company' ? companies.find((company) => company.id === companyId) : null
+  const selectedGroup =
+    postContext === 'group' ? groups.find((group) => group.id === groupId) : null
+  const postAsLabel =
+    selectedCompany?.name ||
+    selectedGroup?.title ||
+    'You'
+  const hasPostAsOptions = companies.length > 0 || groups.length > 0
   const Container = embedded ? YStack : CommunityCard
 
   // The six toolbar icons plus the Post button are wider than a narrow phone
@@ -1054,67 +1065,61 @@ export function CreatePostForm({
   return (
     <>
       <Container gap={0}>
-        {/* Author + audience */}
+        {/* Author + audience / post-as */}
         <XStack padding={16} gap={12} alignItems="center">
           <Avatar name={displayName} src={profile?.avatar_url ?? undefined} size="$5" />
           <YStack gap={4} flex={1}>
             <Text fontSize={16} fontWeight="700" color={communityUi.text}>
               {displayName}
             </Text>
-            <XStack
-              alignSelf="flex-start"
-              alignItems="center"
-              gap={6}
-              paddingHorizontal={10}
-              paddingVertical={5}
-              borderRadius={999}
-              borderWidth={1}
-              borderColor={communityUi.border}
-              cursor="pointer"
-              hoverStyle={{ backgroundColor: communityUi.hoverBg }}
-              onPress={() => setAudienceOpen(true)}
-            >
-              <audience.icon size={14} color={communityUi.textMuted} />
-              <Text fontSize={12} fontWeight="700" color={communityUi.textMuted}>
-                {audience.label}
-              </Text>
-              <Icons.ChevronDown size={14} color={communityUi.textMuted} />
+            <XStack gap={8} flexWrap="wrap">
+              <XStack
+                alignSelf="flex-start"
+                alignItems="center"
+                gap={6}
+                paddingHorizontal={10}
+                paddingVertical={5}
+                borderRadius={999}
+                borderWidth={1}
+                borderColor={communityUi.border}
+                cursor="pointer"
+                hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+                onPress={() => setAudienceOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Audience ${audience.label}`}
+              >
+                <audience.icon size={14} color={communityUi.textMuted} />
+                <Text fontSize={12} fontWeight="700" color={communityUi.textMuted}>
+                  {audience.label}
+                </Text>
+                <Icons.ChevronDown size={14} color={communityUi.textMuted} />
+              </XStack>
+              {hasPostAsOptions ? (
+                <XStack
+                  alignSelf="flex-start"
+                  alignItems="center"
+                  gap={6}
+                  paddingHorizontal={10}
+                  paddingVertical={5}
+                  borderRadius={999}
+                  borderWidth={1}
+                  borderColor={communityUi.border}
+                  cursor="pointer"
+                  hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+                  onPress={() => setPostAsOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Post as ${postAsLabel}`}
+                >
+                  <Icons.Building2 size={14} color={communityUi.textMuted} />
+                  <Text fontSize={12} fontWeight="700" color={communityUi.textMuted} numberOfLines={1}>
+                    {postAsLabel}
+                  </Text>
+                  <Icons.ChevronDown size={14} color={communityUi.textMuted} />
+                </XStack>
+              ) : null}
             </XStack>
           </YStack>
         </XStack>
-
-        {/* Post-as context (page / group) */}
-        {companies.length > 0 || groups.length > 0 ? (
-          <XStack paddingHorizontal={16} paddingBottom={12} gap={8} flexWrap="wrap">
-            <ContextChip label="You" active={postContext === 'profile'} onPress={() => setPostContext('profile')} />
-            {companies.length > 0
-              ? companies.map((company) => (
-                  <ContextChip
-                    key={company.id}
-                    label={company.name}
-                    active={postContext === 'company' && companyId === company.id}
-                    onPress={() => {
-                      setPostContext('company')
-                      setCompanyId(company.id)
-                    }}
-                  />
-                ))
-              : null}
-            {groups.length > 0
-              ? groups.map((group) => (
-                  <ContextChip
-                    key={group.id}
-                    label={group.title}
-                    active={postContext === 'group' && groupId === group.id}
-                    onPress={() => {
-                      setPostContext('group')
-                      setGroupId(group.id)
-                    }}
-                  />
-                ))
-              : null}
-          </XStack>
-        ) : null}
 
         {/* Compose body — drag & drop photos/videos on web */}
         <MediaDropZone
@@ -2030,7 +2035,105 @@ export function CreatePostForm({
           })}
         </YStack>
       </CommunityAdaptiveSheet>
+
+      <CommunityAdaptiveSheet open={postAsOpen} onOpenChange={setPostAsOpen} title="Post as">
+        <YStack gap={4}>
+          <PostAsOptionRow
+            icon={Icons.User}
+            title="You"
+            description="Post from your personal profile"
+            selected={postContext === 'profile'}
+            onPress={() => {
+              setPostContext('profile')
+              setCompanyId(null)
+              setGroupId(null)
+              setPostAsOpen(false)
+            }}
+          />
+          {companies.map((company) => (
+            <PostAsOptionRow
+              key={`company-${company.id}`}
+              icon={Icons.Building2}
+              title={company.name}
+              description="Page"
+              selected={postContext === 'company' && companyId === company.id}
+              onPress={() => {
+                setPostContext('company')
+                setCompanyId(company.id)
+                setGroupId(null)
+                setPostAsOpen(false)
+              }}
+            />
+          ))}
+          {groups.map((group) => (
+            <PostAsOptionRow
+              key={`group-${group.id}`}
+              icon={Icons.Users}
+              title={group.title}
+              description="Group"
+              selected={postContext === 'group' && groupId === group.id}
+              onPress={() => {
+                setPostContext('group')
+                setGroupId(group.id)
+                setCompanyId(null)
+                setPostAsOpen(false)
+              }}
+            />
+          ))}
+        </YStack>
+      </CommunityAdaptiveSheet>
     </>
+  )
+}
+
+function PostAsOptionRow({
+  icon: Icon,
+  title,
+  description,
+  selected,
+  onPress,
+}: {
+  icon: typeof Icons.User
+  title: string
+  description: string
+  selected: boolean
+  onPress: () => void
+}) {
+  const communityUi = useCommunityUi()
+  return (
+    <XStack
+      alignItems="center"
+      gap={12}
+      paddingVertical={12}
+      paddingHorizontal={6}
+      borderRadius={12}
+      cursor="pointer"
+      hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+      pressStyle={{ backgroundColor: communityUi.hoverBg, opacity: 0.9 }}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      onPress={onPress}
+    >
+      <XStack
+        width={40}
+        height={40}
+        borderRadius={999}
+        alignItems="center"
+        justifyContent="center"
+        backgroundColor={communityUi.accentMuted}
+      >
+        <Icon size={20} color={communityUi.brand} />
+      </XStack>
+      <YStack flex={1} gap={2}>
+        <Text fontSize={15} fontWeight="700" color={communityUi.text} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text fontSize={12} color={communityUi.textMuted}>
+          {description}
+        </Text>
+      </YStack>
+      {selected ? <Icons.Check size={20} color={communityUi.brand} /> : null}
+    </XStack>
   )
 }
 
