@@ -13,50 +13,50 @@ const GIPHY_API_KEY =
 
 const FALLBACK_GIFS: GifResult[] = [
   {
-    id: '1',
+    id: '5GoVLqeAOo6PK',
     title: 'Celebrate',
-    url: 'https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/5GoVLqeAOo6PK/200w.gif',
+    url: 'https://i.giphy.com/5GoVLqeAOo6PK.gif',
+    previewUrl: 'https://i.giphy.com/5GoVLqeAOo6PK.gif',
     width: 480,
     height: 270,
   },
   {
-    id: '2',
+    id: '7r4g3v4wAF8rC',
     title: 'Applause',
-    url: 'https://media.giphy.com/media/7r4g3v4wAF8rC/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/7r4g3v4wAF8rC/200w.gif',
+    url: 'https://i.giphy.com/7r4g3v4wAF8rC.gif',
+    previewUrl: 'https://i.giphy.com/7r4g3v4wAF8rC.gif',
     width: 480,
     height: 270,
   },
   {
-    id: '3',
+    id: '111ebonMs90YLu',
     title: 'Thumbs up',
-    url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/111ebonMs90YLu/200w.gif',
+    url: 'https://i.giphy.com/111ebonMs90YLu.gif',
+    previewUrl: 'https://i.giphy.com/111ebonMs90YLu.gif',
     width: 480,
     height: 270,
   },
   {
-    id: '4',
+    id: '5VKbvrjxpVJCM',
     title: 'Excited',
-    url: 'https://media.giphy.com/media/5VKbvrjxpVJCM/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/5VKbvrjxpVJCM/200w.gif',
+    url: 'https://i.giphy.com/5VKbvrjxpVJCM.gif',
+    previewUrl: 'https://i.giphy.com/5VKbvrjxpVJCM.gif',
     width: 480,
     height: 270,
   },
   {
-    id: '5',
+    id: 'l0MYt5jPR6QX5pnqM',
     title: 'Congrats',
-    url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/200w.gif',
+    url: 'https://i.giphy.com/l0MYt5jPR6QX5pnqM.gif',
+    previewUrl: 'https://i.giphy.com/l0MYt5jPR6QX5pnqM.gif',
     width: 480,
     height: 270,
   },
   {
-    id: '6',
+    id: '26BRuo6sLetFw',
     title: 'Nice',
-    url: 'https://media.giphy.com/media/26BRuo6sMax2FYbsdy/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/26BRuo6sMax2FYbsdy/200w.gif',
+    url: 'https://i.giphy.com/26BRuo6sLetFw.gif',
+    previewUrl: 'https://i.giphy.com/26BRuo6sLetFw.gif',
     width: 480,
     height: 270,
   },
@@ -66,17 +66,23 @@ function mapGiphyItem(item: {
   id: string
   title: string
   images: {
-    fixed_height: { url: string; width: string; height: string }
-    fixed_height_small: { url: string }
+    fixed_height?: { url: string; width: string; height: string }
+    fixed_height_small?: { url: string }
+    downsized?: { url: string; width: string; height: string }
+    original?: { url: string }
   }
 }): GifResult {
+  // Prefer stable i.giphy.com embeds — media.giphy.com search URLs often render
+  // Giphy’s “THIS CONTENT IS NOT AVAILABLE” placeholder in the composer.
+  const width = Number(item.images.fixed_height?.width || item.images.downsized?.width) || 200
+  const height = Number(item.images.fixed_height?.height || item.images.downsized?.height) || 200
   return {
     id: item.id,
     title: item.title,
-    url: item.images.fixed_height.url,
-    previewUrl: item.images.fixed_height_small.url,
-    width: Number(item.images.fixed_height.width) || 200,
-    height: Number(item.images.fixed_height.height) || 200,
+    url: `https://i.giphy.com/${item.id}.gif`,
+    previewUrl: item.images.fixed_height_small?.url || `https://i.giphy.com/${item.id}.gif`,
+    width,
+    height,
   }
 }
 
@@ -95,6 +101,30 @@ export async function searchGifs(query: string, limit = 20): Promise<GifResult[]
   } catch {
     return FALLBACK_GIFS
   }
+}
+
+/** Fast, reliable GIF for create-post auto-attach (never blocks the draft). */
+export async function pickComposeGif(query: string): Promise<GifResult> {
+  const trimmed = query.trim() || 'celebrate'
+  const index =
+    Math.abs(
+      [...trimmed].reduce((sum, char) => sum + char.charCodeAt(0), 0),
+    ) % FALLBACK_GIFS.length
+  const fallback = FALLBACK_GIFS[index] ?? FALLBACK_GIFS[0]!
+
+  try {
+    const result = await Promise.race([
+      searchGifs(trimmed, 4),
+      new Promise<GifResult[]>((resolve) => {
+        setTimeout(() => resolve([]), 1800)
+      }),
+    ])
+    const first = result[0]
+    if (first?.id && first.url.includes('i.giphy.com')) return first
+  } catch {
+    // use fallback
+  }
+  return fallback
 }
 
 export function isGifUrl(url: string) {

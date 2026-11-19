@@ -37,13 +37,17 @@ async function invokeEdgeAssist<T>(
         : await Promise.race([
             invokePromise,
             new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error(`${AI_NAME} timed out. Tap Write with AI to try again.`)), timeoutMs)
+              setTimeout(
+                () =>
+                  reject(new Error(`${AI_NAME} timed out. Tap Write with SHERPA to try again.`)),
+                timeoutMs,
+              )
             }),
           ])
     const { data, error } = raced
     if (error) {
       if (/abort|timed?\s*out/i.test(error.message || '')) {
-        throw new Error(`${AI_NAME} timed out. Tap Write with AI to try again.`)
+        throw new Error(`${AI_NAME} timed out. Tap Write with SHERPA to try again.`)
       }
       throw new Error(error.message || `${AI_NAME} is unavailable right now.`)
     }
@@ -54,7 +58,7 @@ async function invokeEdgeAssist<T>(
     return data as T
   } catch (err) {
     if (err instanceof Error && /abort|timed?\s*out/i.test(err.message)) {
-      throw new Error(`${AI_NAME} timed out. Tap Write with AI to try again.`)
+      throw new Error(`${AI_NAME} timed out. Tap Write with SHERPA to try again.`)
     }
     throw err
   } finally {
@@ -321,7 +325,7 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
   let draft: PostDraftResult | null = null
   let edgeError: unknown = null
   try {
-    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody, { timeoutMs: 25_000 }))
+    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody, { timeoutMs: 12_000 }))
   } catch (err) {
     edgeError = err
   }

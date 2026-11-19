@@ -16,7 +16,7 @@ import {
   mergeMemberHashtags,
 } from '~/community/lib/post-draft-complete'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { searchGifs } from '~/community/lib/giphy'
+import { pickComposeGif } from '~/community/lib/giphy'
 import { fetchPublicProfile } from '~/community/lib/network'
 import { HorizontalScrollRow } from '~/components/layout'
 import { Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -147,7 +147,7 @@ export function PostComposeAiBar({
     }
   }, [mode, user?.id, seed, photoCount, videoCount, linkUrl, linkTitle])
 
-  async function applyGeneratedDraft(
+  function applyGeneratedDraft(
     result: {
       content: string
       title: string | null
@@ -165,39 +165,44 @@ export function PostComposeAiBar({
     if (unusable) {
       toast.show('Couldn’t draft this post', {
         tone: 'error',
-        message: 'SHERPA couldn’t expand your notes. Tap Write with AI to try again.',
+        message: 'SHERPA couldn’t expand your notes. Tap Write with SHERPA to try again.',
       })
       return
-    }
-
-    let gifUrl: string | undefined
-    if (!hasMedia) {
-      const query = (result.gifQuery?.trim() || deriveGifQueryFromSeed(promptSeed)).slice(0, 80)
-      try {
-        const gifs = await searchGifs(query, 6)
-        gifUrl = gifs[0]?.url
-      } catch {
-        gifUrl = undefined
-      }
     }
 
     const suggestPhoto = Boolean(result.suggestPhoto) && photoCount < 1
     const suggestVideo = Boolean(result.suggestVideo) && videoCount < 1
     setMediaHints({ photo: suggestPhoto, video: suggestVideo })
 
+    // Apply text immediately — never wait on Giphy before the caption appears.
     onApplyDraft({
       content: returned,
       articleTitle: result.title ?? undefined,
-      gifUrl,
       suggestPhoto,
       suggestVideo,
     })
     toast.show('Draft ready', {
       tone: 'success',
-      message: gifUrl
-        ? 'SHERPA wrote your post and added a matching GIF. Edit anything before posting.'
-        : 'SHERPA wrote a complete post from your notes.',
+      message: 'SHERPA wrote a complete post from your notes.',
     })
+
+    if (!hasMedia) {
+      const query = (result.gifQuery?.trim() || deriveGifQueryFromSeed(promptSeed)).slice(0, 80)
+      void pickComposeGif(query)
+        .then((gif) => {
+          if (!gif?.url) return
+          onApplyDraft({
+            content: returned,
+            articleTitle: result.title ?? undefined,
+            gifUrl: gif.url,
+            suggestPhoto,
+            suggestVideo,
+          })
+        })
+        .catch(() => {
+          // Caption already applied; GIF is optional.
+        })
+    }
   }
 
   async function generateDraft(seedOverride?: string) {
@@ -220,12 +225,12 @@ export function PostComposeAiBar({
         videoCount,
         link,
       })
-      await applyGeneratedDraft(result, promptSeed)
+      applyGeneratedDraft(result, promptSeed)
     } catch (err) {
       const message =
         err instanceof Error && err.message.trim()
           ? err.message.trim()
-          : 'SHERPA couldn’t expand your notes. Tap Write with AI to try again.'
+          : 'SHERPA couldn’t expand your notes. Tap Write with SHERPA to try again.'
       toast.show('Couldn’t draft this post', {
         tone: 'error',
         message,
@@ -265,7 +270,7 @@ export function PostComposeAiBar({
             if (!loading && canDraft) void generateDraft()
           }}
           accessibilityRole="button"
-          accessibilityLabel="Write with AI"
+          accessibilityLabel="Write with SHERPA"
           accessibilityState={{ disabled: !canDraft || loading }}
         >
           {loading ? (
@@ -274,7 +279,7 @@ export function PostComposeAiBar({
             <Icons.Sparkles size={14} color={communityUi.brand} />
           )}
           <Text fontSize={12} fontWeight="700" color={communityUi.brand}>
-            {loading ? 'Writing…' : 'Write with AI'}
+            {loading ? 'SHERPA is writing…' : 'Write with SHERPA'}
           </Text>
         </XStack>
       </XStack>

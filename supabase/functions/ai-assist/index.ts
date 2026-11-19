@@ -1975,14 +1975,19 @@ Deno.serve(async (req) => {
         .join('\n')
 
       const userTurn = prompt || 'Write a complete community post for the attached media/link.'
+      // Plain JSON instruction first (faster than jsonMode + retry on many keys).
       let completion = await callGemini(systemPrompt, [], userTurn, {
-        jsonMode: true,
         temperature: 0.7,
+        maxOutputTokens: 1024,
       })
       let parsed = parsePostDraftJson(completion.answer)
-      // Some Gemini keys/models reject jsonMode — retry as plain text JSON.
+      // Retry once with jsonMode only when the first parse fails.
       if (!parsed?.content) {
-        completion = await callGemini(systemPrompt, [], userTurn, { temperature: 0.7 })
+        completion = await callGemini(systemPrompt, [], userTurn, {
+          jsonMode: true,
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        })
         parsed = parsePostDraftJson(completion.answer)
       }
       // Last resort: accept a plain multi-paragraph reply as content.
