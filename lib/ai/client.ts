@@ -314,40 +314,28 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
     title: typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null,
     content: String(row.content ?? '').trim(),
     usedFallback: Boolean(row.usedFallback),
-    gifQuery:
-      typeof row.gifQuery === 'string' && row.gifQuery.trim() ? row.gifQuery.trim().slice(0, 80) : null,
-    suggestPhoto: Boolean(row.suggestPhoto),
-    suggestVideo: Boolean(row.suggestVideo),
   })
 
-  // Prefer the trained Supabase edge post_draft (Gemini). Owned CloudFront still
-  // serves older Ollama templates for this action.
-  let draft: PostDraftResult | null = null
-  let edgeError: unknown = null
+  // LinkedIn-style rewrite: use trained Gemini edge only — owned Ollama often
+  // returns hashtag stubs / templates instead of a full post.
+  let draft: PostDraftResult
   try {
-    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody, { timeoutMs: 12_000 }))
+    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody, { timeoutMs: 18_000 }))
   } catch (err) {
-    edgeError = err
-  }
-
-  if (!draft || draft.usedFallback || isUnusablePostDraftContent(draft.content, prompt)) {
-    try {
-      const owned = normalize(await invokeAiAssist<PostDraftResult>(requestBody))
-      if (!owned.usedFallback && !isUnusablePostDraftContent(owned.content, prompt)) {
-        draft = owned
-      }
-    } catch {
-      // keep edge error / draft
-    }
-  }
-
-  if (!draft) {
-    if (edgeError instanceof Error) throw edgeError
+    if (err instanceof Error) throw err
     throw new Error(`${AI_NAME} could not draft this post. Try again.`)
   }
 
   requireSherpaDraft(draft)
-  if (!draft.content.trim() || isUnusablePostDraftContent(draft.content, prompt)) {
+  const withoutTags = draft.content
+    .replace(/#[\w\u00C0-\u024F]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (
+    !draft.content.trim() ||
+    isUnusablePostDraftContent(draft.content, prompt) ||
+    withoutTags.length < 120
+  ) {
     throw new Error(`${AI_NAME} could not draft this post. Try again.`)
   }
   return { ...draft, usedFallback: false }

@@ -1946,27 +1946,22 @@ Deno.serve(async (req) => {
           ? context.compose_mode
           : 'text'
       const systemPrompt = [
-        'You are SHERPA drafting professional community posts for SHEconomy (women-focused).',
+        'You are SHERPA — rewrite member notes into a LinkedIn-style professional post for SHEconomy (women-led community).',
         productPlaybook('community'),
-        'Return ONLY JSON with keys: title (string or null), content (string), gifQuery (string), suggestPhoto (boolean), suggestVideo (boolean).',
+        'Return ONLY JSON with keys: title (string or null), content (string).',
         'title is required for article mode; otherwise null.',
-        'content must be a COMPLETE ready-to-publish post: 2–4 short paragraphs (roughly 280–700 characters for text modes, up to 2200 for article).',
-        'Structure: (1) hook that NAMES the topic/brand/org, (2) concrete insight specific to that topic (what it is, why it matters now, one tangible detail), (3) a community question or clear CTA.',
-        'Be specific — never write vague filler like “a few things stood out”, “exploring this”, “women-led teams are doing right now”, or “what’s resonating for you”.',
-        'Never start with “Sharing a quick update on…”. Never return a template with the topic name dropped into a stock sentence.',
-        'If the member wrote an instruction like “Write about X” or a short note like “bioayurveda”, expand X with plausible, respectful, non-hallucinated framing (position it as the member exploring/sharing that brand or cause). Prefer grounded language over invented stats.',
-        'Example tone for topic “bioayurveda”: open on Ayurveda-inspired wellness for busy women founders, mention clean rituals / everyday care, ask which wellness habit the community protects first — not a generic “update on bioayurveda”.',
-        'Example tone for topic “wef.org.in”: open on Women Economic Forum / Mission Million, one concrete leadership or entrepreneurship angle, invite members to share how they show up for women-led growth.',
-        'If the member wrote an instruction like “Write about X”, expand X — never return the instruction verbatim or as a one-liner.',
-        'Hashtags: keep every hashtag the member already typed. You may add at most 2 additional relevant hashtags at the end. No hashtag spam. No markdown fences. No bullet lists unless article mode.',
-        'gifQuery: a short English Giphy search (2–4 words) matching the post mood/topic, e.g. "ayurveda wellness" or "women leadership".',
-        'suggestPhoto: true when a real photo would strengthen the post (product, celebration, event, behind-the-scenes).',
-        'suggestVideo: true when a short clip would help (demo, event recap, launch). Prefer false for simple text reflections.',
+        'Rewrite the member’s notes into a COMPLETE ready-to-publish post. Do NOT return only hashtags. Do NOT attach or describe GIFs/images/videos.',
+        'content: 2–4 short paragraphs (roughly 350–900 characters for text modes, up to 2200 for article). First-person professional voice.',
+        'Structure like LinkedIn AI rewrite: (1) strong opening hook naming the topic/brand, (2) 1–2 concrete insights or observations, (3) a clear question or CTA for the community.',
+        'If the member wrote “Write about X” or a short topic like “bioayurveda”, expand into a full post about X — never echo the instruction.',
+        'Keep any hashtags the member already typed at the end; you may add at most 1–2 more. Hashtags alone are never a valid post.',
+        'Be specific. Never use filler like “Sharing a quick update on…”, “a few things stood out”, or “what’s resonating for you”.',
+        'No markdown fences. No bullet lists unless article mode. No image/GIF/video suggestions in the JSON.',
         languageDirective(context, body),
         'Write the post content (and title when present) in the preferred language.',
         `Compose mode: ${composeMode}.`,
-        photoCount > 0 ? `Attached photos: ${photoCount}. Mention them naturally. Set suggestPhoto false.` : '',
-        videoCount > 0 ? `Attached videos: ${videoCount}. Reference the video naturally. Set suggestVideo false.` : '',
+        photoCount > 0 ? `Member already attached ${photoCount} photo(s) — reference them naturally in the caption.` : '',
+        videoCount > 0 ? `Member already attached ${videoCount} video(s) — reference them naturally.` : '',
         link?.url
           ? `Shared link: ${link.url}${link.title ? ` (${link.title})` : ''}${link.description ? ` — ${String(link.description).slice(0, 200)}` : ''}. Make the link the subject of the post.`
           : '',
@@ -1975,22 +1970,19 @@ Deno.serve(async (req) => {
         .join('\n')
 
       const userTurn = prompt || 'Write a complete community post for the attached media/link.'
-      // Plain JSON instruction first (faster than jsonMode + retry on many keys).
       let completion = await callGemini(systemPrompt, [], userTurn, {
-        temperature: 0.7,
-        maxOutputTokens: 1024,
+        jsonMode: true,
+        temperature: 0.75,
+        maxOutputTokens: 1200,
       })
       let parsed = parsePostDraftJson(completion.answer)
-      // Retry once with jsonMode only when the first parse fails.
       if (!parsed?.content) {
         completion = await callGemini(systemPrompt, [], userTurn, {
-          jsonMode: true,
-          temperature: 0.7,
-          maxOutputTokens: 1024,
+          temperature: 0.75,
+          maxOutputTokens: 1200,
         })
         parsed = parsePostDraftJson(completion.answer)
       }
-      // Last resort: accept a plain multi-paragraph reply as content.
       if (!parsed?.content && completion.answer && completion.answer.trim().length >= 160) {
         const plain = completion.answer
           .trim()
@@ -2002,19 +1994,30 @@ Deno.serve(async (req) => {
             title: null,
             content: plain,
             gifQuery: null,
-            suggestPhoto: photoCount < 1,
+            suggestPhoto: false,
             suggestVideo: false,
           }
         }
       }
+      const bodyText = parsed?.content?.trim() ?? ''
+      const withoutTags = bodyText
+        .replace(/#[\w\u00C0-\u024F]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
       const leaked =
-        !!parsed?.content &&
-        (/you are sherpa writing/i.test(parsed.content) ||
-          /member notes\s*\/\s*topic:/i.test(parsed.content) ||
-          isGenericPostFallbackContent(parsed.content) ||
-          (prompt && parsed.content.trim() === prompt.trim()))
+        !!bodyText &&
+        (/you are sherpa writing/i.test(bodyText) ||
+          /member notes\s*\/\s*topic:/i.test(bodyText) ||
+          isGenericPostFallbackContent(bodyText) ||
+          (prompt && bodyText === prompt.trim()) ||
+          withoutTags.length < 120)
       if (parsed?.content && !leaked) {
-        return json({ ...parsed, usedFallback: false, product: 'community' })
+        return json({
+          title: parsed.title,
+          content: parsed.content,
+          usedFallback: false,
+          product: 'community',
+        })
       }
       console.error('post_draft failed', {
         geminiError: completion.error,

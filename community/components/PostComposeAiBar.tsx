@@ -11,12 +11,8 @@ import {
   localPostComposeSuggestions,
   type ComposeModeHint,
 } from '~/community/lib/post-compose-suggestions'
-import {
-  deriveGifQueryFromSeed,
-  mergeMemberHashtags,
-} from '~/community/lib/post-draft-complete'
+import { mergeMemberHashtags } from '~/community/lib/post-draft-complete'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { pickComposeGif } from '~/community/lib/giphy'
 import { fetchPublicProfile } from '~/community/lib/network'
 import { HorizontalScrollRow } from '~/components/layout'
 import { Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -28,33 +24,33 @@ type ComposeLink = { url: string; title?: string | null; description?: string | 
 export type PostComposeAiDraft = {
   content: string
   articleTitle?: string
-  gifUrl?: string
-  suggestPhoto?: boolean
-  suggestVideo?: boolean
 }
 
 type PostComposeAiBarProps = {
   mode: ComposeModeHint
   onApplyDraft: (draft: PostComposeAiDraft) => void
-  onPickPhoto?: () => void
-  onPickVideo?: () => void
   /** Current composer text used as AI seed when drafting. */
   seedPrompt?: string
   photoCount?: number
   videoCount?: number
-  hasGif?: boolean
   link?: ComposeLink | null
+}
+
+/** Reject drafts that are mostly hashtags / no real caption (not LinkedIn-quality). */
+function isHashtagHeavyDraft(content: string): boolean {
+  const withoutTags = content
+    .replace(/#[\w\u00C0-\u024F]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return withoutTags.length < 120
 }
 
 export function PostComposeAiBar({
   mode,
   onApplyDraft,
-  onPickPhoto,
-  onPickVideo,
   seedPrompt,
   photoCount = 0,
   videoCount = 0,
-  hasGif = false,
   link = null,
 }: PostComposeAiBarProps) {
   const communityUi = useCommunityUi()
@@ -63,25 +59,18 @@ export function PostComposeAiBar({
   const [loading, setLoading] = useState(false)
   const [chips, setChips] = useState<PostSuggestionChip[]>([])
   const [loadingChips, setLoadingChips] = useState(true)
-  const [mediaHints, setMediaHints] = useState<{ photo: boolean; video: boolean }>({
-    photo: false,
-    video: false,
-  })
 
   const linkUrl = link?.url ?? ''
   const linkTitle = link?.title ?? ''
   const seed = seedPrompt?.trim() ?? ''
   const instructionMode = isComposeInstruction(seed)
   const canDraft = Boolean(seed) || photoCount > 0 || videoCount > 0 || Boolean(linkUrl)
-  const hasMedia = photoCount > 0 || videoCount > 0 || hasGif
 
   useEffect(() => {
     let cancelled = false
     const timer = setTimeout(() => {
       setLoadingChips(true)
       void (async () => {
-        // While the member is still writing an instruction, show expansion actions
-        // instead of SHERPA chips that often echo the prompt.
         if (isComposeInstruction(seed)) {
           if (!cancelled) {
             setChips(
@@ -148,61 +137,32 @@ export function PostComposeAiBar({
   }, [mode, user?.id, seed, photoCount, videoCount, linkUrl, linkTitle])
 
   function applyGeneratedDraft(
-    result: {
-      content: string
-      title: string | null
-      gifQuery?: string | null
-      suggestPhoto?: boolean
-      suggestVideo?: boolean
-    },
+    result: { content: string; title: string | null },
     promptSeed: string,
   ) {
     const returned = mergeMemberHashtags(result.content.trim(), promptSeed)
-    // draftPostWithAi already rejected thin/template/leak replies — only block clear leaks here.
     const unusable =
-      !returned || isLeakedComposePrompt(returned) || isGenericFallbackDraft(returned)
+      !returned ||
+      isLeakedComposePrompt(returned) ||
+      isGenericFallbackDraft(returned) ||
+      isHashtagHeavyDraft(returned)
 
     if (unusable) {
       toast.show('Couldn’t draft this post', {
         tone: 'error',
-        message: 'SHERPA couldn’t expand your notes. Tap Write with SHERPA to try again.',
+        message: 'SHERPA couldn’t write a full post. Tap Write with SHERPA to try again.',
       })
       return
     }
 
-    const suggestPhoto = Boolean(result.suggestPhoto) && photoCount < 1
-    const suggestVideo = Boolean(result.suggestVideo) && videoCount < 1
-    setMediaHints({ photo: suggestPhoto, video: suggestVideo })
-
-    // Apply text immediately — never wait on Giphy before the caption appears.
     onApplyDraft({
       content: returned,
       articleTitle: result.title ?? undefined,
-      suggestPhoto,
-      suggestVideo,
     })
     toast.show('Draft ready', {
       tone: 'success',
-      message: 'SHERPA wrote a complete post from your notes.',
+      message: 'SHERPA rewrote your notes into a ready-to-post update.',
     })
-
-    if (!hasMedia) {
-      const query = (result.gifQuery?.trim() || deriveGifQueryFromSeed(promptSeed)).slice(0, 80)
-      void pickComposeGif(query)
-        .then((gif) => {
-          if (!gif?.url) return
-          onApplyDraft({
-            content: returned,
-            articleTitle: result.title ?? undefined,
-            gifUrl: gif.url,
-            suggestPhoto,
-            suggestVideo,
-          })
-        })
-        .catch(() => {
-          // Caption already applied; GIF is optional.
-        })
-    }
   }
 
   async function generateDraft(seedOverride?: string) {
@@ -211,7 +171,6 @@ export function PostComposeAiBar({
 
     setLoading(true)
     try {
-      // Send ONLY the member topic — never the system/instruction block (SHERPA was echoing it).
       const prompt = buildPostDraftPrompt({
         seed: promptSeed,
         photoCount,
@@ -230,7 +189,7 @@ export function PostComposeAiBar({
       const message =
         err instanceof Error && err.message.trim()
           ? err.message.trim()
-          : 'SHERPA couldn’t expand your notes. Tap Write with SHERPA to try again.'
+          : 'SHERPA couldn’t write a full post. Tap Write with SHERPA to try again.'
       toast.show('Couldn’t draft this post', {
         tone: 'error',
         message,
@@ -241,7 +200,6 @@ export function PostComposeAiBar({
   }
 
   function applyChip(chip: PostSuggestionChip) {
-    // Instruction chips and thin drafts must expand — never paste the prompt back.
     if (
       instructionMode ||
       isComposeInstruction(chip.draft) ||
@@ -253,9 +211,6 @@ export function PostComposeAiBar({
     }
     onApplyDraft({ content: chip.draft })
   }
-
-  const showMediaActions =
-    !loading && (mediaHints.photo || mediaHints.video) && (onPickPhoto || onPickVideo)
 
   return (
     <YStack gap={8} width="100%">
@@ -288,50 +243,8 @@ export function PostComposeAiBar({
         <XStack paddingVertical={4}>
           <Spinner size="small" color={communityUi.brand} />
         </XStack>
-      ) : chips.length > 0 || showMediaActions ? (
+      ) : chips.length > 0 ? (
         <HorizontalScrollRow gap={8}>
-          {showMediaActions && mediaHints.photo && onPickPhoto ? (
-            <XStack
-              key="add-photo"
-              paddingHorizontal={12}
-              paddingVertical={8}
-              borderRadius={999}
-              borderWidth={1}
-              borderColor={communityUi.brand}
-              backgroundColor={communityUi.cardBg}
-              cursor="pointer"
-              hoverStyle={{ backgroundColor: communityUi.hoverBg }}
-              pressStyle={{ opacity: 0.85 }}
-              onPress={onPickPhoto}
-              accessibilityRole="button"
-              accessibilityLabel="Add photo"
-            >
-              <Text fontSize={12} fontWeight="600" color={communityUi.brand} numberOfLines={1}>
-                Add photo
-              </Text>
-            </XStack>
-          ) : null}
-          {showMediaActions && mediaHints.video && onPickVideo ? (
-            <XStack
-              key="add-video"
-              paddingHorizontal={12}
-              paddingVertical={8}
-              borderRadius={999}
-              borderWidth={1}
-              borderColor={communityUi.brand}
-              backgroundColor={communityUi.cardBg}
-              cursor="pointer"
-              hoverStyle={{ backgroundColor: communityUi.hoverBg }}
-              pressStyle={{ opacity: 0.85 }}
-              onPress={onPickVideo}
-              accessibilityRole="button"
-              accessibilityLabel="Add video"
-            >
-              <Text fontSize={12} fontWeight="600" color={communityUi.brand} numberOfLines={1}>
-                Add video
-              </Text>
-            </XStack>
-          ) : null}
           {chips.map((chip) => (
             <XStack
               key={chip.label}

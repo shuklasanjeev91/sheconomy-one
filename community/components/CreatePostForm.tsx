@@ -1170,7 +1170,6 @@ export function CreatePostForm({
             seedPrompt={content || articleTitle || celebrationTitle || eventTitle}
             photoCount={photos.length}
             videoCount={videos.length}
-            hasGif={Boolean(imageUrl.trim()) && isGifUrl(imageUrl)}
             link={
               linkPreview
                 ? {
@@ -1180,21 +1179,12 @@ export function CreatePostForm({
                   }
                 : null
             }
-            onPickPhoto={() => {
-              void pickPhotos()
-            }}
-            onPickVideo={() => {
-              void pickPostVideos()
-            }}
             onApplyDraft={(draft) => {
               const next = draft.content.slice(0, contentLimit + 50)
               form.fields.content.onChange(next)
               encodedContentRef.current = next
               if (draft.articleTitle) {
                 setArticleTitle(draft.articleTitle.slice(0, 160))
-              }
-              if (draft.gifUrl && photos.length < 1 && videos.length < 1) {
-                form.fields.imageUrl.setValue(draft.gifUrl)
               }
             }}
           />

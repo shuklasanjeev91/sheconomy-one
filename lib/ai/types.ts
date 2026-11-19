@@ -119,12 +119,6 @@ export type PostDraftResult = {
   title: string | null
   content: string
   usedFallback: boolean
-  /** Short Giphy search query for an optional auto-attached GIF. */
-  gifQuery?: string | null
-  /** Hint that a real photo would strengthen the post. */
-  suggestPhoto?: boolean
-  /** Hint that a short video would strengthen the post. */
-  suggestVideo?: boolean
 }
 
 export type PostSuggestionChip = {
