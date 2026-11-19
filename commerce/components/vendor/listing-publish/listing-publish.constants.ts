@@ -48,7 +48,7 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
     id: LISTING_PUBLISH_STEP_IDS.PRICING,
     label: 'Offer',
     headline: 'Offer',
-    subtitle: 'Simple or Variable — then set price, tax, quantity, and SKU.',
+    subtitle: 'Simple or Variant — then set price, tax, quantity, and SKU.',
     iconName: 'indian-rupee',
   },
   {
@@ -102,7 +102,7 @@ export const LISTING_PUBLISH_IMAGE_HINTS = {
   ACCEPTED_FORMATS_LABEL: 'JPG, PNG, WebP',
 } as const
 
-/** Amazon-style catalog structure: Simple (single SKU) or Variable (parent + children). */
+/** Catalog structure: Simple (single SKU) or Variant/Variable (parent + children). */
 export const PRODUCT_STRUCTURES = {
   SIMPLE: 'simple',
   VARIABLE: 'variable',
@@ -121,8 +121,8 @@ export const PRODUCT_STRUCTURE_OPTIONS = [
   },
   {
     value: PRODUCT_STRUCTURES.VARIABLE,
-    label: 'Variable',
-    description: 'Size / color options with per-variation price & stock.',
+    label: 'Variant',
+    description: 'Size / color options — each variation has its own price & stock.',
   },
 ] as const
 

@@ -94,12 +94,10 @@ export function resolveProductStructure(formData: {
 }): ProductStructure {
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
   const raw = String(meta[LISTING_METADATA_KEYS.PRODUCT_STRUCTURE] ?? '').trim().toLowerCase()
-  if (
-    raw === PRODUCT_STRUCTURES.SIMPLE ||
-    raw === PRODUCT_STRUCTURES.VARIABLE ||
-    raw === PRODUCT_STRUCTURES.GROUPED
-  ) {
-    return raw
+  // Catalog is Simple or Variable only — legacy "grouped" opens as Simple.
+  if (raw === PRODUCT_STRUCTURES.VARIABLE) return PRODUCT_STRUCTURES.VARIABLE
+  if (raw === PRODUCT_STRUCTURES.SIMPLE || raw === PRODUCT_STRUCTURES.GROUPED) {
+    return PRODUCT_STRUCTURES.SIMPLE
   }
   const hasChildren =
     Array.isArray(formData.variations) &&
@@ -350,7 +348,7 @@ export function validatePublishStep(
     }
     case LISTING_PUBLISH_STEP_IDS.PRICING: {
       const structure = resolveProductStructure(formData)
-      if (structure === PRODUCT_STRUCTURES.SIMPLE || structure === PRODUCT_STRUCTURES.GROUPED) {
+      if (structure === PRODUCT_STRUCTURES.SIMPLE) {
         const price = validateListingField('price', formData.price)
         if (!price.isValid && price.error) errors.price = price.error
         if (

@@ -49,22 +49,16 @@ export function ListingEditorStatusRail({
       ? range.min === range.max
         ? `${currencySymbol}${range.min.toFixed(0)}`
         : `${currencySymbol}${range.min.toFixed(0)} – ${currencySymbol}${range.max.toFixed(0)}`
-      : structure === PRODUCT_STRUCTURES.GROUPED
-        ? 'Grouped'
-        : formData.price
-          ? `${currencySymbol}${Number(formData.price).toFixed(0)}`
-          : 'No price'
+      : formData.price
+        ? `${currencySymbol}${Number(formData.price).toFixed(0)}`
+        : 'No price'
 
   const savedLabel = lastSavedAt
     ? `${LISTING_PUBLISH_COPY.LAST_SAVED_PREFIX} ${formatRelativeLastSaved(lastSavedAt)}`
     : LISTING_PUBLISH_COPY.LAST_SAVED_NEVER
 
   const structureLabel =
-    structure === PRODUCT_STRUCTURES.VARIABLE
-      ? 'Variable'
-      : structure === PRODUCT_STRUCTURES.GROUPED
-        ? 'Grouped'
-        : 'Simple'
+    structure === PRODUCT_STRUCTURES.VARIABLE ? 'Variant' : 'Simple'
 
   return (
     <YStack

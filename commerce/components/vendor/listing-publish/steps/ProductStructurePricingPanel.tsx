@@ -335,7 +335,7 @@ export function ProductStructurePricingPanel({
       {showTypeAndPrice ? (
       <ListingPublishCard ui={ui} title="Product type">
         <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-          Amazon-style — Simple (one SKU) or Variable (size/color options).
+          Simple (one SKU) or Variant (size/color options with their own prices).
         </Text>
         <XStack gap="$2" flexWrap="wrap">
           {structureOptions.map((option) => {
@@ -486,7 +486,7 @@ export function ProductStructurePricingPanel({
       ) : null}
 
       {showTypeAndPrice && isVariable ? (
-        <ListingPublishCard ui={ui} title="Variable offer">
+        <ListingPublishCard ui={ui} title="Variant offer">
           <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
             Set each option’s price and stock on the Variations tab.
           </Text>
