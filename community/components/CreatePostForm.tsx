@@ -1048,14 +1048,12 @@ export function CreatePostForm({
     postContext === 'company' ? companies.find((company) => company.id === companyId) : null
   const selectedGroup =
     postContext === 'group' ? groups.find((group) => group.id === groupId) : null
-  const postAsLabel =
-    selectedCompany?.name ||
-    selectedGroup?.title ||
-    'You'
   const hasPostAsOptions = companies.length > 0 || groups.length > 0
-  const audienceTriggerLabel = hasPostAsOptions
-    ? `${audience.label} · ${postAsLabel}`
-    : audience.label
+  // Only append page/group name — never "You" (name already shows above the chip).
+  const audienceTriggerLabel =
+    selectedCompany?.name || selectedGroup?.title
+      ? `${audience.label} · ${selectedCompany?.name || selectedGroup?.title}`
+      : audience.label
   const Container = embedded ? YStack : CommunityCard
 
   // The six toolbar icons plus the Post button are wider than a narrow phone
@@ -2022,8 +2020,8 @@ export function CreatePostForm({
               </Text>
               <PostAsOptionRow
                 icon={Icons.User}
-                title="You"
-                description="Post from your personal profile"
+                title={displayName}
+                description="Personal profile"
                 selected={postContext === 'profile'}
                 onPress={() => {
                   setPostContext('profile')
