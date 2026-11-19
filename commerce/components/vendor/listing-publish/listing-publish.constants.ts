@@ -34,19 +34,19 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
     iconName: 'info',
   },
   {
+    id: LISTING_PUBLISH_STEP_IDS.PRICING,
+    label: 'Pricing',
+    headline: 'Product type & pricing',
+    subtitle:
+      'Choose Simple, Variable, or Grouped — then set the offer price or per-SKU prices.',
+    iconName: 'indian-rupee',
+  },
+  {
     id: LISTING_PUBLISH_STEP_IDS.DETAILS,
     label: 'Details',
     headline: 'Product details',
-    subtitle:
-      'Choose Simple, Variable, or Grouped — then fill identity, options, and inventory.',
+    subtitle: 'Identity, materials, shipping, and inventory for this listing.',
     iconName: 'layers',
-  },
-  {
-    id: LISTING_PUBLISH_STEP_IDS.PRICING,
-    label: 'Pricing',
-    headline: 'Pricing',
-    subtitle: 'Offer price for simple products. Variable SKUs are priced under Details.',
-    iconName: 'indian-rupee',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
@@ -98,17 +98,17 @@ export const PRODUCT_STRUCTURE_OPTIONS = [
   {
     value: PRODUCT_STRUCTURES.SIMPLE,
     label: 'Simple product',
-    description: 'One SKU — price and stock on the Pricing step.',
+    description: 'One SKU with a single selling price and stock.',
   },
   {
     value: PRODUCT_STRUCTURES.VARIABLE,
     label: 'Variable product',
-    description: 'Options like size/color — each variation has its own price & stock.',
+    description: 'Size/color options — each variation has its own price & stock.',
   },
   {
     value: PRODUCT_STRUCTURES.GROUPED,
     label: 'Grouped product',
-    description: 'A collection of related products sold together (no own price).',
+    description: 'A collection of related products (no price on the group).',
   },
 ] as const
 

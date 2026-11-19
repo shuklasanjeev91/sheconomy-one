@@ -492,7 +492,8 @@ function VendorListingPublishContent() {
         })
         return
       }
-      runStepValidation(activeStep)
+      // Allow free movement across unlocked tabs; validate in place without blocking.
+      void runStepValidation(activeStep)
       setActiveStep(step)
     },
     [activeStep, furthestStepIndex, runStepValidation, stepConfig.label, stepIndex, toast],
@@ -843,9 +844,9 @@ function VendorListingPublishContent() {
               errors={displayErrors}
               currencySymbol={currencySymbol}
               isDesktop={isDesktop}
+              sellerCountryCode={sellerCountryCode}
               onUpdate={updateField}
               onUpdateMetadata={updateMetadata}
-              onGoToDetails={() => setActiveStep(LISTING_PUBLISH_STEP_IDS.DETAILS)}
             />
           ) : null}
 

@@ -332,29 +332,6 @@ export function validatePublishStep(
           if (formData.stock === '' || formData.stock === null || formData.stock === undefined) {
             errors.stock = 'Enter quantity in stock for this product.'
           }
-        } else if (structure === PRODUCT_STRUCTURES.VARIABLE) {
-          const children = (formData.variations ?? []).filter((row) =>
-            String(row.variation_value ?? '').trim(),
-          )
-          if (!children.length) {
-            errors.variations = 'Add at least one variation SKU, or switch to Simple product.'
-          } else {
-            const missingPrice = children.some((row) => {
-              const n = Number(row.price)
-              return !Number.isFinite(n) || n < 0
-            })
-            if (missingPrice) {
-              errors.variations = 'Set a price on every variation SKU.'
-            }
-          }
-        } else if (structure === PRODUCT_STRUCTURES.GROUPED) {
-          const ids = readMetadataStringList(
-            (formData.listing_metadata ?? {}) as Record<string, unknown>,
-            LISTING_METADATA_KEYS.GROUPED_LISTING_IDS,
-          )
-          if (ids.length < 2) {
-            errors.grouped = 'Add at least two products to this grouped listing.'
-          }
         }
         if (!formData.materials?.length) {
           warnings.push('Add materials when relevant (fabric, metal, etc.) to help shoppers.')
@@ -378,10 +355,32 @@ export function validatePublishStep(
     }
     case LISTING_PUBLISH_STEP_IDS.PRICING: {
       const structure = resolveProductStructure(formData)
-      // Variable / grouped: price lives on child SKUs or linked products — not here.
       if (structure === PRODUCT_STRUCTURES.SIMPLE) {
         const price = validateListingField('price', formData.price)
         if (!price.isValid && price.error) errors.price = price.error
+      } else if (structure === PRODUCT_STRUCTURES.VARIABLE) {
+        const children = (formData.variations ?? []).filter((row) =>
+          String(row.variation_value ?? '').trim(),
+        )
+        if (!children.length) {
+          errors.variations = 'Add at least one variation SKU, or switch to Simple product.'
+        } else {
+          const missingPrice = children.some((row) => {
+            const n = Number(row.price)
+            return !Number.isFinite(n) || n < 0
+          })
+          if (missingPrice) {
+            errors.variations = 'Set a price on every variation SKU.'
+          }
+        }
+      } else if (structure === PRODUCT_STRUCTURES.GROUPED) {
+        const ids = readMetadataStringList(
+          (formData.listing_metadata ?? {}) as Record<string, unknown>,
+          LISTING_METADATA_KEYS.GROUPED_LISTING_IDS,
+        )
+        if (ids.length < 2) {
+          errors.grouped = 'Add at least two products to this grouped listing.'
+        }
       }
       break
     }
@@ -465,8 +464,8 @@ const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
   listing_type: LISTING_PUBLISH_STEP_IDS.BASIC,
   tags: LISTING_PUBLISH_STEP_IDS.BASIC,
   materials: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  variations: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  grouped: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  variations: LISTING_PUBLISH_STEP_IDS.PRICING,
+  grouped: LISTING_PUBLISH_STEP_IDS.PRICING,
   stock: LISTING_PUBLISH_STEP_IDS.DETAILS,
   quantity: LISTING_PUBLISH_STEP_IDS.DETAILS,
   weight: LISTING_PUBLISH_STEP_IDS.DETAILS,
@@ -486,7 +485,7 @@ const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
   price: LISTING_PUBLISH_STEP_IDS.PRICING,
   mrp: LISTING_PUBLISH_STEP_IDS.PRICING,
   tax_percent: LISTING_PUBLISH_STEP_IDS.PRICING,
-  sku: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  sku: LISTING_PUBLISH_STEP_IDS.PRICING,
   categories: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
   images: LISTING_PUBLISH_STEP_IDS.IMAGES,
   slug: LISTING_PUBLISH_STEP_IDS.SEO,

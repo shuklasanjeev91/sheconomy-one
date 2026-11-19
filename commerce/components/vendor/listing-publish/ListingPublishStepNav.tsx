@@ -78,7 +78,10 @@ export function ListingPublishStepNav({
             cursor={locked ? 'not-allowed' : 'pointer'}
             opacity={active ? 1 : locked ? 0.4 : 0.72}
             flexShrink={spread ? 1 : 0}
-            onPress={() => onSelect(step.id)}
+            pointerEvents={locked ? 'none' : 'auto'}
+            onPress={() => {
+              if (!locked) onSelect(step.id)
+            }}
             hoverStyle={{ opacity: locked ? 0.4 : 1 }}
           >
             {done && !active ? (
