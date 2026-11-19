@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Platform } from 'react-native'
 
 import { ScrollView, YStack } from '~/components/ui'
@@ -17,7 +17,14 @@ type StickyRailProps = {
    * `viewport` — fill the column height; scroll inside the rail (community sidebars).
    */
   pin?: StickyRailPin
-} & GetProps<typeof YStack>
+  width?: number | string
+  maxWidth?: number | string
+} & Omit<GetProps<typeof YStack>, 'width' | 'maxWidth'>
+
+function cssSize(value: number | string | undefined): string | number | undefined {
+  if (value == null) return undefined
+  return typeof value === 'number' ? value : value
+}
 
 /** Sticky side rail / order summary column — reliable on web document scroll. */
 export function StickyRail({
@@ -25,6 +32,8 @@ export function StickyRail({
   scrollable = false,
   pin = 'document',
   style,
+  width,
+  maxWidth,
   ...props
 }: StickyRailProps) {
   const { isDesktopWeb, isDesktop } = useAppLayout()
@@ -43,6 +52,8 @@ export function StickyRail({
         height="100%"
         maxHeight="100%"
         overflow="hidden"
+        width={width as never}
+        maxWidth={maxWidth as never}
         style={style as object}
         {...rest}
       >
@@ -69,6 +80,8 @@ export function StickyRail({
         maxHeight="100%"
         minHeight={0}
         overflow="hidden"
+        width={width as never}
+        maxWidth={maxWidth as never}
         style={
           {
             height: '100%',
@@ -94,27 +107,45 @@ export function StickyRail({
   // so `position: sticky` pins against that container with a small offset.
   const stickyActive = Platform.OS === 'web' && isDesktop
   const stickyTop = isDesktopWeb ? STICKY_RAIL_TOP : 16
-  const stickyStyle = stickyActive
-    ? stickyRailStyle({ scrollable, top: stickyTop })
-    : undefined
+
+  // Native div — Tamagui/Yoga can drop or rewrite `position: sticky` on YStack.
+  if (stickyActive) {
+    const stickyStyle: CSSProperties = {
+      position: 'sticky',
+      top: stickyTop,
+      alignSelf: 'flex-start',
+      zIndex: 5,
+      flexShrink: 0,
+      width: cssSize(width) ?? '100%',
+      maxWidth: cssSize(maxWidth) ?? '100%',
+      ...(scrollable
+        ? {
+            maxHeight: `calc(100vh - ${stickyTop + 16}px)`,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+          }
+        : null),
+      ...(style as CSSProperties),
+    }
+
+    return (
+      <div data-sticky-rail="document" style={stickyStyle}>
+        {children}
+      </div>
+    )
+  }
+
+  const stickyStyle = stickyRailStyle({ scrollable, top: stickyTop })
 
   return (
     <YStack
       flexShrink={0}
       alignSelf="flex-start"
-      zIndex={stickyActive ? 5 : undefined}
-      style={
-        stickyActive || style
-          ? {
-              ...(stickyStyle ?? {}),
-              // Prefer CSS sticky via style — Tamagui `position` can drop `sticky` on web.
-              ...(stickyActive
-                ? ({ position: 'sticky', top: stickyTop, zIndex: 5 } as const)
-                : null),
-              ...(style as object),
-            }
-          : undefined
-      }
+      width={width as never}
+      maxWidth={maxWidth as never}
+      style={style ? { ...stickyStyle, ...(style as object) } : stickyStyle}
       {...props}
     >
       {children}

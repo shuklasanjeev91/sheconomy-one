@@ -1765,7 +1765,7 @@ export function CheckoutScreen() {
             </YStack>
 
             {hasSideRails ? (
-              <StickyRail width={SUMMARY_WIDTH} maxWidth="100%">
+              <StickyRail width={SUMMARY_WIDTH} maxWidth="100%" scrollable>
                 {orderSummary}
               </StickyRail>
             ) : null}

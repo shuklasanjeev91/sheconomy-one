@@ -48,6 +48,10 @@ export function MarketplacePage({
       paddingHorizontal={flush ? (hasSideRails ? 0 : '$3') : undefined}
       borderRadius={flush || !hasSideRails ? 0 : 12}
       paddingBottom={paddingBottom}
+      // Do not clip sticky order-summary rails on desktop web.
+      style={
+        Platform.OS === 'web' && hasSideRails ? ({ overflow: 'visible' } as const) : undefined
+      }
     >
       {children}
     </YStack>

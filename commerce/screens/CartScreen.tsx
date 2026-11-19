@@ -648,6 +648,8 @@ export function CartScreen() {
                 flexDirection="row"
                 alignItems="flex-start"
                 gap="$5"
+                // Keep sticky summary visible while the items column scrolls.
+                style={{ overflow: 'visible' }}
               >
                 <YStack flex={1} minWidth={0} width="100%" gap="$4">
                   {cartItemsPanel}
@@ -663,7 +665,7 @@ export function CartScreen() {
                   ) : null}
                   {savedForLaterShelf}
                 </YStack>
-                <StickyRail width={SUMMARY_WIDTH} maxWidth="100%">
+                <StickyRail width={SUMMARY_WIDTH} maxWidth="100%" scrollable>
                   {desktopBuyBox}
                 </StickyRail>
               </XStack>
