@@ -704,11 +704,12 @@ export function DetailsStep({
 
           {!variationsEnabled ? (
             <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-              Single product — set quantity under Shipping & packaging. You can add options anytime.
+              Single product — set quantity under Shipping & inventory. You can add options anytime.
             </Text>
           ) : null}
 
           {variationsEnabled ? (
+          <>
           <YStack gap="$3">
             {axes.map((axis, axisIndex) => (
               <YStack
@@ -1041,6 +1042,7 @@ export function DetailsStep({
               )
             })}
           </YStack>
+          </>
           ) : null}
         </ListingPublishCard>
       )}
