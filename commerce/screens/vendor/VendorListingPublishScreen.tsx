@@ -58,7 +58,6 @@ import {
   getListingPublishSteps,
   LISTING_PUBLISH_COPY,
   LISTING_PUBLISH_STEP_IDS,
-  PRODUCT_STRUCTURES,
   type ListingPublishStepId,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import {
@@ -475,16 +474,6 @@ function VendorListingPublishContent() {
   const furthestStepIndex = visibleSteps.length - 1
   const isLastStep = stepIndex >= visibleSteps.length - 1
 
-  // If product type drops Variants, leave that tab.
-  useEffect(() => {
-    if (
-      activeStep === LISTING_PUBLISH_STEP_IDS.VARIANTS &&
-      productStructure === PRODUCT_STRUCTURES.SIMPLE
-    ) {
-      setActiveStep(LISTING_PUBLISH_STEP_IDS.PRICING)
-    }
-  }, [activeStep, productStructure])
-
   const goToStep = useCallback((step: ListingPublishStepId) => {
     setActiveStep(step)
   }, [])
@@ -818,25 +807,6 @@ function VendorListingPublishContent() {
                 />
               ) : null}
 
-              {activeStep === LISTING_PUBLISH_STEP_IDS.PRICING ? (
-                <PricingStep
-                  ui={ui}
-                  formData={formData}
-                  errors={displayErrors}
-                  currencySymbol={currencySymbol}
-                  isDesktop={isDesktop}
-                  sellerCountryCode={sellerCountryCode}
-                  panel="type-and-price"
-                  onUpdate={updateField}
-                  onUpdateMetadata={updateMetadata}
-                  onStructureChange={(next) => {
-                    if (next === PRODUCT_STRUCTURES.VARIABLE) {
-                      setActiveStep(LISTING_PUBLISH_STEP_IDS.VARIANTS)
-                    }
-                  }}
-                />
-              ) : null}
-
               {activeStep === LISTING_PUBLISH_STEP_IDS.VARIANTS ? (
                 <PricingStep
                   ui={ui}
@@ -846,6 +816,20 @@ function VendorListingPublishContent() {
                   isDesktop={isDesktop}
                   sellerCountryCode={sellerCountryCode}
                   panel="variants"
+                  onUpdate={updateField}
+                  onUpdateMetadata={updateMetadata}
+                />
+              ) : null}
+
+              {activeStep === LISTING_PUBLISH_STEP_IDS.PRICING ? (
+                <PricingStep
+                  ui={ui}
+                  formData={formData}
+                  errors={displayErrors}
+                  currencySymbol={currencySymbol}
+                  isDesktop={isDesktop}
+                  sellerCountryCode={sellerCountryCode}
+                  panel="type-and-price"
                   onUpdate={updateField}
                   onUpdateMetadata={updateMetadata}
                 />

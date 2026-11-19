@@ -367,7 +367,8 @@ export function validatePublishStep(
           String(row.variation_value ?? '').trim(),
         )
         if (!children.length) {
-          errors.variations = 'Add at least one variation SKU, or switch to Simple product.'
+          errors.variations =
+            'Add at least one variation SKU, or answer No to “Does this product have variations?”.'
         } else {
           const missingPrice = children.some((row) => {
             const n = Number(row.price)
@@ -435,7 +436,8 @@ export function validateFullPublishForm(formData: ListingFormData): StepValidati
       String(row.variation_value ?? '').trim(),
     )
     if (!children.length) {
-      errors.variations = 'Add at least one variation SKU, or switch to Simple product.'
+      errors.variations =
+        'Add at least one variation SKU, or answer No to “Does this product have variations?”.'
     }
   }
   // Materials table removed from Amazon-style form — ignore legacy material errors.

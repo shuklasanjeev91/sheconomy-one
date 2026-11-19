@@ -31,7 +31,11 @@ import {
   parseListingProductInfo,
   type ListingProductInfo,
 } from '~/commerce/lib/listing-product-info'
-import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
+import {
+  ListingFormRow,
+  ListingPublishCard,
+  ListingPublishFieldError,
+} from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
 import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import {
   patchListingProductInfo,
@@ -160,33 +164,32 @@ export function DetailsStep({
       ) : null}
 
       {showDetails && !isDigital ? (
-        <ListingPublishCard ui={ui} title="Product information">
-          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-            Product details: brand, manufacturer, country of origin, and key features
-            are required before publish. Shown on the product page under Product details.
-          </Text>
+        <ListingPublishCard ui={ui} title="Product details">
+          <ListingFormRow ui={ui} label="Brand" required error={errors.brand}>
+            <Input
+              value={readProductInfoString(formData.product_info, 'brand')}
+              onChangeText={(value) => updateProductInfo({ brand: value })}
+              placeholder="Your brand name"
+              invalid={!!errors.brand}
+            />
+          </ListingFormRow>
 
-          <XStack gap="$3" flexWrap="wrap">
-            <Field label="Brand" required flex={1} minWidth={160} error={errors.brand}>
-              <Input
-                value={readProductInfoString(formData.product_info, 'brand')}
-                onChangeText={(value) => updateProductInfo({ brand: value })}
-                placeholder="Your brand name"
-                invalid={!!errors.brand}
-              />
-            </Field>
-            <Field label="Generic name" required flex={1} minWidth={160} error={errors.generic_name}>
-              <Input
-                value={readProductInfoString(formData.product_info, 'generic_name')}
-                onChangeText={(value) => updateProductInfo({ genericName: value })}
-                placeholder="e.g. Handwoven cotton stole"
-                invalid={!!errors.generic_name}
-              />
-            </Field>
-          </XStack>
-          <ListingPublishFieldError ui={ui} message={errors.brand || errors.generic_name} />
+          <ListingFormRow ui={ui} label="Generic name" required error={errors.generic_name}>
+            <Input
+              value={readProductInfoString(formData.product_info, 'generic_name')}
+              onChangeText={(value) => updateProductInfo({ genericName: value })}
+              placeholder="e.g. Handwoven cotton stole"
+              invalid={!!errors.generic_name}
+            />
+          </ListingFormRow>
 
-          <Field label="Key features (one per line)" required error={errors.key_features}>
+          <ListingFormRow
+            ui={ui}
+            label="Key features"
+            required
+            hint="One bullet per line. Add at least 3."
+            error={errors.key_features}
+          >
             <TextArea
               minHeight={110}
               value={readProductInfoString(formData.product_info, 'key_features')}
@@ -196,23 +199,23 @@ export function DetailsStep({
               }
               invalid={!!errors.key_features}
             />
-          </Field>
-          <Text fontSize={11} color={ui.textMuted}>
-            Add at least 3 bullets. Buyers see these as product highlights.
-          </Text>
-          <ListingPublishFieldError ui={ui} message={errors.key_features} />
+          </ListingFormRow>
 
-          <Field label="Manufacturer name" required error={errors.manufacturer_name}>
+          <ListingFormRow ui={ui} label="Manufacturer" required error={errors.manufacturer_name}>
             <Input
               value={readProductInfoString(formData.product_info, 'manufacturer_name')}
               onChangeText={(value) => updateProductInfo({ manufacturerName: value })}
               placeholder="Legal manufacturer / maker name"
               invalid={!!errors.manufacturer_name}
             />
-          </Field>
-          <ListingPublishFieldError ui={ui} message={errors.manufacturer_name} />
+          </ListingFormRow>
 
-          <Field label="Manufacturer address" required error={errors.manufacturer_address}>
+          <ListingFormRow
+            ui={ui}
+            label="Manufacturer address"
+            required
+            error={errors.manufacturer_address}
+          >
             <TextArea
               minHeight={72}
               value={readProductInfoString(formData.product_info, 'manufacturer_address')}
@@ -220,113 +223,116 @@ export function DetailsStep({
               placeholder="Full manufacturing address"
               invalid={!!errors.manufacturer_address}
             />
-          </Field>
-          <ListingPublishFieldError ui={ui} message={errors.manufacturer_address} />
+          </ListingFormRow>
 
-          <GeoSelectField
-            label="Country of origin"
-            value={resolveCountryCode(
-              productInfo.countryOfOrigin ||
-                readMetadataString(meta, LISTING_METADATA_KEYS.COUNTRY_OF_ORIGIN),
-            )}
-            displayValue={
-              productInfo.countryOfOrigin ||
-              getCountryName(
-                resolveCountryCode(readMetadataString(meta, LISTING_METADATA_KEYS.COUNTRY_OF_ORIGIN)),
-              ) ||
-              undefined
-            }
-            placeholder="Select country"
-            options={countryOptions}
-            onChange={(code, option) => {
-              updateProductInfo({ countryOfOrigin: option.label || getCountryName(code) || code })
-            }}
-            sheetTitle="Select country of origin"
-            searchPlaceholder="Search countries"
-            showFlags
-            required
-          />
-          <ListingPublishFieldError ui={ui} message={errors.country_of_origin} />
+          <YStack gap="$1.5" width="100%">
+            <GeoSelectField
+              label="Country of origin"
+              value={resolveCountryCode(
+                productInfo.countryOfOrigin ||
+                  readMetadataString(meta, LISTING_METADATA_KEYS.COUNTRY_OF_ORIGIN),
+              )}
+              displayValue={
+                productInfo.countryOfOrigin ||
+                getCountryName(
+                  resolveCountryCode(
+                    readMetadataString(meta, LISTING_METADATA_KEYS.COUNTRY_OF_ORIGIN),
+                  ),
+                ) ||
+                undefined
+              }
+              placeholder="Select country"
+              options={countryOptions}
+              onChange={(code, option) => {
+                updateProductInfo({
+                  countryOfOrigin: option.label || getCountryName(code) || code,
+                })
+              }}
+              sheetTitle="Select country of origin"
+              searchPlaceholder="Search countries"
+              showFlags
+              required
+            />
+            <ListingPublishFieldError ui={ui} message={errors.country_of_origin} />
+          </YStack>
 
-          <XStack gap="$3" flexWrap="wrap">
-            <Field label="Manufactured on" flex={1} minWidth={160} error={errors.manufacturing_date}>
-              <Input
-                value={readProductInfoString(formData.product_info, 'manufacturing_date')}
-                onChangeText={(value) => updateProductInfo({ manufacturingDate: value })}
-                placeholder="YYYY-MM-DD"
-              />
-            </Field>
-            <Field label="Best before / Expiry" flex={1} minWidth={160} error={errors.expiry_date}>
-              <Input
-                value={readProductInfoString(formData.product_info, 'expiry_date')}
-                onChangeText={(value) => updateProductInfo({ expiryDate: value })}
-                placeholder="YYYY-MM-DD"
-                invalid={!!errors.expiry_date}
-              />
-            </Field>
-          </XStack>
-          <ListingPublishFieldError ui={ui} message={errors.expiry_date} />
+          <ListingFormRow ui={ui} label="Manufactured on" error={errors.manufacturing_date}>
+            <Input
+              value={readProductInfoString(formData.product_info, 'manufacturing_date')}
+              onChangeText={(value) => updateProductInfo({ manufacturingDate: value })}
+              placeholder="YYYY-MM-DD"
+            />
+          </ListingFormRow>
 
-          <XStack gap="$3" flexWrap="wrap">
-            <Field label="Shelf life" flex={1} minWidth={140}>
-              <Input
-                value={readProductInfoString(formData.product_info, 'shelf_life')}
-                onChangeText={(value) => updateProductInfo({ shelfLife: value })}
-                placeholder="e.g. 12 months from manufacture"
-              />
-            </Field>
-            <Field label="Net quantity" flex={1} minWidth={140}>
-              <Input
-                value={readProductInfoString(formData.product_info, 'net_quantity')}
-                onChangeText={(value) => updateProductInfo({ netQuantity: value })}
-                placeholder="e.g. 1 piece, 250 g"
-              />
-            </Field>
-            <Field label="HSN code" flex={1} minWidth={120}>
-              <Input
-                value={
-                  readProductInfoString(formData.product_info, 'hsn_code') ||
-                  readMetadataString(meta, LISTING_METADATA_KEYS.HS_CODE)
-                }
-                onChangeText={(value) => updateProductInfo({ hsnCode: value })}
-                placeholder="e.g. 6911"
-                keyboardType="numeric"
-              />
-            </Field>
-          </XStack>
+          <ListingFormRow ui={ui} label="Best before / Expiry" error={errors.expiry_date}>
+            <Input
+              value={readProductInfoString(formData.product_info, 'expiry_date')}
+              onChangeText={(value) => updateProductInfo({ expiryDate: value })}
+              placeholder="YYYY-MM-DD"
+              invalid={!!errors.expiry_date}
+            />
+          </ListingFormRow>
 
-          <XStack gap="$3" flexWrap="wrap">
-            <Field label="Model / item no." flex={1} minWidth={140}>
-              <Input
-                value={readProductInfoString(formData.product_info, 'model_number')}
-                onChangeText={(value) => updateProductInfo({ modelNumber: value })}
-                placeholder="Optional style code"
-              />
-            </Field>
-            <Field label="Warranty" flex={1} minWidth={140}>
-              <Input
-                value={readProductInfoString(formData.product_info, 'warranty')}
-                onChangeText={(value) => updateProductInfo({ warranty: value })}
-                placeholder="e.g. 6 months against defects"
-              />
-            </Field>
-          </XStack>
+          <ListingFormRow ui={ui} label="Shelf life">
+            <Input
+              value={readProductInfoString(formData.product_info, 'shelf_life')}
+              onChangeText={(value) => updateProductInfo({ shelfLife: value })}
+              placeholder="e.g. 12 months from manufacture"
+            />
+          </ListingFormRow>
 
-          <Field label="Material / composition">
+          <ListingFormRow ui={ui} label="Net quantity">
+            <Input
+              value={readProductInfoString(formData.product_info, 'net_quantity')}
+              onChangeText={(value) => updateProductInfo({ netQuantity: value })}
+              placeholder="e.g. 1 piece, 250 g"
+            />
+          </ListingFormRow>
+
+          <ListingFormRow ui={ui} label="HSN code">
+            <Input
+              value={
+                readProductInfoString(formData.product_info, 'hsn_code') ||
+                readMetadataString(meta, LISTING_METADATA_KEYS.HS_CODE)
+              }
+              onChangeText={(value) => updateProductInfo({ hsnCode: value })}
+              placeholder="e.g. 6911"
+              keyboardType="numeric"
+            />
+          </ListingFormRow>
+
+          <ListingFormRow ui={ui} label="Model / item no.">
+            <Input
+              value={readProductInfoString(formData.product_info, 'model_number')}
+              onChangeText={(value) => updateProductInfo({ modelNumber: value })}
+              placeholder="Optional style code"
+            />
+          </ListingFormRow>
+
+          <ListingFormRow ui={ui} label="Warranty">
+            <Input
+              value={readProductInfoString(formData.product_info, 'warranty')}
+              onChangeText={(value) => updateProductInfo({ warranty: value })}
+              placeholder="e.g. 6 months against defects"
+            />
+          </ListingFormRow>
+
+          <ListingFormRow ui={ui} label="Material / composition">
             <Input
               value={readProductInfoString(formData.product_info, 'material_composition')}
               onChangeText={(value) => updateProductInfo({ materialComposition: value })}
               placeholder="e.g. 100% cotton, ceramic, brass"
             />
-          </Field>
-          <Field label="Care instructions">
+          </ListingFormRow>
+
+          <ListingFormRow ui={ui} label="Care instructions">
             <TextArea
               minHeight={72}
               value={readProductInfoString(formData.product_info, 'care_instructions')}
               onChangeText={(value) => updateProductInfo({ careInstructions: value })}
               placeholder="Wash, storage, and handling notes"
             />
-          </Field>
+          </ListingFormRow>
 
           <Text
             fontSize={12}
@@ -339,25 +345,25 @@ export function DetailsStep({
           </Text>
           {showPackerImporter ? (
             <YStack gap="$3">
-              <Field label="Packer name">
+              <ListingFormRow ui={ui} label="Packer name">
                 <Input
                   value={readProductInfoString(formData.product_info, 'packer_name')}
                   onChangeText={(value) => updateProductInfo({ packerName: value })}
                 />
-              </Field>
-              <Field label="Packer address">
+              </ListingFormRow>
+              <ListingFormRow ui={ui} label="Packer address">
                 <TextArea
                   minHeight={64}
                   value={readProductInfoString(formData.product_info, 'packer_address')}
                   onChangeText={(value) => updateProductInfo({ packerAddress: value })}
                 />
-              </Field>
-              <Field label="Importer name">
+              </ListingFormRow>
+              <ListingFormRow ui={ui} label="Importer name">
                 <Input
                   value={readProductInfoString(formData.product_info, 'importer_name')}
                   onChangeText={(value) => updateProductInfo({ importerName: value })}
                 />
-              </Field>
+              </ListingFormRow>
             </YStack>
           ) : null}
         </ListingPublishCard>
@@ -420,24 +426,23 @@ export function DetailsStep({
 
       {showShipping && !isDigital ? (
         <ListingPublishCard ui={ui} title="Package">
-          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-            Weight and dimensions for shipping. Quantity lives on the Offer tab (or per variation).
-          </Text>
-          <Field label="Weight (grams)">
+          <ListingFormRow ui={ui} label="Weight (grams)">
             <Input
               value={formData.weight != null ? String(formData.weight) : ''}
               onChangeText={(value) => onUpdate('weight', value)}
               keyboardType="numeric"
             />
-          </Field>
-          <Field label="Package Dimensions (L × W × H cm)">
-            <XStack gap="$2" flexWrap="wrap">
+          </ListingFormRow>
+          <ListingFormRow ui={ui} label="Dimensions (L × W × H cm)">
+            <XStack gap="$2" flexWrap="wrap" width="100%">
               <Input
                 flex={1}
                 minWidth={80}
                 placeholder="Length"
                 value={readMetadataString(meta, LISTING_METADATA_KEYS.PACKAGE_LENGTH_CM)}
-                onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_LENGTH_CM, value)}
+                onChangeText={(value) =>
+                  onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_LENGTH_CM, value)
+                }
                 keyboardType="numeric"
               />
               <Input
@@ -445,7 +450,9 @@ export function DetailsStep({
                 minWidth={80}
                 placeholder="Width"
                 value={readMetadataString(meta, LISTING_METADATA_KEYS.PACKAGE_WIDTH_CM)}
-                onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_WIDTH_CM, value)}
+                onChangeText={(value) =>
+                  onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_WIDTH_CM, value)
+                }
                 keyboardType="numeric"
               />
               <Input
@@ -453,30 +460,25 @@ export function DetailsStep({
                 minWidth={80}
                 placeholder="Height"
                 value={readMetadataString(meta, LISTING_METADATA_KEYS.PACKAGE_HEIGHT_CM)}
-                onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_HEIGHT_CM, value)}
+                onChangeText={(value) =>
+                  onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_HEIGHT_CM, value)
+                }
                 keyboardType="numeric"
               />
             </XStack>
-          </Field>
-        </ListingPublishCard>
-      ) : null}
-
-      {showShipping && !isDigital ? (
-        <ListingPublishCard ui={ui}>
-          <XStack alignItems="center" justifyContent="space-between" gap="$3">
-            <YStack flex={1} gap="$1">
-              <Text fontSize={14} fontWeight="800" color={ui.text}>
-                Shipping required
-              </Text>
-              <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-                Turn off only for digital downloads or services without delivery.
-              </Text>
-            </YStack>
-            <Switch
-              checked={formData.shipping_required ?? true}
-              onCheckedChange={(checked) => onUpdate('shipping_required', !!checked)}
-            />
-          </XStack>
+          </ListingFormRow>
+          <ListingFormRow
+            ui={ui}
+            label="Shipping required"
+            hint="Turn off only for digital downloads or services without delivery."
+          >
+            <XStack alignItems="center" minHeight={40}>
+              <Switch
+                checked={formData.shipping_required ?? true}
+                onCheckedChange={(checked) => onUpdate('shipping_required', !!checked)}
+              />
+            </XStack>
+          </ListingFormRow>
         </ListingPublishCard>
       ) : null}
     </YStack>

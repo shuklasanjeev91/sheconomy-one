@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 
 import {
   Button,
-  Field,
   Icons,
   Input,
   Spinner,
@@ -15,7 +14,10 @@ import { LISTING_TYPE_OPTIONS_SELECTABLE, LISTING_VALIDATION } from '~/lib/listi
 import type { ListingFormData } from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
+import {
+  ListingFormRow,
+  ListingPublishCard,
+} from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
 import { listingTypeIcon } from '~/commerce/components/vendor/listing-publish/ListingTypeChooser'
 import { countWords } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
@@ -125,16 +127,14 @@ export function BasicInfoStep({
         </XStack>
       ) : null}
 
-      <ListingPublishCard
-        ui={ui}
-        title="Listing Title"
-        headerRight={
-          <Text fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.4}>
-            {titleLength} / {LISTING_VALIDATION.TITLE.MAX_LENGTH} CHARACTERS
-          </Text>
-        }
-      >
-        <Field error={errors.title}>
+      <ListingPublishCard ui={ui} title="Vital info">
+        <ListingFormRow
+          ui={ui}
+          label="Product name"
+          required
+          hint={`${titleLength} / ${LISTING_VALIDATION.TITLE.MAX_LENGTH} characters`}
+          error={errors.title}
+        >
           <Input
             width="100%"
             value={formData.title}
@@ -143,55 +143,51 @@ export function BasicInfoStep({
             maxLength={LISTING_VALIDATION.TITLE.MAX_LENGTH}
             invalid={!!errors.title}
           />
-        </Field>
-        <ListingPublishFieldError ui={ui} message={errors.title} />
-      </ListingPublishCard>
+        </ListingFormRow>
 
-      <ListingPublishCard
-        ui={ui}
-        title="Description"
-        headerRight={
-          <Text fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.4}>
-            {wordCount} WORDS · MIN {LISTING_VALIDATION.DESCRIPTION.MIN_LENGTH} CHARS
-          </Text>
-        }
-      >
-        <Field error={errors.description}>
+        <ListingFormRow
+          ui={ui}
+          label="Product description"
+          required
+          hint={`${wordCount} words · min ${LISTING_VALIDATION.DESCRIPTION.MIN_LENGTH} characters`}
+          error={errors.description}
+        >
           <TextArea
             width="100%"
             minHeight={140}
             value={formData.description ?? ''}
             onChangeText={(value) => onUpdate('description', value)}
-            placeholder="Describe materials, craftsmanship, and what makes this piece unique (50+ characters)..."
+            placeholder="Describe materials, craftsmanship, and what makes this piece unique..."
             maxLength={LISTING_VALIDATION.DESCRIPTION.MAX_LENGTH}
             invalid={!!errors.description}
           />
-        </Field>
-        <ListingPublishFieldError ui={ui} message={errors.description} />
-      </ListingPublishCard>
+        </ListingFormRow>
 
-      <ListingPublishCard ui={ui} title="Tags">
-        <TagInput ui={ui} onAdd={onAddTag} />
-        <XStack gap="$2" flexWrap="wrap" marginTop="$2">
-          {(formData.tags ?? []).map((tag) => (
-            <XStack
-              key={tag}
-              alignItems="center"
-              gap={6}
-              paddingHorizontal={10}
-              paddingVertical={6}
-              borderRadius={999}
-              backgroundColor={ui.chip}
-            >
-              <Text fontSize={12} fontWeight="700" color={ui.brand}>
-                {tag}
-              </Text>
-              <YStack cursor="pointer" onPress={() => onRemoveTag(tag)}>
-                <Icons.X size={12} color={ui.brand} />
-              </YStack>
+        <ListingFormRow ui={ui} label="Search terms / tags">
+          <YStack gap="$2" width="100%">
+            <TagInput ui={ui} onAdd={onAddTag} />
+            <XStack gap="$2" flexWrap="wrap">
+              {(formData.tags ?? []).map((tag) => (
+                <XStack
+                  key={tag}
+                  alignItems="center"
+                  gap={6}
+                  paddingHorizontal={10}
+                  paddingVertical={6}
+                  borderRadius={8}
+                  backgroundColor={ui.chip}
+                >
+                  <Text fontSize={12} fontWeight="700" color={ui.brand}>
+                    {tag}
+                  </Text>
+                  <YStack cursor="pointer" onPress={() => onRemoveTag(tag)}>
+                    <Icons.X size={12} color={ui.brand} />
+                  </YStack>
+                </XStack>
+              ))}
             </XStack>
-          ))}
-        </XStack>
+          </YStack>
+        </ListingFormRow>
       </ListingPublishCard>
     </YStack>
   )

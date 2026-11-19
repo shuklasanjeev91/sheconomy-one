@@ -8,8 +8,8 @@ import {
 export const LISTING_PUBLISH_STEP_IDS = {
   BASIC: 'basic',
   IMAGES: 'images',
-  PRICING: 'pricing',
   VARIANTS: 'variants',
+  PRICING: 'pricing',
   DETAILS: 'details',
   SHIPPING: 'shipping',
   CATEGORIES: 'categories',
@@ -25,16 +25,15 @@ export type ListingPublishStepConfig = {
   headline: string
   subtitle: string
   iconName: 'info' | 'layers' | 'indian-rupee' | 'tags' | 'image' | 'search' | 'sliders' | 'truck'
-  /** When true, tab only shows for Variable products. */
-  requiresVariants?: boolean
 }
 
+/** Amazon Seller Central tab order: Vital info → Images → Variations → Offer → … */
 export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
   {
     id: LISTING_PUBLISH_STEP_IDS.BASIC,
-    label: 'Product identity',
-    headline: 'Product identity',
-    subtitle: 'Title, description, and tags — like Amazon product name & description.',
+    label: 'Vital info',
+    headline: 'Vital info',
+    subtitle: 'Product name, description, and tags.',
     iconName: 'info',
   },
   {
@@ -45,19 +44,18 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
     iconName: 'image',
   },
   {
-    id: LISTING_PUBLISH_STEP_IDS.PRICING,
-    label: 'Offer',
-    headline: 'Offer',
-    subtitle: 'Simple or Variant — then set price, tax, quantity, and SKU.',
-    iconName: 'indian-rupee',
-  },
-  {
     id: LISTING_PUBLISH_STEP_IDS.VARIANTS,
     label: 'Variations',
     headline: 'Variations',
-    subtitle: 'Size / color options with per-SKU price and stock.',
+    subtitle: 'Choose whether this product has size, color, or other options.',
     iconName: 'sliders',
-    requiresVariants: true,
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.PRICING,
+    label: 'Offer',
+    headline: 'Offer',
+    subtitle: 'Your price, quantity, tax, and seller SKU.',
+    iconName: 'indian-rupee',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.DETAILS,
@@ -116,20 +114,19 @@ export type ProductStructure =
 export const PRODUCT_STRUCTURE_OPTIONS = [
   {
     value: PRODUCT_STRUCTURES.SIMPLE,
-    label: 'Simple',
-    description: 'One SKU — single price and stock.',
+    label: 'No',
+    description: 'Sold as a single SKU.',
   },
   {
     value: PRODUCT_STRUCTURES.VARIABLE,
-    label: 'Variant',
-    description: 'Size / color options — each variation has its own price & stock.',
+    label: 'Yes',
+    description: 'Size, color, or other options.',
   },
 ] as const
 
-/** Visible top tabs for the current product structure. */
-export function getListingPublishSteps(structure: ProductStructure): ListingPublishStepConfig[] {
-  const needsVariants = structure === PRODUCT_STRUCTURES.VARIABLE
-  return LISTING_PUBLISH_STEPS.filter((step) => !step.requiresVariants || needsVariants)
+/** All Amazon listing tabs — Variations is always visible (Yes/No gate lives on that tab). */
+export function getListingPublishSteps(_structure?: ProductStructure): ListingPublishStepConfig[] {
+  return [...LISTING_PUBLISH_STEPS]
 }
 
 /** Keys stored inside `listing_metadata` for vendor-only form fields. */
