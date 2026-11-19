@@ -170,35 +170,9 @@ Deno.serve(async (request) => {
     }
   }
 
-  const shopIds = [
-    ...new Set(
-      activeLines
-        .map((row) => row.shop_id || listingById.get(row.listing_id)?.shop_id)
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ]
-  if (shopIds.length) {
-    const { data: kycRows, error: kycError } = await admin
-      .from('shop_payu_kyc')
-      .select('shop_id, status')
-      .in('shop_id', shopIds)
-    if (kycError) return jsonResponse({ success: false, message: kycError.message }, 400)
-    // Match shop_payu_kyc_allows_orders: every shop must have payu_verified KYC (missing row blocks).
-    const verified = new Set(
-      (kycRows ?? []).filter((row) => row.status === 'payu_verified').map((row) => row.shop_id),
-    )
-    const blocked = shopIds.filter((id) => !verified.has(id))
-    if (blocked.length) {
-      return jsonResponse(
-        {
-          success: false,
-          message:
-            'One or more shops are not ready to accept orders yet. Payout verification is still pending.',
-        },
-        400,
-      )
-    }
-  }
+  // Seller PayU KYC is no longer a buyer checkout gate. Platform SHEPay collects
+  // on the parent MID; settlements stay held (awaiting_child) until each shop's
+  // child merchant is verified. shop_payu_kyc_allows_orders always returns true.
 
   const finalizeShepay =
     body.finalize_shepay === false ? false : paymentMode === 'online'

@@ -514,7 +514,7 @@ export function CheckoutPayuPanel({
             ? Boolean(ensured.orderPaymentId)
             : Boolean(ensured.paymentStepId))
         if (!ensuredOk) {
-          setError('Could not start checkout. Check your address and try again.')
+          setError('Could not start payment. See the message above, then try again.')
           setBusy(false)
           return
         }

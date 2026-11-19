@@ -4,7 +4,7 @@
 
 1. Cart groups line items **by shop** (cart + checkout UI).
 2. Single Pay → Edge Function `commerce-create-checkout` (idempotency key):
-   - Validates cart, stock, and seller KYC (every shop must be `payu_verified`).
+   - Validates cart and stock. Seller PayU KYC is **not** required to take payment (funds stay held until the shop’s child is verified).
    - Calls `atomic_marketplace_checkout` → **one** `commerce_checkout_groups` row + **N** child orders (items + `order_delivery` + inventory reservations) + **N** per-shop payment steps (`platform_fee_amount: 0` SHEconomy commission).
    - Per-shop shipping from delivery profiles / Easyship DDP is included in the shop gross. Sellers self-fund `easyship_shipping_credits`; labels debit that wallet.
    - Online SHEPay: `finalize_shepay_bundle_charge` → one charge step with `metadata.allocations[]`.
@@ -19,15 +19,16 @@
    - Refunds (`process-refund`) call PayU with split/child details and mark settlements `refunded`.
    - Connecting a child (`shepay-release-pending`) attaches keys and runs eligibility release — not an immediate payout.
 
-### Order gating (mandatory KYC)
+### Order gating vs payout KYC
 
-Every shop must have a `shop_payu_kyc` row with status **`payu_verified`** before it can accept orders.
-Missing KYC is treated the same as incomplete KYC.
+Buyers can always check out. `shop_payu_kyc_allows_orders` returns **true** so cart → PayU is never blocked by missing seller KYC.
 
-- Server: `shop_payu_kyc_allows_orders` inside `atomic_marketplace_checkout` / referral first-sale helpers
-- Edge check in `commerce-create-checkout`
-- Storefront: listings require `shops.verified` (set only when KYC sync activates; cleared for non-verified shops)
-- Vendor hub: banner + publish blocked until `payu_verified`
+Seller payouts remain gated:
+
+- Webhook creates `shepay_pending_settlements` with `awaiting_child` until the shop has a connected PayU child
+- `shepay-sync-kyc` / release cron only move money after `payu_verified`
+- Vendor hub still banners + nudges KYC so sellers can get settled
+- Storefront visibility uses `shops.verified` (decoupled from PayU KYC)
 
 ## Vendor setup (zero PayU touchpoint)
 

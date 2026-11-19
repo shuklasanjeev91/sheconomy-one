@@ -800,7 +800,10 @@ export function maskSecret(value: string): string {
   return `••••${trimmed.slice(-4)}`
 }
 
-/** Every seller must reach `payu_verified` — missing KYC blocks selling. */
+/**
+ * True when seller PayU child KYC is verified (payouts can release).
+ * Buyer checkout is not gated on this — settlements stay held until verified.
+ */
 export function kycAllowsStorefront(status: PayuKycStatus | null | undefined): boolean {
   return status === 'payu_verified'
 }
