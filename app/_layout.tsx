@@ -117,7 +117,8 @@ body {
     max-height: none !important;
     min-height: 100vh;
     min-height: 100dvh;
-    overflow-x: hidden;
+    /* clip keeps horizontal gutters without creating a sticky-breaking scrollport */
+    overflow-x: clip;
     overflow-y: auto !important;
     scroll-behavior: smooth;
   }

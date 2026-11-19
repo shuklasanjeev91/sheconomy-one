@@ -25,17 +25,13 @@ export function stickyRailStyle(options: StickyRailOptions = {}) {
     return base
   }
 
-  const style: Record<string, string | number> = {
+  // Do not set overflow on the sticky node — Chromium skips sticky when the
+  // sticky element itself is a scroll container. Callers that need a scrollable
+  // tall rail should wrap children in an inner scroller.
+  return {
     position: 'sticky',
     top,
     alignSelf: 'flex-start',
     zIndex: 5,
   }
-
-  if (options.scrollable) {
-    style.maxHeight = `calc(100vh - ${top + 16}px)`
-    style.overflowY = 'auto'
-  }
-
-  return style
 }

@@ -36,11 +36,9 @@ export function StickyRail({
   maxWidth,
   ...props
 }: StickyRailProps) {
-  const { isDesktopWeb, isDesktop } = useAppLayout()
+  const { isDesktopWeb, isDesktop, hasSideRails } = useAppLayout()
 
   if (pin === 'viewport' && Platform.OS !== 'web') {
-    // Native tablets / iPad: pin the rail to the row height and scroll inside
-    // so long left-nav lists stay reachable while the center column scrolls.
     const { gap, ...rest } = props
 
     return (
@@ -101,14 +99,13 @@ export function StickyRail({
     )
   }
 
-  // Sticky whenever the rail sits beside content on web. Wide windows scroll
-  // the document (offset below the sticky app header); narrower desktop
-  // windows scroll an inner container that already starts below the header,
-  // so `position: sticky` pins against that container with a small offset.
-  const stickyActive = Platform.OS === 'web' && isDesktop
+  // Stick on any web two-column layout (cart/checkout), not only gtMd.
+  const stickyActive = Platform.OS === 'web' && (isDesktop || hasSideRails || isDesktopWeb)
   const stickyTop = isDesktopWeb ? STICKY_RAIL_TOP : 16
 
   // Native div — Tamagui/Yoga can drop or rewrite `position: sticky` on YStack.
+  // IMPORTANT: never put overflow on the sticky node itself — that disables sticky
+  // in Chromium. Scroll tall summaries in an inner wrapper instead.
   if (stickyActive) {
     const stickyStyle: CSSProperties = {
       position: 'sticky',
@@ -118,26 +115,27 @@ export function StickyRail({
       flexShrink: 0,
       width: cssSize(width) ?? '100%',
       maxWidth: cssSize(maxWidth) ?? '100%',
-      ...(scrollable
-        ? {
-            maxHeight: `calc(100vh - ${stickyTop + 16}px)`,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            overscrollBehavior: 'contain',
-            WebkitOverflowScrolling: 'touch',
-          }
-        : null),
       ...(style as CSSProperties),
     }
 
+    const innerStyle: CSSProperties | undefined = scrollable
+      ? {
+          maxHeight: `calc(100vh - ${stickyTop + 16}px)`,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
+        }
+      : undefined
+
     return (
       <div data-sticky-rail="document" style={stickyStyle}>
-        {children}
+        {innerStyle ? <div style={innerStyle}>{children}</div> : children}
       </div>
     )
   }
 
-  const stickyStyle = stickyRailStyle({ scrollable, top: stickyTop })
+  const fallbackStyle = stickyRailStyle({ scrollable, top: stickyTop })
 
   return (
     <YStack
@@ -145,7 +143,7 @@ export function StickyRail({
       alignSelf="flex-start"
       width={width as never}
       maxWidth={maxWidth as never}
-      style={style ? { ...stickyStyle, ...(style as object) } : stickyStyle}
+      style={style ? { ...fallbackStyle, ...(style as object) } : fallbackStyle}
       {...props}
     >
       {children}

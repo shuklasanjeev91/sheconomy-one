@@ -641,17 +641,18 @@ export function CartScreen() {
             </YStack>
           ) : hasSideRails ? (
             <YStack gap="$8" width="100%">
-              <XStack
-                width="100%"
-                maxWidth="100%"
-                alignSelf="stretch"
-                flexDirection="row"
-                alignItems="flex-start"
-                gap="$5"
-                // Keep sticky summary visible while the items column scrolls.
-                style={{ overflow: 'visible' }}
+              <div
+                data-cart-layout="desktop"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `minmax(0, 1fr) ${SUMMARY_WIDTH}px`,
+                  gap: 20,
+                  alignItems: 'start',
+                  width: '100%',
+                  overflow: 'visible',
+                }}
               >
-                <YStack flex={1} minWidth={0} width="100%" gap="$4">
+                <YStack minWidth={0} width="100%" gap="$4">
                   {cartItemsPanel}
                   {hasInactiveItems ? (
                     <Text color={c.secondary} fontSize={13}>
@@ -668,7 +669,7 @@ export function CartScreen() {
                 <StickyRail width={SUMMARY_WIDTH} maxWidth="100%" scrollable>
                   {desktopBuyBox}
                 </StickyRail>
-              </XStack>
+              </div>
               {discoveryRails}
             </YStack>
           ) : (
