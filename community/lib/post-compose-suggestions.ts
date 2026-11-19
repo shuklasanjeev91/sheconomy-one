@@ -188,12 +188,17 @@ export function isThinOrEchoPostDraft(draft: string, seed?: string | null): bool
   if (isLeakedComposePrompt(body)) return true
   if (isGenericFallbackDraft(body)) return true
   if (body.length < 80) return true
-  if (
-    /^(write|create|make|draft|compose|generate|post about|tell|share about|help me|about)\b/i.test(
-      body,
-    )
-  ) {
-    return true
+
+  // Finished multi-paragraph posts are never “thin”, even if they open with About/Create/…
+  const looksLikeFinishedPost = body.length >= 160 && /\n\s*\n/.test(body)
+  if (!looksLikeFinishedPost) {
+    if (
+      /^(write|create|make|draft|compose|generate|post about|tell|share about|help me|about)\b/i.test(
+        body,
+      )
+    ) {
+      return true
+    }
   }
 
   const seedText = (seed ?? '').trim()
@@ -204,9 +209,11 @@ export function isThinOrEchoPostDraft(draft: string, seed?: string | null): bool
   if (!normalizedSeed) return false
   if (normalizedBody === normalizedSeed) return true
   if (normalizedBody.startsWith(normalizedSeed) && body.length < seedText.length + 60) return true
-  if (normalizedSeed.startsWith(normalizedBody)) return true
+  // Only treat seed-contains-body as an echo for short bodies (instruction chips).
+  if (!looksLikeFinishedPost && normalizedSeed.startsWith(normalizedBody)) return true
   // Near-echo: chip kept most of the seed and only trimmed a hashtag/tail.
   if (
+    !looksLikeFinishedPost &&
     normalizedBody.length >= 12 &&
     (normalizedSeed.includes(normalizedBody) || normalizedBody.includes(normalizedSeed)) &&
     Math.abs(normalizedBody.length - normalizedSeed.length) < 40

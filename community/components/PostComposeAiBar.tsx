@@ -126,15 +126,12 @@ export function PostComposeAiBar({
   function applyGeneratedDraft(
     content: string,
     articleTitle: string | null | undefined,
-    promptSeed: string,
+    _promptSeed: string,
   ) {
     const returned = content.trim()
+    // draftPostWithAi already rejected thin/template/leak replies — only block clear leaks here.
     const unusable =
-      !returned ||
-      isLeakedComposePrompt(returned) ||
-      isGenericFallbackDraft(returned) ||
-      isThinOrEchoPostDraft(returned, promptSeed) ||
-      isThinOrEchoPostDraft(returned, seed)
+      !returned || isLeakedComposePrompt(returned) || isGenericFallbackDraft(returned)
 
     if (unusable) {
       toast.show('Couldn’t draft this post', {

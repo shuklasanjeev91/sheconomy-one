@@ -273,25 +273,36 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
     },
   }
 
-  let result: PostDraftResult
-  try {
-    result = await invokeAiAssist<PostDraftResult>(requestBody)
-  } catch (ownedError) {
-    // Owned host down/lagging — use the trained edge post_draft path.
-    result = await invokeEdgeAssist<PostDraftResult>(requestBody)
-    if (!result) throw ownedError
-  }
-
   const normalize = (row: PostDraftResult) => ({
     title: typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null,
     content: String(row.content ?? '').trim(),
     usedFallback: Boolean(row.usedFallback),
   })
 
-  let draft = normalize(result)
-  if (draft.usedFallback || isUnusablePostDraftContent(draft.content, prompt)) {
-    const edge = await invokeEdgeAssist<PostDraftResult>(requestBody)
-    draft = normalize(edge)
+  // Prefer the trained Supabase edge post_draft (Gemini). Owned CloudFront still
+  // serves older Ollama templates for this action.
+  let draft: ReturnType<typeof normalize> | null = null
+  let edgeError: unknown = null
+  try {
+    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody))
+  } catch (err) {
+    edgeError = err
+  }
+
+  if (!draft || draft.usedFallback || isUnusablePostDraftContent(draft.content, prompt)) {
+    try {
+      const owned = normalize(await invokeAiAssist<PostDraftResult>(requestBody))
+      if (!owned.usedFallback && !isUnusablePostDraftContent(owned.content, prompt)) {
+        draft = owned
+      }
+    } catch {
+      // keep edge error / draft
+    }
+  }
+
+  if (!draft) {
+    if (edgeError instanceof Error) throw edgeError
+    throw new Error(`${AI_NAME} could not draft this post. Try again.`)
   }
 
   requireSherpaDraft(draft)

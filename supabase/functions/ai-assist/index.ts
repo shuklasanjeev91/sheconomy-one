@@ -1955,13 +1955,28 @@ Deno.serve(async (req) => {
         .filter(Boolean)
         .join('\n')
 
-      const completion = await callGemini(
-        systemPrompt,
-        [],
-        prompt || 'Write a complete community post for the attached media/link.',
-        { jsonMode: true, temperature: 0.7 },
-      )
-      const parsed = parsePostDraftJson(completion.answer)
+      const userTurn = prompt || 'Write a complete community post for the attached media/link.'
+      let completion = await callGemini(systemPrompt, [], userTurn, {
+        jsonMode: true,
+        temperature: 0.7,
+      })
+      let parsed = parsePostDraftJson(completion.answer)
+      // Some Gemini keys/models reject jsonMode — retry as plain text JSON.
+      if (!parsed?.content) {
+        completion = await callGemini(systemPrompt, [], userTurn, { temperature: 0.7 })
+        parsed = parsePostDraftJson(completion.answer)
+      }
+      // Last resort: accept a plain multi-paragraph reply as content.
+      if (!parsed?.content && completion.answer && completion.answer.trim().length >= 160) {
+        const plain = completion.answer
+          .trim()
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/```$/i, '')
+          .trim()
+        if (plain && !plain.trimStart().startsWith('{')) {
+          parsed = { title: null, content: plain }
+        }
+      }
       const leaked =
         !!parsed?.content &&
         (/you are sherpa writing/i.test(parsed.content) ||
@@ -1971,6 +1986,10 @@ Deno.serve(async (req) => {
       if (parsed?.content && !leaked) {
         return json({ ...parsed, usedFallback: false, product: 'community' })
       }
+      console.error('post_draft failed', {
+        geminiError: completion.error,
+        hadAnswer: Boolean(completion.answer),
+      })
       return json({
         error: 'SHERPA could not draft this post. Try again.',
         usedFallback: true,

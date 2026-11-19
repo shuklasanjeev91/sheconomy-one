@@ -81,6 +81,16 @@ describe('post compose AI helpers', () => {
     ).toBe(false)
   })
 
+  it('does not treat finished posts that open with About/Create as thin', () => {
+    const aboutDraft = `About BioAyurveda — Ayurveda-inspired wellness that fits a founder schedule.
+
+Clean daily rituals can feel practical, not precious, when the day is already full.
+
+What wellness habit do you protect even on your busiest weeks?`
+    expect(isThinOrEchoPostDraft(aboutDraft, 'Write about bioayurveda')).toBe(false)
+    expect(isComposeInstruction(aboutDraft)).toBe(false)
+  })
+
   it('detects the old generic template fallback', () => {
     expect(
       isGenericFallbackDraft(
