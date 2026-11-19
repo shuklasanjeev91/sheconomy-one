@@ -660,7 +660,7 @@ function MeetingRoomOverlay({
   title,
   callMedia,
   isHost,
-  activeBreakoutRoomId = null,
+  activeBreakoutRoomId: _activeBreakoutRoomId = null,
   onRemountMedia,
   onJoinBreakoutRoom,
   onLeaveBreakoutRoom,
@@ -1103,7 +1103,9 @@ function MeetingRoomOverlay({
   }, [listenChannel, myInterpreterChannel, setInterpretationPlayback])
 
   const recordingSession = useMeetingRecording({
-    roomName: callMedia?.connected ? activeBreakoutRoomId ?? meeting.room_id ?? null : null,
+    // Cloud recording always targets the main SFU room. Passing a breakout room
+    // id fails the edge-function room check and makes Stop a no-op mid-meeting.
+    roomName: callMedia?.connected ? meeting.room_id ?? null : null,
     meetingId: meeting.id,
     meetingCode: meeting.meeting_code,
     enabled: allowRecording && (isAuthoritativeHost || canModerate),
@@ -1186,8 +1188,10 @@ function MeetingRoomOverlay({
     setStageTapHandler(toggleControls)
     return () => setStageTapHandler(null)
   }, [setStageTapHandler, toggleControls])
+  // Toolbar Stop / REC must track active capture only — `processing` is encode/upload
+  // after stop, and treating it as recording made Stop open "Start recording?" instead.
   const recording = isAuthoritativeHost || canModerate
-    ? recordingSession.recording || recordingSession.isProcessing
+    ? recordingSession.recording
     : presence.liveRecordingSignal ?? recordingIndicator.isRecording
 
   useEffect(() => {
@@ -1348,18 +1352,15 @@ function MeetingRoomOverlay({
       toast.show('Cloud recording is not available in this meeting yet', { tone: 'info' })
       return
     }
-    const run = () => {
-      try {
-        recordingSession.toggleRecording()
-      } catch (error) {
-        toast.show('Recording failed', {
-          tone: 'error',
-          message: error instanceof Error ? error.message : undefined,
-        })
-      }
-    }
     if (recordingSession.recording) {
-      run()
+      void recordingSession.stopRecording()
+      return
+    }
+    if (recordingSession.isProcessing) {
+      toast.show('Recording is processing', {
+        tone: 'info',
+        message: 'Your MP4 is encoding. You can start another recording once it finishes.',
+      })
       return
     }
     confirmMeetingAction({
@@ -1368,7 +1369,9 @@ function MeetingRoomOverlay({
         'A Co-Work grid recording will start with the room audio mixed into one MP4. Everyone in the meeting will see a recording notice.',
       confirmLabel: 'Start recording',
       destructive: true,
-      onConfirm: run,
+      onConfirm: () => {
+        void recordingSession.startRecording()
+      },
     })
   }, [
     allowRecording,

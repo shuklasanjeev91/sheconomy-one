@@ -1727,7 +1727,11 @@ function parsePostDraftJson(raw: string | null): { title: string | null; content
 }
 
 function fallbackPostDraft(prompt: string, mode: string) {
-  const topic = prompt.trim().slice(0, 120) || 'this week’s update'
+  const cleaned = prompt
+    .replace(/^write (a |an |the )?(post |update )?(about|on|regarding)\s+/i, '')
+    .replace(/^write about\s+/i, '')
+    .trim()
+  const topic = cleaned.slice(0, 120) || 'this week’s update'
   if (mode === 'article') {
     return {
       title: `Notes on ${topic}`,
@@ -1897,24 +1901,43 @@ Deno.serve(async (req) => {
 
     if (action === 'post_draft') {
       const prompt = typeof body.message === 'string' ? body.message.trim() : ''
-      if (!prompt) return json({ error: 'message required' }, 400)
+      const photoCount = Number(context.photo_count ?? 0) || 0
+      const videoCount = Number(context.video_count ?? 0) || 0
+      const link =
+        context.link && typeof context.link === 'object'
+          ? (context.link as { url?: string; title?: string; description?: string })
+          : null
+      const hasMedia = photoCount > 0 || videoCount > 0 || Boolean(link?.url)
+      if (!prompt && !hasMedia) return json({ error: 'message required' }, 400)
       const composeMode =
         typeof context.compose_mode === 'string' && context.compose_mode
           ? context.compose_mode
           : 'text'
-      const fallback = fallbackPostDraft(prompt, composeMode)
+      const fallback = fallbackPostDraft(prompt || link?.title || 'this update', composeMode)
       const systemPrompt = [
         'You draft professional community posts for a women-focused platform.',
         'Return ONLY JSON with keys: title (string or null), content (string).',
         'title is required for article mode; otherwise null.',
         'content should be warm, specific, under 900 characters for text modes, under 2500 for article.',
+        'Expand the member notes into a complete ready-to-publish post. Never return their instruction unchanged.',
         'No hashtag spam. At most 2 hashtags. No markdown fences.',
         languageDirective(context, body),
         'Write the post content (and title when present) in the preferred language.',
         `Compose mode: ${composeMode}.`,
-      ].join('\n')
+        photoCount > 0 ? `Attached photos: ${photoCount}.` : '',
+        videoCount > 0 ? `Attached videos: ${videoCount}.` : '',
+        link?.url
+          ? `Shared link: ${link.url}${link.title ? ` (${link.title})` : ''}${link.description ? ` — ${String(link.description).slice(0, 200)}` : ''}.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
 
-      const completion = await callGemini(systemPrompt, [], prompt)
+      const completion = await callGemini(
+        systemPrompt,
+        [],
+        prompt || 'Write a complete community post for the attached media/link.',
+      )
       const parsed = parsePostDraftJson(completion.answer)
       if (parsed?.content) {
         return json({ ...parsed, usedFallback: false, product: 'community' })

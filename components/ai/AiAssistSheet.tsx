@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 
 import {
   AppBottomSheet,
@@ -17,6 +18,7 @@ import { useDictationOptional } from '~/providers/dictation-context'
 import { radius } from '~/config/tokens'
 import { ListingGrid } from '~/commerce/components/ListingGrid'
 import { fetchListingsByIds, type ListingSummary } from '~/commerce/lib/commerce'
+import { getListingSlug } from '~/lib/supabase/commerce'
 import {
   aiProductLabel,
   fetchAiSuggestions,
@@ -37,12 +39,19 @@ import {
 } from '~/providers/ai-assist-context'
 import type { AiRouteContext } from '~/lib/ai'
 import { navigateApp } from '~/lib/platform/navigate'
+import { routes } from '~/lib/routes'
 
 function newLocalId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function RelatedListingCards({ ids }: { ids: string[] }) {
+function RelatedListingCards({
+  ids,
+  onOpenListing,
+}: {
+  ids: string[]
+  onOpenListing: (listing: ListingSummary) => void
+}) {
   const [rows, setRows] = useState<ListingSummary[]>([])
 
   useEffect(() => {
@@ -60,7 +69,15 @@ function RelatedListingCards({ ids }: { ids: string[] }) {
   }, [ids])
 
   if (!rows.length) return null
-  return <ListingGrid listings={rows} columns={2} personalize={false} showQuickAdd />
+  return (
+    <ListingGrid
+      listings={rows}
+      columns={2}
+      personalize={false}
+      showQuickAdd
+      onOpenListing={onOpenListing}
+    />
+  )
 }
 
 /**
@@ -233,6 +250,11 @@ function AiAssistSheetBody({
   function goLink(href: string) {
     closeAssist()
     navigateApp(href as never)
+  }
+
+  function openRelatedListing(listing: ListingSummary) {
+    const slug = getListingSlug(listing)
+    goLink(routes.listing(Platform.OS === 'web' ? slug : listing.id))
   }
 
   const footer = (
@@ -420,7 +442,9 @@ function AiAssistSheetBody({
                   ))}
                 </XStack>
               ) : null}
-              {message.listingIds?.length ? <RelatedListingCards ids={message.listingIds} /> : null}
+              {message.listingIds?.length ? (
+                <RelatedListingCards ids={message.listingIds} onOpenListing={openRelatedListing} />
+              ) : null}
             </YStack>
           )
         })}

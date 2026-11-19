@@ -222,15 +222,24 @@ export async function draftShopWithAi(params: ShopDraftParams = {}): Promise<Sho
 
 /** Professional post draft for community compose (web + native). */
 export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraftResult> {
+  const prompt = params.prompt.trim()
+  if (!prompt && !(params.photoCount || params.videoCount || params.link?.url)) {
+    throw new Error('Add a note, photo, video, or link before drafting.')
+  }
+
   const result = await invokeAiAssist<PostDraftResult>({
     action: 'post_draft',
     product: 'community',
-    message: withLanguageReplyHint(params.prompt),
+    message: withLanguageReplyHint(
+      prompt ||
+        'Write a complete community post for the attached media and/or link. Do not leave the body empty.',
+    ),
     context: {
       compose_mode: params.mode ?? 'text',
       photo_count: params.photoCount ?? 0,
       video_count: params.videoCount ?? 0,
       link: params.link ?? null,
+      expand_notes: true,
     },
   })
 
@@ -265,10 +274,12 @@ export async function fetchPostSuggestions(params?: {
       member_name: params?.memberName ?? null,
       headline: params?.headline ?? null,
       location: params?.location ?? null,
-      prompt: params?.prompt ?? '',
+      // Topic hint only — full drafts belong in post_draft, not chip labels.
+      prompt: (params?.prompt ?? '').trim().slice(0, 160),
       photo_count: params?.photoCount ?? 0,
       video_count: params?.videoCount ?? 0,
       link: params?.link ?? null,
+      suggestion_style: 'short_labels_full_drafts',
     },
   })
   if (!Array.isArray(result.suggestions)) return []

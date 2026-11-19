@@ -143,12 +143,109 @@ export function localPostComposeSuggestions(mode: ComposeModeHint = 'text'): Pos
   }
 }
 
+function normalizeComposeText(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** True when a suggestion/draft is only a short instruction or repeats the seed. */
+export function isThinOrEchoPostDraft(draft: string, seed?: string | null): boolean {
+  const body = draft.trim()
+  if (!body) return true
+  if (body.length < 80) return true
+
+  const seedText = (seed ?? '').trim()
+  if (!seedText) return false
+
+  const normalizedBody = normalizeComposeText(body)
+  const normalizedSeed = normalizeComposeText(seedText)
+  if (!normalizedSeed) return false
+  if (normalizedBody === normalizedSeed) return true
+  if (normalizedBody.startsWith(normalizedSeed) && body.length < seedText.length + 40) return true
+  if (normalizedSeed.startsWith(normalizedBody)) return true
+  return false
+}
+
+/**
+ * Build the SHERPA prompt so compose expands notes/media into a publishable post
+ * instead of echoing the instruction.
+ */
+export function buildPostDraftPrompt(input: {
+  seed?: string | null
+  photoCount?: number
+  videoCount?: number
+  link?: { url: string; title?: string | null; description?: string | null } | null
+}): string {
+  const parts: string[] = [
+    'Write a complete, ready-to-publish community post.',
+    'Expand the member’s notes into warm, specific copy. Do not repeat their instruction verbatim.',
+    'At most 2 hashtags. No markdown fences.',
+  ]
+
+  const seed = input.seed?.trim() ?? ''
+  if (seed) parts.push(`Member notes / topic:\n${seed}`)
+
+  const photos = input.photoCount ?? 0
+  if (photos > 0) {
+    parts.push(
+      `They attached ${photos} photo${photos === 1 ? '' : 's'}. Mention the photo${photos === 1 ? '' : 's'} naturally as something they are sharing.`,
+    )
+  }
+
+  const videos = input.videoCount ?? 0
+  if (videos > 0) {
+    parts.push(
+      `They attached ${videos} video${videos === 1 ? '' : 's'}. Reference the video naturally without inventing a transcript.`,
+    )
+  }
+
+  const link = input.link
+  if (link?.url) {
+    const title = link.title?.trim()
+    const description = link.description?.trim()
+    parts.push(
+      [
+        `They are sharing this link: ${link.url}`,
+        title ? `Link title: ${title}` : null,
+        description ? `Link summary: ${description.slice(0, 280)}` : null,
+        'Weave the link into the post as the main subject.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    )
+  }
+
+  return parts.join('\n\n')
+}
+
+/** Drop suggestion chips that merely echo the composer seed. */
+export function filterPostSuggestionChips<T extends { label: string; draft: string }>(
+  chips: T[],
+  seed?: string | null,
+): T[] {
+  const normalizedSeed = normalizeComposeText(seed ?? '')
+  return chips.filter((chip) => {
+    // Labels are short by design — only reject when label/draft repeats the seed.
+    if (normalizedSeed) {
+      const label = normalizeComposeText(chip.label)
+      if (label && (label === normalizedSeed || normalizedSeed.startsWith(label) && label.length >= 12)) {
+        return false
+      }
+    }
+    if (isThinOrEchoPostDraft(chip.draft, seed)) return false
+    return true
+  })
+}
+
 /** Fallback draft when the AI edge action is unavailable. */
 export function fallbackPostDraft(prompt: string, mode: ComposeModeHint = 'text'): {
   title: string | null
   content: string
 } {
-  const topic = prompt.trim().slice(0, 120) || 'this week’s update'
+  const cleaned = prompt
+    .replace(/^write (a |an |the )?(post |update )?(about|on|regarding)\s+/i, '')
+    .replace(/^write about\s+/i, '')
+    .trim()
+  const topic = cleaned.slice(0, 120) || 'this week’s update'
   if (mode === 'article') {
     return {
       title: `Notes on ${topic}`,

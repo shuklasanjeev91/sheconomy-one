@@ -1439,7 +1439,10 @@ export function MeetingControls({
   const phoneSlotWidth = (count: number) =>
     Math.floor((phoneDockWidth - (count - 1) * phoneControlGap) / count)
   const phoneFixedCount =
-    4 + (caps.supportsVideo !== false ? 1 : 0) + (primaryKeys.includes('share_screen') ? 1 : 0)
+    4 +
+    (caps.supportsVideo !== false ? 1 : 0) +
+    (primaryKeys.includes('share_screen') ? 1 : 0) +
+    (primaryKeys.includes('stop_record') ? 1 : 0)
   // Reactions are also in the More sheet, so drop them before More gets pushed off-screen.
   const phoneShowReactions =
     primaryKeys.includes('reactions') && !!onToggleReactions && phoneSlotWidth(phoneFixedCount + 1) >= 54
@@ -1710,6 +1713,17 @@ export function MeetingControls({
                     icon={Icons.Smile}
                     variant={reactionTrayOpen ? 'brand' : 'neutral'}
                     onPress={openReactions}
+                    compact={compact}
+                    minWidth={phoneControlWidth}
+                    maxWidth={phoneControlWidth}
+                  />
+                ) : null}
+                {primaryKeys.includes('stop_record') ? (
+                  <ControlButton
+                    label={primaryLabel('stop_record')}
+                    icon={Icons.Circle}
+                    variant="danger"
+                    onPress={onToggleRecord}
                     compact={compact}
                     minWidth={phoneControlWidth}
                     maxWidth={phoneControlWidth}

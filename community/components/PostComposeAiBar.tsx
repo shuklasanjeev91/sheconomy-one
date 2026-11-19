@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react'
 
-import type { ComposeModeHint } from '~/community/lib/post-compose-suggestions'
+import {
+  buildPostDraftPrompt,
+  filterPostSuggestionChips,
+  fallbackPostDraft,
+  isThinOrEchoPostDraft,
+  localPostComposeSuggestions,
+  type ComposeModeHint,
+} from '~/community/lib/post-compose-suggestions'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { fetchPublicProfile } from '~/community/lib/network'
 import { HorizontalScrollRow } from '~/components/layout'
-import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { draftPostWithAi, fetchPostSuggestions, type PostSuggestionChip } from '~/lib/ai'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -29,6 +36,7 @@ export function PostComposeAiBar({
   link = null,
 }: PostComposeAiBarProps) {
   const communityUi = useCommunityUi()
+  const toast = useAppToast()
   const { user } = useSupabase()
   const [loading, setLoading] = useState(false)
   const [chips, setChips] = useState<PostSuggestionChip[]>([])
@@ -36,6 +44,8 @@ export function PostComposeAiBar({
 
   const linkUrl = link?.url ?? ''
   const linkTitle = link?.title ?? ''
+  const canDraft =
+    Boolean(seedPrompt?.trim()) || photoCount > 0 || videoCount > 0 || Boolean(linkUrl)
 
   useEffect(() => {
     let cancelled = false
@@ -52,39 +62,62 @@ export function PostComposeAiBar({
           location = profile.data?.location?.trim() ?? ''
         }
         try {
+          // Pass a short topic hint — full composer text makes SHERPA echo the seed as a chip.
+          const topicHint = seedPrompt?.trim().slice(0, 160) || ''
           const rows = await fetchPostSuggestions({
             mode,
             memberName,
             headline,
             location,
-            prompt: seedPrompt,
+            prompt: topicHint,
             photoCount,
             videoCount,
             link: linkUrl ? { url: linkUrl, title: linkTitle } : null,
           })
-          if (!cancelled) setChips(rows)
+          if (cancelled) return
+          const filtered = filterPostSuggestionChips(rows, seedPrompt)
+          if (filtered.length > 0) {
+            setChips(filtered)
+            return
+          }
+          setChips(
+            localPostComposeSuggestions(mode).map((row) => ({
+              label: row.label,
+              draft: row.draft,
+            })),
+          )
         } catch {
-          if (!cancelled) setChips([])
+          if (!cancelled) {
+            setChips(
+              localPostComposeSuggestions(mode).map((row) => ({
+                label: row.label,
+                draft: row.draft,
+              })),
+            )
+          }
         } finally {
           if (!cancelled) setLoadingChips(false)
         }
       })()
-    }, 400)
+    }, 450)
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
   }, [mode, user?.id, seedPrompt, photoCount, videoCount, linkUrl, linkTitle])
 
-  function applyChip(chip: PostSuggestionChip) {
-    onApplyDraft({ content: chip.draft })
-  }
+  async function generateDraft(seed?: string) {
+    const promptSeed = (seed ?? seedPrompt)?.trim() ?? ''
+    if (!promptSeed && photoCount < 1 && videoCount < 1 && !link?.url) return
 
-  async function draftWithAi() {
-    const prompt = seedPrompt?.trim() ?? ''
-    if (!prompt && photoCount < 1 && videoCount < 1 && !link?.url) return
     setLoading(true)
     try {
+      const prompt = buildPostDraftPrompt({
+        seed: promptSeed,
+        photoCount,
+        videoCount,
+        link,
+      })
       const result = await draftPostWithAi({
         prompt,
         mode,
@@ -93,16 +126,40 @@ export function PostComposeAiBar({
         link,
       })
       const returned = result.content.trim()
-      if (!returned) return
+      if (!returned || isThinOrEchoPostDraft(returned, promptSeed)) {
+        const fallback = fallbackPostDraft(promptSeed || link?.title || linkUrl || 'this update', mode)
+        onApplyDraft({
+          content: fallback.content,
+          articleTitle: result.title ?? fallback.title ?? undefined,
+        })
+        return
+      }
       onApplyDraft({
         content: returned,
         articleTitle: result.title ?? undefined,
       })
     } catch {
-      // Leave the words the member already wrote.
+      const fallback = fallbackPostDraft(promptSeed || link?.title || linkUrl || 'this update', mode)
+      onApplyDraft({
+        content: fallback.content,
+        articleTitle: fallback.title ?? undefined,
+      })
+      toast.show('Draft ready', {
+        tone: 'info',
+        message: 'Expanded your notes into a starter post. Edit anything before posting.',
+      })
     } finally {
       setLoading(false)
     }
+  }
+
+  function applyChip(chip: PostSuggestionChip) {
+    // Short / echo chips are instructions — expand them into a full post.
+    if (isThinOrEchoPostDraft(chip.draft, seedPrompt) || isThinOrEchoPostDraft(chip.draft, chip.label)) {
+      void generateDraft(chip.draft || chip.label || seedPrompt)
+      return
+    }
+    onApplyDraft({ content: chip.draft })
   }
 
   return (
@@ -111,14 +168,15 @@ export function PostComposeAiBar({
         <XStack
           alignItems="center"
           gap={6}
-          cursor="pointer"
-          opacity={loading ? 0.7 : 1}
-          pressStyle={{ opacity: 0.85 }}
+          cursor={canDraft || loading ? 'pointer' : 'default'}
+          opacity={loading ? 0.7 : canDraft ? 1 : 0.45}
+          pressStyle={canDraft ? { opacity: 0.85 } : undefined}
           onPress={() => {
-            if (!loading) void draftWithAi()
+            if (!loading && canDraft) void generateDraft()
           }}
           accessibilityRole="button"
           accessibilityLabel="Write with AI"
+          accessibilityState={{ disabled: !canDraft || loading }}
         >
           {loading ? (
             <Spinner size="small" color={communityUi.brand} />
@@ -126,7 +184,7 @@ export function PostComposeAiBar({
             <Icons.Sparkles size={14} color={communityUi.brand} />
           )}
           <Text fontSize={12} fontWeight="700" color={communityUi.brand}>
-            Write with AI
+            {loading ? 'Writing…' : 'Write with AI'}
           </Text>
         </XStack>
       </XStack>

@@ -19,6 +19,8 @@ type ListingGridProps = {
   compact?: boolean
   personalize?: boolean
   showQuickAdd?: boolean
+  /** Forwarded to each organic card (e.g. close SHERPA then navigate). */
+  onOpenListing?: (listing: ListingSummary) => void
   sponsoredItems?: SponsoredCommerceItem[]
   onSponsoredEvent?: (
     item: SponsoredCommerceItem,
@@ -68,6 +70,7 @@ export function ListingGrid({
   compact,
   personalize = true,
   showQuickAdd,
+  onOpenListing,
   sponsoredItems = [],
   onSponsoredEvent,
 }: ListingGridProps) {
@@ -114,7 +117,12 @@ export function ListingGrid({
         {mixedListings.map((entry) => (
           <div key={entry.key} style={{ width: '100%', minWidth: 0 }}>
             {entry.kind === 'organic' ? (
-              <ListingCard listing={entry.item} compact={compact} showQuickAdd={showQuickAdd} />
+              <ListingCard
+                listing={entry.item}
+                compact={compact}
+                showQuickAdd={showQuickAdd}
+                onOpen={onOpenListing}
+              />
             ) : (
               <SponsoredListingCard
                 item={entry.item}
@@ -139,7 +147,12 @@ export function ListingGrid({
           {...slotInsets(index % columns, columns)}
         >
           {entry.kind === 'organic' ? (
-            <ListingCard listing={entry.item} compact={compact} showQuickAdd={showQuickAdd} />
+            <ListingCard
+              listing={entry.item}
+              compact={compact}
+              showQuickAdd={showQuickAdd}
+              onOpen={onOpenListing}
+            />
           ) : (
             <SponsoredListingCard
               item={entry.item}

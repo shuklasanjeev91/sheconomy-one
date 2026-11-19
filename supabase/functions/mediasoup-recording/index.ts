@@ -111,9 +111,6 @@ Deno.serve(async (req) => {
     if (!meetingId || !['start', 'stop', 'status', 'reconcile'].includes(action)) {
       return jsonResponse({ ok: false, error: 'Invalid request.' }, 400)
     }
-    if ((action === 'start' || action === 'stop') && !roomName) {
-      return jsonResponse({ ok: false, error: 'roomName is required.' }, 400)
-    }
 
     const { data: meeting, error: meetingError } = await supabase
       .from('meetings')
@@ -121,11 +118,40 @@ Deno.serve(async (req) => {
       .eq('id', meetingId)
       .maybeSingle()
     if (meetingError || !meeting) return jsonResponse({ ok: false, error: 'Meeting not found.' }, 404)
-    if (meeting.host_id !== authData.user.id) {
-      return jsonResponse({ ok: false, error: 'Only the host can control recording.' }, 403)
+
+    const userId = authData.user.id
+    const isHost = meeting.host_id === userId
+    let isCoHost = false
+    if (!isHost) {
+      const { data: actorRole } = await supabase
+        .from('meeting_roles')
+        .select('role')
+        .eq('meeting_id', meetingId)
+        .eq('user_id', userId)
+        .maybeSingle()
+      const role = String(actorRole?.role ?? '')
+      isCoHost = role === 'co_host' || role === 'host'
     }
-    if (roomName && meeting.room_id !== roomName) {
-      return jsonResponse({ ok: false, error: 'Invalid room.' }, 403)
+    if (!isHost && !isCoHost) {
+      return jsonResponse({ ok: false, error: 'Only the host or co-host can control recording.' }, 403)
+    }
+
+    // Start/stop always address the main meeting room. Clients may still send a
+    // breakout room name while joined there — accept it for auth but record the main room.
+    if (roomName && meeting.room_id && roomName !== meeting.room_id) {
+      const { data: breakout } = await serviceSupabase
+        .from('meeting_breakout_rooms')
+        .select('id')
+        .eq('meeting_id', meetingId)
+        .eq('livekit_room_name', roomName)
+        .maybeSingle()
+      if (!breakout) {
+        return jsonResponse({ ok: false, error: 'Invalid room.' }, 403)
+      }
+    }
+    const recordingRoomName = String(meeting.room_id || roomName || '')
+    if ((action === 'start' || action === 'stop') && !recordingRoomName) {
+      return jsonResponse({ ok: false, error: 'roomName is required.' }, 400)
     }
 
     // ── status / reconcile ──────────────────────────────────────────────────
@@ -212,7 +238,7 @@ Deno.serve(async (req) => {
       }
 
       const started = await mediasoupAdmin<{ error?: string }>('record/start', {
-        room: `${MEDIASOUP_ROOM_PREFIX}${roomName}`,
+        room: `${MEDIASOUP_ROOM_PREFIX}${recordingRoomName}`,
         recordingId: row.id,
         layout: composition.layout,
         audio: composition.audio,

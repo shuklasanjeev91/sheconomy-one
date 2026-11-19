@@ -157,8 +157,15 @@ export function useMeetingRecording({
         return false
       }
 
+      // Actively recording — stop instead of starting a second job.
       if (recording || isActiveRecordingStatus(status)) {
         return stopRecording()
+      }
+
+      // Encode/upload in progress — do not start another recording yet.
+      if (status === 'processing') {
+        onErrorRef.current?.('Recording is still processing. Wait for it to finish before starting another.')
+        return false
       }
 
       const cloud = await startCloudRecording({
@@ -201,8 +208,13 @@ export function useMeetingRecording({
   }, [enabled, meetingId, recording, refreshStatus, roomName, status, stopRecording])
 
   const toggleRecording = useCallback(() => {
+    // Call stop directly so a start-in-flight `startingRef` cannot swallow Stop taps.
+    if (recording || isActiveRecordingStatus(status)) {
+      void stopRecording()
+      return
+    }
     void startRecording()
-  }, [startRecording])
+  }, [recording, startRecording, status, stopRecording])
 
   useEffect(() => {
     if (!enabled || !meetingId) return

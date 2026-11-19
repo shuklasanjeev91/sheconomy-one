@@ -46,12 +46,22 @@ type ListingCardProps = {
   listing: ListingSummary
   compact?: boolean
   showQuickAdd?: boolean
+  /**
+   * When set, image / title / price open via this callback instead of AppLink.
+   * Use from overlays (e.g. SHERPA) that must close before navigating.
+   */
+  onOpen?: (listing: ListingSummary) => void
 }
 
 /**
  * Listing tile — square image(s), heart overlay, title, optional rating, bold price.
  */
-export const ListingCard = memo(function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps) {
+export const ListingCard = memo(function ListingCard({
+  listing,
+  compact,
+  showQuickAdd,
+  onOpen,
+}: ListingCardProps) {
   const ui = useAppUi()
   const cardShadow = useThemedShadowStyle('sm')
   const cardShadowMd = useThemedShadowStyle('md')
@@ -89,6 +99,96 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
   )
 
   const warmListing = () => warmListingRoute(listing, listingSlug)
+  const openListing = () => {
+    warmListing()
+    onOpen?.(listing)
+  }
+
+  const media = (
+    <YStack
+      width="100%"
+      height="100%"
+      borderRadius={16}
+      overflow="hidden"
+      backgroundColor={ui.imagePlaceholder}
+      borderWidth={1}
+      borderColor={ui.borderSubtle}
+      {...motion.cardLift}
+      hoverStyle={{ ...motion.cardLift.hoverStyle, ...cardShadowMd }}
+      style={cardShadow}
+      onPressIn={warmListing}
+      {...(onOpen
+        ? {
+            onPress: openListing,
+            cursor: 'pointer' as const,
+            role: 'link' as const,
+            accessibilityRole: 'link' as const,
+            accessibilityLabel: cardTitle,
+          }
+        : null)}
+    >
+      <ListingImage
+        imageUrls={displayUrls}
+        alt={cardTitle}
+        width="100%"
+        height="100%"
+        objectFit="cover"
+        displaySize={{ width: 640, height: 640, quality: 72, resize: 'cover' }}
+      />
+    </YStack>
+  )
+
+  const details = (
+    <YStack
+      gap={4}
+      cursor="pointer"
+      paddingHorizontal={2}
+      animation="quick"
+      onPressIn={warmListing}
+      {...(onOpen
+        ? {
+            onPress: openListing,
+            role: 'link' as const,
+            accessibilityRole: 'link' as const,
+            accessibilityLabel: cardTitle,
+          }
+        : null)}
+    >
+      <Text
+        fontSize={compact ? 12 : 13}
+        fontWeight="600"
+        numberOfLines={2}
+        lineHeight={compact ? 17 : 19}
+        color={ui.text}
+        letterSpacing={-0.2}
+        hoverStyle={{ color: ui.brand }}
+      >
+        {cardTitle}
+      </Text>
+
+      {hasRating ? (
+        <XStack gap={4} alignItems="center">
+          <StarRating rating={listing.average_rating ?? 0} size={11} />
+          <Text fontSize={12} color={ui.textSecondary} fontWeight="500">
+            {formatRating(listing.average_rating)}
+            {listing.total_reviews ? ` (${listing.total_reviews})` : ''}
+          </Text>
+        </XStack>
+      ) : null}
+
+      <YStack gap={2}>
+        <ListingPriceBlock
+          price={listing.price}
+          mrp={listing.mrp}
+          currency={listing.currency}
+          priceIncludesTax={listing.price_includes_tax}
+          taxPercent={listing.tax_percent}
+          size="sm"
+          hideTaxLabel
+        />
+      </YStack>
+    </YStack>
+  )
 
   return (
     <YStack width="100%" gap={compact ? '$1.5' : '$2'}>
@@ -102,30 +202,7 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
         }}
         onMouseLeave={() => setPreviewImageIndex(0)}
       >
-        <AppLink href={listingHref} asChild>
-          <YStack
-            width="100%"
-            height="100%"
-            borderRadius={16}
-            overflow="hidden"
-            backgroundColor={ui.imagePlaceholder}
-            borderWidth={1}
-            borderColor={ui.borderSubtle}
-            {...motion.cardLift}
-            hoverStyle={{ ...motion.cardLift.hoverStyle, ...cardShadowMd }}
-            style={cardShadow}
-            onPressIn={warmListing}
-          >
-            <ListingImage
-              imageUrls={displayUrls}
-              alt={cardTitle}
-              width="100%"
-              height="100%"
-              objectFit="cover"
-              displaySize={{ width: 640, height: 640, quality: 72, resize: 'cover' }}
-            />
-          </YStack>
-        </AppLink>
+        {onOpen ? media : <AppLink href={listingHref} asChild>{media}</AppLink>}
         <FavoriteButton listingId={listing.id} size={compact ? 16 : 18} />
         {imageUrls.length > 1 ? (
           <XStack
@@ -171,63 +248,28 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
       </YStack>
 
       {deliveryHint || listing.listing_type ? (
-        <ListingTypeBadge
-          listingType={listing.listing_type}
-          compact={compact}
-          deliveryHint={deliveryHint}
-        />
-      ) : null}
-
-      <AppLink href={listingHref} asChild>
-        <YStack
-          gap={4}
-          cursor="pointer"
-          paddingHorizontal={2}
-          animation="quick"
-          onPressIn={warmListing}
-        >
-          <Text
-            fontSize={compact ? 12 : 13}
-            fontWeight="600"
-            numberOfLines={2}
-            lineHeight={compact ? 17 : 19}
-            color={ui.text}
-            letterSpacing={-0.2}
-            hoverStyle={{ color: ui.brand }}
-          >
-            {cardTitle}
-          </Text>
-
-          {hasRating ? (
-            <XStack gap={4} alignItems="center">
-              <StarRating rating={listing.average_rating ?? 0} size={11} />
-              <Text fontSize={12} color={ui.textSecondary} fontWeight="500">
-                {formatRating(listing.average_rating)}
-                {listing.total_reviews ? ` (${listing.total_reviews})` : ''}
-              </Text>
-            </XStack>
-          ) : null}
-
-          <YStack gap={2}>
-            <ListingPriceBlock
-              price={listing.price}
-              mrp={listing.mrp}
-              currency={listing.currency}
-              priceIncludesTax={listing.price_includes_tax}
-              taxPercent={listing.tax_percent}
-              size="sm"
-              hideTaxLabel
+        onOpen ? (
+          <YStack onPress={openListing} cursor="pointer">
+            <ListingTypeBadge
+              listingType={listing.listing_type}
+              compact={compact}
+              deliveryHint={deliveryHint}
             />
           </YStack>
-        </YStack>
-      </AppLink>
+        ) : (
+          <ListingTypeBadge
+            listingType={listing.listing_type}
+            compact={compact}
+            deliveryHint={deliveryHint}
+          />
+        )
+      ) : null}
+
+      {onOpen ? details : <AppLink href={listingHref} asChild>{details}</AppLink>}
 
       {listing.shop_name && !compact ? (
         listing.shop_slug || listing.shop_id ? (
-          <AppLink
-            href={routes.shop(listing.shop_slug || listing.shop_id!)}
-            asChild
-          >
+          onOpen ? (
             <Text
               fontSize={12}
               color={ui.link}
@@ -236,10 +278,29 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
               paddingHorizontal={2}
               cursor="pointer"
               hoverStyle={{ color: ui.brand }}
+              onPress={openListing}
+              accessibilityRole="link"
             >
               {listing.shop_name}
             </Text>
-          </AppLink>
+          ) : (
+            <AppLink
+              href={routes.shop(listing.shop_slug || listing.shop_id!)}
+              asChild
+            >
+              <Text
+                fontSize={12}
+                color={ui.link}
+                numberOfLines={1}
+                fontWeight="600"
+                paddingHorizontal={2}
+                cursor="pointer"
+                hoverStyle={{ color: ui.brand }}
+              >
+                {listing.shop_name}
+              </Text>
+            </AppLink>
+          )
         ) : (
           <Text fontSize={12} color={ui.textMuted} numberOfLines={1} fontWeight="500" paddingHorizontal={2}>
             {listing.shop_name}
@@ -247,12 +308,18 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
         )
       ) : null}
 
-      {showQuickAdd ? <QuickAddCartAction listing={listing} /> : null}
+      {showQuickAdd ? <QuickAddCartAction listing={listing} onOpen={onOpen} /> : null}
     </YStack>
   )
 })
 
-function QuickAddCartAction({ listing }: { listing: ListingSummary }) {
+function QuickAddCartAction({
+  listing,
+  onOpen,
+}: {
+  listing: ListingSummary
+  onOpen?: (listing: ListingSummary) => void
+}) {
   const { addToCart } = useCart()
   const toast = useAppToast()
   const router = useRouter()
@@ -269,7 +336,8 @@ function QuickAddCartAction({ listing }: { listing: ListingSummary }) {
             tone: 'default',
             message: 'Select options on the product page to add it.',
           })
-          router.push(routes.listing(Platform.OS === 'web' ? getListingSlug(listing) : listing.id))
+          if (onOpen) onOpen(listing)
+          else router.push(routes.listing(Platform.OS === 'web' ? getListingSlug(listing) : listing.id))
           return { error }
         }
         return { error: null }
