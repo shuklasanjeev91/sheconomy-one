@@ -59,12 +59,36 @@ export function PostComposeAiBar({
   const [loading, setLoading] = useState(false)
   const [chips, setChips] = useState<PostSuggestionChip[]>([])
   const [loadingChips, setLoadingChips] = useState(true)
+  const [memberContext, setMemberContext] = useState<{
+    memberName: string
+    headline: string
+    location: string
+    occupation: string
+  }>({ memberName: '', headline: '', location: '', occupation: '' })
 
   const linkUrl = link?.url ?? ''
   const linkTitle = link?.title ?? ''
   const seed = seedPrompt?.trim() ?? ''
   const instructionMode = isComposeInstruction(seed)
   const canDraft = Boolean(seed) || photoCount > 0 || videoCount > 0 || Boolean(linkUrl)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      if (!user?.id) return
+      const profile = await fetchPublicProfile(user.id)
+      if (cancelled) return
+      setMemberContext({
+        memberName: profile.data?.full_name?.trim() ?? '',
+        headline: profile.data?.headline?.trim() || profile.data?.occupation?.trim() || '',
+        location: profile.data?.location?.trim() ?? '',
+        occupation: profile.data?.occupation?.trim() ?? '',
+      })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -84,21 +108,12 @@ export function PostComposeAiBar({
           return
         }
 
-        let memberName = ''
-        let headline = ''
-        let location = ''
-        if (user?.id) {
-          const profile = await fetchPublicProfile(user.id)
-          memberName = profile.data?.full_name?.trim() ?? ''
-          headline = profile.data?.headline?.trim() || profile.data?.occupation?.trim() || ''
-          location = profile.data?.location?.trim() ?? ''
-        }
         try {
           const rows = await fetchPostSuggestions({
             mode,
-            memberName,
-            headline,
-            location,
+            memberName: memberContext.memberName,
+            headline: memberContext.headline,
+            location: memberContext.location,
             prompt: seed.slice(0, 160),
             photoCount,
             videoCount,
@@ -134,7 +149,17 @@ export function PostComposeAiBar({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [mode, user?.id, seed, photoCount, videoCount, linkUrl, linkTitle])
+  }, [
+    mode,
+    seed,
+    photoCount,
+    videoCount,
+    linkUrl,
+    linkTitle,
+    memberContext.memberName,
+    memberContext.headline,
+    memberContext.location,
+  ])
 
   function applyGeneratedDraft(
     result: { content: string; title: string | null },
@@ -183,6 +208,10 @@ export function PostComposeAiBar({
         photoCount,
         videoCount,
         link,
+        memberName: memberContext.memberName,
+        headline: memberContext.headline,
+        location: memberContext.location,
+        occupation: memberContext.occupation,
       })
       applyGeneratedDraft(result, promptSeed)
     } catch (err) {
@@ -234,7 +263,7 @@ export function PostComposeAiBar({
             <Icons.Sparkles size={14} color={communityUi.brand} />
           )}
           <Text fontSize={12} fontWeight="700" color={communityUi.brand}>
-            {loading ? 'SHERPA is writing…' : 'Write with SHERPA'}
+            {loading ? 'SHERPA is researching…' : 'Write with SHERPA'}
           </Text>
         </XStack>
       </XStack>

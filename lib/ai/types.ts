@@ -113,6 +113,11 @@ export type PostDraftParams = {
   photoCount?: number
   videoCount?: number
   link?: { url: string; title?: string | null; description?: string | null } | null
+  /** Member profile context for personalized drafts. */
+  memberName?: string | null
+  headline?: string | null
+  location?: string | null
+  occupation?: string | null
 }
 
 export type PostDraftResult = {

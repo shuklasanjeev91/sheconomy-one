@@ -1115,26 +1115,36 @@ async function callGeminiOnce(
   model: string,
   systemPrompt: string,
   contents: GeminiContent[],
-  options?: { jsonMode?: boolean; maxOutputTokens?: number; temperature?: number },
+  options?: {
+    jsonMode?: boolean
+    maxOutputTokens?: number
+    temperature?: number
+    googleSearch?: boolean
+  },
 ): Promise<{ answer: string | null; error: string | null }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
   const generationConfig: Record<string, unknown> = {
     temperature: options?.temperature ?? 0.4,
     maxOutputTokens: options?.maxOutputTokens ?? 4096,
   }
-  if (options?.jsonMode) {
+  // Grounding tools and responseMimeType=json are incompatible on many models.
+  if (options?.jsonMode && !options?.googleSearch) {
     generationConfig.responseMimeType = 'application/json'
+  }
+  const payload: Record<string, unknown> = {
+    systemInstruction: {
+      parts: [{ text: systemPrompt }],
+    },
+    contents,
+    generationConfig,
+  }
+  if (options?.googleSearch) {
+    payload.tools = [{ google_search: {} }]
   }
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: systemPrompt }],
-      },
-      contents,
-      generationConfig,
-    }),
+    body: JSON.stringify(payload),
   })
 
   if (!response.ok) {
@@ -1166,7 +1176,12 @@ async function callGemini(
   systemPrompt: string,
   history: ChatMessageRow[],
   userMessage: string,
-  options?: { jsonMode?: boolean; maxOutputTokens?: number; temperature?: number },
+  options?: {
+    jsonMode?: boolean
+    maxOutputTokens?: number
+    temperature?: number
+    googleSearch?: boolean
+  },
 ): Promise<LlmCallResult> {
   const keys = collectGeminiApiKeys()
   if (!keys.length) {
@@ -1209,6 +1224,45 @@ function isGenericPostFallbackContent(content: string): boolean {
       /what would you add from your experience/i.test(body)) ||
     (/excited to celebrate\b/i.test(body) && /who else is celebrating a win/i.test(body))
   )
+}
+
+function extractTopicFromComposeNotes(seed: string): string {
+  const raw = seed.trim()
+  if (!raw) return ''
+  return raw
+    .replace(/^write (a |an |the )?(post |update )?(about|on|regarding)\s+/i, '')
+    .replace(/^write about\s+/i, '')
+    .replace(/^about\s+/i, '')
+    .replace(/#[\w\u00C0-\u024F]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160)
+}
+
+async function researchTopicBrief(topic: string): Promise<string> {
+  const cleaned = topic.trim()
+  if (!cleaned || cleaned.length < 2) return ''
+  const researchPrompt = [
+    'You research topics for professional social posts.',
+    'Use web search when available. Return 4–7 short factual bullets about the topic.',
+    'Focus on: what it is, who it serves, notable mission/products, why it matters for women-led professionals.',
+    'No marketing fluff. No hashtags. No post draft — facts only. Max 600 characters.',
+  ].join('\n')
+  const completion = await callGemini(
+    researchPrompt,
+    [],
+    `Collect global facts about: ${cleaned}`,
+    { googleSearch: true, temperature: 0.2, maxOutputTokens: 700 },
+  )
+  if (completion.answer?.trim()) return completion.answer.trim().slice(0, 900)
+  // Fallback without search — model prior knowledge only.
+  const local = await callGemini(
+    researchPrompt,
+    [],
+    `Summarize known public facts about: ${cleaned}. If uncertain, say what is commonly associated with the name.`,
+    { temperature: 0.3, maxOutputTokens: 700 },
+  )
+  return local.answer?.trim().slice(0, 900) ?? ''
 }
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
@@ -1945,22 +1999,37 @@ Deno.serve(async (req) => {
         typeof context.compose_mode === 'string' && context.compose_mode
           ? context.compose_mode
           : 'text'
+      const memberName =
+        typeof context.member_name === 'string' ? context.member_name.trim() : ''
+      const headline = typeof context.headline === 'string' ? context.headline.trim() : ''
+      const location = typeof context.location === 'string' ? context.location.trim() : ''
+      const occupation =
+        typeof context.occupation === 'string' ? context.occupation.trim() : ''
+      const topic = extractTopicFromComposeNotes(prompt || link?.title || '')
+      const researchBrief = topic ? await researchTopicBrief(topic) : ''
+
       const systemPrompt = [
-        'You are SHERPA — rewrite member notes into a LinkedIn-style professional post for SHEconomy (women-led community).',
+        'You are SHERPA — research-informed LinkedIn-style post writer for SHEconomy (women-led community).',
         productPlaybook('community'),
         'Return ONLY JSON with keys: title (string or null), content (string).',
         'title is required for article mode; otherwise null.',
-        'Rewrite the member’s notes into a COMPLETE ready-to-publish post. Do NOT return only hashtags. Do NOT attach or describe GIFs/images/videos.',
+        'Use the RESEARCH BRIEF and MEMBER CONTEXT below. Turn member notes into a COMPLETE ready-to-publish post.',
+        'Do NOT return only hashtags. Do NOT invent unverifiable stats. Prefer brief facts from research; if research is thin, still write a thoughtful first-person post about the topic.',
         'content: 2–4 short paragraphs (roughly 350–900 characters for text modes, up to 2200 for article). First-person professional voice.',
-        'Structure like LinkedIn AI rewrite: (1) strong opening hook naming the topic/brand, (2) 1–2 concrete insights or observations, (3) a clear question or CTA for the community.',
-        'If the member wrote “Write about X” or a short topic like “bioayurveda”, expand into a full post about X — never echo the instruction.',
-        'Keep any hashtags the member already typed at the end; you may add at most 1–2 more. Hashtags alone are never a valid post.',
-        'Be specific. Never use filler like “Sharing a quick update on…”, “a few things stood out”, or “what’s resonating for you”.',
-        'No markdown fences. No bullet lists unless article mode. No image/GIF/video suggestions in the JSON.',
+        'Structure: (1) hook naming the topic/brand, (2) 1–2 concrete insights grounded in research, (3) community question or CTA.',
+        'If notes say “Write about X”, expand X — never echo the instruction.',
+        'Keep member hashtags at the end; add at most 1–2 more. Hashtags alone are never valid.',
+        'Never use filler like “Sharing a quick update on…” or “what’s resonating for you”.',
+        'No markdown fences. No bullet lists unless article mode. No image/GIF suggestions.',
         languageDirective(context, body),
         'Write the post content (and title when present) in the preferred language.',
         `Compose mode: ${composeMode}.`,
-        photoCount > 0 ? `Member already attached ${photoCount} photo(s) — reference them naturally in the caption.` : '',
+        topic ? `TOPIC: ${topic}` : '',
+        researchBrief ? `RESEARCH BRIEF:\n${researchBrief}` : 'RESEARCH BRIEF: (none — use careful general knowledge).',
+        memberName || headline || location || occupation
+          ? `MEMBER CONTEXT: ${[memberName && `name=${memberName}`, headline && `headline=${headline}`, occupation && `occupation=${occupation}`, location && `location=${location}`].filter(Boolean).join('; ')}`
+          : '',
+        photoCount > 0 ? `Member already attached ${photoCount} photo(s) — reference them naturally.` : '',
         videoCount > 0 ? `Member already attached ${videoCount} video(s) — reference them naturally.` : '',
         link?.url
           ? `Shared link: ${link.url}${link.title ? ` (${link.title})` : ''}${link.description ? ` — ${String(link.description).slice(0, 200)}` : ''}. Make the link the subject of the post.`
@@ -1969,16 +2038,21 @@ Deno.serve(async (req) => {
         .filter(Boolean)
         .join('\n')
 
-      const userTurn = prompt || 'Write a complete community post for the attached media/link.'
+      const userTurn = [
+        'Member notes from create-post textarea:',
+        prompt || '(media/link only)',
+        '',
+        'Write the complete community post now as JSON.',
+      ].join('\n')
       let completion = await callGemini(systemPrompt, [], userTurn, {
         jsonMode: true,
-        temperature: 0.75,
+        temperature: 0.7,
         maxOutputTokens: 1200,
       })
       let parsed = parsePostDraftJson(completion.answer)
       if (!parsed?.content) {
         completion = await callGemini(systemPrompt, [], userTurn, {
-          temperature: 0.75,
+          temperature: 0.7,
           maxOutputTokens: 1200,
         })
         parsed = parsePostDraftJson(completion.answer)

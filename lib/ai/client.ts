@@ -303,6 +303,11 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
       photo_count: params.photoCount ?? 0,
       video_count: params.videoCount ?? 0,
       link: params.link ?? null,
+      member_name: params.memberName?.trim() || null,
+      headline: params.headline?.trim() || null,
+      location: params.location?.trim() || null,
+      occupation: params.occupation?.trim() || null,
+      research_topic: true,
       expand_notes: true,
       draft_style: 'complete_ready_to_publish',
       require_paragraphs: true,
@@ -316,11 +321,10 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
     usedFallback: Boolean(row.usedFallback),
   })
 
-  // LinkedIn-style rewrite: use trained Gemini edge only — owned Ollama often
-  // returns hashtag stubs / templates instead of a full post.
+  // Research + LinkedIn-style rewrite on the trained Gemini edge (can take longer).
   let draft: PostDraftResult
   try {
-    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody, { timeoutMs: 18_000 }))
+    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody, { timeoutMs: 28_000 }))
   } catch (err) {
     if (err instanceof Error) throw err
     throw new Error(`${AI_NAME} could not draft this post. Try again.`)

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   deriveGifQueryFromSeed,
+  extractTopicFromComposeNotes,
   mergeMemberHashtags,
 } from '~/community/lib/post-draft-complete'
 
@@ -21,6 +22,13 @@ describe('post draft complete helpers', () => {
       'Write about bioayurveda #youarestrongerthanyouthink',
     )
     expect(merged.match(/#youarestrongerthanyouthink/gi)?.length).toBe(1)
+  })
+
+  it('extracts the research topic from write-about seeds', () => {
+    expect(extractTopicFromComposeNotes('Write about bioayurveda #youarestrongerthanyouthink')).toBe(
+      'bioayurveda',
+    )
+    expect(extractTopicFromComposeNotes('About wef.org.in #missionmillion')).toBe('wef.org.in')
   })
 
   it('derives a short gif query from write-about seeds', () => {
