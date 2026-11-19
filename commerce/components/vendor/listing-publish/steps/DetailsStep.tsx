@@ -361,7 +361,7 @@ export function DetailsStep({
             </YStack>
           ) : null}
         </ListingPublishCard>
-      )}
+      ) : null}
 
       {showDetails ? (
       <ListingPublishCard
