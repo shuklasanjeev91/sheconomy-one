@@ -4,14 +4,15 @@ import {
   LISTING_VALIDATION,
 } from '~/lib/listing/listing.type'
 
-/** Wizard / top-tab identifiers — stable keys for navigation + validation. */
+/** Amazon-style top-tab identifiers — stable keys for navigation + validation. */
 export const LISTING_PUBLISH_STEP_IDS = {
   BASIC: 'basic',
   IMAGES: 'images',
   PRICING: 'pricing',
   VARIANTS: 'variants',
-  CATEGORIES: 'categories',
   DETAILS: 'details',
+  SHIPPING: 'shipping',
+  CATEGORIES: 'categories',
   SEO: 'seo',
 } as const
 
@@ -23,60 +24,67 @@ export type ListingPublishStepConfig = {
   label: string
   headline: string
   subtitle: string
-  iconName: 'info' | 'layers' | 'indian-rupee' | 'tags' | 'image' | 'search' | 'sliders'
-  /** When true, tab only shows for Variable / Grouped products. */
+  iconName: 'info' | 'layers' | 'indian-rupee' | 'tags' | 'image' | 'search' | 'sliders' | 'truck'
+  /** When true, tab only shows for Variable products. */
   requiresVariants?: boolean
 }
 
 export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
   {
     id: LISTING_PUBLISH_STEP_IDS.BASIC,
-    label: 'Product Info',
-    headline: 'Product Information',
-    subtitle: 'Title, description, and tags for your listing.',
+    label: 'Product identity',
+    headline: 'Product identity',
+    subtitle: 'Title, description, and tags — like Amazon product name & description.',
     iconName: 'info',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.IMAGES,
-    label: 'Media',
-    headline: 'Media',
-    subtitle: 'Main photo first, then angles and detail shots.',
+    label: 'Images',
+    headline: 'Images',
+    subtitle: 'Main image first, then angles and detail shots.',
     iconName: 'image',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.PRICING,
-    label: 'Pricing',
-    headline: 'Pricing',
-    subtitle: 'Choose Simple, Variable, or Grouped — then set prices.',
+    label: 'Offer',
+    headline: 'Offer',
+    subtitle: 'Simple or Variable — then set price, tax, quantity, and SKU.',
     iconName: 'indian-rupee',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.VARIANTS,
-    label: 'Variants',
-    headline: 'Variants',
-    subtitle: 'Options, SKU prices, and stock — or grouped product links.',
+    label: 'Variations',
+    headline: 'Variations',
+    subtitle: 'Size / color options with per-SKU price and stock.',
     iconName: 'sliders',
     requiresVariants: true,
   },
   {
-    id: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
-    label: 'Categories',
-    headline: 'Categories',
-    subtitle: 'Classify your item so shoppers can find it.',
-    iconName: 'tags',
-  },
-  {
     id: LISTING_PUBLISH_STEP_IDS.DETAILS,
-    label: 'Inventory',
-    headline: 'Inventory & Shipping',
-    subtitle: 'Stock, package size, materials, and compliance details.',
+    label: 'Product details',
+    headline: 'Product details',
+    subtitle: 'Brand, manufacturer, country of origin, and compliance fields.',
     iconName: 'layers',
   },
   {
+    id: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+    label: 'Shipping',
+    headline: 'Shipping',
+    subtitle: 'Package weight and dimensions for delivery.',
+    iconName: 'truck',
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
+    label: 'Browse',
+    headline: 'Browse nodes',
+    subtitle: 'Choose categories so shoppers can find this product.',
+    iconName: 'tags',
+  },
+  {
     id: LISTING_PUBLISH_STEP_IDS.SEO,
-    label: 'SEO',
-    headline: 'SEO',
-    subtitle: 'Search title, description, and custom URL.',
+    label: 'Keywords',
+    headline: 'Search keywords',
+    subtitle: 'Slug, search title, and meta description.',
     iconName: 'search',
   },
 ] as const
@@ -94,10 +102,11 @@ export const LISTING_PUBLISH_IMAGE_HINTS = {
   ACCEPTED_FORMATS_LABEL: 'JPG, PNG, WebP',
 } as const
 
-/** WooCommerce / Amazon-style catalog structure (independent of physical/digital/service). */
+/** Amazon-style catalog structure: Simple (single SKU) or Variable (parent + children). */
 export const PRODUCT_STRUCTURES = {
   SIMPLE: 'simple',
   VARIABLE: 'variable',
+  /** @deprecated Kept for reading legacy metadata only — UI no longer offers Grouped. */
   GROUPED: 'grouped',
 } as const
 
@@ -108,32 +117,26 @@ export const PRODUCT_STRUCTURE_OPTIONS = [
   {
     value: PRODUCT_STRUCTURES.SIMPLE,
     label: 'Simple',
-    description: 'Single SKU — one price and stock (WooCommerce Simple).',
+    description: 'One SKU — single price and stock.',
   },
   {
     value: PRODUCT_STRUCTURES.VARIABLE,
     label: 'Variable',
-    description: 'Size / color options with per-variant price & stock.',
-  },
-  {
-    value: PRODUCT_STRUCTURES.GROUPED,
-    label: 'Grouped',
-    description: 'Bundle of related listings (no price on the group).',
+    description: 'Size / color options with per-variation price & stock.',
   },
 ] as const
 
-/** Visible top tabs for the current product structure (WooCommerce-style). */
+/** Visible top tabs for the current product structure. */
 export function getListingPublishSteps(structure: ProductStructure): ListingPublishStepConfig[] {
-  const needsVariants =
-    structure === PRODUCT_STRUCTURES.VARIABLE || structure === PRODUCT_STRUCTURES.GROUPED
+  const needsVariants = structure === PRODUCT_STRUCTURES.VARIABLE
   return LISTING_PUBLISH_STEPS.filter((step) => !step.requiresVariants || needsVariants)
 }
 
 /** Keys stored inside `listing_metadata` for vendor-only form fields. */
 export const LISTING_METADATA_KEYS = {
-  /** simple | variable | grouped — Amazon/WooCommerce product data type */
+  /** simple | variable — Amazon product offer type */
   PRODUCT_STRUCTURE: 'product_structure',
-  /** Listing IDs included in a grouped product */
+  /** Legacy grouped listing IDs (no longer edited in UI) */
   GROUPED_LISTING_IDS: 'grouped_listing_ids',
   PRICING_NOTES: 'pricing_notes',
   MIN_ORDER_QUANTITY: 'min_order_quantity',
@@ -200,20 +203,11 @@ export const LISTING_PUBLISH_COPY = {
   LAST_SAVED_NEVER: 'Not saved yet',
   IMAGES_REQUIRED_BANNER:
     'Upload at least 3 product photos (main + details). Main image ≥1000px, clean background, no watermarks.',
-  LISTING_TIP_CATEGORIES:
-    'Vendors who select specific sub-categories see a 24% increase in discovery rates. Our Orchestrator AI will verify these tags after you publish.',
-  EXPERT_TIP_PRICING:
-    "Products with 'Accept Offers' enabled see a 14% higher engagement rate. Bulk discounts are recommended for items in the Lifestyle category.",
   IMAGE_GUIDELINES: [
     'Main image: product fills the frame on a clean / white background.',
     `At least ${LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX}px on the longest side (1600px+ recommended).`,
     `Upload ${LISTING_IMAGE_CONSTRAINTS.MIN_COUNT_PUBLISH}–${LISTING_IMAGE_CONSTRAINTS.MAX_COUNT} photos: MAIN, angle, detail, lifestyle.`,
     'No watermarks, logos, or text overlays on the main image.',
     'Use natural lighting; keep colours accurate to the product.',
-  ] as const,
-  SEO_BEST_PRACTICES: [
-    'Include your primary keyword naturally in the title and description.',
-    'Ensure your SEO Title is unique across your catalogue.',
-    'Use descriptive alt-text on every product image.',
   ] as const,
 } as const

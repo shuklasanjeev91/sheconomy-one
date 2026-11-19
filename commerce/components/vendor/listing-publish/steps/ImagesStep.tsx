@@ -277,9 +277,6 @@ export function ImagesStep({
               </XStack>
             ))}
           </YStack>
-          <Text fontSize={12} color={ui.textMuted} fontStyle="italic" marginTop="$2">
-            Tip: Quality images increase conversion rates by up to 40%.
-          </Text>
         </ListingPublishCard>
       </YStack>
     </XStack>

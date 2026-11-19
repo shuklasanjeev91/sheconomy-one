@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 
 import {
   Button,
-  Checkbox,
   Field,
   Icons,
   Image,
@@ -15,7 +14,6 @@ import {
   Spinner,
   Switch,
   Text,
-  TextArea,
   XStack,
   YStack,
   useAppToast,
@@ -55,9 +53,6 @@ import {
   type ProductStructure,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import {
-  readMetadataBoolean,
-  readMetadataString,
-  readMetadataStringList,
   readProductInfoString,
   resolveProductStructure,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
@@ -91,7 +86,6 @@ export function ProductStructurePricingPanel({
   onStructureChange,
 }: ProductStructurePricingPanelProps) {
   const toast = useAppToast()
-  const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
   const variations = formData.variations ?? []
   const images = formData.images ?? []
   const isDigital = formData.listing_type === LISTING_TYPES.DIGITAL
@@ -108,12 +102,14 @@ export function ProductStructurePricingPanel({
     const fromMeta = parseVariationAxes(formData.listing_metadata)
     return fromMeta.length ? fromMeta : []
   })
-  const productStructure = resolveProductStructure(formData)
+  const rawStructure = resolveProductStructure(formData)
+  // Legacy "grouped" listings open as Simple in the Amazon-style editor.
+  const productStructure =
+    rawStructure === PRODUCT_STRUCTURES.VARIABLE
+      ? PRODUCT_STRUCTURES.VARIABLE
+      : PRODUCT_STRUCTURES.SIMPLE
   const isVariable = productStructure === PRODUCT_STRUCTURES.VARIABLE
-  const isGrouped = productStructure === PRODUCT_STRUCTURES.GROUPED
   const isSimple = productStructure === PRODUCT_STRUCTURES.SIMPLE
-  const groupedIds = readMetadataStringList(meta, LISTING_METADATA_KEYS.GROUPED_LISTING_IDS)
-  const [groupedDraft, setGroupedDraft] = useState('')
   const [axisValueDraft, setAxisValueDraft] = useState<Record<number, string>>({})
   const [variantError, setVariantError] = useState<string | null>(null)
 
@@ -126,20 +122,19 @@ export function ProductStructurePricingPanel({
   )
 
   function setProductStructure(next: ProductStructure) {
-    // Single metadata write — chained onUpdateMetadata calls race on stale formData
-    // and wipe product_structure (clicks appear to do nothing).
+    if (next !== PRODUCT_STRUCTURES.SIMPLE && next !== PRODUCT_STRUCTURES.VARIABLE) return
+    // Single metadata write — chained updates race on stale formData.
     const base = {
       ...((formData.listing_metadata ?? {}) as Record<string, unknown>),
       [LISTING_METADATA_KEYS.PRODUCT_STRUCTURE]: next,
+      [LISTING_METADATA_KEYS.GROUPED_LISTING_IDS]: [],
     }
     if (next === PRODUCT_STRUCTURES.SIMPLE) {
-      base[LISTING_METADATA_KEYS.GROUPED_LISTING_IDS] = []
       onUpdate('variations', [])
       setAxes([])
       setVariantError(null)
       onUpdate('listing_metadata', withVariationAxes(base, []) as ListingFormData['listing_metadata'])
-    } else if (next === PRODUCT_STRUCTURES.VARIABLE) {
-      base[LISTING_METADATA_KEYS.GROUPED_LISTING_IDS] = []
+    } else {
       const nextAxes = axes.length ? axes : [{ name: 'Color', values: [] as string[] }]
       setAxes(nextAxes)
       setVariantError(null)
@@ -147,30 +142,8 @@ export function ProductStructurePricingPanel({
         'listing_metadata',
         withVariationAxes(base, nextAxes) as ListingFormData['listing_metadata'],
       )
-    } else if (next === PRODUCT_STRUCTURES.GROUPED) {
-      onUpdate('variations', [])
-      setAxes([])
-      setVariantError(null)
-      onUpdate('listing_metadata', withVariationAxes(base, []) as ListingFormData['listing_metadata'])
     }
     onStructureChange?.(next)
-  }
-
-  function addGroupedListingId() {
-    const id = groupedDraft.trim()
-    if (!id || groupedIds.includes(id)) {
-      setGroupedDraft('')
-      return
-    }
-    onUpdateMetadata(LISTING_METADATA_KEYS.GROUPED_LISTING_IDS, [...groupedIds, id])
-    setGroupedDraft('')
-  }
-
-  function removeGroupedListingId(id: string) {
-    onUpdateMetadata(
-      LISTING_METADATA_KEYS.GROUPED_LISTING_IDS,
-      groupedIds.filter((row) => row !== id),
-    )
   }
 
   function persistAxes(nextAxes: VariationAxis[]) {
@@ -362,7 +335,7 @@ export function ProductStructurePricingPanel({
       {showTypeAndPrice ? (
       <ListingPublishCard ui={ui} title="Product type">
         <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-          WooCommerce / Amazon / Dukaan — pick how this product is sold. Tabs update instantly.
+          Amazon-style — Simple (one SKU) or Variable (size/color options).
         </Text>
         <XStack gap="$2" flexWrap="wrap">
           {structureOptions.map((option) => {
@@ -509,139 +482,13 @@ export function ProductStructurePricingPanel({
             </XStack>
           </Field>
 
-          <Field label="Pricing notes">
-            <TextArea
-              minHeight={100}
-              value={readMetadataString(meta, LISTING_METADATA_KEYS.PRICING_NOTES)}
-              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.PRICING_NOTES, value)}
-              placeholder="Seasonal pricing or special conditions…"
-            />
-          </Field>
         </ListingPublishCard>
       ) : null}
 
-      {showTypeAndPrice && isSimple ? (
-        <ListingPublishCard ui={ui} title="Inventory alerts">
-          <Field label="Minimum order quantity">
-            <Input
-              value={readMetadataString(meta, LISTING_METADATA_KEYS.MIN_ORDER_QUANTITY, '1')}
-              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.MIN_ORDER_QUANTITY, value)}
-              keyboardType="numeric"
-            />
-          </Field>
-          <Field label="Low stock threshold">
-            <XStack alignItems="center" gap="$2">
-              <Input
-                flex={1}
-                value={readMetadataString(meta, LISTING_METADATA_KEYS.LOW_STOCK_THRESHOLD, '5')}
-                onChangeText={(value) =>
-                  onUpdateMetadata(LISTING_METADATA_KEYS.LOW_STOCK_THRESHOLD, value)
-                }
-                keyboardType="numeric"
-              />
-              <Icons.Bell size={16} color={ui.brand} />
-            </XStack>
-          </Field>
-          <XStack alignItems="flex-start" gap="$3" paddingTop="$2">
-            <Checkbox
-              checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.ALLOW_PREORDER, false)}
-              onCheckedChange={(checked) =>
-                onUpdateMetadata(LISTING_METADATA_KEYS.ALLOW_PREORDER, !!checked)
-              }
-            />
-            <YStack flex={1} gap="$0.5">
-              <Text fontSize={13} fontWeight="700" color={ui.text}>
-                Allow pre-orders when out of stock
-              </Text>
-              <Text fontSize={12} color={ui.textSecondary}>
-                Buyers can pay now; you ship after restock.
-              </Text>
-            </YStack>
-          </XStack>
-          <Field label="Expected ship date (pre-order)">
-            <Input
-              value={readMetadataString(meta, LISTING_METADATA_KEYS.EXPECTED_SHIP_AT)}
-              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.EXPECTED_SHIP_AT, value)}
-              placeholder="YYYY-MM-DD"
-            />
-          </Field>
-          <XStack alignItems="flex-start" gap="$3">
-            <Checkbox
-              checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.REPLENISHABLE, false)}
-              onCheckedChange={(checked) =>
-                onUpdateMetadata(LISTING_METADATA_KEYS.REPLENISHABLE, !!checked)
-              }
-            />
-            <YStack flex={1} gap="$0.5">
-              <Text fontSize={13} fontWeight="700" color={ui.text}>
-                Replenishable (scheduled reorder)
-              </Text>
-              <Text fontSize={12} color={ui.textSecondary}>
-                Let buyers set a weekly or monthly reorder reminder.
-              </Text>
-            </YStack>
-          </XStack>
-        </ListingPublishCard>
-      ) : null}
-
-      {showVariants && isGrouped ? (
-        <ListingPublishCard ui={ui} title="Grouped products">
-          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-            Add listing IDs from your shop. Shoppers see this group and buy the linked products — no
-            offer price on the group itself.
-          </Text>
-          <ListingPublishFieldError ui={ui} message={errors.grouped} />
-          <XStack gap="$2" alignItems="flex-end" flexWrap="wrap">
-            <Field label="Listing ID" flex={1} minWidth={220}>
-              <Input
-                value={groupedDraft}
-                onChangeText={setGroupedDraft}
-                placeholder="Paste a product listing UUID"
-                onSubmitEditing={addGroupedListingId}
-              />
-            </Field>
-            <Button tone="outline" size="$3" onPress={addGroupedListingId}>
-              Add product
-            </Button>
-          </XStack>
-          {groupedIds.length === 0 ? (
-            <Text fontSize={12} color={ui.textSecondary}>
-              No products linked yet.
-            </Text>
-          ) : (
-            <YStack gap="$2">
-              {groupedIds.map((id) => (
-                <XStack
-                  key={id}
-                  alignItems="center"
-                  justifyContent="space-between"
-                  gap="$2"
-                  padding="$3"
-                  borderRadius={12}
-                  backgroundColor={ui.surfaceMuted}
-                >
-                  <Text flex={1} fontSize={12} fontWeight="600" color={ui.text} numberOfLines={1}>
-                    {id}
-                  </Text>
-                  <Button
-                    tone="ghost"
-                    size="$2"
-                    icon={<Icons.X size={14} />}
-                    onPress={() => removeGroupedListingId(id)}
-                  />
-                </XStack>
-              ))}
-            </YStack>
-          )}
-        </ListingPublishCard>
-      ) : null}
-
-      {showTypeAndPrice && (isVariable || isGrouped) ? (
-        <ListingPublishCard ui={ui} title={isVariable ? 'Variable pricing' : 'Grouped pricing'}>
+      {showTypeAndPrice && isVariable ? (
+        <ListingPublishCard ui={ui} title="Variable offer">
           <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-            {isVariable
-              ? 'Set each option’s price and stock in Variants below.'
-              : 'Link products in Variants below. The group itself has no offer price.'}
+            Set each option’s price and stock on the Variations tab.
           </Text>
         </ListingPublishCard>
       ) : null}

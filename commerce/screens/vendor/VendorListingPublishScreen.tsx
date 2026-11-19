@@ -800,7 +800,6 @@ function VendorListingPublishContent() {
                   isDesktop={isDesktop}
                   onEditType={() => setTypeConfirmed(false)}
                   onUpdate={updateField}
-                  onUpdateMetadata={updateMetadata}
                   onAddTag={handleAddTag}
                   onRemoveTag={handleRemoveTag}
                   onWriteWithAi={() => void writeWithAi()}
@@ -831,10 +830,7 @@ function VendorListingPublishContent() {
                   onUpdate={updateField}
                   onUpdateMetadata={updateMetadata}
                   onStructureChange={(next) => {
-                    if (
-                      next === PRODUCT_STRUCTURES.VARIABLE ||
-                      next === PRODUCT_STRUCTURES.GROUPED
-                    ) {
+                    if (next === PRODUCT_STRUCTURES.VARIABLE) {
                       setActiveStep(LISTING_PUBLISH_STEP_IDS.VARIANTS)
                     }
                   }}
@@ -855,6 +851,30 @@ function VendorListingPublishContent() {
                 />
               ) : null}
 
+              {activeStep === LISTING_PUBLISH_STEP_IDS.DETAILS ? (
+                <DetailsStep
+                  ui={ui}
+                  formData={formData}
+                  errors={displayErrors}
+                  sellerCountryCode={sellerCountryCode}
+                  section="details"
+                  onUpdate={updateField}
+                  onUpdateMetadata={updateMetadata}
+                />
+              ) : null}
+
+              {activeStep === LISTING_PUBLISH_STEP_IDS.SHIPPING ? (
+                <DetailsStep
+                  ui={ui}
+                  formData={formData}
+                  errors={displayErrors}
+                  sellerCountryCode={sellerCountryCode}
+                  section="shipping"
+                  onUpdate={updateField}
+                  onUpdateMetadata={updateMetadata}
+                />
+              ) : null}
+
               {activeStep === LISTING_PUBLISH_STEP_IDS.CATEGORIES ? (
                 <CategoriesStep
                   ui={ui}
@@ -862,17 +882,6 @@ function VendorListingPublishContent() {
                   errors={displayErrors}
                   onToggleCategory={handleToggleCategory}
                   onClearCategories={handleClearCategories}
-                />
-              ) : null}
-
-              {activeStep === LISTING_PUBLISH_STEP_IDS.DETAILS ? (
-                <DetailsStep
-                  ui={ui}
-                  formData={formData}
-                  errors={displayErrors}
-                  sellerCountryCode={sellerCountryCode}
-                  onUpdate={updateField}
-                  onUpdateMetadata={updateMetadata}
                 />
               ) : null}
 

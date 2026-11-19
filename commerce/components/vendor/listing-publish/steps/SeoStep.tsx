@@ -1,5 +1,4 @@
 import {
-  Checkbox,
   Field,
   Icons,
   Input,
@@ -13,9 +12,7 @@ import type { ListingFormData } from '~/lib/listing/listing.type'
 import { generateListingSlug } from '~/lib/listing/listing.utils'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { ListingPublishCard, ListingPublishFieldError, ListingPublishTip } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
-import { LISTING_METADATA_KEYS, LISTING_PUBLISH_COPY } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
-import { readMetadataBoolean } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
+import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
 
 type SeoStepProps = {
   ui: AppUiTokens
@@ -34,9 +31,7 @@ export function SeoStep({
   shopSlug,
   isDesktop,
   onUpdate,
-  onUpdateMetadata,
 }: SeoStepProps) {
-  const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
   const slug = formData.slug?.trim() || generateListingSlug(formData.title)
   const seoTitle = formData.meta_title?.trim() || formData.title
   const seoDescription = formData.meta_description?.trim() || formData.description || ''
@@ -133,70 +128,6 @@ export function SeoStep({
         </ListingPublishCard>
       </YStack>
 
-      <YStack width={isDesktop ? 300 : '100%'} maxWidth="100%" gap="$4">
-        <ListingPublishCard ui={ui} title="VISIBILITY SETTINGS" titleAccent>
-          <VisibilityRow
-            ui={ui}
-            label="Index this page (Robots)"
-            checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.SEO_INDEX, true)}
-            onChange={(checked) => onUpdateMetadata(LISTING_METADATA_KEYS.SEO_INDEX, checked)}
-          />
-          <VisibilityRow
-            ui={ui}
-            label="Follow links on this page"
-            checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.SEO_FOLLOW_LINKS, true)}
-            onChange={(checked) => onUpdateMetadata(LISTING_METADATA_KEYS.SEO_FOLLOW_LINKS, checked)}
-          />
-          <VisibilityRow
-            ui={ui}
-            label="Exclude from site search"
-            checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.SEO_EXCLUDE_SITE_SEARCH, false)}
-            onChange={(checked) =>
-              onUpdateMetadata(LISTING_METADATA_KEYS.SEO_EXCLUDE_SITE_SEARCH, checked)
-            }
-          />
-          <VisibilityRow
-            ui={ui}
-            label="Enable Rich Snippets (Schema)"
-            checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.SEO_RICH_SNIPPETS, true)}
-            onChange={(checked) => onUpdateMetadata(LISTING_METADATA_KEYS.SEO_RICH_SNIPPETS, checked)}
-          />
-        </ListingPublishCard>
-
-        <ListingPublishCard ui={ui} title="SEO Best Practices">
-          <YStack gap="$2">
-            {LISTING_PUBLISH_COPY.SEO_BEST_PRACTICES.map((tip) => (
-              <XStack key={tip} gap="$2" alignItems="flex-start">
-                <Icons.Check size={14} color={ui.brand} marginTop={2} />
-                <Text fontSize={12} color={ui.textSecondary} lineHeight={18} flex={1}>
-                  {tip}
-                </Text>
-              </XStack>
-            ))}
-          </YStack>
-        </ListingPublishCard>
-      </YStack>
-    </XStack>
-  )
-}
-
-function VisibilityRow({
-  ui,
-  label,
-  checked,
-  onChange,
-}: {
-  ui: AppUiTokens
-  label: string
-  checked: boolean
-  onChange: (checked: boolean) => void
-}) {
-  return (
-    <XStack alignItems="center" gap="$3" paddingVertical="$1">
-      <Checkbox checked={checked} onCheckedChange={(value) => onChange(!!value)} />
-      <Text fontSize={13} fontWeight="600" color={ui.text}>
-        {label}
-      </Text>
     </XStack>
   )
 }

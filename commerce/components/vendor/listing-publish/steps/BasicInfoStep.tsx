@@ -2,12 +2,10 @@ import { useMemo, useState } from 'react'
 
 import {
   Button,
-  Checkbox,
   Field,
   Icons,
   Input,
   Spinner,
-  Switch,
   Text,
   TextArea,
   XStack,
@@ -19,7 +17,6 @@ import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
 import { listingTypeIcon } from '~/commerce/components/vendor/listing-publish/ListingTypeChooser'
-import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import { countWords } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
 type BasicInfoStepProps = {
@@ -27,10 +24,8 @@ type BasicInfoStepProps = {
   formData: ListingFormData
   errors: Record<string, string>
   isDesktop: boolean
-  featuredCredits?: number
   onEditType: () => void
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
-  onUpdateMetadata?: (key: string, value: unknown) => void
   onAddTag: (tag: string) => void
   onRemoveTag: (tag: string) => void
   onWriteWithAi?: () => void
@@ -41,11 +36,8 @@ export function BasicInfoStep({
   ui,
   formData,
   errors,
-  isDesktop,
-  featuredCredits = 3,
   onEditType,
   onUpdate,
-  onUpdateMetadata,
   onAddTag,
   onRemoveTag,
   onWriteWithAi,
@@ -53,11 +45,6 @@ export function BasicInfoStep({
 }: BasicInfoStepProps) {
   const titleLength = formData.title?.length ?? 0
   const wordCount = useMemo(() => countWords(formData.description ?? ''), [formData.description])
-  const meta =
-    formData.listing_metadata && typeof formData.listing_metadata === 'object'
-      ? (formData.listing_metadata as Record<string, unknown>)
-      : {}
-  const followersOnly = Boolean(meta[LISTING_METADATA_KEYS.FOLLOWERS_ONLY])
   const selectedType = LISTING_TYPE_OPTIONS_SELECTABLE.find(
     (option) => option.value === formData.listing_type,
   )
@@ -183,76 +170,29 @@ export function BasicInfoStep({
         <ListingPublishFieldError ui={ui} message={errors.description} />
       </ListingPublishCard>
 
-      <XStack gap="$4" flexWrap="wrap" alignItems="stretch">
-        <YStack flex={1} minWidth={260}>
-          <ListingPublishCard ui={ui} title="Tags">
-            <TagInput ui={ui} onAdd={onAddTag} />
-            <XStack gap="$2" flexWrap="wrap" marginTop="$2">
-              {(formData.tags ?? []).map((tag) => (
-                <XStack
-                  key={tag}
-                  alignItems="center"
-                  gap={6}
-                  paddingHorizontal={10}
-                  paddingVertical={6}
-                  borderRadius={999}
-                  backgroundColor={ui.chip}
-                >
-                  <Text fontSize={12} fontWeight="700" color={ui.brand}>
-                    {tag}
-                  </Text>
-                  <YStack cursor="pointer" onPress={() => onRemoveTag(tag)}>
-                    <Icons.X size={12} color={ui.brand} />
-                  </YStack>
-                </XStack>
-              ))}
-            </XStack>
-          </ListingPublishCard>
-        </YStack>
-
-        <YStack flex={1} minWidth={260}>
-          <ListingPublishCard ui={ui} title="Feature Listing">
-            <XStack alignItems="flex-start" gap="$3">
-              <Checkbox
-                checked={!!formData.is_featured}
-                onCheckedChange={(checked) => onUpdate('is_featured', !!checked)}
-              />
-              <YStack flex={1} gap="$1">
-                <Text fontSize={13} fontWeight="700" color={ui.text}>
-                  Feature this listing
-                </Text>
-                <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-                  Elevate your product to the top of the feed for 48 hours.
-                </Text>
-                <Text fontSize={12} fontWeight="800" color={ui.brand}>
-                  {featuredCredits} credits remain
-                </Text>
+      <ListingPublishCard ui={ui} title="Tags">
+        <TagInput ui={ui} onAdd={onAddTag} />
+        <XStack gap="$2" flexWrap="wrap" marginTop="$2">
+          {(formData.tags ?? []).map((tag) => (
+            <XStack
+              key={tag}
+              alignItems="center"
+              gap={6}
+              paddingHorizontal={10}
+              paddingVertical={6}
+              borderRadius={999}
+              backgroundColor={ui.chip}
+            >
+              <Text fontSize={12} fontWeight="700" color={ui.brand}>
+                {tag}
+              </Text>
+              <YStack cursor="pointer" onPress={() => onRemoveTag(tag)}>
+                <Icons.X size={12} color={ui.brand} />
               </YStack>
             </XStack>
-          </ListingPublishCard>
-        </YStack>
-      </XStack>
-
-      {onUpdateMetadata ? (
-        <ListingPublishCard ui={ui} title="Follower perk">
-          <XStack alignItems="flex-start" gap="$3">
-            <Switch
-              checked={followersOnly}
-              onCheckedChange={(checked) =>
-                onUpdateMetadata(LISTING_METADATA_KEYS.FOLLOWERS_ONLY, !!checked)
-              }
-            />
-            <YStack flex={1} gap="$1">
-              <Text fontSize={13} fontWeight="700" color={ui.text}>
-                Followers only
-              </Text>
-              <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-                Shoppers must follow your shop before they can buy this listing.
-              </Text>
-            </YStack>
-          </XStack>
-        </ListingPublishCard>
-      ) : null}
+          ))}
+        </XStack>
+      </ListingPublishCard>
     </YStack>
   )
 }

@@ -326,16 +326,7 @@ export function validatePublishStep(
       break
     }
     case LISTING_PUBLISH_STEP_IDS.DETAILS: {
-      const structure = resolveProductStructure(formData)
       if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
-        if (structure === PRODUCT_STRUCTURES.SIMPLE) {
-          if (formData.stock === '' || formData.stock === null || formData.stock === undefined) {
-            errors.stock = 'Enter quantity in stock for this product.'
-          }
-        }
-        if (!formData.materials?.length) {
-          warnings.push('Add materials when relevant (fabric, metal, etc.) to help shoppers.')
-        }
         const productQuality = validatePhysicalProductInfoQuality(
           formData.product_info,
           formData.listing_metadata,
@@ -353,11 +344,21 @@ export function validatePublishStep(
       }
       break
     }
+    case LISTING_PUBLISH_STEP_IDS.SHIPPING: {
+      // Package fields are optional — no hard gates.
+      break
+    }
     case LISTING_PUBLISH_STEP_IDS.PRICING: {
       const structure = resolveProductStructure(formData)
-      if (structure === PRODUCT_STRUCTURES.SIMPLE) {
+      if (structure === PRODUCT_STRUCTURES.SIMPLE || structure === PRODUCT_STRUCTURES.GROUPED) {
         const price = validateListingField('price', formData.price)
         if (!price.isValid && price.error) errors.price = price.error
+        if (
+          formData.listing_type === LISTING_TYPES.PHYSICAL &&
+          (formData.stock === '' || formData.stock === null || formData.stock === undefined)
+        ) {
+          errors.stock = 'Enter quantity available for this offer.'
+        }
       }
       break
     }
@@ -377,14 +378,6 @@ export function validatePublishStep(
           if (missingPrice) {
             errors.variations = 'Set a price on every variation SKU.'
           }
-        }
-      } else if (structure === PRODUCT_STRUCTURES.GROUPED) {
-        const ids = readMetadataStringList(
-          (formData.listing_metadata ?? {}) as Record<string, unknown>,
-          LISTING_METADATA_KEYS.GROUPED_LISTING_IDS,
-        )
-        if (ids.length < 2) {
-          errors.grouped = 'Add at least two products to this grouped listing.'
         }
       }
       break
@@ -436,11 +429,10 @@ export function validateFullPublishForm(formData: ListingFormData): StepValidati
   const errors = { ...result.errors, ...quality.errors }
   const warnings = [...quality.warnings]
 
-  // Variable / grouped: parent price is derived or unused — drop false positives.
-  if (structure === PRODUCT_STRUCTURES.VARIABLE || structure === PRODUCT_STRUCTURES.GROUPED) {
-    delete errors.price
-  }
+  // Variable: parent price is derived from child SKUs — drop false positives.
   if (structure === PRODUCT_STRUCTURES.VARIABLE) {
+    delete errors.price
+    delete errors.stock
     const children = (formData.variations ?? []).filter((row) =>
       String(row.variation_value ?? '').trim(),
     )
@@ -448,17 +440,8 @@ export function validateFullPublishForm(formData: ListingFormData): StepValidati
       errors.variations = 'Add at least one variation SKU, or switch to Simple product.'
     }
   }
-  if (structure === PRODUCT_STRUCTURES.GROUPED) {
-    const ids = readMetadataStringList(
-      (formData.listing_metadata ?? {}) as Record<string, unknown>,
-      LISTING_METADATA_KEYS.GROUPED_LISTING_IDS,
-    )
-    if (ids.length < 2) {
-      errors.grouped = 'Add at least two products to this grouped listing.'
-    }
-    // Grouped parents don't need their own stock.
-    delete errors.stock
-  }
+  // Materials table removed from Amazon-style form — ignore legacy material errors.
+  delete errors.materials
 
   return { isValid: Object.keys(errors).length === 0, errors, warnings }
 }
@@ -470,10 +453,9 @@ const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
   tags: LISTING_PUBLISH_STEP_IDS.BASIC,
   materials: LISTING_PUBLISH_STEP_IDS.DETAILS,
   variations: LISTING_PUBLISH_STEP_IDS.VARIANTS,
-  grouped: LISTING_PUBLISH_STEP_IDS.VARIANTS,
-  stock: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  quantity: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  weight: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  stock: LISTING_PUBLISH_STEP_IDS.PRICING,
+  quantity: LISTING_PUBLISH_STEP_IDS.PRICING,
+  weight: LISTING_PUBLISH_STEP_IDS.SHIPPING,
   manufacturer_name: LISTING_PUBLISH_STEP_IDS.DETAILS,
   manufacturer_address: LISTING_PUBLISH_STEP_IDS.DETAILS,
   brand: LISTING_PUBLISH_STEP_IDS.DETAILS,

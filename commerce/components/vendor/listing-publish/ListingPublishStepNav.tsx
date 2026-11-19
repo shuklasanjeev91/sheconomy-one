@@ -25,6 +25,8 @@ function stepIcon(iconName: ListingPublishStepConfig['iconName'], color: string,
       return <Icons.Search size={size} color={color} />
     case 'sliders':
       return <Icons.SlidersHorizontal size={size} color={color} />
+    case 'truck':
+      return <Icons.Truck size={size} color={color} />
     default:
       return <Icons.Circle size={size} color={color} />
   }

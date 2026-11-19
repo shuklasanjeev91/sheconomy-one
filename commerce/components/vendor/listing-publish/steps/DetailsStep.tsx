@@ -31,18 +31,12 @@ import {
   parseListingProductInfo,
   type ListingProductInfo,
 } from '~/commerce/lib/listing-product-info'
-import { buildParentSkuFromTitle } from '~/commerce/lib/listing-variant-skus'
-
 import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
-import {
-  LISTING_METADATA_KEYS,
-  PRODUCT_STRUCTURES,
-} from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import {
   patchListingProductInfo,
   readMetadataString,
   readProductInfoString,
-  resolveProductStructure,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
 type DetailsStepProps = {
@@ -50,6 +44,8 @@ type DetailsStepProps = {
   formData: ListingFormData
   errors: Record<string, string>
   sellerCountryCode?: string | null
+  /** Amazon tabs: product details vs shipping package. */
+  section?: 'details' | 'shipping' | 'all'
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
 }
@@ -58,11 +54,11 @@ export function DetailsStep({
   ui,
   formData,
   errors,
+  section = 'all',
   onUpdate,
   onUpdateMetadata,
 }: DetailsStepProps) {
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
-  const materials = formData.materials ?? []
   const attributes = formData.attributes ?? []
   const isDigital = formData.listing_type === LISTING_TYPES.DIGITAL
   const productInfo = parseListingProductInfo(formData.product_info)
@@ -70,10 +66,8 @@ export function DetailsStep({
   const [showPackerImporter, setShowPackerImporter] = useState(
     Boolean(productInfo.packerName || productInfo.packerAddress || productInfo.importerName),
   )
-  const productStructure = resolveProductStructure(formData)
-  const isVariable = productStructure === PRODUCT_STRUCTURES.VARIABLE
-  const isGrouped = productStructure === PRODUCT_STRUCTURES.GROUPED
-  const hasChildSkus = (formData.variations ?? []).length > 0
+  const showDetails = section === 'details' || section === 'all'
+  const showShipping = section === 'shipping' || section === 'all'
 
   function updateProductInfo(patch: Partial<ListingProductInfo>) {
     const next = patchListingProductInfo(formData.product_info, patch)
@@ -93,21 +87,8 @@ export function DetailsStep({
     }
   }
 
-  function addMaterial() {
-    onUpdate('materials', [
-      ...materials,
-      { material_name: '', percentage: null, certification: '' },
-    ])
-  }
 
-  function updateMaterial(index: number, patch: Record<string, unknown>) {
-    const next = materials.map((row, i) => (i === index ? { ...row, ...patch } : row))
-    onUpdate('materials', next)
-  }
 
-  function removeMaterial(index: number) {
-    onUpdate('materials', materials.filter((_, i) => i !== index))
-  }
 
   function addAttribute() {
     onUpdate('attributes', [...attributes, { attribute_name: '', attribute_value: '' }])
@@ -124,7 +105,7 @@ export function DetailsStep({
 
   return (
     <YStack gap="$4" width="100%">
-      {isDigital ? (
+      {showDetails && isDigital ? (
         <ListingPublishCard ui={ui} title="Digital Delivery">
           <Field label="Download URL" error={errors.digital_file_url}>
             <Input
@@ -178,58 +159,7 @@ export function DetailsStep({
         </ListingPublishCard>
       ) : null}
 
-      {isDigital ? null : (
-        <ListingPublishCard
-          ui={ui}
-          title="Materials & composition"
-          headerRight={
-            <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addMaterial}>
-              + Add material
-            </Text>
-          }
-        >
-          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-            Optional — add fabric, metal, or composition when it helps shoppers compare products.
-          </Text>
-          <ListingPublishFieldError ui={ui} message={errors.materials} />
-          <YStack gap="$2">
-            {materials.map((material, index) => (
-              <XStack
-                key={`material-${index}`}
-                gap="$2"
-                alignItems="flex-end"
-                flexWrap="wrap"
-                padding="$3"
-                borderRadius={12}
-                backgroundColor={ui.roseSurface}
-              >
-                <Field label="NAME" flex={2} minWidth={140}>
-                  <Input
-                    value={material.material_name ?? ''}
-                    onChangeText={(value) => updateMaterial(index, { material_name: value })}
-                  />
-                </Field>
-                <Field label="PERCENTAGE" flex={1} minWidth={96}>
-                  <Input
-                    value={material.percentage != null ? String(material.percentage) : ''}
-                    onChangeText={(value) => updateMaterial(index, { percentage: value })}
-                    keyboardType="numeric"
-                  />
-                </Field>
-                <Field label="CERTIFICATION" flex={2} minWidth={140}>
-                  <Input
-                    value={material.certification ?? ''}
-                    onChangeText={(value) => updateMaterial(index, { certification: value })}
-                  />
-                </Field>
-                <Button tone="ghost" size="$2" icon={<Icons.Trash2 size={14} />} onPress={() => removeMaterial(index)} />
-              </XStack>
-            ))}
-          </YStack>
-        </ListingPublishCard>
-      )}
-
-      {isDigital ? null : (
+      {showDetails && !isDigital ? (
         <ListingPublishCard ui={ui} title="Product information">
           <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
             Product details: brand, manufacturer, country of origin, and key features
@@ -433,33 +363,7 @@ export function DetailsStep({
         </ListingPublishCard>
       )}
 
-      {isDigital || isGrouped ? null : (
-        <ListingPublishCard ui={ui} title="Seller SKU">
-          <Field label="SKU">
-            <XStack gap="$2" alignItems="center">
-              <Input
-                flex={1}
-                value={formData.sku ?? ''}
-                onChangeText={(value) => onUpdate('sku', value)}
-                placeholder="Auto from title if empty"
-              />
-              <Button
-                tone="outline"
-                size="$3"
-                onPress={() => onUpdate('sku', buildParentSkuFromTitle(formData.title))}
-              >
-                Generate
-              </Button>
-            </XStack>
-          </Field>
-          <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-            {isVariable
-              ? 'Variation prices and option SKUs are managed on the Pricing step.'
-              : 'Set the selling price on the Pricing step. Quantity lives under Shipping & inventory.'}
-          </Text>
-        </ListingPublishCard>
-      )}
-
+      {showDetails ? (
       <ListingPublishCard
         ui={ui}
         title="Additional attributes (optional)"
@@ -512,65 +416,20 @@ export function DetailsStep({
           </YStack>
         )}
       </ListingPublishCard>
+      ) : null}
 
-      {isDigital ? null : (
-        <ListingPublishCard ui={ui} title="Shipping & inventory">
+      {showShipping && !isDigital ? (
+        <ListingPublishCard ui={ui} title="Package">
           <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-            Package details for shipping. Stock for variable products is set per SKU on Pricing.
+            Weight and dimensions for shipping. Quantity lives on the Offer tab (or per variation).
           </Text>
-
-          <XStack gap="$3" flexWrap="wrap">
-            {isVariable || hasChildSkus ? (
-              <YStack flex={1} minWidth={120} gap="$1" justifyContent="center">
-                <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
-                  Quantity
-                </Text>
-                <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-                  Total across variations: {formData.stock ?? 0}. Edit stock on each SKU under Pricing.
-                </Text>
-              </YStack>
-            ) : isGrouped ? (
-              <YStack flex={1} minWidth={120} gap="$1" justifyContent="center">
-                <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
-                  Quantity
-                </Text>
-                <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-                  Grouped products use each linked listing’s own stock.
-                </Text>
-              </YStack>
-            ) : (
-              <Field label="Quantity" flex={1} minWidth={120} error={errors.stock}>
-                <Input
-                  value={String(formData.stock ?? '')}
-                  onChangeText={(value) => {
-                    onUpdate('stock', value)
-                    onUpdate('quantity', value)
-                  }}
-                  keyboardType="numeric"
-                  invalid={!!errors.stock}
-                  placeholder="Units available"
-                />
-              </Field>
-            )}
-            <Field label="Weight (grams)" flex={1} minWidth={120}>
-              <Input
-                value={formData.weight != null ? String(formData.weight) : ''}
-                onChangeText={(value) => onUpdate('weight', value)}
-                keyboardType="numeric"
-              />
-            </Field>
-            <Field label="HS Code" flex={1} minWidth={120}>
-              <Input
-                value={
-                  readProductInfoString(formData.product_info, 'hsn_code') ||
-                  readMetadataString(meta, LISTING_METADATA_KEYS.HS_CODE)
-                }
-                onChangeText={(value) => updateProductInfo({ hsnCode: value })}
-                keyboardType="numeric"
-              />
-            </Field>
-          </XStack>
-
+          <Field label="Weight (grams)">
+            <Input
+              value={formData.weight != null ? String(formData.weight) : ''}
+              onChangeText={(value) => onUpdate('weight', value)}
+              keyboardType="numeric"
+            />
+          </Field>
           <Field label="Package Dimensions (L × W × H cm)">
             <XStack gap="$2" flexWrap="wrap">
               <Input
@@ -599,20 +458,18 @@ export function DetailsStep({
               />
             </XStack>
           </Field>
-
-          <ListingPublishFieldError ui={ui} message={errors.stock} />
         </ListingPublishCard>
-      )}
+      ) : null}
 
-      {isDigital ? null : (
+      {showShipping && !isDigital ? (
         <ListingPublishCard ui={ui}>
           <XStack alignItems="center" justifyContent="space-between" gap="$3">
             <YStack flex={1} gap="$1">
               <Text fontSize={14} fontWeight="800" color={ui.text}>
-                Physical Product
+                Shipping required
               </Text>
               <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-                This item requires physical delivery and will use the calculated shipping rates.
+                Turn off only for digital downloads or services without delivery.
               </Text>
             </YStack>
             <Switch
@@ -621,7 +478,7 @@ export function DetailsStep({
             />
           </XStack>
         </ListingPublishCard>
-      )}
+      ) : null}
     </YStack>
   )
 }
