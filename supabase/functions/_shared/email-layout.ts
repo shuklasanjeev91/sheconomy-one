@@ -1,26 +1,32 @@
-/** Shared SHEconomy branded chrome for transactional emails. */
+/** Shared SHEconomy Mailchimp-style chrome for transactional emails. */
 
 const BRAND_NAME = 'SHEconomy'
 const BRAND_PRIMARY = '#D81B60'
 const BRAND_CORAL = '#FF8C42'
 const BRAND_PINK = '#FF5E9B'
-const BRAND_BG = '#fef9f5'
+const BRAND_BG = '#f7f1f4'
 const BRAND_SURFACE = '#ffffff'
 const BRAND_TEXT = '#1a1a2e'
 const BRAND_MUTED = '#5c5c6e'
 const BRAND_FOOTER = '#9ca3af'
 const LOGO_URL =
   'https://zsaqrrzwygzwrlzgymxk.supabase.co/storage/v1/object/public/sheconomy-logo/1024X1024.png'
-const SITE_URL = 'https://sheconomy.in'
+const SITE_URL = 'https://www.sheconomy.in'
 const SUPPORT_EMAIL = 'info@sheconomy.in'
 
 const FONT =
   "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
 const GRADIENT = `linear-gradient(135deg, ${BRAND_PRIMARY} 0%, ${BRAND_PINK} 50%, ${BRAND_CORAL} 100%)`
 const CTA_STYLE =
-  `display:inline-block;background:${GRADIENT};color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 36px;border-radius:50px;box-shadow:0 4px 14px rgba(216,27,96,0.35);letter-spacing:0.3px;`
+  `display:inline-block;background:${GRADIENT};color:#ffffff;font-weight:800;font-size:15px;text-decoration:none;padding:15px 36px;border-radius:50px;box-shadow:0 6px 18px rgba(216,27,96,0.30);letter-spacing:0.2px;`
 const P_STYLE = `margin:0 0 14px;color:${BRAND_MUTED};font-size:15px;line-height:1.7;`
 const STRONG_STYLE = `color:${BRAND_TEXT};font-weight:700;`
+const H1_STYLE =
+  'margin:0 0 12px;font-size:28px;font-weight:800;color:#1a1a2e;line-height:1.2;letter-spacing:-0.3px;'
+const EYEBROW_STYLE =
+  'margin:0 0 6px;font-size:11px;font-weight:800;color:#D81B60;text-transform:uppercase;letter-spacing:1.6px;'
+const TRUST_HTML =
+  '<p style="margin:14px 0 0;text-align:center;font-size:12px;color:#9ca3af;line-height:1.5;">Secure checkout · Women-led brands · Easy returns</p>'
 
 export type WrapEmailHtmlOptions = {
   /** Skip wrapping even for fragments. */
@@ -49,7 +55,7 @@ export function enhanceFragmentContent(html: string): string {
       if (/^mailto:/i.test(h)) {
         return `<p style="${P_STYLE}"><a href="${h}" style="color:${BRAND_PRIMARY};text-decoration:none;font-weight:600;">${label}</a></p>`
       }
-      return `<div style="text-align:center;margin:24px 0 8px;"><a href="${h}" style="${CTA_STYLE}">${label}</a></div>`
+      return `<div style="text-align:center;margin:22px 0 8px;"><a href="${h}" style="${CTA_STYLE}">${label}</a></div>`
     },
   )
 
@@ -61,7 +67,7 @@ export function enhanceFragmentContent(html: string): string {
       if (/^mailto:/i.test(h)) {
         return `<a href="${h}" style="color:${BRAND_PRIMARY};text-decoration:none;font-weight:600;">${label}</a>`
       }
-      return `<div style="text-align:center;margin:24px 0 8px;"><a href="${h}" style="${CTA_STYLE}">${label}</a></div>`
+      return `<div style="text-align:center;margin:22px 0 8px;"><a href="${h}" style="${CTA_STYLE}">${label}</a></div>`
     },
   )
 
@@ -77,11 +83,47 @@ export function enhanceFragmentContent(html: string): string {
     `<strong style="${STRONG_STYLE}">`,
   )
 
+  // Normalize legacy h2 heroes → Mailchimp h1.
+  out = out.replace(/<\/?h2\b/gi, (tag) => tag.replace(/h2/i, 'h1'))
+  out = out.replace(
+    /<h1(?![^>]*\bstyle\s*=)(\s[^>]*)?>/gi,
+    `<h1 style="${H1_STYLE}">`,
+  )
+  out = out.replace(
+    /<h1([^>]*)style="([^"]*)"/gi,
+    (_m, attrs: string, style: string) => {
+      if (/font-size\s*:\s*2[4-9]px|font-size\s*:\s*3/i.test(style)) {
+        return `<h1${attrs}style="${style}"`
+      }
+      return `<h1${attrs}style="${H1_STYLE}"`
+    },
+  )
+
+  // Soft-upgrade common eyebrow paragraphs that used older letter-spacing.
+  out = out.replace(
+    /<p([^>]*style="[^"]*text-transform:\s*uppercase[^"]*")>/gi,
+    (full) => {
+      if (/letter-spacing:\s*1\.6px/i.test(full)) return full
+      return full.replace(
+        /letter-spacing:\s*[\d.]+px/i,
+        'letter-spacing:1.6px',
+      ).replace(
+        /font-weight:\s*\d+/i,
+        'font-weight:800',
+      )
+    },
+  )
+
+  // Append trust strip once if the fragment did not already include it.
+  if (!/Women-led brands/i.test(out) && !/Secure checkout/i.test(out)) {
+    out = `${out}\n${TRUST_HTML}`
+  }
+
   return out
 }
 
 /**
- * Wrap a fragment (or plain text) in branded table chrome.
+ * Wrap a fragment (or plain text) in Mailchimp-style branded table chrome.
  * Full HTML documents are returned unchanged.
  */
 export function wrapEmailHtml(
@@ -101,43 +143,48 @@ export function wrapEmailHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
   <title>${BRAND_NAME}</title>
+  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
 </head>
-<body style="margin:0;padding:0;background:${BRAND_BG};font-family:${FONT};">
+<body style="margin:0;padding:0;background:${BRAND_BG};font-family:${FONT};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
   ${
     preheader
-      ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${preheader}</div>`
+      ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">${preheader}</div>`
       : ''
   }
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${BRAND_BG};">
     <tr>
-      <td align="center" style="padding:32px 16px;">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:${BRAND_SURFACE};border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(200,40,80,0.10);">
+      <td align="center" style="padding:28px 14px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:${BRAND_SURFACE};border-radius:20px;overflow:hidden;box-shadow:0 8px 28px rgba(200,40,80,0.12);">
           <tr>
-            <td style="background:${GRADIENT};padding:32px 40px;text-align:center;">
-              <img src="${LOGO_URL}" alt="${BRAND_NAME}" height="56" style="display:inline-block;vertical-align:middle;border:0;border-radius:12px;background:#fff;" />
-              <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:12px;letter-spacing:0.5px;">
+            <td style="background:${GRADIENT};padding:28px 36px 24px;text-align:center;">
+              <img src="${LOGO_URL}" alt="${BRAND_NAME}" height="52" style="display:inline-block;vertical-align:middle;border:0;border-radius:12px;background:#fff;" />
+              <p style="margin:10px 0 0;color:rgba(255,255,255,0.92);font-size:12px;letter-spacing:0.6px;font-weight:600;">
                 Women-led Businesses &middot; India's Marketplace
               </p>
             </td>
           </tr>
           <tr>
-            <td style="background:${GRADIENT};height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="height:3px;background:${GRADIENT};font-size:0;line-height:0;">&nbsp;</td>
           </tr>
           <tr>
-            <td style="padding:32px 40px 16px;font-family:${FONT};font-size:15px;line-height:1.7;color:${BRAND_TEXT};">
+            <td style="padding:30px 36px 18px;font-family:${FONT};font-size:15px;line-height:1.7;color:${BRAND_TEXT};">
               ${content}
             </td>
           </tr>
           <tr>
-            <td style="background:linear-gradient(135deg,#fffaf6 0%,#fceaf1 50%,#fffaf6 100%);border-top:1px solid #f2e4ea;padding:20px 40px;text-align:center;font-family:${FONT};">
-              <p style="margin:0 0 4px;font-weight:700;color:${BRAND_PRIMARY};font-size:13px;letter-spacing:1px;">${BRAND_NAME.toUpperCase()}</p>
-              <p style="margin:0 0 6px;color:${BRAND_FOOTER};font-size:11px;line-height:1.5;">Empowering women entrepreneurs across India</p>
-              <p style="margin:0 0 6px;color:${BRAND_FOOTER};font-size:12px;">
-                Need help? Contact
-                <a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND_PRIMARY};text-decoration:none;">${SUPPORT_EMAIL}</a>
+            <td style="background:linear-gradient(135deg,#fffaf6 0%,#fceaf1 55%,#fffaf6 100%);border-top:1px solid #f2e4ea;padding:22px 36px;text-align:center;font-family:${FONT};">
+              <p style="margin:0 0 6px;font-weight:800;color:${BRAND_PRIMARY};font-size:12px;letter-spacing:1.4px;">${BRAND_NAME.toUpperCase()}</p>
+              <p style="margin:0 0 8px;color:${BRAND_FOOTER};font-size:11px;line-height:1.55;">Empowering women entrepreneurs across India</p>
+              <p style="margin:0 0 8px;color:${BRAND_FOOTER};font-size:12px;">
+                Need help?
+                <a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND_PRIMARY};text-decoration:none;font-weight:600;">${SUPPORT_EMAIL}</a>
               </p>
-              <a href="${SITE_URL}" style="color:${BRAND_PRIMARY};font-size:11px;text-decoration:none;">www.sheconomy.in</a>
+              <a href="${SITE_URL}" style="color:${BRAND_PRIMARY};font-size:11px;text-decoration:none;font-weight:600;">www.sheconomy.in</a>
+              <p style="margin:12px 0 0;color:#c4c4ce;font-size:10px;line-height:1.5;">
+                You received this email because you have a SHEconomy account.
+              </p>
             </td>
           </tr>
         </table>
@@ -154,4 +201,15 @@ function escapeHtml(value: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+/** Exported for tests / admin previews. */
+export const emailLayoutTokens = {
+  BRAND_NAME,
+  BRAND_PRIMARY,
+  EYEBROW_STYLE,
+  H1_STYLE,
+  P_STYLE,
+  CTA_STYLE,
+  TRUST_HTML,
 }

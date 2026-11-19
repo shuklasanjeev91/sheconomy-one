@@ -5,6 +5,7 @@ import { useCart } from '~/commerce/hooks/useCart'
 import { useAppToast } from '~/components/ui'
 import { navigateApp } from '~/lib/platform/navigate'
 import { commerceRoutes } from '~/lib/routes'
+import { supabase } from '~/lib/supabase/client'
 
 type EmailOp = 'inc' | 'dec' | 'add' | 'buy' | 'set'
 
@@ -93,21 +94,28 @@ export function useEmailCommerceActions(options?: { listingId?: string | null })
             })
             return
           }
-          const current = items.find((row) => row.id === itemId)
-          if (!current) {
+          // Restore abandoned carts first — email opens often hit an empty active cart.
+          await refresh()
+          if (cancelled) return
+
+          let currentQty = items.find((row) => row.id === itemId)?.quantity ?? null
+          if (currentQty == null) {
+            const { data: row } = await supabase
+              .from('cart_items')
+              .select('id, quantity')
+              .eq('id', itemId)
+              .maybeSingle()
+            currentQty = row?.quantity ?? null
+          }
+          if (currentQty == null) {
             toast.show('Item not in cart', {
               tone: 'danger',
-              message: 'Open your cart and try again after signing in.',
+              message: 'Sign in, then open your cart from the email again.',
             })
-            await refresh()
             return
           }
           const nextQty =
-            op === 'set'
-              ? qty
-              : op === 'inc'
-                ? current.quantity + 1
-                : current.quantity - 1
+            op === 'set' ? qty : op === 'inc' ? currentQty + 1 : currentQty - 1
           const { error } =
             nextQty <= 0
               ? await removeItem(itemId)

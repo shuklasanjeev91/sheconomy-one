@@ -351,8 +351,11 @@ Deno.serve(async (req) => {
           )
         } else {
           try {
-            const subject =
+            let subject =
               substitute(template?.email_subject_template, vars) || notification.title
+            if (vars._test_batch === true || vars._test_batch === 'true') {
+              subject = `[TEST] ${subject}`
+            }
             const html =
               substitute(template?.email_body_template, vars) ||
               `<p>${notification.message}</p>${
