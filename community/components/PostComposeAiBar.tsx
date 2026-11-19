@@ -4,8 +4,8 @@ import {
   buildPostDraftPrompt,
   composeExpansionChips,
   filterPostSuggestionChips,
-  fallbackPostDraft,
   isComposeInstruction,
+  isGenericFallbackDraft,
   isLeakedComposePrompt,
   isThinOrEchoPostDraft,
   localPostComposeSuggestions,
@@ -132,18 +132,14 @@ export function PostComposeAiBar({
     const unusable =
       !returned ||
       isLeakedComposePrompt(returned) ||
+      isGenericFallbackDraft(returned) ||
       isThinOrEchoPostDraft(returned, promptSeed) ||
       isThinOrEchoPostDraft(returned, seed)
 
     if (unusable) {
-      const fallback = fallbackPostDraft(promptSeed || link?.title || linkUrl || 'this update', mode)
-      onApplyDraft({
-        content: fallback.content,
-        articleTitle: articleTitle ?? fallback.title ?? undefined,
-      })
-      toast.show('Draft ready', {
-        tone: 'success',
-        message: 'Expanded your notes into a full post. Edit anything before posting.',
+      toast.show('Couldn’t draft this post', {
+        tone: 'error',
+        message: 'SHERPA couldn’t expand your notes. Tap Write with AI to try again.',
       })
       return
     }
@@ -179,15 +175,14 @@ export function PostComposeAiBar({
         link,
       })
       applyGeneratedDraft(result.content, result.title, promptSeed)
-    } catch {
-      const fallback = fallbackPostDraft(promptSeed || link?.title || linkUrl || 'this update', mode)
-      onApplyDraft({
-        content: fallback.content,
-        articleTitle: fallback.title ?? undefined,
-      })
-      toast.show('Draft ready', {
-        tone: 'info',
-        message: 'Expanded your notes into a starter post. Edit anything before posting.',
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message.trim()
+          ? err.message.trim()
+          : 'SHERPA couldn’t expand your notes. Tap Write with AI to try again.'
+      toast.show('Couldn’t draft this post', {
+        tone: 'error',
+        message,
       })
     } finally {
       setLoading(false)

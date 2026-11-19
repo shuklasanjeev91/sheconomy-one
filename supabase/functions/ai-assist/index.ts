@@ -1166,6 +1166,7 @@ async function callGemini(
   systemPrompt: string,
   history: ChatMessageRow[],
   userMessage: string,
+  options?: { jsonMode?: boolean; maxOutputTokens?: number; temperature?: number },
 ): Promise<LlmCallResult> {
   const keys = collectGeminiApiKeys()
   if (!keys.length) {
@@ -1180,7 +1181,7 @@ async function callGemini(
   for (const { source, key } of keys) {
     for (const model of models) {
       try {
-        const result = await callGeminiOnce(key, model, systemPrompt, contents)
+        const result = await callGeminiOnce(key, model, systemPrompt, contents, options)
         if (result.answer) {
           return { answer: result.answer, model, error: null, keySource: source }
         }
@@ -1195,6 +1196,19 @@ async function callGemini(
   }
 
   return { answer: null, model: null, error: lastError, keySource: keys[0]?.source ?? null }
+}
+
+function isGenericPostFallbackContent(content: string): boolean {
+  const body = content.trim()
+  if (!body) return false
+  return (
+    /^sharing a quick update on\b/i.test(body) ||
+    (/a few things stood out for me as i.?ve been exploring this/i.test(body) &&
+      /what.?s resonating for you/i.test(body)) ||
+    (/i.?ve been thinking about\b/i.test(body) &&
+      /what would you add from your experience/i.test(body)) ||
+    (/excited to celebrate\b/i.test(body) && /who else is celebrating a win/i.test(body))
+  )
 }
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
@@ -1752,32 +1766,6 @@ function parsePostSuggestionChips(raw: string | null): Array<{ label: string; dr
   }
 }
 
-function fallbackPostDraft(prompt: string, mode: string) {
-  const cleaned = prompt
-    .replace(/^write (a |an |the )?(post |update )?(about|on|regarding)\s+/i, '')
-    .replace(/^write about\s+/i, '')
-    .replace(/^rewrite this as a polished professional post:\s*/i, '')
-    .replace(/^turn this into a post with a clear call to action:\s*/i, '')
-    .trim()
-  const topic = cleaned.slice(0, 120) || 'this week’s update'
-  if (mode === 'article') {
-    return {
-      title: `Notes on ${topic}`,
-      content: `I’ve been thinking about ${topic}.\n\nHere’s the short version of what I’m learning, what I’d do differently next time, and one question for this community.\n\nWhat would you add from your experience?`,
-    }
-  }
-  if (mode === 'celebration') {
-    return {
-      title: null,
-      content: `Excited to celebrate ${topic}!\n\nGrateful for everyone who supported this journey — the encouragement from this community made a real difference.\n\nHere’s to what’s next. Who else is celebrating a win this week?`,
-    }
-  }
-  return {
-    title: null,
-    content: `Sharing a quick update on ${topic}.\n\nA few things stood out for me as I’ve been exploring this — especially how it connects to the work women-led teams are doing right now.\n\nWould love perspectives from this community: what’s resonating for you, and what would you try next?`,
-  }
-}
-
 function parseShopDraftJson(
   raw: string | null,
 ): { names: string[]; description: string } | null {
@@ -1941,13 +1929,18 @@ Deno.serve(async (req) => {
         typeof context.compose_mode === 'string' && context.compose_mode
           ? context.compose_mode
           : 'text'
-      const fallback = fallbackPostDraft(prompt || link?.title || 'this update', composeMode)
       const systemPrompt = [
         'You are SHERPA drafting professional community posts for SHEconomy (women-focused).',
+        productPlaybook('community'),
         'Return ONLY JSON with keys: title (string or null), content (string).',
         'title is required for article mode; otherwise null.',
         'content must be a COMPLETE ready-to-publish post: 2–4 short paragraphs (roughly 280–700 characters for text modes, up to 2200 for article).',
-        'Structure: (1) hook tied to the topic, (2) concrete insight/story/context, (3) invite the community with a question or clear call to action.',
+        'Structure: (1) hook that NAMES the topic/brand/org, (2) concrete insight specific to that topic (what it is, why it matters now, one tangible detail), (3) a community question or clear CTA.',
+        'Be specific — never write vague filler like “a few things stood out”, “exploring this”, “women-led teams are doing right now”, or “what’s resonating for you”.',
+        'Never start with “Sharing a quick update on…”. Never return a template with the topic name dropped into a stock sentence.',
+        'If the member wrote an instruction like “Write about X” or a short note like “bioayurveda”, expand X with plausible, respectful, non-hallucinated framing (position it as the member exploring/sharing that brand or cause). Prefer grounded language over invented stats.',
+        'Example tone for topic “bioayurveda”: open on Ayurveda-inspired wellness for busy women founders, mention clean rituals / everyday care, ask which wellness habit the community protects first — not a generic “update on bioayurveda”.',
+        'Example tone for topic “wef.org.in”: open on Women Economic Forum / Mission Million, one concrete leadership or entrepreneurship angle, invite members to share how they show up for women-led growth.',
         'If the member wrote an instruction like “Write about X”, expand X — never return the instruction verbatim or as a one-liner.',
         'No hashtag spam. At most 2 relevant hashtags at the end. No markdown fences. No bullet lists unless article mode.',
         languageDirective(context, body),
@@ -1966,17 +1959,23 @@ Deno.serve(async (req) => {
         systemPrompt,
         [],
         prompt || 'Write a complete community post for the attached media/link.',
+        { jsonMode: true, temperature: 0.7 },
       )
       const parsed = parsePostDraftJson(completion.answer)
       const leaked =
         !!parsed?.content &&
         (/you are sherpa writing/i.test(parsed.content) ||
           /member notes\s*\/\s*topic:/i.test(parsed.content) ||
+          isGenericPostFallbackContent(parsed.content) ||
           (prompt && parsed.content.trim() === prompt.trim()))
       if (parsed?.content && !leaked) {
         return json({ ...parsed, usedFallback: false, product: 'community' })
       }
-      return json({ ...fallback, usedFallback: true, product: 'community' })
+      return json({
+        error: 'SHERPA could not draft this post. Try again.',
+        usedFallback: true,
+        product: 'community',
+      })
     }
 
     if (action === 'post_suggestions') {

@@ -4,8 +4,8 @@ import {
   buildPostDraftPrompt,
   composeExpansionChips,
   filterPostSuggestionChips,
-  fallbackPostDraft,
   isComposeInstruction,
+  isGenericFallbackDraft,
   isLeakedComposePrompt,
   isThinOrEchoPostDraft,
 } from '~/community/lib/post-compose-suggestions'
@@ -81,11 +81,30 @@ describe('post compose AI helpers', () => {
     ).toBe(false)
   })
 
-  it('strips “write about” instructions in the local fallback', () => {
-    const draft = fallbackPostDraft('Write about wef.org.in', 'text')
-    expect(draft.content.toLowerCase()).toContain('wef.org.in')
-    expect(draft.content.toLowerCase()).not.toMatch(/^write about wef\.org\.in$/i)
-    expect(draft.content.length).toBeGreaterThan(160)
-    expect(draft.content.split('\n\n').length).toBeGreaterThanOrEqual(2)
+  it('detects the old generic template fallback', () => {
+    expect(
+      isGenericFallbackDraft(
+        `Sharing a quick update on bioayurveda.
+
+A few things stood out for me as I’ve been exploring this — especially how it connects to the work women-led teams are doing right now.
+
+Would love perspectives from this community: what’s resonating for you, and what would you try next?`,
+      ),
+    ).toBe(true)
+    expect(
+      isGenericFallbackDraft(
+        'BioAyurveda’s everyday rituals keep showing up in conversations with women founders who want wellness that fits a packed calendar.\n\nI’ve been looking at how clean, Ayurveda-inspired care can feel practical—not precious—for busy professionals.\n\nWhat’s one wellness habit you protect even on your busiest weeks?',
+      ),
+    ).toBe(false)
+    expect(
+      isThinOrEchoPostDraft(
+        `Sharing a quick update on bioayurveda.
+
+A few things stood out for me as I’ve been exploring this — especially how it connects to the work women-led teams are doing right now.
+
+Would love perspectives from this community: what’s resonating for you, and what would you try next?`,
+        'bioayurveda',
+      ),
+    ).toBe(true)
   })
 })

@@ -1,6 +1,8 @@
 import { AI_NAME } from '~/config/brand'
-import { getAiLanguagePrefs } from '~/lib/ai/language'
+import { getAiLanguagePrefs, withAiLanguage } from '~/lib/ai/language'
+import { isGenericFallbackDraft } from '~/lib/ai/post-draft-guards'
 import { invokeOwnedAssist } from '~/lib/ai/owned-service'
+import { supabase } from '~/lib/supabase'
 
 /** Until the owned SHERPA host is redeployed, nudge the model via the user turn. */
 function withLanguageReplyHint(message: string): string {
@@ -10,6 +12,31 @@ function withLanguageReplyHint(message: string): string {
   if (!prefs.languageCode || prefs.languageCode === 'en') return text
   if (/\breply in\b/i.test(text)) return text
   return `${text}\n\n(Please reply in ${prefs.languageLabel}.)`
+}
+
+/** Live create-post drafts when owned CloudFront still returns the old template. */
+async function invokeEdgeAssist<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke('ai-assist', {
+    body: withAiLanguage(body),
+  })
+  if (error) {
+    throw new Error(error.message || `${AI_NAME} is unavailable right now.`)
+  }
+  const payload = data as { error?: string } | null
+  if (payload && typeof payload === 'object' && payload.error) {
+    throw new Error(String(payload.error))
+  }
+  return data as T
+}
+
+function isUnusablePostDraftContent(content: string, prompt: string): boolean {
+  const body = content.trim()
+  if (!body) return true
+  if (isGenericFallbackDraft(body)) return true
+  if (prompt && body === prompt.trim()) return true
+  if (/you are sherpa writing/i.test(body)) return true
+  if (/member notes\s*\/\s*topic:/i.test(body)) return true
+  return false
 }
 
 import type {
@@ -227,7 +254,7 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
     throw new Error('Add a note, photo, video, or link before drafting.')
   }
 
-  const result = await invokeAiAssist<PostDraftResult>({
+  const requestBody = {
     action: 'post_draft',
     product: 'community',
     // Member topic only — drafting rules live in server/system context to avoid prompt echo.
@@ -244,24 +271,32 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
       require_paragraphs: true,
       forbid_prompt_echo: true,
     },
+  }
+
+  let result: PostDraftResult
+  try {
+    result = await invokeAiAssist<PostDraftResult>(requestBody)
+  } catch (ownedError) {
+    // Owned host down/lagging — use the trained edge post_draft path.
+    result = await invokeEdgeAssist<PostDraftResult>(requestBody)
+    if (!result) throw ownedError
+  }
+
+  const normalize = (row: PostDraftResult) => ({
+    title: typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null,
+    content: String(row.content ?? '').trim(),
+    usedFallback: Boolean(row.usedFallback),
   })
 
-  const draft = {
-    title: typeof result.title === 'string' && result.title.trim() ? result.title.trim() : null,
-    content: String(result.content ?? '').trim(),
-    usedFallback: Boolean(result.usedFallback),
+  let draft = normalize(result)
+  if (draft.usedFallback || isUnusablePostDraftContent(draft.content, prompt)) {
+    const edge = await invokeEdgeAssist<PostDraftResult>(requestBody)
+    draft = normalize(edge)
   }
+
   requireSherpaDraft(draft)
-  if (!draft.content.trim()) {
+  if (!draft.content.trim() || isUnusablePostDraftContent(draft.content, prompt)) {
     throw new Error(`${AI_NAME} could not draft this post. Try again.`)
-  }
-  // Guard: never return the outbound topic/prompt block as the post body.
-  if (
-    draft.content === prompt ||
-    /you are sherpa writing/i.test(draft.content) ||
-    /member notes\s*\/\s*topic:/i.test(draft.content)
-  ) {
-    throw new Error(`${AI_NAME} returned an unusable draft. Try again.`)
   }
   return { ...draft, usedFallback: false }
 }

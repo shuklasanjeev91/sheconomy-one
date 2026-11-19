@@ -3,6 +3,10 @@
  * Works offline on web, iOS, and Android; AI can refine via `post_draft`.
  */
 
+import { isGenericFallbackDraft } from '~/lib/ai/post-draft-guards'
+
+export { isGenericFallbackDraft } from '~/lib/ai/post-draft-guards'
+
 export type ComposeModeHint =
   | 'text'
   | 'poll'
@@ -182,6 +186,7 @@ export function isThinOrEchoPostDraft(draft: string, seed?: string | null): bool
   const body = draft.trim()
   if (!body) return true
   if (isLeakedComposePrompt(body)) return true
+  if (isGenericFallbackDraft(body)) return true
   if (body.length < 80) return true
   if (
     /^(write|create|make|draft|compose|generate|post about|tell|share about|help me|about)\b/i.test(
@@ -250,6 +255,7 @@ export function filterPostSuggestionChips<T extends { label: string; draft: stri
   const normalizedSeed = normalizeComposeText(seed ?? '')
   return chips.filter((chip) => {
     if (isLeakedComposePrompt(chip.label) || isLeakedComposePrompt(chip.draft)) return false
+    if (isGenericFallbackDraft(chip.draft)) return false
     const label = normalizeComposeText(chip.label)
     if (normalizedSeed && label) {
       if (label === normalizedSeed) return false
