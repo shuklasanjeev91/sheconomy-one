@@ -48,7 +48,6 @@ import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { ListingPublishFooter } from '~/commerce/components/vendor/listing-publish/ListingPublishFooter'
-import { ListingEditorStatusRail } from '~/commerce/components/vendor/listing-publish/ListingEditorStatusRail'
 import {
   ListingPublishPageHeader,
   ListingPublishStepNav,
@@ -779,126 +778,107 @@ function VendorListingPublishContent() {
             onSelect={goToStep}
           />
 
-          <XStack gap="$4" alignItems="flex-start" flexWrap={isDesktop ? 'nowrap' : 'wrap'}>
-            <YStack flex={1} minWidth={280} gap="$4">
-              {activeStep === LISTING_PUBLISH_STEP_IDS.BASIC ? (
-                <BasicInfoStep
-                  ui={ui}
-                  formData={formData}
-                  errors={displayErrors}
-                  isDesktop={isDesktop}
-                  onEditType={() => setTypeConfirmed(false)}
-                  onUpdate={updateField}
-                  onAddTag={handleAddTag}
-                  onRemoveTag={handleRemoveTag}
-                  onWriteWithAi={() => void writeWithAi()}
-                  writingWithAi={writingListing}
-                />
-              ) : null}
-
-              {activeStep === LISTING_PUBLISH_STEP_IDS.IMAGES ? (
-                <ImagesStep
-                  ui={ui}
-                  formData={formData}
-                  errors={displayErrors}
-                  isDesktop={isDesktop}
-                  onChangeImages={handleChangeImages}
-                  onApplyAiDraft={handleApplyAiDraft}
-                />
-              ) : null}
-
-              {activeStep === LISTING_PUBLISH_STEP_IDS.VARIANTS ? (
-                <PricingStep
-                  ui={ui}
-                  formData={formData}
-                  errors={displayErrors}
-                  currencySymbol={currencySymbol}
-                  isDesktop={isDesktop}
-                  sellerCountryCode={sellerCountryCode}
-                  panel="variants"
-                  onUpdate={updateField}
-                  onUpdateMetadata={updateMetadata}
-                />
-              ) : null}
-
-              {activeStep === LISTING_PUBLISH_STEP_IDS.PRICING ? (
-                <PricingStep
-                  ui={ui}
-                  formData={formData}
-                  errors={displayErrors}
-                  currencySymbol={currencySymbol}
-                  isDesktop={isDesktop}
-                  sellerCountryCode={sellerCountryCode}
-                  panel="type-and-price"
-                  onUpdate={updateField}
-                  onUpdateMetadata={updateMetadata}
-                />
-              ) : null}
-
-              {activeStep === LISTING_PUBLISH_STEP_IDS.DETAILS ? (
-                <DetailsStep
-                  ui={ui}
-                  formData={formData}
-                  errors={displayErrors}
-                  sellerCountryCode={sellerCountryCode}
-                  section="details"
-                  onUpdate={updateField}
-                  onUpdateMetadata={updateMetadata}
-                />
-              ) : null}
-
-              {activeStep === LISTING_PUBLISH_STEP_IDS.SHIPPING ? (
-                <DetailsStep
-                  ui={ui}
-                  formData={formData}
-                  errors={displayErrors}
-                  sellerCountryCode={sellerCountryCode}
-                  section="shipping"
-                  onUpdate={updateField}
-                  onUpdateMetadata={updateMetadata}
-                />
-              ) : null}
-
-              {activeStep === LISTING_PUBLISH_STEP_IDS.CATEGORIES ? (
-                <CategoriesStep
-                  ui={ui}
-                  formData={formData}
-                  errors={displayErrors}
-                  onToggleCategory={handleToggleCategory}
-                  onClearCategories={handleClearCategories}
-                />
-              ) : null}
-
-              {activeStep === LISTING_PUBLISH_STEP_IDS.SEO ? (
-                <SeoStep
-                  ui={ui}
-                  formData={formData}
-                  errors={displayErrors}
-                  shopSlug={shopSlug}
-                  isDesktop={isDesktop}
-                  onUpdate={updateField}
-                  onUpdateMetadata={updateMetadata}
-                />
-              ) : null}
-            </YStack>
-
-            {isDesktop ? (
-              <YStack width={280} flexShrink={0}>
-                <ListingEditorStatusRail
-                  ui={ui}
-                  formData={formData}
-                  currencySymbol={currencySymbol}
-                  isEditMode={isEditMode}
-                  lastSavedAt={lastSavedAt}
-                  isSaving={isSaving}
-                  isPublishing={publishProgress.isPublishing}
-                  onSaveDraft={() => void saveDraft()}
-                  onPublish={() => void publishListingNow()}
-                  onCancel={() => router.push(vendorRoutes.products)}
-                />
-              </YStack>
+          <YStack flex={1} minWidth={280} gap="$4" width="100%">
+            {activeStep === LISTING_PUBLISH_STEP_IDS.BASIC ? (
+              <BasicInfoStep
+                ui={ui}
+                formData={formData}
+                errors={displayErrors}
+                isDesktop={isDesktop}
+                onEditType={() => setTypeConfirmed(false)}
+                onUpdate={updateField}
+                onAddTag={handleAddTag}
+                onRemoveTag={handleRemoveTag}
+                onWriteWithAi={() => void writeWithAi()}
+                writingWithAi={writingListing}
+              />
             ) : null}
-          </XStack>
+
+            {activeStep === LISTING_PUBLISH_STEP_IDS.IMAGES ? (
+              <ImagesStep
+                ui={ui}
+                formData={formData}
+                errors={displayErrors}
+                isDesktop={isDesktop}
+                onChangeImages={handleChangeImages}
+                onApplyAiDraft={handleApplyAiDraft}
+              />
+            ) : null}
+
+            {activeStep === LISTING_PUBLISH_STEP_IDS.VARIANTS ? (
+              <PricingStep
+                ui={ui}
+                formData={formData}
+                errors={displayErrors}
+                currencySymbol={currencySymbol}
+                isDesktop={isDesktop}
+                sellerCountryCode={sellerCountryCode}
+                panel="variants"
+                onUpdate={updateField}
+                onUpdateMetadata={updateMetadata}
+              />
+            ) : null}
+
+            {activeStep === LISTING_PUBLISH_STEP_IDS.PRICING ? (
+              <PricingStep
+                ui={ui}
+                formData={formData}
+                errors={displayErrors}
+                currencySymbol={currencySymbol}
+                isDesktop={isDesktop}
+                sellerCountryCode={sellerCountryCode}
+                panel="type-and-price"
+                onUpdate={updateField}
+                onUpdateMetadata={updateMetadata}
+              />
+            ) : null}
+
+            {activeStep === LISTING_PUBLISH_STEP_IDS.DETAILS ? (
+              <DetailsStep
+                ui={ui}
+                formData={formData}
+                errors={displayErrors}
+                sellerCountryCode={sellerCountryCode}
+                section="details"
+                onUpdate={updateField}
+                onUpdateMetadata={updateMetadata}
+              />
+            ) : null}
+
+            {activeStep === LISTING_PUBLISH_STEP_IDS.SHIPPING ? (
+              <DetailsStep
+                ui={ui}
+                formData={formData}
+                errors={displayErrors}
+                sellerCountryCode={sellerCountryCode}
+                section="shipping"
+                onUpdate={updateField}
+                onUpdateMetadata={updateMetadata}
+              />
+            ) : null}
+
+            {activeStep === LISTING_PUBLISH_STEP_IDS.CATEGORIES ? (
+              <CategoriesStep
+                ui={ui}
+                formData={formData}
+                errors={displayErrors}
+                onToggleCategory={handleToggleCategory}
+                onClearCategories={handleClearCategories}
+              />
+            ) : null}
+
+            {activeStep === LISTING_PUBLISH_STEP_IDS.SEO ? (
+              <SeoStep
+                ui={ui}
+                formData={formData}
+                errors={displayErrors}
+                shopSlug={shopSlug}
+                isDesktop={isDesktop}
+                onUpdate={updateField}
+                onUpdateMetadata={updateMetadata}
+              />
+            ) : null}
+          </YStack>
         </YStack>
       </YStack>
 
