@@ -160,13 +160,33 @@ export function isComposeInstruction(text: string | null | undefined): boolean {
   return value.length < 80
 }
 
+/**
+ * True when model output leaked our drafting instructions into the post body.
+ * (SHERPA sometimes echoes the user/system prompt instead of writing a post.)
+ */
+export function isLeakedComposePrompt(draft: string | null | undefined): boolean {
+  const body = draft?.trim() ?? ''
+  if (!body) return false
+  return (
+    /you are sherpa writing/i.test(body) ||
+    /complete ready-to-publish post/i.test(body) ||
+    /member notes\s*\/\s*topic:/i.test(body) ||
+    /not an outline and not a restatement/i.test(body) ||
+    /about 280–700 characters/i.test(body) ||
+    /no markdown fences/i.test(body)
+  )
+}
+
 /** True when a suggestion/draft is only a short instruction or repeats the seed. */
 export function isThinOrEchoPostDraft(draft: string, seed?: string | null): boolean {
   const body = draft.trim()
   if (!body) return true
+  if (isLeakedComposePrompt(body)) return true
   if (body.length < 80) return true
   if (
-    /^(write|create|make|draft|compose|generate|post about|tell|share about|help me)\b/i.test(body)
+    /^(write|create|make|draft|compose|generate|post about|tell|share about|help me|about)\b/i.test(
+      body,
+    )
   ) {
     return true
   }
@@ -192,8 +212,8 @@ export function isThinOrEchoPostDraft(draft: string, seed?: string | null): bool
 }
 
 /**
- * Build the SHERPA prompt so compose expands notes/media into a publishable post
- * instead of echoing the instruction.
+ * Member-facing topic only — never include SHERPA system instructions here.
+ * Instructions belong in API context / server system prompt so they cannot leak into the composer.
  */
 export function buildPostDraftPrompt(input: {
   seed?: string | null
@@ -201,47 +221,25 @@ export function buildPostDraftPrompt(input: {
   videoCount?: number
   link?: { url: string; title?: string | null; description?: string | null } | null
 }): string {
-  const parts: string[] = [
-    'You are SHERPA writing for SHEconomy Community (women-led professionals).',
-    'Write a COMPLETE ready-to-publish post — not an outline and not a restatement of the instruction.',
-    'Use 2–4 short paragraphs (about 280–700 characters): hook, concrete insight/story, then a question or call to action.',
-    'Warm and specific. At most 2 hashtags at the end. No markdown fences.',
-  ]
-
   const seed = input.seed?.trim() ?? ''
-  if (seed) parts.push(`Member notes / topic:\n${seed}`)
+  if (seed) return seed
 
+  const parts: string[] = []
   const photos = input.photoCount ?? 0
   if (photos > 0) {
-    parts.push(
-      `They attached ${photos} photo${photos === 1 ? '' : 's'}. Mention the photo${photos === 1 ? '' : 's'} naturally as something they are sharing.`,
-    )
+    parts.push(`Share a community post about the ${photos} attached photo${photos === 1 ? '' : 's'}.`)
   }
-
   const videos = input.videoCount ?? 0
   if (videos > 0) {
-    parts.push(
-      `They attached ${videos} video${videos === 1 ? '' : 's'}. Reference the video naturally without inventing a transcript.`,
-    )
+    parts.push(`Share a community post about the attached video${videos === 1 ? '' : 's'}.`)
   }
-
   const link = input.link
   if (link?.url) {
-    const title = link.title?.trim()
-    const description = link.description?.trim()
     parts.push(
-      [
-        `They are sharing this link: ${link.url}`,
-        title ? `Link title: ${title}` : null,
-        description ? `Link summary: ${description.slice(0, 280)}` : null,
-        'Make the link the main subject of the post.',
-      ]
-        .filter(Boolean)
-        .join('\n'),
+      `Share a community post about this link: ${link.url}${link.title ? ` (${link.title})` : ''}`,
     )
   }
-
-  return parts.join('\n\n')
+  return parts.join(' ') || 'Share a warm professional community update.'
 }
 
 /** Drop suggestion chips that merely echo the composer seed. */
@@ -251,6 +249,7 @@ export function filterPostSuggestionChips<T extends { label: string; draft: stri
 ): T[] {
   const normalizedSeed = normalizeComposeText(seed ?? '')
   return chips.filter((chip) => {
+    if (isLeakedComposePrompt(chip.label) || isLeakedComposePrompt(chip.draft)) return false
     const label = normalizeComposeText(chip.label)
     if (normalizedSeed && label) {
       if (label === normalizedSeed) return false

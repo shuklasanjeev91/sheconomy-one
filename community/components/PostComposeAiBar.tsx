@@ -6,6 +6,7 @@ import {
   filterPostSuggestionChips,
   fallbackPostDraft,
   isComposeInstruction,
+  isLeakedComposePrompt,
   isThinOrEchoPostDraft,
   localPostComposeSuggestions,
   type ComposeModeHint,
@@ -122,12 +123,48 @@ export function PostComposeAiBar({
     }
   }, [mode, user?.id, seed, photoCount, videoCount, linkUrl, linkTitle])
 
+  function applyGeneratedDraft(
+    content: string,
+    articleTitle: string | null | undefined,
+    promptSeed: string,
+  ) {
+    const returned = content.trim()
+    const unusable =
+      !returned ||
+      isLeakedComposePrompt(returned) ||
+      isThinOrEchoPostDraft(returned, promptSeed) ||
+      isThinOrEchoPostDraft(returned, seed)
+
+    if (unusable) {
+      const fallback = fallbackPostDraft(promptSeed || link?.title || linkUrl || 'this update', mode)
+      onApplyDraft({
+        content: fallback.content,
+        articleTitle: articleTitle ?? fallback.title ?? undefined,
+      })
+      toast.show('Draft ready', {
+        tone: 'success',
+        message: 'Expanded your notes into a full post. Edit anything before posting.',
+      })
+      return
+    }
+
+    onApplyDraft({
+      content: returned,
+      articleTitle: articleTitle ?? undefined,
+    })
+    toast.show('Draft ready', {
+      tone: 'success',
+      message: 'SHERPA wrote a complete post from your notes.',
+    })
+  }
+
   async function generateDraft(seedOverride?: string) {
     const promptSeed = (seedOverride ?? seed).trim()
     if (!promptSeed && photoCount < 1 && videoCount < 1 && !link?.url) return
 
     setLoading(true)
     try {
+      // Send ONLY the member topic — never the system/instruction block (SHERPA was echoing it).
       const prompt = buildPostDraftPrompt({
         seed: promptSeed,
         photoCount,
@@ -141,27 +178,7 @@ export function PostComposeAiBar({
         videoCount,
         link,
       })
-      const returned = result.content.trim()
-      if (!returned || isThinOrEchoPostDraft(returned, promptSeed) || isThinOrEchoPostDraft(returned, seed)) {
-        const fallback = fallbackPostDraft(promptSeed || link?.title || linkUrl || 'this update', mode)
-        onApplyDraft({
-          content: fallback.content,
-          articleTitle: result.title ?? fallback.title ?? undefined,
-        })
-        toast.show('Draft ready', {
-          tone: 'success',
-          message: 'Expanded your notes into a full post. Edit anything before posting.',
-        })
-        return
-      }
-      onApplyDraft({
-        content: returned,
-        articleTitle: result.title ?? undefined,
-      })
-      toast.show('Draft ready', {
-        tone: 'success',
-        message: 'SHERPA wrote a complete post from your notes.',
-      })
+      applyGeneratedDraft(result.content, result.title, promptSeed)
     } catch {
       const fallback = fallbackPostDraft(promptSeed || link?.title || linkUrl || 'this update', mode)
       onApplyDraft({

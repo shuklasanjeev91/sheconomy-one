@@ -230,9 +230,9 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
   const result = await invokeAiAssist<PostDraftResult>({
     action: 'post_draft',
     product: 'community',
+    // Member topic only — drafting rules live in server/system context to avoid prompt echo.
     message: withLanguageReplyHint(
-      prompt ||
-        'Write a complete community post for the attached media and/or link. Do not leave the body empty.',
+      prompt || 'Write a complete community post for the attached media and/or link.',
     ),
     context: {
       compose_mode: params.mode ?? 'text',
@@ -240,6 +240,9 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
       video_count: params.videoCount ?? 0,
       link: params.link ?? null,
       expand_notes: true,
+      draft_style: 'complete_ready_to_publish',
+      require_paragraphs: true,
+      forbid_prompt_echo: true,
     },
   })
 
@@ -251,6 +254,14 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
   requireSherpaDraft(draft)
   if (!draft.content.trim()) {
     throw new Error(`${AI_NAME} could not draft this post. Try again.`)
+  }
+  // Guard: never return the outbound topic/prompt block as the post body.
+  if (
+    draft.content === prompt ||
+    /you are sherpa writing/i.test(draft.content) ||
+    /member notes\s*\/\s*topic:/i.test(draft.content)
+  ) {
+    throw new Error(`${AI_NAME} returned an unusable draft. Try again.`)
   }
   return { ...draft, usedFallback: false }
 }

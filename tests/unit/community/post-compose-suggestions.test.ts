@@ -6,6 +6,7 @@ import {
   filterPostSuggestionChips,
   fallbackPostDraft,
   isComposeInstruction,
+  isLeakedComposePrompt,
   isThinOrEchoPostDraft,
 } from '~/community/lib/post-compose-suggestions'
 
@@ -55,18 +56,29 @@ describe('post compose AI helpers', () => {
     ])
   })
 
-  it('builds an expansion prompt from notes and media', () => {
+  it('sends only the member topic to SHERPA (no system-instruction leak)', () => {
     const prompt = buildPostDraftPrompt({
-      seed: 'Write about wef.org.in',
+      seed: 'About wef.org.in #missionmillion #womenlead',
       photoCount: 2,
       videoCount: 1,
       link: { url: 'https://wef.org.in', title: 'WEF India' },
     })
-    expect(prompt).toContain('COMPLETE ready-to-publish')
-    expect(prompt).toContain('Write about wef.org.in')
-    expect(prompt).toContain('2 photo')
-    expect(prompt).toContain('1 video')
-    expect(prompt).toContain('https://wef.org.in')
+    expect(prompt).toBe('About wef.org.in #missionmillion #womenlead')
+    expect(prompt).not.toMatch(/you are sherpa/i)
+    expect(prompt).not.toMatch(/member notes/i)
+  })
+
+  it('detects leaked drafting instructions in model output', () => {
+    expect(
+      isLeakedComposePrompt(
+        'You are SHERPA writing for SHEconomy Community (women-led professionals). Write a COMPLETE ready-to-publish post — not an outline and not a restatement of the instruction. Member notes / topic: About wef.org.in',
+      ),
+    ).toBe(true)
+    expect(
+      isLeakedComposePrompt(
+        'Sharing a few reflections from wef.org.in — inclusive growth matters for women-led teams.',
+      ),
+    ).toBe(false)
   })
 
   it('strips “write about” instructions in the local fallback', () => {

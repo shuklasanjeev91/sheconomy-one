@@ -1968,7 +1968,12 @@ Deno.serve(async (req) => {
         prompt || 'Write a complete community post for the attached media/link.',
       )
       const parsed = parsePostDraftJson(completion.answer)
-      if (parsed?.content) {
+      const leaked =
+        !!parsed?.content &&
+        (/you are sherpa writing/i.test(parsed.content) ||
+          /member notes\s*\/\s*topic:/i.test(parsed.content) ||
+          (prompt && parsed.content.trim() === prompt.trim()))
+      if (parsed?.content && !leaked) {
         return json({ ...parsed, usedFallback: false, product: 'community' })
       }
       return json({ ...fallback, usedFallback: true, product: 'community' })
