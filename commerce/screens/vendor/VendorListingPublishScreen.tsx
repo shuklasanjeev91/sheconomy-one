@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'one'
 
@@ -38,7 +38,6 @@ import {
   setListingStatus,
   updateListingField,
   updateListingWithDetails,
-  validateForm,
 } from '~/lib/listing/listing.store'
 import { toFriendlyListingError } from '~/lib/listing/listing.errors'
 import { useShopPayuKyc } from '~/commerce/hooks/useShopPayuKyc'
@@ -48,17 +47,17 @@ import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { ListingPublishFooter, ListingPublishTopBar } from '~/commerce/components/vendor/listing-publish/ListingPublishFooter'
-import {
-  ListingPublishPageHeader,
-  ListingPublishStepNav,
-} from '~/commerce/components/vendor/listing-publish/ListingPublishStepNav'
+import { ListingPublishFooter } from '~/commerce/components/vendor/listing-publish/ListingPublishFooter'
+import { ListingEditorSection } from '~/commerce/components/vendor/listing-publish/ListingEditorSection'
+import { ListingEditorSectionNav } from '~/commerce/components/vendor/listing-publish/ListingEditorSectionNav'
+import { ListingEditorStatusRail } from '~/commerce/components/vendor/listing-publish/ListingEditorStatusRail'
 import { ListingTypeChooser } from '~/commerce/components/vendor/listing-publish/ListingTypeChooser'
 import {
+  LISTING_EDITOR_SECTIONS,
   LISTING_PUBLISH_COPY,
   LISTING_PUBLISH_STEP_IDS,
-  LISTING_PUBLISH_STEPS,
-  type ListingPublishStepId,
+  PRODUCT_STRUCTURES,
+  type ListingEditorSectionId,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import {
   buildFormFromListingDetails,
@@ -66,10 +65,10 @@ import {
   findStepForErrors,
   formDataToPublishPayload,
   mergeListingMetadata,
+  resolveProductStructure,
   updateListingMetadataField,
   validateDraftForm,
   validateFullPublishForm,
-  validatePublishStep,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 import { fetchShopAddressDetails } from '~/commerce/lib/shop-address'
 import { seedDefaultWarehouseFromListing } from '~/commerce/lib/warehouse-inventory'
@@ -146,13 +145,9 @@ function VendorListingPublishContent() {
   const isLoadingDetails = useAppSelector((s) => s.listing.isLoadingDetails)
   const isUpdating = useAppSelector((s) => s.listing.isUpdating)
   const publishProgress = useAppSelector(selectPublishProgressInfo)
-  const { currency, currencySymbol } = useVendorCurrency()
+  const { currencySymbol } = useVendorCurrency()
 
-  const [activeStep, setActiveStep] = useState<ListingPublishStepId>(LISTING_PUBLISH_STEP_IDS.BASIC)
-  // Editing an existing listing unlocks every step; a new listing is walked in order.
-  const [furthestStepIndex, setFurthestStepIndex] = useState(
-    isEditMode ? LISTING_PUBLISH_STEPS.length - 1 : 0,
-  )
+  const [activeSection, setActiveSection] = useState<ListingEditorSectionId>('basic')
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({})
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(!isEditMode)
@@ -178,13 +173,6 @@ function VendorListingPublishContent() {
       cancelled = true
     }
   }, [shop?.id])
-
-  const stepIndex = useMemo(
-    () => Math.max(0, LISTING_PUBLISH_STEPS.findIndex((step) => step.id === activeStep)),
-    [activeStep],
-  )
-  const stepConfig = LISTING_PUBLISH_STEPS[stepIndex]
-  const isLastStep = stepIndex === LISTING_PUBLISH_STEPS.length - 1
 
   const shopSlug =
     shop?.slug || shop?.shop_name?.toLowerCase().replace(/\s+/g, '-') || 'shop'
@@ -238,7 +226,7 @@ function VendorListingPublishContent() {
       if (isDuplicateMode) {
         setTypePicked(true)
         setTypeConfirmed(true)
-        setFurthestStepIndex(LISTING_PUBLISH_STEPS.length - 1)
+        setActiveSection('basic')
         toast.show('Listing copied', {
           tone: 'success',
           message: 'Review the copy, then save as draft or publish.',
@@ -335,7 +323,7 @@ function VendorListingPublishContent() {
       handleChangeType(type)
       setTypePicked(true)
       setTypeConfirmed(true)
-      setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
+      setActiveSection('basic')
     },
     [handleChangeType],
   )
@@ -432,7 +420,7 @@ function VendorListingPublishContent() {
         tone: 'success',
         message: draft.priceNote || 'Review the title, description, and price before publishing.',
       })
-      setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
+      setActiveSection('basic')
     },
     [formData.categories, formData.price, formData.tags, toast, updateField],
   )
@@ -471,52 +459,26 @@ function VendorListingPublishContent() {
     }
   }, [formData.images, handleApplyAiDraft, toast, updateField, writingListing])
 
-  const runStepValidation = useCallback(
-    (stepId: ListingPublishStepId) => {
-      const result = validatePublishStep(stepId, formData)
-      setStepErrors(result.errors)
-      dispatch(validateForm())
-      return result.isValid
-    },
-    [dispatch, formData],
-  )
-
-  const goToStep = useCallback(
-    (step: ListingPublishStepId) => {
-      const target = LISTING_PUBLISH_STEPS.findIndex((entry) => entry.id === step)
-      if (target < 0 || target === stepIndex) return
-      if (target > furthestStepIndex) {
-        toast.show(LISTING_PUBLISH_COPY.STEP_LOCKED, {
-          tone: 'warning',
-          message: `Complete ${stepConfig.label} to continue.`,
-        })
-        return
-      }
-      // Allow free movement across unlocked tabs; validate in place without blocking.
-      void runStepValidation(activeStep)
-      setActiveStep(step)
-    },
-    [activeStep, furthestStepIndex, runStepValidation, stepConfig.label, stepIndex, toast],
-  )
+  const scrollToSection = useCallback((section: ListingEditorSectionId) => {
+    setActiveSection(section)
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const el = document.getElementById(`listing-section-${section}`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
 
   const goNext = useCallback(() => {
-    if (isLastStep) return
-    if (!runStepValidation(activeStep)) {
-      toast.show('Fix this step to continue', {
-        tone: 'danger',
-        message: `Complete the required fields in ${stepConfig.label}.`,
-      })
-      return
-    }
-    const next = stepIndex + 1
-    setFurthestStepIndex((current) => Math.max(current, next))
-    setActiveStep(LISTING_PUBLISH_STEPS[next].id)
-  }, [activeStep, isLastStep, runStepValidation, stepConfig.label, stepIndex, toast])
+    const order = LISTING_EDITOR_SECTIONS.filter(
+      (entry) => entry.id !== 'variants' || resolveProductStructure(formData) !== PRODUCT_STRUCTURES.SIMPLE,
+    )
+    const idx = order.findIndex((entry) => entry.id === activeSection)
+    const next = order[Math.min(order.length - 1, idx + 1)]
+    if (next) scrollToSection(next.id)
+  }, [activeSection, formData, scrollToSection])
 
   const goBack = useCallback(() => {
-    if (stepIndex === 0) return
-    setActiveStep(LISTING_PUBLISH_STEPS[stepIndex - 1].id)
-  }, [stepIndex])
+    router.push(vendorRoutes.products)
+  }, [router])
 
   const saveDraft = useCallback(async () => {
     if (!shop?.id) {
@@ -527,7 +489,7 @@ function VendorListingPublishContent() {
     const draft = validateDraftForm(formData)
     if (!draft.isValid) {
       setStepErrors(draft.errors)
-      setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
+      scrollToSection('basic')
       toast.show('Add a title first', {
         tone: 'danger',
         message: Object.values(draft.errors)[0] ?? 'Please complete required fields.',
@@ -584,7 +546,7 @@ function VendorListingPublishContent() {
         message: toFriendlyListingError(error),
       })
     }
-  }, [dispatch, editListingId, formData, isEditMode, router, shop?.id, toast])
+  }, [dispatch, editListingId, formData, isEditMode, router, scrollToSection, shop?.id, toast])
 
   const publishListingNow = useCallback(async () => {
     if (!shop?.id) {
@@ -608,7 +570,17 @@ function VendorListingPublishContent() {
     if (!full.isValid) {
       setStepErrors(full.errors)
       const failingStep = findStepForErrors(full.errors)
-      if (failingStep) setActiveStep(failingStep)
+      if (failingStep) {
+        const section =
+          LISTING_EDITOR_SECTIONS.find(
+            (entry) => entry.stepId === failingStep && entry.id !== 'variants',
+          )?.id ??
+          (failingStep === LISTING_PUBLISH_STEP_IDS.PRICING &&
+          resolveProductStructure(formData) !== PRODUCT_STRUCTURES.SIMPLE
+            ? 'variants'
+            : 'basic')
+        scrollToSection(section)
+      }
       toast.show('Fix validation errors', {
         tone: 'danger',
         message: Object.values(full.errors)[0] ?? 'Please complete required fields.',
@@ -677,6 +649,7 @@ function VendorListingPublishContent() {
     kycAllowsSelling,
     kycLoading,
     router,
+    scrollToSection,
     shop?.id,
     toast,
   ])
@@ -767,147 +740,234 @@ function VendorListingPublishContent() {
     )
   }
 
+  const productStructure = resolveProductStructure(formData)
+  const showVariantsNav =
+    productStructure === PRODUCT_STRUCTURES.VARIABLE ||
+    productStructure === PRODUCT_STRUCTURES.GROUPED
+  const pageTitle = isEditMode
+    ? LISTING_PUBLISH_COPY.PAGE_TITLE_EDIT
+    : isDuplicateMode
+      ? LISTING_PUBLISH_COPY.PAGE_TITLE_DUPLICATE
+      : LISTING_PUBLISH_COPY.PAGE_TITLE_CREATE
+
   return (
     <YStack width="100%" backgroundColor={ui.background}>
-      {/* The vendor layout already owns the page scroller — a nested one here
-          collapses to zero height on web and blanks the composer. */}
       <YStack width="100%" minWidth={0}>
         <YStack
           width="100%"
           maxWidth="100%"
           alignSelf="stretch"
-          paddingHorizontal={isDesktop ? '$6' : '$3'}
-          paddingTop={isDesktop ? '$5' : '$3'}
+          paddingHorizontal={isDesktop ? '$5' : '$3'}
+          paddingTop={isDesktop ? '$4' : '$3'}
           paddingBottom={24 + tabClearance + footerClearance}
           gap="$4"
         >
-          {/* <ListingPublishTopBar
-            ui={ui}
-            title={
-              isEditMode
-                ? LISTING_PUBLISH_COPY.PAGE_TITLE_EDIT
-                : isDuplicateMode
-                  ? LISTING_PUBLISH_COPY.PAGE_TITLE_DUPLICATE
-                  : LISTING_PUBLISH_COPY.PAGE_TITLE_CREATE
-            }
-            isSaving={isSaving}
-            onBack={() => router.push(vendorRoutes.products)}
-            onSaveDraft={() => void saveDraft()}
-          /> */}
+          <YStack gap="$1">
+            <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
+              {pageTitle}
+            </Text>
+            <Text fontSize={13} color={ui.textSecondary}>
+              Dukaan / WooCommerce-style editor — jump any section from the left, publish when ready.
+            </Text>
+          </YStack>
 
-          <ListingPublishPageHeader
-            ui={ui}
-            isDesktop={isDesktop}
-            headline={stepConfig.headline}
-            subtitle={stepConfig.subtitle}
-          />
+          <XStack gap="$4" alignItems="flex-start" flexWrap={isDesktop ? 'nowrap' : 'wrap'}>
+            {isDesktop ? (
+              <YStack width={220} flexShrink={0}>
+                <ListingEditorSectionNav
+                  ui={ui}
+                  activeSection={activeSection}
+                  showVariants={showVariantsNav}
+                  onSelect={scrollToSection}
+                />
+              </YStack>
+            ) : null}
 
-          <ListingPublishStepNav
-            ui={ui}
-            activeStep={activeStep}
-            furthestStepIndex={furthestStepIndex}
-            isDesktop={isDesktop}
-            onSelect={goToStep}
-          />
+            <YStack flex={1} minWidth={280} gap="$6">
+              {!isDesktop ? (
+                <ListingEditorSectionNav
+                  ui={ui}
+                  activeSection={activeSection}
+                  showVariants={showVariantsNav}
+                  onSelect={scrollToSection}
+                />
+              ) : null}
 
-          {activeStep === LISTING_PUBLISH_STEP_IDS.BASIC ? (
-            <BasicInfoStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              isDesktop={isDesktop}
-              onEditType={() => setTypeConfirmed(false)}
-              onUpdate={updateField}
-              onUpdateMetadata={updateMetadata}
-              onAddTag={handleAddTag}
-              onRemoveTag={handleRemoveTag}
-              onWriteWithAi={() => void writeWithAi()}
-              writingWithAi={writingListing}
-            />
-          ) : null}
+              <ListingEditorSection
+                ui={ui}
+                id="basic"
+                title="Product Information"
+                subtitle="Name, description, and tags."
+              >
+                <BasicInfoStep
+                  ui={ui}
+                  formData={formData}
+                  errors={displayErrors}
+                  isDesktop={isDesktop}
+                  onEditType={() => setTypeConfirmed(false)}
+                  onUpdate={updateField}
+                  onUpdateMetadata={updateMetadata}
+                  onAddTag={handleAddTag}
+                  onRemoveTag={handleRemoveTag}
+                  onWriteWithAi={() => void writeWithAi()}
+                  writingWithAi={writingListing}
+                />
+              </ListingEditorSection>
 
-          {activeStep === LISTING_PUBLISH_STEP_IDS.DETAILS ? (
-            <DetailsStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              sellerCountryCode={sellerCountryCode}
-              onUpdate={updateField}
-              onUpdateMetadata={updateMetadata}
-            />
-          ) : null}
+              <ListingEditorSection
+                ui={ui}
+                id="images"
+                title="Media"
+                subtitle="Main image first, then angles and detail shots."
+              >
+                <ImagesStep
+                  ui={ui}
+                  formData={formData}
+                  errors={displayErrors}
+                  isDesktop={isDesktop}
+                  onChangeImages={handleChangeImages}
+                  onApplyAiDraft={handleApplyAiDraft}
+                />
+              </ListingEditorSection>
 
-          {activeStep === LISTING_PUBLISH_STEP_IDS.PRICING ? (
-            <PricingStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              currencySymbol={currencySymbol}
-              isDesktop={isDesktop}
-              sellerCountryCode={sellerCountryCode}
-              onUpdate={updateField}
-              onUpdateMetadata={updateMetadata}
-            />
-          ) : null}
+              <ListingEditorSection
+                ui={ui}
+                id="pricing"
+                title="Pricing"
+                subtitle="Pick Simple, Variable, or Grouped — then set prices."
+              >
+                <PricingStep
+                  ui={ui}
+                  formData={formData}
+                  errors={displayErrors}
+                  currencySymbol={currencySymbol}
+                  isDesktop={isDesktop}
+                  sellerCountryCode={sellerCountryCode}
+                  panel="type-and-price"
+                  onUpdate={updateField}
+                  onUpdateMetadata={updateMetadata}
+                />
+              </ListingEditorSection>
 
-          {activeStep === LISTING_PUBLISH_STEP_IDS.CATEGORIES ? (
-            <CategoriesStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              onToggleCategory={handleToggleCategory}
-              onClearCategories={handleClearCategories}
-            />
-          ) : null}
+              {showVariantsNav ? (
+                <ListingEditorSection
+                  ui={ui}
+                  id="variants"
+                  title="Variants"
+                  subtitle={
+                    productStructure === PRODUCT_STRUCTURES.GROUPED
+                      ? 'Link related products in this group.'
+                      : 'Add options like Size or Color, then price each SKU.'
+                  }
+                >
+                  <PricingStep
+                    ui={ui}
+                    formData={formData}
+                    errors={displayErrors}
+                    currencySymbol={currencySymbol}
+                    isDesktop={isDesktop}
+                    sellerCountryCode={sellerCountryCode}
+                    panel="variants"
+                    onUpdate={updateField}
+                    onUpdateMetadata={updateMetadata}
+                  />
+                </ListingEditorSection>
+              ) : null}
 
-          {activeStep === LISTING_PUBLISH_STEP_IDS.IMAGES ? (
-            <ImagesStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              isDesktop={isDesktop}
-              onChangeImages={handleChangeImages}
-              onApplyAiDraft={handleApplyAiDraft}
-            />
-          ) : null}
+              <ListingEditorSection
+                ui={ui}
+                id="categories"
+                title="Categories"
+                subtitle="Help shoppers browse to this product."
+              >
+                <CategoriesStep
+                  ui={ui}
+                  formData={formData}
+                  errors={displayErrors}
+                  onToggleCategory={handleToggleCategory}
+                  onClearCategories={handleClearCategories}
+                />
+              </ListingEditorSection>
 
-          {activeStep === LISTING_PUBLISH_STEP_IDS.SEO ? (
-            <SeoStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              shopSlug={shopSlug}
-              isDesktop={isDesktop}
-              onUpdate={updateField}
-              onUpdateMetadata={updateMetadata}
-            />
-          ) : null}
+              <ListingEditorSection
+                ui={ui}
+                id="details"
+                title="Inventory & Shipping"
+                subtitle="Stock, package size, materials, and product details."
+              >
+                <DetailsStep
+                  ui={ui}
+                  formData={formData}
+                  errors={displayErrors}
+                  sellerCountryCode={sellerCountryCode}
+                  onUpdate={updateField}
+                  onUpdateMetadata={updateMetadata}
+                />
+              </ListingEditorSection>
+
+              <ListingEditorSection
+                ui={ui}
+                id="seo"
+                title="SEO"
+                subtitle="Search title, description, and custom URL."
+              >
+                <SeoStep
+                  ui={ui}
+                  formData={formData}
+                  errors={displayErrors}
+                  shopSlug={shopSlug}
+                  isDesktop={isDesktop}
+                  onUpdate={updateField}
+                  onUpdateMetadata={updateMetadata}
+                />
+              </ListingEditorSection>
+            </YStack>
+
+            {isDesktop ? (
+              <YStack width={280} flexShrink={0}>
+                <ListingEditorStatusRail
+                  ui={ui}
+                  formData={formData}
+                  currencySymbol={currencySymbol}
+                  isEditMode={isEditMode}
+                  lastSavedAt={lastSavedAt}
+                  isSaving={isSaving}
+                  isPublishing={publishProgress.isPublishing}
+                  onSaveDraft={() => void saveDraft()}
+                  onPublish={() => void publishListingNow()}
+                  onCancel={() => router.push(vendorRoutes.products)}
+                />
+              </YStack>
+            ) : null}
+          </XStack>
         </YStack>
       </YStack>
 
-      <YStack
-        width="100%"
-        style={
-          Platform.OS === 'web'
-            ? ({ position: 'sticky', bottom: tabClearance } as const)
-            : undefined
-        }
-      >
-        <ListingPublishFooter
-          ui={ui}
-          isDesktop={isDesktop}
-          safeBottom={safeBottom}
-          lastSavedAt={lastSavedAt}
-          isSaving={isSaving}
-          isPublishing={publishProgress.isPublishing}
-          showPublish={isLastStep}
-          isFirstStep={stepIndex === 0}
-          onBack={goBack}
-          onNext={goNext}
-          onSaveDraft={() => void saveDraft()}
-          onPublish={() => void publishListingNow()}
-        />
-      </YStack>
+      {!isDesktop ? (
+        <YStack
+          width="100%"
+          style={
+            Platform.OS === 'web'
+              ? ({ position: 'sticky', bottom: tabClearance } as const)
+              : undefined
+          }
+        >
+          <ListingPublishFooter
+            ui={ui}
+            isDesktop={isDesktop}
+            safeBottom={safeBottom}
+            lastSavedAt={lastSavedAt}
+            isSaving={isSaving}
+            isPublishing={publishProgress.isPublishing}
+            showPublish
+            isFirstStep
+            onBack={goBack}
+            onNext={goNext}
+            onSaveDraft={() => void saveDraft()}
+            onPublish={() => void publishListingNow()}
+          />
+        </YStack>
+      ) : null}
     </YStack>
   )
 }

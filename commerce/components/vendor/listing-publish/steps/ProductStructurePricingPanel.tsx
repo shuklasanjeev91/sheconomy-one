@@ -71,6 +71,8 @@ type ProductStructurePricingPanelProps = {
   errors: Record<string, string>
   currencySymbol: string
   sellerCountryCode?: string | null
+  /** Split Dukaan sections: type+simple price vs variants/grouped. */
+  panel?: 'full' | 'type-and-price' | 'variants'
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
 }
@@ -81,6 +83,7 @@ export function ProductStructurePricingPanel({
   errors,
   currencySymbol,
   sellerCountryCode,
+  panel = 'full',
   onUpdate,
   onUpdateMetadata,
 }: ProductStructurePricingPanelProps) {
@@ -334,11 +337,15 @@ export function ProductStructurePricingPanel({
     )
   }
 
+  const showTypeAndPrice = panel === 'full' || panel === 'type-and-price'
+  const showVariants = panel === 'full' || panel === 'variants'
+
   return (
     <YStack gap="$4" width="100%">
+      {showTypeAndPrice ? (
       <ListingPublishCard ui={ui} title="Product type">
         <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-          Like WooCommerce / Amazon — pick how this listing is sold, then set prices below.
+          WooCommerce / Dukaan style — Simple, Variable, or Grouped. Pricing fields update below.
         </Text>
         <XStack gap="$2" flexWrap="wrap">
           {structureOptions.map((option) => {
@@ -373,8 +380,9 @@ export function ProductStructurePricingPanel({
           })}
         </XStack>
       </ListingPublishCard>
+      ) : null}
 
-      {isSimple ? (
+      {showTypeAndPrice && isSimple ? (
         <ListingPublishCard ui={ui} title="Offer price">
           <Field label={`Selling price (${currencySymbol})`} error={errors.price}>
             <XStack alignItems="center" gap="$2">
@@ -489,7 +497,7 @@ export function ProductStructurePricingPanel({
         </ListingPublishCard>
       ) : null}
 
-      {isSimple ? (
+      {showTypeAndPrice && isSimple ? (
         <ListingPublishCard ui={ui} title="Inventory alerts">
           <Field label="Minimum order quantity">
             <Input
@@ -553,7 +561,7 @@ export function ProductStructurePricingPanel({
         </ListingPublishCard>
       ) : null}
 
-      {isGrouped ? (
+      {showVariants && isGrouped ? (
         <ListingPublishCard ui={ui} title="Grouped products">
           <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
             Add listing IDs from your shop. Shoppers see this group and buy the linked products — no
@@ -605,7 +613,17 @@ export function ProductStructurePricingPanel({
         </ListingPublishCard>
       ) : null}
 
-      {isVariable ? (
+      {showTypeAndPrice && (isVariable || isGrouped) ? (
+        <ListingPublishCard ui={ui} title={isVariable ? 'Variable pricing' : 'Grouped pricing'}>
+          <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
+            {isVariable
+              ? 'Set each option’s price and stock in Variants below.'
+              : 'Link products in Variants below. The group itself has no offer price.'}
+          </Text>
+        </ListingPublishCard>
+      ) : null}
+
+      {showVariants && isVariable ? (
         <ListingPublishCard
           ui={ui}
           title="Variations & SKU prices"

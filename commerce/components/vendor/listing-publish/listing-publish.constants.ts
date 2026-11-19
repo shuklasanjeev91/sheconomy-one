@@ -28,48 +28,95 @@ export type ListingPublishStepConfig = {
 export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
   {
     id: LISTING_PUBLISH_STEP_IDS.BASIC,
-    label: 'Basic Info',
-    headline: 'Listing Basics',
-    subtitle: 'Introduce your product with a compelling title, description, and tags.',
+    label: 'Product Information',
+    headline: 'Product Information',
+    subtitle: 'Name, description, and tags — like Dukaan / WooCommerce product info.',
     iconName: 'info',
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.IMAGES,
+    label: 'Media',
+    headline: 'Media',
+    subtitle: 'Upload product photos. Main image first, then angles and details.',
+    iconName: 'image',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.PRICING,
     label: 'Pricing',
-    headline: 'Product type & pricing',
-    subtitle:
-      'Choose Simple, Variable, or Grouped — then set the offer price or per-SKU prices.',
+    headline: 'Pricing',
+    subtitle: 'Choose Simple, Variable, or Grouped — then set offer or per-SKU prices.',
     iconName: 'indian-rupee',
-  },
-  {
-    id: LISTING_PUBLISH_STEP_IDS.DETAILS,
-    label: 'Details',
-    headline: 'Product details',
-    subtitle: 'Identity, materials, shipping, and inventory for this listing.',
-    iconName: 'layers',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
     label: 'Categories',
-    headline: 'Select Categories',
-    subtitle: 'Classify your item to help customers find it more easily.',
+    headline: 'Categories',
+    subtitle: 'Classify your item so shoppers can find it.',
     iconName: 'tags',
   },
   {
-    id: LISTING_PUBLISH_STEP_IDS.IMAGES,
-    label: 'Images',
-    headline: 'Select Images',
-    subtitle: 'Help customers discover your item with clear and appealing product photos.',
-    iconName: 'image',
+    id: LISTING_PUBLISH_STEP_IDS.DETAILS,
+    label: 'Inventory & Shipping',
+    headline: 'Inventory & Shipping',
+    subtitle: 'Stock, package size, materials, and compliance details.',
+    iconName: 'layers',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.SEO,
     label: 'SEO',
-    headline: 'Search Engine Optimization',
-    subtitle: 'Fine-tune how your product appears in global search results and discoverability feeds.',
+    headline: 'SEO',
+    subtitle: 'Control how this product appears in search results.',
     iconName: 'search',
   },
 ] as const
+
+/** Dukaan-style single-page section anchors (includes Variants jump target). */
+export const LISTING_EDITOR_SECTIONS = [
+  {
+    id: 'basic',
+    label: 'Product Information',
+    hint: 'Name & description',
+    stepId: LISTING_PUBLISH_STEP_IDS.BASIC,
+  },
+  {
+    id: 'images',
+    label: 'Media',
+    hint: 'Photos & gallery',
+    stepId: LISTING_PUBLISH_STEP_IDS.IMAGES,
+  },
+  {
+    id: 'pricing',
+    label: 'Pricing',
+    hint: 'Type, MRP & offer',
+    stepId: LISTING_PUBLISH_STEP_IDS.PRICING,
+  },
+  {
+    id: 'variants',
+    label: 'Variants',
+    hint: 'Options & SKU prices',
+    stepId: LISTING_PUBLISH_STEP_IDS.PRICING,
+  },
+  {
+    id: 'categories',
+    label: 'Categories',
+    hint: 'Storefront browse',
+    stepId: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
+  },
+  {
+    id: 'details',
+    label: 'Inventory & Shipping',
+    hint: 'Stock, weight, tax',
+    stepId: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  },
+  {
+    id: 'seo',
+    label: 'SEO',
+    hint: 'Title & slug',
+    stepId: LISTING_PUBLISH_STEP_IDS.SEO,
+  },
+] as const
+
+export type ListingEditorSectionId = (typeof LISTING_EDITOR_SECTIONS)[number]['id']
 
 /** Re-export listing type options so UIs never duplicate labels. */
 export { LISTING_TYPE_OPTIONS, LISTING_VALIDATION, LISTING_IMAGE_CONSTRAINTS }
@@ -97,18 +144,18 @@ export type ProductStructure =
 export const PRODUCT_STRUCTURE_OPTIONS = [
   {
     value: PRODUCT_STRUCTURES.SIMPLE,
-    label: 'Simple product',
-    description: 'One SKU with a single selling price and stock.',
+    label: 'Simple',
+    description: 'Single SKU — one price and stock (WooCommerce Simple).',
   },
   {
     value: PRODUCT_STRUCTURES.VARIABLE,
-    label: 'Variable product',
-    description: 'Size/color options — each variation has its own price & stock.',
+    label: 'Variable',
+    description: 'Size / color options with per-variant price & stock.',
   },
   {
     value: PRODUCT_STRUCTURES.GROUPED,
-    label: 'Grouped product',
-    description: 'A collection of related products (no price on the group).',
+    label: 'Grouped',
+    description: 'Bundle of related listings (no price on the group).',
   },
 ] as const
 

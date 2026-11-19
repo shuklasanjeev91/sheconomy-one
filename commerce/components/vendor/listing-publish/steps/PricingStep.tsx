@@ -20,6 +20,7 @@ type PricingStepProps = {
   currencySymbol: string
   isDesktop: boolean
   sellerCountryCode?: string | null
+  panel?: 'full' | 'type-and-price' | 'variants'
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
 }
@@ -31,10 +32,12 @@ export function PricingStep({
   currencySymbol,
   isDesktop,
   sellerCountryCode,
+  panel = 'full',
   onUpdate,
   onUpdateMetadata,
 }: PricingStepProps) {
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
+  const showSidebar = panel !== 'variants'
 
   return (
     <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
@@ -45,55 +48,58 @@ export function PricingStep({
           errors={errors}
           currencySymbol={currencySymbol}
           sellerCountryCode={sellerCountryCode}
+          panel={panel}
           onUpdate={onUpdate}
           onUpdateMetadata={onUpdateMetadata}
         />
       </YStack>
 
-      <YStack width={isDesktop ? 300 : '100%'} maxWidth="100%" gap="$4">
-        <ListingPublishCard ui={ui} title="Sales options">
-          <XStack alignItems="flex-start" gap="$3">
-            <Checkbox
-              checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.ACCEPT_OFFERS, false)}
-              onCheckedChange={(checked) =>
-                onUpdateMetadata(LISTING_METADATA_KEYS.ACCEPT_OFFERS, !!checked)
-              }
-            />
-            <YStack flex={1} gap="$0.5">
-              <Text fontSize={13} fontWeight="700" color={ui.text}>
-                Accept offers from buyers
-              </Text>
-              <Text fontSize={12} color={ui.textSecondary}>
-                Allow price negotiation for this product.
-              </Text>
-            </YStack>
-          </XStack>
+      {showSidebar ? (
+        <YStack width={isDesktop ? 260 : '100%'} maxWidth="100%" gap="$4">
+          <ListingPublishCard ui={ui} title="Sales options">
+            <XStack alignItems="flex-start" gap="$3">
+              <Checkbox
+                checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.ACCEPT_OFFERS, false)}
+                onCheckedChange={(checked) =>
+                  onUpdateMetadata(LISTING_METADATA_KEYS.ACCEPT_OFFERS, !!checked)
+                }
+              />
+              <YStack flex={1} gap="$0.5">
+                <Text fontSize={13} fontWeight="700" color={ui.text}>
+                  Accept offers from buyers
+                </Text>
+                <Text fontSize={12} color={ui.textSecondary}>
+                  Allow price negotiation for this product.
+                </Text>
+              </YStack>
+            </XStack>
 
-          <XStack alignItems="flex-start" gap="$3">
-            <Checkbox
-              checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.OFFER_BULK_DISCOUNTS, false)}
-              onCheckedChange={(checked) =>
-                onUpdateMetadata(LISTING_METADATA_KEYS.OFFER_BULK_DISCOUNTS, !!checked)
-              }
-            />
-            <YStack flex={1} gap="$0.5">
-              <Text fontSize={13} fontWeight="700" color={ui.text}>
-                Offer bulk discounts
-              </Text>
-              <Text fontSize={12} color={ui.textSecondary}>
-                Apply tiered pricing for large orders.
-              </Text>
-            </YStack>
-          </XStack>
-        </ListingPublishCard>
+            <XStack alignItems="flex-start" gap="$3">
+              <Checkbox
+                checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.OFFER_BULK_DISCOUNTS, false)}
+                onCheckedChange={(checked) =>
+                  onUpdateMetadata(LISTING_METADATA_KEYS.OFFER_BULK_DISCOUNTS, !!checked)
+                }
+              />
+              <YStack flex={1} gap="$0.5">
+                <Text fontSize={13} fontWeight="700" color={ui.text}>
+                  Offer bulk discounts
+                </Text>
+                <Text fontSize={12} color={ui.textSecondary}>
+                  Apply tiered pricing for large orders.
+                </Text>
+              </YStack>
+            </XStack>
+          </ListingPublishCard>
 
-        <ListingPublishTip
-          ui={ui}
-          solid
-          title="EXPERT TIP"
-          body={LISTING_PUBLISH_COPY.EXPERT_TIP_PRICING}
-        />
-      </YStack>
+          <ListingPublishTip
+            ui={ui}
+            solid
+            title="EXPERT TIP"
+            body={LISTING_PUBLISH_COPY.EXPERT_TIP_PRICING}
+          />
+        </YStack>
+      ) : null}
     </XStack>
   )
 }
