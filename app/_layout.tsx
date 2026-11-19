@@ -93,7 +93,6 @@ html, body, #root {
   width: 100%;
   max-width: 100%;
   margin: 0;
-  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -112,15 +111,26 @@ body {
   }
 }
 @media (min-width: 1021px) {
-  html, body {
+  /*
+   * Document scroll must live on html only. If body also gets overflow-x/y
+   * (even overflow-x: clip + overflow-y: auto), Chromium treats body as a
+   * scrollport and position:sticky on cart/checkout order summary never pins.
+   */
+  html {
     height: auto !important;
     max-height: none !important;
     min-height: 100vh;
     min-height: 100dvh;
-    /* clip keeps horizontal gutters without creating a sticky-breaking scrollport */
     overflow-x: clip;
     overflow-y: auto !important;
     scroll-behavior: smooth;
+  }
+  body {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible !important;
   }
   /* Sticky footer: shell fills the viewport so footer sits after content (or at bottom when short). */
   #root {

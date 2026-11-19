@@ -665,12 +665,14 @@ export function CartScreen() {
                     </Text>
                   ) : null}
                   {savedForLaterShelf}
+                  {/* Keep discovery inside the grid column so StickyRail's
+                      containing block stays tall while browsing recommendations. */}
+                  {discoveryRails}
                 </YStack>
                 <StickyRail width={SUMMARY_WIDTH} maxWidth="100%" scrollable>
                   {desktopBuyBox}
                 </StickyRail>
               </div>
-              {discoveryRails}
             </YStack>
           ) : (
             <YStack gap="$4" width="100%" flexShrink={0}>
