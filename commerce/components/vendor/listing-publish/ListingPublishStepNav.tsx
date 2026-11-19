@@ -23,17 +23,21 @@ function stepIcon(iconName: ListingPublishStepConfig['iconName'], color: string,
       return <Icons.Image size={size} color={color} />
     case 'search':
       return <Icons.Search size={size} color={color} />
+    case 'sliders':
+      return <Icons.SlidersHorizontal size={size} color={color} />
     default:
       return <Icons.Circle size={size} color={color} />
   }
 }
 
-/** Below this the six steps can't share a row legibly, so they scroll instead. */
-const STEP_SPREAD_MIN_WIDTH = 700
+/** Below this the tabs can't share a row legibly, so they scroll instead. */
+const STEP_SPREAD_MIN_WIDTH = 760
 
 type ListingPublishStepNavProps = {
   ui: AppUiTokens
   activeStep: ListingPublishStepId
+  /** Tabs to render (filtered by product structure). Defaults to all. */
+  steps?: readonly ListingPublishStepConfig[]
   /** Highest step the vendor has unlocked — later steps are not tappable yet. */
   furthestStepIndex: number
   onSelect: (step: ListingPublishStepId) => void
@@ -43,24 +47,26 @@ type ListingPublishStepNavProps = {
 export function ListingPublishStepNav({
   ui,
   activeStep,
+  steps = LISTING_PUBLISH_STEPS,
   furthestStepIndex,
   onSelect,
   isDesktop,
 }: ListingPublishStepNavProps) {
   const { width } = useWindowDimensions()
   const spread = isDesktop || width >= STEP_SPREAD_MIN_WIDTH
+  const visible = steps.length ? steps : LISTING_PUBLISH_STEPS
 
   const tabs = (
     <XStack
       width="100%"
-      gap={spread ? '$2' : '$3'}
+      gap={spread ? '$1.5' : '$3'}
       flexWrap="nowrap"
       paddingBottom="$1"
       borderBottomWidth={1}
       borderBottomColor={ui.borderSubtle}
       justifyContent={spread ? 'space-between' : 'flex-start'}
     >
-      {LISTING_PUBLISH_STEPS.map((step, index) => {
+      {visible.map((step, index) => {
         const active = step.id === activeStep
         const done = index < furthestStepIndex
         const locked = index > furthestStepIndex
@@ -72,6 +78,7 @@ export function ListingPublishStepNav({
             gap={6}
             flex={spread ? 1 : undefined}
             minWidth={spread ? 0 : undefined}
+            paddingHorizontal={spread ? 4 : 8}
             paddingBottom="$2.5"
             borderBottomWidth={active ? 2 : 0}
             borderBottomColor={active ? ui.brand : 'transparent'}
@@ -90,7 +97,7 @@ export function ListingPublishStepNav({
               stepIcon(step.iconName, active ? ui.brand : ui.textMuted)
             )}
             <Text
-              fontSize={13}
+              fontSize={spread ? 12.5 : 13}
               fontWeight={active ? '800' : '600'}
               color={active ? ui.brand : ui.textSecondary}
               numberOfLines={1}

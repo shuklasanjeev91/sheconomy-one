@@ -9,6 +9,7 @@ import {
 import {
   LISTING_METADATA_KEYS,
   LISTING_PUBLISH_COPY,
+  type ProductStructure,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import { readMetadataBoolean } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 import { ProductStructurePricingPanel } from '~/commerce/components/vendor/listing-publish/steps/ProductStructurePricingPanel'
@@ -23,6 +24,7 @@ type PricingStepProps = {
   panel?: 'full' | 'type-and-price' | 'variants'
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
+  onStructureChange?: (next: ProductStructure) => void
 }
 
 export function PricingStep({
@@ -35,6 +37,7 @@ export function PricingStep({
   panel = 'full',
   onUpdate,
   onUpdateMetadata,
+  onStructureChange,
 }: PricingStepProps) {
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
   const showSidebar = panel !== 'variants'
@@ -51,6 +54,7 @@ export function PricingStep({
           panel={panel}
           onUpdate={onUpdate}
           onUpdateMetadata={onUpdateMetadata}
+          onStructureChange={onStructureChange}
         />
       </YStack>
 

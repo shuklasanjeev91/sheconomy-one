@@ -75,6 +75,8 @@ type ProductStructurePricingPanelProps = {
   panel?: 'full' | 'type-and-price' | 'variants'
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
+  /** Fired after product type changes so the parent can open the Variants tab. */
+  onStructureChange?: (next: ProductStructure) => void
 }
 
 export function ProductStructurePricingPanel({
@@ -86,6 +88,7 @@ export function ProductStructurePricingPanel({
   panel = 'full',
   onUpdate,
   onUpdateMetadata,
+  onStructureChange,
 }: ProductStructurePricingPanelProps) {
   const toast = useAppToast()
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
@@ -123,20 +126,34 @@ export function ProductStructurePricingPanel({
   )
 
   function setProductStructure(next: ProductStructure) {
-    onUpdateMetadata(LISTING_METADATA_KEYS.PRODUCT_STRUCTURE, next)
+    // Single metadata write — chained onUpdateMetadata calls race on stale formData
+    // and wipe product_structure (clicks appear to do nothing).
+    const base = {
+      ...((formData.listing_metadata ?? {}) as Record<string, unknown>),
+      [LISTING_METADATA_KEYS.PRODUCT_STRUCTURE]: next,
+    }
     if (next === PRODUCT_STRUCTURES.SIMPLE) {
+      base[LISTING_METADATA_KEYS.GROUPED_LISTING_IDS] = []
       onUpdate('variations', [])
-      persistAxes([])
+      setAxes([])
       setVariantError(null)
-      onUpdateMetadata(LISTING_METADATA_KEYS.GROUPED_LISTING_IDS, [])
+      onUpdate('listing_metadata', withVariationAxes(base, []) as ListingFormData['listing_metadata'])
     } else if (next === PRODUCT_STRUCTURES.VARIABLE) {
-      onUpdateMetadata(LISTING_METADATA_KEYS.GROUPED_LISTING_IDS, [])
-      if (!axes.length) persistAxes([{ name: 'Color', values: [] }])
+      base[LISTING_METADATA_KEYS.GROUPED_LISTING_IDS] = []
+      const nextAxes = axes.length ? axes : [{ name: 'Color', values: [] as string[] }]
+      setAxes(nextAxes)
+      setVariantError(null)
+      onUpdate(
+        'listing_metadata',
+        withVariationAxes(base, nextAxes) as ListingFormData['listing_metadata'],
+      )
     } else if (next === PRODUCT_STRUCTURES.GROUPED) {
       onUpdate('variations', [])
-      persistAxes([])
+      setAxes([])
       setVariantError(null)
+      onUpdate('listing_metadata', withVariationAxes(base, []) as ListingFormData['listing_metadata'])
     }
+    onStructureChange?.(next)
   }
 
   function addGroupedListingId() {
@@ -345,37 +362,43 @@ export function ProductStructurePricingPanel({
       {showTypeAndPrice ? (
       <ListingPublishCard ui={ui} title="Product type">
         <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-          WooCommerce / Dukaan style — Simple, Variable, or Grouped. Pricing fields update below.
+          WooCommerce / Amazon / Dukaan — pick how this product is sold. Tabs update instantly.
         </Text>
         <XStack gap="$2" flexWrap="wrap">
           {structureOptions.map((option) => {
             const selected = productStructure === option.value
             return (
-              <YStack
+              <Button
                 key={option.value}
+                tone={selected ? 'primary' : 'outline'}
+                size="$4"
                 flex={1}
-                flexBasis={160}
-                minWidth={160}
-                gap="$1.5"
-                padding="$3"
+                flexBasis={140}
+                minWidth={140}
+                height="auto"
+                paddingVertical="$3"
+                paddingHorizontal="$3"
                 borderRadius={14}
-                borderWidth={selected ? 2 : 1}
-                borderColor={selected ? ui.brand : ui.borderSubtle}
-                backgroundColor={selected ? ui.roseSurface : ui.surface}
-                cursor="pointer"
-                role="button"
-                tabIndex={0}
                 onPress={() => setProductStructure(option.value)}
-                hoverStyle={{ borderColor: ui.brand }}
-                pressStyle={{ opacity: 0.92 }}
               >
-                <Text fontSize={13} fontWeight="800" color={ui.text}>
-                  {option.label}
-                </Text>
-                <Text fontSize={11.5} color={ui.textSecondary} lineHeight={16}>
-                  {option.description}
-                </Text>
-              </YStack>
+                <YStack gap="$1" alignItems="flex-start" width="100%">
+                  <Text
+                    fontSize={13}
+                    fontWeight="800"
+                    color={selected ? '#fff' : ui.text}
+                  >
+                    {option.label}
+                  </Text>
+                  <Text
+                    fontSize={11.5}
+                    color={selected ? 'rgba(255,255,255,0.88)' : ui.textSecondary}
+                    lineHeight={16}
+                    textAlign="left"
+                  >
+                    {option.description}
+                  </Text>
+                </YStack>
+              </Button>
             )
           })}
         </XStack>

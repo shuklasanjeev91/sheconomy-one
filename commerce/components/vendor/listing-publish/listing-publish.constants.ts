@@ -4,13 +4,14 @@ import {
   LISTING_VALIDATION,
 } from '~/lib/listing/listing.type'
 
-/** Wizard step identifiers — stable keys for navigation + validation. */
+/** Wizard / top-tab identifiers — stable keys for navigation + validation. */
 export const LISTING_PUBLISH_STEP_IDS = {
   BASIC: 'basic',
-  DETAILS: 'details',
-  PRICING: 'pricing',
-  CATEGORIES: 'categories',
   IMAGES: 'images',
+  PRICING: 'pricing',
+  VARIANTS: 'variants',
+  CATEGORIES: 'categories',
+  DETAILS: 'details',
   SEO: 'seo',
 } as const
 
@@ -22,30 +23,40 @@ export type ListingPublishStepConfig = {
   label: string
   headline: string
   subtitle: string
-  iconName: 'info' | 'layers' | 'indian-rupee' | 'tags' | 'image' | 'search'
+  iconName: 'info' | 'layers' | 'indian-rupee' | 'tags' | 'image' | 'search' | 'sliders'
+  /** When true, tab only shows for Variable / Grouped products. */
+  requiresVariants?: boolean
 }
 
 export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
   {
     id: LISTING_PUBLISH_STEP_IDS.BASIC,
-    label: 'Product Information',
+    label: 'Product Info',
     headline: 'Product Information',
-    subtitle: 'Name, description, and tags — like Dukaan / WooCommerce product info.',
+    subtitle: 'Title, description, and tags for your listing.',
     iconName: 'info',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.IMAGES,
     label: 'Media',
     headline: 'Media',
-    subtitle: 'Upload product photos. Main image first, then angles and details.',
+    subtitle: 'Main photo first, then angles and detail shots.',
     iconName: 'image',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.PRICING,
     label: 'Pricing',
     headline: 'Pricing',
-    subtitle: 'Choose Simple, Variable, or Grouped — then set offer or per-SKU prices.',
+    subtitle: 'Choose Simple, Variable, or Grouped — then set prices.',
     iconName: 'indian-rupee',
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.VARIANTS,
+    label: 'Variants',
+    headline: 'Variants',
+    subtitle: 'Options, SKU prices, and stock — or grouped product links.',
+    iconName: 'sliders',
+    requiresVariants: true,
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
@@ -56,7 +67,7 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.DETAILS,
-    label: 'Inventory & Shipping',
+    label: 'Inventory',
     headline: 'Inventory & Shipping',
     subtitle: 'Stock, package size, materials, and compliance details.',
     iconName: 'layers',
@@ -65,58 +76,10 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
     id: LISTING_PUBLISH_STEP_IDS.SEO,
     label: 'SEO',
     headline: 'SEO',
-    subtitle: 'Control how this product appears in search results.',
+    subtitle: 'Search title, description, and custom URL.',
     iconName: 'search',
   },
 ] as const
-
-/** Dukaan-style single-page section anchors (includes Variants jump target). */
-export const LISTING_EDITOR_SECTIONS = [
-  {
-    id: 'basic',
-    label: 'Product Information',
-    hint: 'Name & description',
-    stepId: LISTING_PUBLISH_STEP_IDS.BASIC,
-  },
-  {
-    id: 'images',
-    label: 'Media',
-    hint: 'Photos & gallery',
-    stepId: LISTING_PUBLISH_STEP_IDS.IMAGES,
-  },
-  {
-    id: 'pricing',
-    label: 'Pricing',
-    hint: 'Type, MRP & offer',
-    stepId: LISTING_PUBLISH_STEP_IDS.PRICING,
-  },
-  {
-    id: 'variants',
-    label: 'Variants',
-    hint: 'Options & SKU prices',
-    stepId: LISTING_PUBLISH_STEP_IDS.PRICING,
-  },
-  {
-    id: 'categories',
-    label: 'Categories',
-    hint: 'Storefront browse',
-    stepId: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
-  },
-  {
-    id: 'details',
-    label: 'Inventory & Shipping',
-    hint: 'Stock, weight, tax',
-    stepId: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  },
-  {
-    id: 'seo',
-    label: 'SEO',
-    hint: 'Title & slug',
-    stepId: LISTING_PUBLISH_STEP_IDS.SEO,
-  },
-] as const
-
-export type ListingEditorSectionId = (typeof LISTING_EDITOR_SECTIONS)[number]['id']
 
 /** Re-export listing type options so UIs never duplicate labels. */
 export { LISTING_TYPE_OPTIONS, LISTING_VALIDATION, LISTING_IMAGE_CONSTRAINTS }
@@ -158,6 +121,13 @@ export const PRODUCT_STRUCTURE_OPTIONS = [
     description: 'Bundle of related listings (no price on the group).',
   },
 ] as const
+
+/** Visible top tabs for the current product structure (WooCommerce-style). */
+export function getListingPublishSteps(structure: ProductStructure): ListingPublishStepConfig[] {
+  const needsVariants =
+    structure === PRODUCT_STRUCTURES.VARIABLE || structure === PRODUCT_STRUCTURES.GROUPED
+  return LISTING_PUBLISH_STEPS.filter((step) => !step.requiresVariants || needsVariants)
+}
 
 /** Keys stored inside `listing_metadata` for vendor-only form fields. */
 export const LISTING_METADATA_KEYS = {

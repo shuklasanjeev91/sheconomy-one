@@ -358,7 +358,12 @@ export function validatePublishStep(
       if (structure === PRODUCT_STRUCTURES.SIMPLE) {
         const price = validateListingField('price', formData.price)
         if (!price.isValid && price.error) errors.price = price.error
-      } else if (structure === PRODUCT_STRUCTURES.VARIABLE) {
+      }
+      break
+    }
+    case LISTING_PUBLISH_STEP_IDS.VARIANTS: {
+      const structure = resolveProductStructure(formData)
+      if (structure === PRODUCT_STRUCTURES.VARIABLE) {
         const children = (formData.variations ?? []).filter((row) =>
           String(row.variation_value ?? '').trim(),
         )
@@ -464,8 +469,8 @@ const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
   listing_type: LISTING_PUBLISH_STEP_IDS.BASIC,
   tags: LISTING_PUBLISH_STEP_IDS.BASIC,
   materials: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  variations: LISTING_PUBLISH_STEP_IDS.PRICING,
-  grouped: LISTING_PUBLISH_STEP_IDS.PRICING,
+  variations: LISTING_PUBLISH_STEP_IDS.VARIANTS,
+  grouped: LISTING_PUBLISH_STEP_IDS.VARIANTS,
   stock: LISTING_PUBLISH_STEP_IDS.DETAILS,
   quantity: LISTING_PUBLISH_STEP_IDS.DETAILS,
   weight: LISTING_PUBLISH_STEP_IDS.DETAILS,
