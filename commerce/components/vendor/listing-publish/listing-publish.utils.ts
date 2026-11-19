@@ -85,24 +85,24 @@ export function readMetadataStringList(meta: Record<string, unknown>, key: strin
 }
 
 /**
- * Infer WooCommerce-style product structure from metadata + variations.
- * Existing listings with child SKUs → variable; otherwise simple.
+ * Infer product structure from metadata + variations.
+ * Child SKUs always win — default metadata is "simple", which must not hide
+ * existing variable listings that never wrote product_structure=variable.
  */
 export function resolveProductStructure(formData: {
   listing_metadata?: Record<string, unknown> | null
   variations?: { variation_value?: string | null }[] | null
 }): ProductStructure {
-  const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
-  const raw = String(meta[LISTING_METADATA_KEYS.PRODUCT_STRUCTURE] ?? '').trim().toLowerCase()
-  // Catalog is Simple or Variable only — legacy "grouped" opens as Simple.
-  if (raw === PRODUCT_STRUCTURES.VARIABLE) return PRODUCT_STRUCTURES.VARIABLE
-  if (raw === PRODUCT_STRUCTURES.SIMPLE || raw === PRODUCT_STRUCTURES.GROUPED) {
-    return PRODUCT_STRUCTURES.SIMPLE
-  }
   const hasChildren =
     Array.isArray(formData.variations) &&
     formData.variations.some((row) => String(row.variation_value ?? '').trim())
-  return hasChildren ? PRODUCT_STRUCTURES.VARIABLE : PRODUCT_STRUCTURES.SIMPLE
+  if (hasChildren) return PRODUCT_STRUCTURES.VARIABLE
+
+  const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
+  const raw = String(meta[LISTING_METADATA_KEYS.PRODUCT_STRUCTURE] ?? '').trim().toLowerCase()
+  if (raw === PRODUCT_STRUCTURES.VARIABLE) return PRODUCT_STRUCTURES.VARIABLE
+  // simple | grouped | unset → Simple when there are no child SKUs
+  return PRODUCT_STRUCTURES.SIMPLE
 }
 
 /** Parent price range from variation SKUs (for Pricing step summary). */
@@ -161,12 +161,6 @@ export function buildFormFromListingDetails(
     asDuplicate?: boolean
   },
 ): ListingFormData {
-  const meta = mergeListingMetadata(
-    (listing.listing_metadata as Record<string, unknown> | null) ?? undefined,
-  )
-  const productInfo = serializeListingProductInfo(
-    parseListingProductInfo(listing.product_info, listing.listing_metadata),
-  )
   const asDuplicate = Boolean(extras?.asDuplicate)
   const baseTitle = listing.title ?? ''
   const title = asDuplicate
@@ -184,6 +178,16 @@ export function buildFormFromListingDetails(
           listing_id: undefined,
         }
       : row,
+  )
+  const hasChildren = variations.some((row) => String(row.variation_value ?? '').trim())
+  const meta = mergeListingMetadata({
+    ...((listing.listing_metadata as Record<string, unknown> | null) ?? {}),
+    ...(hasChildren
+      ? { [LISTING_METADATA_KEYS.PRODUCT_STRUCTURE]: PRODUCT_STRUCTURES.VARIABLE }
+      : {}),
+  })
+  const productInfo = serializeListingProductInfo(
+    parseListingProductInfo(listing.product_info, listing.listing_metadata),
   )
   const materials = (extras?.materials ?? []).map((row) =>
     asDuplicate ? { ...row, id: undefined, listing_id: undefined } : row,

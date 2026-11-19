@@ -103,7 +103,25 @@ export function ProductStructurePricingPanel({
   const taxCountryLabel = getCountryName(taxCountry) || taxCountry
   const [axes, setAxes] = useState<VariationAxis[]>(() => {
     const fromMeta = parseVariationAxes(formData.listing_metadata)
-    return fromMeta.length ? fromMeta : []
+    if (fromMeta.length) return fromMeta
+    // Rebuild themes from existing child SKU options when metadata lacks axes.
+    const byName = new Map<string, Set<string>>()
+    for (const row of formData.variations ?? []) {
+      const options = (row.variation_metadata as { options?: Record<string, string> } | null)
+        ?.options
+      if (!options || typeof options !== 'object') continue
+      for (const [name, value] of Object.entries(options)) {
+        const theme = String(name ?? '').trim()
+        const entry = String(value ?? '').trim()
+        if (!theme || !entry) continue
+        if (!byName.has(theme)) byName.set(theme, new Set())
+        byName.get(theme)!.add(entry)
+      }
+    }
+    return [...byName.entries()].map(([name, values]) => ({
+      name,
+      values: [...values],
+    }))
   })
   const rawStructure = resolveProductStructure(formData)
   // Legacy "grouped" listings open as Simple in the Amazon-style editor.

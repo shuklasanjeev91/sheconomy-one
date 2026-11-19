@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  resolveProductStructure,
   validateDraftForm,
   validatePublishStep,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
-import { LISTING_PUBLISH_STEP_IDS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import {
+  LISTING_METADATA_KEYS,
+  LISTING_PUBLISH_STEP_IDS,
+  PRODUCT_STRUCTURES,
+} from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import { EMPTY_LISTING_FORM_DATA, LISTING_TYPES } from '~/lib/listing/listing.type'
 import type { ListingFormData } from '~/lib/listing/listing.type'
 
@@ -83,6 +88,29 @@ describe('publish wizard step validation', () => {
     )
     expect(result.errors.materials).toBeUndefined()
     expect(result.errors.variations).toBeUndefined()
+  })
+})
+
+describe('resolveProductStructure', () => {
+  it('treats listings with child SKUs as variable even when metadata defaults to simple', () => {
+    expect(
+      resolveProductStructure({
+        listing_metadata: { [LISTING_METADATA_KEYS.PRODUCT_STRUCTURE]: PRODUCT_STRUCTURES.SIMPLE },
+        variations: [
+          { variation_value: 'Red / M' },
+          { variation_value: 'Blue / L' },
+        ],
+      }),
+    ).toBe(PRODUCT_STRUCTURES.VARIABLE)
+  })
+
+  it('stays simple when there are no child SKUs', () => {
+    expect(
+      resolveProductStructure({
+        listing_metadata: { [LISTING_METADATA_KEYS.PRODUCT_STRUCTURE]: PRODUCT_STRUCTURES.SIMPLE },
+        variations: [],
+      }),
+    ).toBe(PRODUCT_STRUCTURES.SIMPLE)
   })
 })
 
