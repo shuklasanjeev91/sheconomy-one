@@ -6,6 +6,7 @@ import { Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/comp
 import { BRAND_NAME } from '~/config/brand'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection, StickyRail } from '~/components/layout'
 import { useCart } from '~/commerce/hooks/useCart'
+import { useEmailCommerceActions } from '~/commerce/hooks/useEmailCommerceActions'
 import { useStorefrontCartItems } from '~/commerce/hooks/useStorefrontCartItems'
 import { useShopPartners } from '~/commerce/hooks/useShopPartners'
 import { useShopHeaders } from '~/commerce/hooks/useShopHeaders'
@@ -81,6 +82,7 @@ export function CartScreen() {
     moveToCart,
     removeSavedItem,
   } = useCart()
+  useEmailCommerceActions()
   const { items, isChecking, hasInactiveItems } = useStorefrontCartItems(cartItems)
   const { favoriteIds, isFavorite, toggleFavorite } = useFavorites()
   const toast = useAppToast()

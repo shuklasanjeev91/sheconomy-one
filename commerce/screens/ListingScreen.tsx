@@ -60,6 +60,7 @@ import { fetchListingReturnPolicy, type ListingReturnPolicy } from '~/commerce/l
 import { listingMediaKind } from '~/commerce/lib/listing-media'
 import { findCartItemForListing } from '~/commerce/lib/cart-listing'
 import { useCart } from '~/commerce/hooks/useCart'
+import { useEmailCommerceActions } from '~/commerce/hooks/useEmailCommerceActions'
 import { useShopFollow } from '~/commerce/hooks/useShopFollow'
 import { recordListingView } from '~/commerce/lib/recently-viewed'
 import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
@@ -196,6 +197,7 @@ export function ListingScreen({
     removeItem,
     refresh: refreshCart,
   } = useCart()
+  useEmailCommerceActions({ listingId: listing?.id ?? null })
   const { user } = useSupabase()
   const toast = useAppToast()
   const { hasSideRails } = useAppLayout()
