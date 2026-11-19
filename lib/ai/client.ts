@@ -15,18 +15,51 @@ function withLanguageReplyHint(message: string): string {
 }
 
 /** Live create-post drafts when owned CloudFront still returns the old template. */
-async function invokeEdgeAssist<T>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke('ai-assist', {
-    body: withAiLanguage(body),
-  })
-  if (error) {
-    throw new Error(error.message || `${AI_NAME} is unavailable right now.`)
+async function invokeEdgeAssist<T>(
+  body: Record<string, unknown>,
+  options?: { timeoutMs?: number },
+): Promise<T> {
+  const timeoutMs = options?.timeoutMs ?? 25_000
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+  const timer =
+    controller && typeof setTimeout === 'function'
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null
+
+  try {
+    const invokePromise = supabase.functions.invoke('ai-assist', {
+      body: withAiLanguage(body),
+      ...(controller ? { signal: controller.signal } : {}),
+    })
+    const raced =
+      timer == null
+        ? await invokePromise
+        : await Promise.race([
+            invokePromise,
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error(`${AI_NAME} timed out. Tap Write with AI to try again.`)), timeoutMs)
+            }),
+          ])
+    const { data, error } = raced
+    if (error) {
+      if (/abort|timed?\s*out/i.test(error.message || '')) {
+        throw new Error(`${AI_NAME} timed out. Tap Write with AI to try again.`)
+      }
+      throw new Error(error.message || `${AI_NAME} is unavailable right now.`)
+    }
+    const payload = data as { error?: string } | null
+    if (payload && typeof payload === 'object' && payload.error) {
+      throw new Error(String(payload.error))
+    }
+    return data as T
+  } catch (err) {
+    if (err instanceof Error && /abort|timed?\s*out/i.test(err.message)) {
+      throw new Error(`${AI_NAME} timed out. Tap Write with AI to try again.`)
+    }
+    throw err
+  } finally {
+    if (timer) clearTimeout(timer)
   }
-  const payload = data as { error?: string } | null
-  if (payload && typeof payload === 'object' && payload.error) {
-    throw new Error(String(payload.error))
-  }
-  return data as T
 }
 
 function isUnusablePostDraftContent(content: string, prompt: string): boolean {
@@ -273,18 +306,22 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
     },
   }
 
-  const normalize = (row: PostDraftResult) => ({
+  const normalize = (row: PostDraftResult): PostDraftResult => ({
     title: typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null,
     content: String(row.content ?? '').trim(),
     usedFallback: Boolean(row.usedFallback),
+    gifQuery:
+      typeof row.gifQuery === 'string' && row.gifQuery.trim() ? row.gifQuery.trim().slice(0, 80) : null,
+    suggestPhoto: Boolean(row.suggestPhoto),
+    suggestVideo: Boolean(row.suggestVideo),
   })
 
   // Prefer the trained Supabase edge post_draft (Gemini). Owned CloudFront still
   // serves older Ollama templates for this action.
-  let draft: ReturnType<typeof normalize> | null = null
+  let draft: PostDraftResult | null = null
   let edgeError: unknown = null
   try {
-    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody))
+    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody, { timeoutMs: 25_000 }))
   } catch (err) {
     edgeError = err
   }

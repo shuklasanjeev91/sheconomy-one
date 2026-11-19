@@ -1730,7 +1730,13 @@ function fallbackMeetingDraft(prompt: string, _timeZone: string) {
   }
 }
 
-function parsePostDraftJson(raw: string | null): { title: string | null; content: string } | null {
+function parsePostDraftJson(raw: string | null): {
+  title: string | null
+  content: string
+  gifQuery: string | null
+  suggestPhoto: boolean
+  suggestVideo: boolean
+} | null {
   if (!raw) return null
   const trimmed = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '')
   try {
@@ -1739,7 +1745,17 @@ function parsePostDraftJson(raw: string | null): { title: string | null; content
     if (!content) return null
     const title =
       typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title.trim() : null
-    return { title, content }
+    const gifQuery =
+      typeof parsed.gifQuery === 'string' && parsed.gifQuery.trim()
+        ? parsed.gifQuery.trim().slice(0, 80)
+        : null
+    return {
+      title,
+      content,
+      gifQuery,
+      suggestPhoto: Boolean(parsed.suggestPhoto),
+      suggestVideo: Boolean(parsed.suggestVideo),
+    }
   } catch {
     return null
   }
@@ -1932,7 +1948,7 @@ Deno.serve(async (req) => {
       const systemPrompt = [
         'You are SHERPA drafting professional community posts for SHEconomy (women-focused).',
         productPlaybook('community'),
-        'Return ONLY JSON with keys: title (string or null), content (string).',
+        'Return ONLY JSON with keys: title (string or null), content (string), gifQuery (string), suggestPhoto (boolean), suggestVideo (boolean).',
         'title is required for article mode; otherwise null.',
         'content must be a COMPLETE ready-to-publish post: 2–4 short paragraphs (roughly 280–700 characters for text modes, up to 2200 for article).',
         'Structure: (1) hook that NAMES the topic/brand/org, (2) concrete insight specific to that topic (what it is, why it matters now, one tangible detail), (3) a community question or clear CTA.',
@@ -1942,12 +1958,15 @@ Deno.serve(async (req) => {
         'Example tone for topic “bioayurveda”: open on Ayurveda-inspired wellness for busy women founders, mention clean rituals / everyday care, ask which wellness habit the community protects first — not a generic “update on bioayurveda”.',
         'Example tone for topic “wef.org.in”: open on Women Economic Forum / Mission Million, one concrete leadership or entrepreneurship angle, invite members to share how they show up for women-led growth.',
         'If the member wrote an instruction like “Write about X”, expand X — never return the instruction verbatim or as a one-liner.',
-        'No hashtag spam. At most 2 relevant hashtags at the end. No markdown fences. No bullet lists unless article mode.',
+        'Hashtags: keep every hashtag the member already typed. You may add at most 2 additional relevant hashtags at the end. No hashtag spam. No markdown fences. No bullet lists unless article mode.',
+        'gifQuery: a short English Giphy search (2–4 words) matching the post mood/topic, e.g. "ayurveda wellness" or "women leadership".',
+        'suggestPhoto: true when a real photo would strengthen the post (product, celebration, event, behind-the-scenes).',
+        'suggestVideo: true when a short clip would help (demo, event recap, launch). Prefer false for simple text reflections.',
         languageDirective(context, body),
         'Write the post content (and title when present) in the preferred language.',
         `Compose mode: ${composeMode}.`,
-        photoCount > 0 ? `Attached photos: ${photoCount}. Mention them naturally.` : '',
-        videoCount > 0 ? `Attached videos: ${videoCount}. Reference the video naturally.` : '',
+        photoCount > 0 ? `Attached photos: ${photoCount}. Mention them naturally. Set suggestPhoto false.` : '',
+        videoCount > 0 ? `Attached videos: ${videoCount}. Reference the video naturally. Set suggestVideo false.` : '',
         link?.url
           ? `Shared link: ${link.url}${link.title ? ` (${link.title})` : ''}${link.description ? ` — ${String(link.description).slice(0, 200)}` : ''}. Make the link the subject of the post.`
           : '',
@@ -1974,7 +1993,13 @@ Deno.serve(async (req) => {
           .replace(/```$/i, '')
           .trim()
         if (plain && !plain.trimStart().startsWith('{')) {
-          parsed = { title: null, content: plain }
+          parsed = {
+            title: null,
+            content: plain,
+            gifQuery: null,
+            suggestPhoto: photoCount < 1,
+            suggestVideo: false,
+          }
         }
       }
       const leaked =
