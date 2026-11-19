@@ -47,8 +47,8 @@ export function PricingStep({
           {(formData.variations?.length ?? 0) > 0 ? (
             <ListingPublishTip
               ui={ui}
-              title="Variant pricing"
-              body="These values seed new child SKUs. Edit parent SKU, child price, tax, HSN, and stock under Details → Variant SKUs."
+              title="Variation pricing"
+              body="This offer price seeds new variation SKUs. Edit each option’s price, tax, and quantity under Details → Variations."
             />
           ) : null}
           <Field label={`Selling price (${currencySymbol})`} error={errors.price}>

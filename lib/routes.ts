@@ -119,6 +119,9 @@ export const vendorRoutes = {
   editShop: '/vendor/settings?section=general' as Href,
   createListing: '/vendor/create-listing' as Href,
   editListing: (id: string) => `/vendor/create-listing?id=${encodeURIComponent(id)}` as Href,
+  /** Prefill the create wizard from an existing listing (duplicate). */
+  duplicateListing: (id: string) =>
+    `/vendor/create-listing?copyFrom=${encodeURIComponent(id)}` as Href,
   products: '/vendor/products' as Href,
   orders: '/vendor/orders' as Href,
   ordersSection: (section: string) =>

@@ -105,8 +105,13 @@ export function DetailsStep({
   const [axes, setAxes] = useState<VariationAxis[]>(() => {
     const fromMeta = parseVariationAxes(formData.listing_metadata)
     if (fromMeta.length) return fromMeta
-    return [{ name: 'Color', values: [] }]
+    return []
   })
+  const [variationsEnabled, setVariationsEnabled] = useState(
+    () =>
+      (formData.variations?.some((row) => String(row.variation_value ?? '').trim()) ?? false) ||
+      parseVariationAxes(formData.listing_metadata).some((axis) => axis.values.length > 0),
+  )
   const [axisValueDraft, setAxisValueDraft] = useState<Record<number, string>>({})
   const [variantError, setVariantError] = useState<string | null>(null)
 
@@ -385,15 +390,15 @@ export function DetailsStep({
       {isDigital ? null : (
         <ListingPublishCard
           ui={ui}
-          title="Materials & Composition"
+          title="Materials & composition"
           headerRight={
             <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addMaterial}>
-              + Add Material
+              + Add material
             </Text>
           }
         >
-          <Text fontSize={11} color={ui.danger} fontWeight="700">
-            * Required
+          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
+            Optional — add fabric, metal, or composition when it helps shoppers compare products.
           </Text>
           <ListingPublishFieldError ui={ui} message={errors.materials} />
           <YStack gap="$2">
@@ -640,30 +645,51 @@ export function DetailsStep({
       {isDigital ? null : (
         <ListingPublishCard
           ui={ui}
-          title="Variant SKUs"
+          title="Variations"
           headerRight={
-            <XStack gap="$3" alignItems="center">
-              <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addAxis}>
-                + Axis
-              </Text>
-              <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={generateChildSkus}>
-                Generate SKUs
-              </Text>
-            </XStack>
+            hasChildSkus || variationsEnabled ? (
+              <XStack gap="$3" alignItems="center">
+                <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addAxis}>
+                  + Option
+                </Text>
+                <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={generateChildSkus}>
+                  Apply options
+                </Text>
+              </XStack>
+            ) : null
           }
         >
-          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-            Parent SKU identifies the listing; generate child SKUs from options (Color, Size, …) with
-            price, tax, HSN, stock, and images per combination.
-          </Text>
+          <XStack alignItems="center" justifyContent="space-between" gap="$3" flexWrap="wrap">
+            <YStack flex={1} gap="$1" minWidth={200}>
+              <Text fontSize={14} fontWeight="800" color={ui.text}>
+                This product has variations
+              </Text>
+              <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
+                Turn on for size, color, or style options — like Amazon. Leave off for a single SKU.
+              </Text>
+            </YStack>
+            <Switch
+              checked={variationsEnabled}
+              onCheckedChange={(checked) => {
+                setVariationsEnabled(checked)
+                if (!checked) {
+                  onUpdate('variations', [])
+                  persistAxes([])
+                  setVariantError(null)
+                } else if (!axes.length) {
+                  persistAxes([{ name: 'Color', values: [] }])
+                }
+              }}
+            />
+          </XStack>
 
-          <Field label="Parent SKU">
+          <Field label="SKU (seller SKU)">
             <XStack gap="$2" alignItems="center">
               <Input
                 flex={1}
                 value={formData.sku ?? ''}
                 onChangeText={(value) => onUpdate('sku', value)}
-                placeholder="Auto-generated from title if empty"
+                placeholder="Auto from title if empty"
               />
               <Button
                 tone="outline"
@@ -676,6 +702,13 @@ export function DetailsStep({
           </Field>
           <ListingPublishFieldError ui={ui} message={errors.sku || errors.variations || variantError || undefined} />
 
+          {!variationsEnabled ? (
+            <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+              Single product — set quantity under Shipping & packaging. You can add options anytime.
+            </Text>
+          ) : null}
+
+          {variationsEnabled ? (
           <YStack gap="$3">
             {axes.map((axis, axisIndex) => (
               <YStack
@@ -1008,15 +1041,16 @@ export function DetailsStep({
               )
             })}
           </YStack>
+          ) : null}
         </ListingPublishCard>
       )}
 
       <ListingPublishCard
         ui={ui}
-        title="Additional Attributes (Optional)"
+        title="Additional attributes (optional)"
         headerRight={
           <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addAttribute}>
-            + Add Attribute
+            + Add attribute
           </Text>
         }
       >
@@ -1065,9 +1099,9 @@ export function DetailsStep({
       </ListingPublishCard>
 
       {isDigital ? null : (
-        <ListingPublishCard ui={ui} title="Shipping & packaging">
+        <ListingPublishCard ui={ui} title="Shipping & inventory">
           <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-            Package weight and dimensions for shipping rates. Parent and child SKUs live under Variant SKUs.
+            Quantity and package details for shipping rates. Variation stock is edited under each option above.
           </Text>
 
           <XStack gap="$3" flexWrap="wrap">
@@ -1077,16 +1111,20 @@ export function DetailsStep({
                   Quantity
                 </Text>
                 <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-                  Sum of child SKU stock ({formData.stock ?? 0}). Edit stock on each variant.
+                  Total across variations: {formData.stock ?? 0}. Edit stock on each SKU above.
                 </Text>
               </YStack>
             ) : (
-              <Field label="Initial Quantity" flex={1} minWidth={120} error={errors.stock}>
+              <Field label="Quantity" flex={1} minWidth={120} error={errors.stock}>
                 <Input
                   value={String(formData.stock ?? '')}
-                  onChangeText={(value) => onUpdate('stock', value)}
+                  onChangeText={(value) => {
+                    onUpdate('stock', value)
+                    onUpdate('quantity', value)
+                  }}
                   keyboardType="numeric"
                   invalid={!!errors.stock}
+                  placeholder="Units available"
                 />
               </Field>
             )}

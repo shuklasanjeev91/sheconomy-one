@@ -170,11 +170,11 @@ export const LISTING_STATUS_ACTIONS: readonly {
   icon: IconType
   tone?: 'danger' | 'warning' | 'success' | 'neutral'
 }[] = [
-  { value: LISTING_STATUS.ACTIVE, label: 'Publish', icon: Icons.CheckCircle2, tone: 'success' },
-  { value: LISTING_STATUS.DRAFT, label: 'Set to Draft', icon: Icons.FileText, tone: 'neutral' },
-  { value: LISTING_STATUS.PAUSED, label: 'Pause', icon: Icons.Pause, tone: 'warning' },
-  { value: LISTING_STATUS.SOLD_OUT, label: 'Mark Sold Out', icon: Icons.ShoppingBag, tone: 'danger' },
-  { value: LISTING_STATUS.ARCHIVED, label: 'Archive', icon: Icons.Archive, tone: 'danger' },
+  { value: LISTING_STATUS.ACTIVE, label: 'Active', icon: Icons.CheckCircle2, tone: 'success' },
+  { value: LISTING_STATUS.DRAFT, label: 'Draft', icon: Icons.FileText, tone: 'neutral' },
+  { value: LISTING_STATUS.PAUSED, label: 'Inactive', icon: Icons.Pause, tone: 'warning' },
+  { value: LISTING_STATUS.SOLD_OUT, label: 'Out of stock', icon: Icons.ShoppingBag, tone: 'danger' },
+  { value: LISTING_STATUS.ARCHIVED, label: 'Close listing', icon: Icons.Archive, tone: 'danger' },
 ]
 
 export function listingStatusActionsFor(

@@ -239,6 +239,7 @@ export function VendorListingsProductsTab({
   const rowActions = {
     onView: onOpenListing,
     onEdit: (listingId: string) => navigateApp(vendorRoutes.editListing(listingId)),
+    onDuplicate: (listingId: string) => navigateApp(vendorRoutes.duplicateListing(listingId)),
     onManageStock: (listingId: string) =>
       setStockEditorId((current) => (current === listingId ? null : listingId)),
     onStatusChange: changeStatus,
@@ -447,6 +448,9 @@ export function VendorListingsProductsTab({
               <Text flex={0.9} fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.5}>
                 STATUS
               </Text>
+              <Text width={72} fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.5} textAlign="center">
+                EDIT
+              </Text>
               <XStack width={44} />
             </XStack>
 
@@ -549,6 +553,7 @@ export function VendorListingsProductsTab({
 type ProductRowActions = {
   onView: (listingId: string) => void
   onEdit: (listingId: string) => void
+  onDuplicate: (listingId: string) => void
   onManageStock: (listingId: string) => void
   onStatusChange: (listingId: string, status: ListingStatus) => void
   onDelete: (row: ShopListingRow) => void
@@ -592,20 +597,26 @@ function ProductListingActionsMenu({
         <YStack gap={2}>
           <MenuActionRow
             ui={ui}
+            label="Edit listing"
+            icon={<Icons.Pencil size={16} color={ui.textSecondary} />}
+            onPress={() => runAction(() => actions.onEdit(row.id))}
+          />
+          <MenuActionRow
+            ui={ui}
             label="View details"
             icon={<Icons.Eye size={16} color={ui.textSecondary} />}
             onPress={() => runAction(() => actions.onView(row.id))}
           />
           <MenuActionRow
             ui={ui}
-            label="Edit"
-            icon={<Icons.Pencil size={16} color={ui.textSecondary} />}
-            onPress={() => runAction(() => actions.onEdit(row.id))}
+            label="Duplicate listing"
+            icon={<Icons.Copy size={16} color={ui.textSecondary} />}
+            onPress={() => runAction(() => actions.onDuplicate(row.id))}
           />
           {row.listing_type === LISTING_TYPES.PHYSICAL ? (
             <MenuActionRow
               ui={ui}
-              label="Manage stock"
+              label="Edit quantity"
               icon={<Icons.Package size={16} color={ui.textSecondary} />}
               onPress={() => runAction(() => actions.onManageStock(row.id))}
             />
@@ -615,7 +626,7 @@ function ProductListingActionsMenu({
 
           <YStack paddingHorizontal="$1" paddingBottom="$1">
             <Text fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.4}>
-              SET STATUS
+              LISTING STATUS
             </Text>
           </YStack>
 
@@ -629,11 +640,19 @@ function ProductListingActionsMenu({
                   : action.tone === 'danger'
                     ? ui.danger
                     : ui.textSecondary
+            const label =
+              action.value === 'active'
+                ? 'Active'
+                : action.value === 'paused'
+                  ? 'Inactive'
+                  : action.value === 'archived'
+                    ? 'Close listing'
+                    : action.label
             return (
               <MenuActionRow
                 key={action.value}
                 ui={ui}
-                label={action.label}
+                label={label}
                 icon={<Icon size={16} color={color} />}
                 onPress={() => runAction(() => actions.onStatusChange(row.id, action.value))}
               />
@@ -644,7 +663,7 @@ function ProductListingActionsMenu({
 
           <MenuActionRow
             ui={ui}
-            label="Delete"
+            label="Delete product"
             tone="danger"
             icon={<Icons.Trash2 size={16} color={ui.danger} />}
             onPress={() => runAction(() => actions.onDelete(row))}
@@ -802,6 +821,19 @@ function ProductTableRow({
             </Text>
           </XStack>
         ) : null}
+      </XStack>
+
+      <XStack
+        width={72}
+        justifyContent="center"
+        onPress={(e) => {
+          e?.stopPropagation?.()
+          actions.onEdit(row.id)
+        }}
+      >
+        <Text fontSize={13} fontWeight="700" color={ui.brand} cursor="pointer">
+          Edit
+        </Text>
       </XStack>
 
       <XStack width={44} justifyContent="center" onPress={(e) => e?.stopPropagation?.()}>

@@ -78,12 +78,12 @@ export function VendorListingsScreen() {
         <XStack alignItems="flex-start" justifyContent="space-between" gap="$3" flexWrap="wrap">
           <YStack gap="$1" flex={1} minWidth={0}>
             <Text fontSize={isDesktop ? 28 : 24} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
-              {activeTab === 'section' ? 'Shop Sections' : 'Inventory Management'}
+              {activeTab === 'section' ? 'Shop sections' : 'Manage inventory'}
             </Text>
             <Text fontSize={14} color={ui.textSecondary} maxWidth={620} lineHeight={20}>
               {activeTab === 'section'
-                ? 'Organize your storefront collections to guide customers through your premium offerings.'
-                : 'Organize, refine, and perfect your storefront offerings.'}
+                ? 'Organize storefront collections so shoppers can browse your catalogue.'
+                : 'Add, edit, duplicate, or close listings — search by title or SKU like Amazon Seller Central.'}
             </Text>
           </YStack>
 
@@ -96,11 +96,11 @@ export function VendorListingsScreen() {
                 icon={<Icons.Upload size={16} />}
                 onPress={() => setBulkImportOpen(true)}
               >
-                Import
+                Add products via upload
               </Button>
               <AppLink href={vendorRoutes.createListing} asChild>
                 <Button tone="primary" size="$3" borderRadius={999} icon={<Icons.Plus size={16} />}>
-                  Add Product
+                  Add a product
                 </Button>
               </AppLink>
               <AppLink href={vendorRoutes.bundles} asChild>

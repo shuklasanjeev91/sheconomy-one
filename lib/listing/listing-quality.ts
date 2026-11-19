@@ -263,33 +263,37 @@ export function validateListingQuality(
     );
     mergeQuality(issues, errors, warnings, productResult);
 
+    // Materials & variations are optional (Amazon-style single-SKU default).
     if (!Array.isArray(formData.materials) || formData.materials.length === 0) {
       pushIssue(issues, errors, warnings, {
         field: "materials",
-        severity: "error",
-        message: "At least one material is required for physical products.",
+        severity: "warning",
+        message: "Add materials when relevant to help shoppers compare products.",
       });
     }
     if (
-      !Array.isArray(formData.variations) ||
-      formData.variations.length === 0
+      Array.isArray(formData.variations) &&
+      formData.variations.some((row) => !String(row.variation_value ?? "").trim())
     ) {
       pushIssue(issues, errors, warnings, {
         field: "variations",
         severity: "error",
-        message:
-          "At least one product variation is required for physical products.",
+        message: "Each variation needs an option value, or remove empty variations.",
       });
     }
+    const hasChildSkus =
+      Array.isArray(formData.variations) &&
+      formData.variations.some((row) => String(row.variation_value ?? "").trim());
     if (
-      formData.stock === "" ||
-      formData.stock === null ||
-      formData.stock === undefined
+      !hasChildSkus &&
+      (formData.stock === "" ||
+        formData.stock === null ||
+        formData.stock === undefined)
     ) {
       pushIssue(issues, errors, warnings, {
         field: "stock",
         severity: "error",
-        message: "Stock quantity is required for physical products.",
+        message: "Enter quantity in stock for this product.",
       });
     }
   }

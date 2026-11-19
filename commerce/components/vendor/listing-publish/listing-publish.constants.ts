@@ -36,16 +36,17 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
   {
     id: LISTING_PUBLISH_STEP_IDS.DETAILS,
     label: 'Details',
-    headline: 'Listing Details',
+    headline: 'Product details',
     subtitle:
-      'Product identity, variant (child) SKUs, attributes, and shipping/packaging details.',
+      'Identity, inventory, and optional variations (size, color) — like Amazon Seller Central.',
     iconName: 'layers',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.PRICING,
     label: 'Pricing',
-    headline: 'Pricing',
-    subtitle: 'Set selling price, MRP, tax, and commercial options. Stock lives on Details → Variant SKUs.',
+    headline: 'Offer pricing',
+    subtitle:
+      'Set your selling price and tax. For variations, edit each SKU under Details → Variations.',
     iconName: 'indian-rupee',
   },
   {
@@ -128,8 +129,9 @@ export const LISTING_PUBLISH_DEFAULT_METADATA = {
 } as const
 
 export const LISTING_PUBLISH_COPY = {
-  PAGE_TITLE_CREATE: 'Create New Listing',
-  PAGE_TITLE_EDIT: 'Edit Listing',
+  PAGE_TITLE_CREATE: 'Add a product',
+  PAGE_TITLE_EDIT: 'Edit listing',
+  PAGE_TITLE_DUPLICATE: 'Duplicate listing',
   SAVE_DRAFT: 'Save as Draft',
   PUBLISH: 'Publish',
   BACK: 'Back',

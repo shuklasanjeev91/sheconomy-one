@@ -73,20 +73,7 @@ export const bulkImportPublishDataSchema = z
           path: ['stock'],
         })
       }
-      if (!data.materials?.length) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'At least one material is required for physical products.',
-          path: ['materials'],
-        })
-      }
-      if (!data.variations?.length) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'At least one product variation is required for physical products.',
-          path: ['variations'],
-        })
-      }
+      // Materials & variations optional — single-SKU physical listings are valid.
     }
 
     if (data.listing_type === LISTING_TYPES.DIGITAL && !data.digital_file_url?.trim()) {

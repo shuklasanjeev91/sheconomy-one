@@ -99,18 +99,14 @@ async function settleOr<T>(promise: Promise<T>, fallback: T): Promise<T> {
   }
 }
 
-/** Empty buffer for a listing type, with the one-row seeds the physical form expects. */
+/** Empty buffer for a listing type — Amazon-style single-SKU default (no forced variants). */
 function seedFormForType(listingType: ListingType, shopId?: string): ListingFormData {
-  const base: ListingFormData = {
+  return {
     ...getDefaultListingFormData(listingType),
     shop_id: shopId,
     listing_metadata: mergeListingMetadata(undefined),
-  }
-  if (listingType !== LISTING_TYPES.PHYSICAL) return base
-  return {
-    ...base,
-    materials: [{ material_name: '', percentage: null, certification: '' }],
-    variations: [{ variation_name: 'Color', variation_value: '', price_adjustment: 0, stock: 0 }],
+    materials: [],
+    variations: [],
   }
 }
 
@@ -134,10 +130,13 @@ function VendorListingPublishContent() {
   const toast = useAppToast()
   const dispatch = useAppDispatch()
   const { isDesktop, safeBottom } = useAppLayout()
-  const params = useLocalSearchParams<{ id?: string }>()
+  const params = useLocalSearchParams<{ id?: string; copyFrom?: string }>()
 
   const editListingId = typeof params.id === 'string' ? params.id : undefined
+  const copyFromId = typeof params.copyFrom === 'string' ? params.copyFrom : undefined
   const isEditMode = Boolean(editListingId)
+  const isDuplicateMode = Boolean(copyFromId) && !isEditMode
+  const hydrateListingId = editListingId ?? copyFromId
 
   const shop = useAppSelector((s) => s.shop.currentShop)
   const { allowsSelling: kycAllowsSelling, isLoading: kycLoading } = useShopPayuKyc(shop?.id)
@@ -191,16 +190,14 @@ function VendorListingPublishContent() {
     shop?.slug || shop?.shop_name?.toLowerCase().replace(/\s+/g, '-') || 'shop'
 
   useEffect(() => {
-    if (!isEditMode) {
+    if (!hydrateListingId) {
       dispatch(resetListingFormData())
       dispatch(loadFormFromListing(seedFormForType(LISTING_TYPES.PHYSICAL, shop?.id)))
       setHydrated(true)
       return
     }
 
-    if (!editListingId) return
-
-    const listingId = editListingId
+    const listingId = hydrateListingId
     let cancelled = false
 
     setLoadError(null)
@@ -234,9 +231,19 @@ function VendorListingPublishContent() {
           category_id: row.category_id,
           is_primary: row.is_primary ?? false,
         })),
+        asDuplicate: isDuplicateMode,
       })
 
       dispatch(loadFormFromListing(hydratedForm))
+      if (isDuplicateMode) {
+        setTypePicked(true)
+        setTypeConfirmed(true)
+        setFurthestStepIndex(LISTING_PUBLISH_STEPS.length - 1)
+        toast.show('Listing copied', {
+          tone: 'success',
+          message: 'Review the copy, then save as draft or publish.',
+        })
+      }
       setHydrated(true)
     }
 
@@ -252,7 +259,7 @@ function VendorListingPublishContent() {
     return () => {
       cancelled = true
     }
-  }, [dispatch, editListingId, isEditMode, reloadToken, shop?.id, toast])
+  }, [dispatch, hydrateListingId, isDuplicateMode, reloadToken, shop?.id, toast])
 
   const retryHydrate = useCallback(() => {
     setLoadError(null)
@@ -775,7 +782,13 @@ function VendorListingPublishContent() {
         >
           {/* <ListingPublishTopBar
             ui={ui}
-            title={isEditMode ? LISTING_PUBLISH_COPY.PAGE_TITLE_EDIT : LISTING_PUBLISH_COPY.PAGE_TITLE_CREATE}
+            title={
+              isEditMode
+                ? LISTING_PUBLISH_COPY.PAGE_TITLE_EDIT
+                : isDuplicateMode
+                  ? LISTING_PUBLISH_COPY.PAGE_TITLE_DUPLICATE
+                  : LISTING_PUBLISH_COPY.PAGE_TITLE_CREATE
+            }
             isSaving={isSaving}
             onBack={() => router.push(vendorRoutes.products)}
             onSaveDraft={() => void saveDraft()}

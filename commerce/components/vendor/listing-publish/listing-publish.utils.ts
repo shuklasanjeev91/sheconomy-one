@@ -9,7 +9,7 @@ import type {
   ListingMaterial,
   ListingVariation,
 } from '~/lib/listing/listing.type'
-import { LISTING_TYPES } from '~/lib/listing/listing.type'
+import { LISTING_STATUS, LISTING_TYPES } from '~/lib/listing/listing.type'
 import { generateListingSlug } from '~/lib/listing/listing.utils'
 import {
   validateListingQuality,
@@ -113,6 +113,8 @@ export function buildFormFromListingDetails(
     attributes?: ListingAttribute[]
     materials?: ListingMaterial[]
     categoryIds?: { category_id: string; is_primary?: boolean }[]
+    /** Prefill create wizard as a duplicate (Amazon “Copy listing”). */
+    asDuplicate?: boolean
   },
 ): ListingFormData {
   const meta = mergeListingMetadata(
@@ -121,10 +123,34 @@ export function buildFormFromListingDetails(
   const productInfo = serializeListingProductInfo(
     parseListingProductInfo(listing.product_info, listing.listing_metadata),
   )
+  const asDuplicate = Boolean(extras?.asDuplicate)
+  const baseTitle = listing.title ?? ''
+  const title = asDuplicate
+    ? baseTitle.toLowerCase().startsWith('copy of ')
+      ? baseTitle
+      : `Copy of ${baseTitle}`
+    : baseTitle
+
+  const images = extras?.images ? listingImagesToDrafts(extras.images) : []
+  const variations = (extras?.variations ?? []).map((row) =>
+    asDuplicate
+      ? {
+          ...row,
+          id: undefined,
+          listing_id: undefined,
+        }
+      : row,
+  )
+  const materials = (extras?.materials ?? []).map((row) =>
+    asDuplicate ? { ...row, id: undefined, listing_id: undefined } : row,
+  )
+  const attributes = (extras?.attributes ?? []).map((row) =>
+    asDuplicate ? { ...row, id: undefined, listing_id: undefined } : row,
+  )
 
   return {
     shop_id: listing.shop_id ?? undefined,
-    title: listing.title ?? '',
+    title,
     description: listing.description ?? '',
     listing_type: listing.listing_type ?? LISTING_TYPES.PHYSICAL,
     price: listing.price ?? '',
@@ -133,16 +159,16 @@ export function buildFormFromListingDetails(
     tax_percent: listing.tax_percent ?? '18',
     product_info: productInfo,
     quantity: listing.quantity ?? 1,
-    is_featured: listing.is_featured ?? false,
-    is_active: listing.is_active ?? true,
-    listing_status: listing.listing_status ?? undefined,
-    slug: listing.slug ?? '',
-    meta_title: listing.meta_title ?? '',
+    is_featured: asDuplicate ? false : (listing.is_featured ?? false),
+    is_active: asDuplicate ? false : (listing.is_active ?? true),
+    listing_status: asDuplicate ? LISTING_STATUS.DRAFT : listing.listing_status ?? undefined,
+    slug: asDuplicate ? '' : (listing.slug ?? ''),
+    meta_title: asDuplicate ? '' : (listing.meta_title ?? ''),
     meta_description: listing.meta_description ?? '',
     tags: listing.tags ?? [],
     listing_metadata: meta,
     stock: listing.stock ?? 0,
-    sku: listing.sku ?? '',
+    sku: asDuplicate && listing.sku ? `${listing.sku}-COPY` : (listing.sku ?? ''),
     weight: listing.weight ?? null,
     dimensions: (listing.dimensions as Record<string, unknown>) ?? {},
     shipping_required: listing.shipping_required ?? true,
@@ -161,10 +187,16 @@ export function buildFormFromListingDetails(
         category_id: row.category_id,
         is_primary: row.is_primary ?? false,
       })),
-    images: extras?.images ? listingImagesToDrafts(extras.images) : [],
-    variations: extras?.variations ?? [],
-    attributes: extras?.attributes ?? [],
-    materials: extras?.materials ?? [],
+    images: asDuplicate
+      ? images.map((img) => ({
+          ...img,
+          id: undefined,
+          variation_id: null,
+        }))
+      : images,
+    variations,
+    attributes,
+    materials,
   }
 }
 
@@ -249,14 +281,21 @@ export function validatePublishStep(
     }
     case LISTING_PUBLISH_STEP_IDS.DETAILS: {
       if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
-        if (!formData.materials?.length) {
-          errors.materials = 'At least one material is required for physical products.'
-        }
+        // Amazon-style: single-SKU listings need stock; variations/materials are optional.
         if (!formData.variations?.length) {
-          errors.variations = 'At least one product variation is required for physical products.'
+          if (formData.stock === '' || formData.stock === null || formData.stock === undefined) {
+            errors.stock = 'Enter quantity in stock for this product.'
+          }
+        } else {
+          const emptyChild = formData.variations.some(
+            (row) => !String(row.variation_value ?? '').trim(),
+          )
+          if (emptyChild) {
+            errors.variations = 'Each variation needs an option value, or turn off variations.'
+          }
         }
-        if (formData.stock === '' || formData.stock === null || formData.stock === undefined) {
-          errors.stock = 'Stock quantity is required for physical products.'
+        if (!formData.materials?.length) {
+          warnings.push('Add materials when relevant (fabric, metal, etc.) to help shoppers.')
         }
         const productQuality = validatePhysicalProductInfoQuality(
           formData.product_info,
