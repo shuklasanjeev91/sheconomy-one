@@ -1920,6 +1920,8 @@ Deno.serve(async (req) => {
       const postType = typeof context.post_type === 'string' ? context.post_type : ''
       const postContent = typeof context.post_content === 'string' ? context.post_content : ''
       const authorName = typeof context.author_name === 'string' ? context.author_name : ''
+      const parentComment =
+        typeof context.parent_comment === 'string' ? context.parent_comment : ''
       const local = localCommentSuggestionList({
         postType,
         content: postContent,
@@ -1941,6 +1943,7 @@ Deno.serve(async (req) => {
         `Post type: ${postType || 'text'}.`,
         authorName ? `Author: ${authorName}.` : '',
         postContent ? `Post excerpt: ${postContent.slice(0, 400)}` : '',
+        parentComment ? `Replying to comment: ${parentComment.slice(0, 280)}` : '',
       ]
         .filter(Boolean)
         .join('\n')
@@ -1954,6 +1957,93 @@ Deno.serve(async (req) => {
       return json({
         suggestions: fromModel.length ? fromModel.slice(0, 4) : local,
         usedFallback: !fromModel.length,
+        product: 'community',
+      })
+    }
+
+    if (action === 'comment_draft') {
+      const prompt = typeof body.message === 'string' ? body.message.trim() : ''
+      const postType = typeof context.post_type === 'string' ? context.post_type : 'text'
+      const postContent = typeof context.post_content === 'string' ? context.post_content : ''
+      const authorName = typeof context.author_name === 'string' ? context.author_name : ''
+      const parentComment =
+        typeof context.parent_comment === 'string' ? context.parent_comment : ''
+      const systemPrompt = [
+        'You are SHERPA — write one professional community comment for SHEconomy.',
+        'Return ONLY JSON with key: content (string).',
+        'content: 1–3 warm, specific sentences (roughly 40–280 characters). No hashtag spam. No markdown.',
+        'If the member left notes, expand or polish them into a ready-to-post comment — never echo the instruction.',
+        'If notes are empty, write an original comment grounded in the post.',
+        'Never invent unverifiable claims. Never be salesy or generic (“Great post!” alone is not enough).',
+        languageDirective(context, body),
+        `Post type: ${postType}.`,
+        authorName ? `Post author: ${authorName}.` : '',
+        postContent ? `Post excerpt: ${postContent.slice(0, 500)}` : '',
+        parentComment ? `Replying to: ${parentComment.slice(0, 280)}` : '',
+        typeof context.event_title === 'string' && context.event_title
+          ? `Event: ${context.event_title}`
+          : '',
+        typeof context.celebration_title === 'string' && context.celebration_title
+          ? `Celebration: ${context.celebration_title}`
+          : '',
+        typeof context.product_title === 'string' && context.product_title
+          ? `Product: ${context.product_title}`
+          : '',
+        typeof context.shop_name === 'string' && context.shop_name
+          ? `Shop: ${context.shop_name}`
+          : '',
+        typeof context.article_title === 'string' && context.article_title
+          ? `Article: ${context.article_title}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+
+      const userTurn = [
+        'Member comment notes:',
+        prompt || '(none — write from the post context)',
+        '',
+        'Return the comment as JSON now.',
+      ].join('\n')
+
+      const completion = await callGemini(systemPrompt, [], userTurn, {
+        jsonMode: true,
+        temperature: 0.7,
+        maxOutputTokens: 400,
+      })
+      let content = ''
+      if (completion.answer) {
+        try {
+          const trimmed = completion.answer
+            .trim()
+            .replace(/^```json\s*/i, '')
+            .replace(/^```\s*/i, '')
+            .replace(/```$/i, '')
+          const parsed = JSON.parse(trimmed) as { content?: unknown }
+          if (typeof parsed.content === 'string') content = parsed.content.trim()
+        } catch {
+          const plain = completion.answer
+            .trim()
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/```$/i, '')
+            .trim()
+          if (plain && !plain.startsWith('{')) content = plain
+        }
+      }
+      if (content.length >= 12) {
+        return json({
+          content: content.slice(0, 500),
+          usedFallback: false,
+          product: 'community',
+        })
+      }
+      console.error('comment_draft failed', {
+        geminiError: completion.error,
+        hadAnswer: Boolean(completion.answer),
+      })
+      return json({
+        error: 'SHERPA could not draft this comment. Try again.',
+        usedFallback: true,
         product: 'community',
       })
     }
@@ -2680,7 +2770,7 @@ Deno.serve(async (req) => {
     return json(
       {
         error:
-          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft | post_draft | post_suggestions | shop_draft | translate | moderate_image | describe_search_image | listing_draft_from_image | ai_search.',
+          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | comment_draft | meeting_draft | post_draft | post_suggestions | shop_draft | translate | moderate_image | describe_search_image | listing_draft_from_image | ai_search.',
       },
       400,
     )

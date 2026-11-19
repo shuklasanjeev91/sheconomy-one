@@ -128,18 +128,17 @@ export function PostComments({
 
       {isAuthenticated ? (
         <YStack gap="$2">
-          {suggestionContext ? (
-            <CommentSuggestionChips
-              context={suggestionContext}
-              disabled={isCommenting}
-              onSelect={(text) => {
-                // MentionInput's encoded value is held separately. Keep it in
-                // sync when a suggestion replaces the visible controlled value.
-                encodedRef.current = text
-                onDraftChange(text)
-              }}
-            />
-          ) : null}
+          <CommentSuggestionChips
+            context={suggestionContext ?? {}}
+            seedPrompt={commentDraft}
+            disabled={isCommenting}
+            onSelect={(text) => {
+              // MentionInput's encoded value is held separately. Keep it in
+              // sync when a suggestion replaces the visible controlled value.
+              encodedRef.current = text
+              onDraftChange(text)
+            }}
+          />
           <CommentDraftRow
             value={commentDraft}
             placeholder="Add a comment…"
@@ -288,6 +287,7 @@ function CommentThread({
               parentComment: comment.content,
               authorName: comment.authorName,
             }}
+            seedPrompt={replyDraft}
             disabled={isSending}
             onSelect={(text) => {
               replyEncodedRef.current = text

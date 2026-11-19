@@ -91,6 +91,16 @@ export type CommentSuggestionParams = {
   parentComment?: string | null
 }
 
+export type CommentDraftParams = CommentSuggestionParams & {
+  /** Member notes in the comment box — SHERPA expands or polishes these. */
+  prompt?: string | null
+}
+
+export type CommentDraftResult = {
+  content: string
+  usedFallback?: boolean
+}
+
 export type MeetingDraftParams = {
   /** Natural language: "weekly design sync tomorrow 4pm about launch" */
   prompt: string

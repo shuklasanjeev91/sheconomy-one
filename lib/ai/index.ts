@@ -6,6 +6,8 @@ export type {
   AiProduct,
   AiRouteContext,
   AiSuggestion,
+  CommentDraftParams,
+  CommentDraftResult,
   CommentSuggestionParams,
   FetchAiSuggestionsParams,
   MeetingDraftParams,
@@ -21,6 +23,7 @@ export type {
 } from '~/lib/ai/types'
 
 export {
+  draftCommentWithAi,
   draftMeetingWithAi,
   draftPostWithAi,
   draftShopWithAi,

@@ -86,6 +86,8 @@ import type {
   AiSearchParams,
   AiSearchResult,
   AiSuggestion,
+  CommentDraftParams,
+  CommentDraftResult,
   CommentSuggestionParams,
   DescribeSearchImageParams,
   DescribeSearchImageResult,
@@ -194,6 +196,23 @@ export async function fetchChatSuggestions(params: {
   return result.suggestions.map((line) => String(line).trim()).filter(Boolean).slice(0, 3)
 }
 
+function commentAssistContext(params: CommentSuggestionParams | CommentDraftParams) {
+  return {
+    post_type: params.postType ?? null,
+    post_content: params.content ?? null,
+    author_name: params.authorName ?? null,
+    event_title: params.eventTitle ?? null,
+    celebration_title: params.celebrationTitle ?? null,
+    product_title: params.productTitle ?? null,
+    shop_name: params.shopName ?? null,
+    article_title: params.articleTitle ?? null,
+    has_media: Boolean(params.hasMedia),
+    image_url: params.imageUrl ?? null,
+    has_video: Boolean(params.hasVideo),
+    parent_comment: params.parentComment ?? null,
+  }
+}
+
 /** Professional comment starters for a community post. */
 export async function fetchCommentSuggestions(
   params: CommentSuggestionParams,
@@ -201,24 +220,45 @@ export async function fetchCommentSuggestions(
   const result = await invokeAiAssist<{ suggestions?: string[] }>({
     action: 'comment_suggestions',
     product: 'community',
-    context: {
-      post_type: params.postType ?? null,
-      post_content: params.content ?? null,
-      author_name: params.authorName ?? null,
-      event_title: params.eventTitle ?? null,
-      celebration_title: params.celebrationTitle ?? null,
-      product_title: params.productTitle ?? null,
-      shop_name: params.shopName ?? null,
-      article_title: params.articleTitle ?? null,
-      has_media: Boolean(params.hasMedia),
-      image_url: params.imageUrl ?? null,
-      has_video: Boolean(params.hasVideo),
-      parent_comment: params.parentComment ?? null,
-    },
+    context: commentAssistContext(params),
   })
   return Array.isArray(result.suggestions)
     ? result.suggestions.map((s) => String(s).trim()).filter(Boolean)
     : []
+}
+
+/** Write or polish a community comment with SHERPA (edge Gemini, owned fallback). */
+export async function draftCommentWithAi(
+  params: CommentDraftParams,
+): Promise<CommentDraftResult> {
+  const prompt = (params.prompt ?? '').trim()
+  const requestBody = {
+    action: 'comment_draft',
+    product: 'community',
+    message: withLanguageReplyHint(
+      prompt || 'Write a thoughtful professional comment for this post.',
+    ),
+    context: commentAssistContext(params),
+  }
+
+  let draft: CommentDraftResult
+  try {
+    draft = await invokeEdgeAssist<CommentDraftResult>(requestBody, { timeoutMs: 28_000 })
+  } catch (edgeErr) {
+    try {
+      draft = await invokeAiAssist<CommentDraftResult>(requestBody)
+    } catch {
+      if (edgeErr instanceof Error) throw edgeErr
+      throw new Error(`${AI_NAME} could not draft this comment. Try again.`)
+    }
+  }
+
+  requireSherpaDraft(draft)
+  const content = String(draft.content ?? '').trim()
+  if (!content || content.length < 12) {
+    throw new Error(`${AI_NAME} could not draft this comment. Try again.`)
+  }
+  return { content: content.slice(0, 500), usedFallback: false }
 }
 
 /** Natural-language natural-language meeting draft for Co-Work schedule. */
