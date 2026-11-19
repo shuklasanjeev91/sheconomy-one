@@ -134,6 +134,11 @@ function productPlaybook(product: AiProduct): string {
         '- Network: connect at /community/network; request warm intros from profiles.',
         '- Jobs: browse /community/jobs; improve profile + open-to-work for better matches.',
         '- Growth tips: post consistently, engage on others’ posts, complete profile sections.',
+        'Create-post drafting (trained):',
+        '- When a member gives a short instruction like “Write about X”, expand into a complete ready-to-publish post.',
+        '- Never echo the instruction. Write 2–4 short paragraphs: hook, insight/story, and a question or call to action.',
+        '- Use attached photos, videos, and links as the subject; keep at most 2 hashtags; no markdown fences.',
+        '- Tone: warm, professional, women-led community — specific over generic.',
       ].join('\n')
     case 'shop':
       return [
@@ -1726,27 +1731,50 @@ function parsePostDraftJson(raw: string | null): { title: string | null; content
   }
 }
 
+function parsePostSuggestionChips(raw: string | null): Array<{ label: string; draft: string }> {
+  if (!raw) return []
+  const trimmed = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '')
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((row) => {
+        if (!row || typeof row !== 'object') return null
+        const item = row as Record<string, unknown>
+        const label = typeof item.label === 'string' ? item.label.trim() : ''
+        const draft = typeof item.draft === 'string' ? item.draft.trim() : ''
+        if (!label || !draft) return null
+        return { label, draft }
+      })
+      .filter((row): row is { label: string; draft: string } => !!row)
+  } catch {
+    return []
+  }
+}
+
 function fallbackPostDraft(prompt: string, mode: string) {
   const cleaned = prompt
     .replace(/^write (a |an |the )?(post |update )?(about|on|regarding)\s+/i, '')
     .replace(/^write about\s+/i, '')
+    .replace(/^rewrite this as a polished professional post:\s*/i, '')
+    .replace(/^turn this into a post with a clear call to action:\s*/i, '')
     .trim()
   const topic = cleaned.slice(0, 120) || 'this week’s update'
   if (mode === 'article') {
     return {
       title: `Notes on ${topic}`,
-      content: `I’ve been thinking about ${topic}.\n\nHere’s the short version of what I’m learning, what I’d do differently, and one question for this community.`,
+      content: `I’ve been thinking about ${topic}.\n\nHere’s the short version of what I’m learning, what I’d do differently next time, and one question for this community.\n\nWhat would you add from your experience?`,
     }
   }
   if (mode === 'celebration') {
     return {
       title: null,
-      content: `Excited to celebrate ${topic}! Grateful for everyone who supported this — looking forward to what’s next.`,
+      content: `Excited to celebrate ${topic}!\n\nGrateful for everyone who supported this journey — the encouragement from this community made a real difference.\n\nHere’s to what’s next. Who else is celebrating a win this week?`,
     }
   }
   return {
     title: null,
-    content: `Sharing a quick update on ${topic}.\n\nWould love perspectives from this community — what’s working for you right now?`,
+    content: `Sharing a quick update on ${topic}.\n\nA few things stood out for me as I’ve been exploring this — especially how it connects to the work women-led teams are doing right now.\n\nWould love perspectives from this community: what’s resonating for you, and what would you try next?`,
   }
 }
 
@@ -1915,19 +1943,20 @@ Deno.serve(async (req) => {
           : 'text'
       const fallback = fallbackPostDraft(prompt || link?.title || 'this update', composeMode)
       const systemPrompt = [
-        'You draft professional community posts for a women-focused platform.',
+        'You are SHERPA drafting professional community posts for SHEconomy (women-focused).',
         'Return ONLY JSON with keys: title (string or null), content (string).',
         'title is required for article mode; otherwise null.',
-        'content should be warm, specific, under 900 characters for text modes, under 2500 for article.',
-        'Expand the member notes into a complete ready-to-publish post. Never return their instruction unchanged.',
-        'No hashtag spam. At most 2 hashtags. No markdown fences.',
+        'content must be a COMPLETE ready-to-publish post: 2–4 short paragraphs (roughly 280–700 characters for text modes, up to 2200 for article).',
+        'Structure: (1) hook tied to the topic, (2) concrete insight/story/context, (3) invite the community with a question or clear call to action.',
+        'If the member wrote an instruction like “Write about X”, expand X — never return the instruction verbatim or as a one-liner.',
+        'No hashtag spam. At most 2 relevant hashtags at the end. No markdown fences. No bullet lists unless article mode.',
         languageDirective(context, body),
         'Write the post content (and title when present) in the preferred language.',
         `Compose mode: ${composeMode}.`,
-        photoCount > 0 ? `Attached photos: ${photoCount}.` : '',
-        videoCount > 0 ? `Attached videos: ${videoCount}.` : '',
+        photoCount > 0 ? `Attached photos: ${photoCount}. Mention them naturally.` : '',
+        videoCount > 0 ? `Attached videos: ${videoCount}. Reference the video naturally.` : '',
         link?.url
-          ? `Shared link: ${link.url}${link.title ? ` (${link.title})` : ''}${link.description ? ` — ${String(link.description).slice(0, 200)}` : ''}.`
+          ? `Shared link: ${link.url}${link.title ? ` (${link.title})` : ''}${link.description ? ` — ${String(link.description).slice(0, 200)}` : ''}. Make the link the subject of the post.`
           : '',
       ]
         .filter(Boolean)
@@ -1943,6 +1972,47 @@ Deno.serve(async (req) => {
         return json({ ...parsed, usedFallback: false, product: 'community' })
       }
       return json({ ...fallback, usedFallback: true, product: 'community' })
+    }
+
+    if (action === 'post_suggestions') {
+      const composeMode =
+        typeof context.compose_mode === 'string' && context.compose_mode
+          ? context.compose_mode
+          : 'text'
+      const seed =
+        typeof context.prompt === 'string' ? context.prompt.trim().slice(0, 160) : ''
+      const photoCount = Number(context.photo_count ?? 0) || 0
+      const videoCount = Number(context.video_count ?? 0) || 0
+      const link =
+        context.link && typeof context.link === 'object'
+          ? (context.link as { url?: string; title?: string })
+          : null
+      const systemPrompt = [
+        'You suggest short create-post starter chips for SHEconomy Community.',
+        'Return ONLY a JSON array of 3 objects: { "label": string, "draft": string }.',
+        'label: 2–4 words, never copy the member prompt.',
+        'draft: a COMPLETE ready-to-publish post (2–3 short paragraphs), never an instruction echo.',
+        'Warm, professional, women-led tone. At most 2 hashtags. No markdown.',
+        languageDirective(context, body),
+        `Compose mode: ${composeMode}.`,
+        seed ? `Member topic hint: ${seed}` : 'Member has not typed a topic yet — invent useful starters.',
+        photoCount > 0 ? `Photos attached: ${photoCount}.` : '',
+        videoCount > 0 ? `Videos attached: ${videoCount}.` : '',
+        link?.url ? `Link: ${link.url}${link.title ? ` (${link.title})` : ''}.` : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+
+      const completion = await callGemini(
+        systemPrompt,
+        [],
+        seed || 'Suggest 3 original community post starters.',
+      )
+      const suggestions = parsePostSuggestionChips(completion.answer)
+      if (suggestions.length) {
+        return json({ suggestions: suggestions.slice(0, 4), product: 'community' })
+      }
+      return json({ suggestions: [], product: 'community' })
     }
 
     if (action === 'shop_draft') {
@@ -2480,7 +2550,7 @@ Deno.serve(async (req) => {
     return json(
       {
         error:
-          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft | post_draft | shop_draft | translate | moderate_image | describe_search_image | listing_draft_from_image | ai_search.',
+          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft | post_draft | post_suggestions | shop_draft | translate | moderate_image | describe_search_image | listing_draft_from_image | ai_search.',
       },
       400,
     )

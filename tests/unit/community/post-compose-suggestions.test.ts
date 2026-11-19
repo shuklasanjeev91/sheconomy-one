@@ -62,7 +62,7 @@ describe('post compose AI helpers', () => {
       videoCount: 1,
       link: { url: 'https://wef.org.in', title: 'WEF India' },
     })
-    expect(prompt).toContain('complete, ready-to-publish')
+    expect(prompt).toContain('COMPLETE ready-to-publish')
     expect(prompt).toContain('Write about wef.org.in')
     expect(prompt).toContain('2 photo')
     expect(prompt).toContain('1 video')
@@ -73,6 +73,7 @@ describe('post compose AI helpers', () => {
     const draft = fallbackPostDraft('Write about wef.org.in', 'text')
     expect(draft.content.toLowerCase()).toContain('wef.org.in')
     expect(draft.content.toLowerCase()).not.toMatch(/^write about wef\.org\.in$/i)
-    expect(draft.content.length).toBeGreaterThan(80)
+    expect(draft.content.length).toBeGreaterThan(160)
+    expect(draft.content.split('\n\n').length).toBeGreaterThanOrEqual(2)
   })
 })

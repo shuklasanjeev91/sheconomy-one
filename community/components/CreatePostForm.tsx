@@ -170,7 +170,6 @@ export function CreatePostForm({
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [gifOpen, setGifOpen] = useState(false)
   const [audienceOpen, setAudienceOpen] = useState(false)
-  const [postAsOpen, setPostAsOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [visibility, setVisibility] = useState<Visibility>('public')
   const encodedContentRef = useRef('')
@@ -1054,6 +1053,9 @@ export function CreatePostForm({
     selectedGroup?.title ||
     'You'
   const hasPostAsOptions = companies.length > 0 || groups.length > 0
+  const audienceTriggerLabel = hasPostAsOptions
+    ? `${audience.label} · ${postAsLabel}`
+    : audience.label
   const Container = embedded ? YStack : CommunityCard
 
   // The six toolbar icons plus the Post button are wider than a narrow phone
@@ -1065,58 +1067,33 @@ export function CreatePostForm({
   return (
     <>
       <Container gap={0}>
-        {/* Author + audience / post-as */}
+        {/* Author + single audience / post-as control */}
         <XStack padding={16} gap={12} alignItems="center">
           <Avatar name={displayName} src={profile?.avatar_url ?? undefined} size="$5" />
           <YStack gap={4} flex={1}>
             <Text fontSize={16} fontWeight="700" color={communityUi.text}>
               {displayName}
             </Text>
-            <XStack gap={8} flexWrap="wrap">
-              <XStack
-                alignSelf="flex-start"
-                alignItems="center"
-                gap={6}
-                paddingHorizontal={10}
-                paddingVertical={5}
-                borderRadius={999}
-                borderWidth={1}
-                borderColor={communityUi.border}
-                cursor="pointer"
-                hoverStyle={{ backgroundColor: communityUi.hoverBg }}
-                onPress={() => setAudienceOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Audience ${audience.label}`}
-              >
-                <audience.icon size={14} color={communityUi.textMuted} />
-                <Text fontSize={12} fontWeight="700" color={communityUi.textMuted}>
-                  {audience.label}
-                </Text>
-                <Icons.ChevronDown size={14} color={communityUi.textMuted} />
-              </XStack>
-              {hasPostAsOptions ? (
-                <XStack
-                  alignSelf="flex-start"
-                  alignItems="center"
-                  gap={6}
-                  paddingHorizontal={10}
-                  paddingVertical={5}
-                  borderRadius={999}
-                  borderWidth={1}
-                  borderColor={communityUi.border}
-                  cursor="pointer"
-                  hoverStyle={{ backgroundColor: communityUi.hoverBg }}
-                  onPress={() => setPostAsOpen(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Post as ${postAsLabel}`}
-                >
-                  <Icons.Building2 size={14} color={communityUi.textMuted} />
-                  <Text fontSize={12} fontWeight="700" color={communityUi.textMuted} numberOfLines={1}>
-                    {postAsLabel}
-                  </Text>
-                  <Icons.ChevronDown size={14} color={communityUi.textMuted} />
-                </XStack>
-              ) : null}
+            <XStack
+              alignSelf="flex-start"
+              alignItems="center"
+              gap={6}
+              paddingHorizontal={10}
+              paddingVertical={5}
+              borderRadius={999}
+              borderWidth={1}
+              borderColor={communityUi.border}
+              cursor="pointer"
+              hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+              onPress={() => setAudienceOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Post settings ${audienceTriggerLabel}`}
+            >
+              <audience.icon size={14} color={communityUi.textMuted} />
+              <Text fontSize={12} fontWeight="700" color={communityUi.textMuted} numberOfLines={1}>
+                {audienceTriggerLabel}
+              </Text>
+              <Icons.ChevronDown size={14} color={communityUi.textMuted} />
             </XStack>
           </YStack>
         </XStack>
@@ -1988,98 +1965,113 @@ export function CreatePostForm({
         </YStack>
       </CommunityAdaptiveSheet>
 
-      <CommunityAdaptiveSheet open={audienceOpen} onOpenChange={setAudienceOpen} title="Who can see your post?">
-        <YStack gap={4}>
-          {(Object.keys(AUDIENCE) as Visibility[]).map((key) => {
-            const item = AUDIENCE[key]
-            const selected = visibility === key
-            return (
-              <XStack
-                key={key}
-                alignItems="center"
-                gap={12}
-                paddingVertical={12}
-                paddingHorizontal={6}
-                borderRadius={12}
-                cursor="pointer"
-                hoverStyle={{ backgroundColor: communityUi.hoverBg }}
-                pressStyle={{ backgroundColor: communityUi.hoverBg, opacity: 0.9 }}
-                accessibilityRole="button"
-                accessibilityLabel={item.label}
-                onPress={() => {
-                  setVisibility(key)
-                  setAudienceOpen(false)
-                }}
-              >
+      <CommunityAdaptiveSheet open={audienceOpen} onOpenChange={setAudienceOpen} title="Post settings">
+        <YStack gap={16}>
+          <YStack gap={4}>
+            <Text fontSize={12} fontWeight="700" color={communityUi.textMuted} paddingHorizontal={6}>
+              Who can see this
+            </Text>
+            {(Object.keys(AUDIENCE) as Visibility[]).map((key) => {
+              const item = AUDIENCE[key]
+              const selected = visibility === key
+              return (
                 <XStack
-                  width={40}
-                  height={40}
-                  borderRadius={999}
+                  key={key}
                   alignItems="center"
-                  justifyContent="center"
-                  backgroundColor={communityUi.accentMuted}
+                  gap={12}
+                  paddingVertical={12}
+                  paddingHorizontal={6}
+                  borderRadius={12}
+                  cursor="pointer"
+                  hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+                  pressStyle={{ backgroundColor: communityUi.hoverBg, opacity: 0.9 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                  onPress={() => {
+                    setVisibility(key)
+                  }}
                 >
-                  <item.icon size={20} color={communityUi.brand} />
+                  <XStack
+                    width={40}
+                    height={40}
+                    borderRadius={999}
+                    alignItems="center"
+                    justifyContent="center"
+                    backgroundColor={communityUi.accentMuted}
+                  >
+                    <item.icon size={20} color={communityUi.brand} />
+                  </XStack>
+                  <YStack flex={1} gap={2}>
+                    <Text fontSize={15} fontWeight="700" color={communityUi.text}>
+                      {item.label}
+                    </Text>
+                    <Text fontSize={12} color={communityUi.textMuted}>
+                      {item.description}
+                    </Text>
+                  </YStack>
+                  {selected ? <Icons.Check size={20} color={communityUi.brand} /> : null}
                 </XStack>
-                <YStack flex={1} gap={2}>
-                  <Text fontSize={15} fontWeight="700" color={communityUi.text}>
-                    {item.label}
-                  </Text>
-                  <Text fontSize={12} color={communityUi.textMuted}>
-                    {item.description}
-                  </Text>
-                </YStack>
-                {selected ? <Icons.Check size={20} color={communityUi.brand} /> : null}
-              </XStack>
-            )
-          })}
-        </YStack>
-      </CommunityAdaptiveSheet>
+              )
+            })}
+          </YStack>
 
-      <CommunityAdaptiveSheet open={postAsOpen} onOpenChange={setPostAsOpen} title="Post as">
-        <YStack gap={4}>
-          <PostAsOptionRow
-            icon={Icons.User}
-            title="You"
-            description="Post from your personal profile"
-            selected={postContext === 'profile'}
-            onPress={() => {
-              setPostContext('profile')
-              setCompanyId(null)
-              setGroupId(null)
-              setPostAsOpen(false)
-            }}
-          />
-          {companies.map((company) => (
-            <PostAsOptionRow
-              key={`company-${company.id}`}
-              icon={Icons.Building2}
-              title={company.name}
-              description="Page"
-              selected={postContext === 'company' && companyId === company.id}
-              onPress={() => {
-                setPostContext('company')
-                setCompanyId(company.id)
-                setGroupId(null)
-                setPostAsOpen(false)
-              }}
-            />
-          ))}
-          {groups.map((group) => (
-            <PostAsOptionRow
-              key={`group-${group.id}`}
-              icon={Icons.Users}
-              title={group.title}
-              description="Group"
-              selected={postContext === 'group' && groupId === group.id}
-              onPress={() => {
-                setPostContext('group')
-                setGroupId(group.id)
-                setCompanyId(null)
-                setPostAsOpen(false)
-              }}
-            />
-          ))}
+          {hasPostAsOptions ? (
+            <YStack gap={4}>
+              <Text fontSize={12} fontWeight="700" color={communityUi.textMuted} paddingHorizontal={6}>
+                Post as
+              </Text>
+              <PostAsOptionRow
+                icon={Icons.User}
+                title="You"
+                description="Post from your personal profile"
+                selected={postContext === 'profile'}
+                onPress={() => {
+                  setPostContext('profile')
+                  setCompanyId(null)
+                  setGroupId(null)
+                }}
+              />
+              {companies.map((company) => (
+                <PostAsOptionRow
+                  key={`company-${company.id}`}
+                  icon={Icons.Building2}
+                  title={company.name}
+                  description="Page"
+                  selected={postContext === 'company' && companyId === company.id}
+                  onPress={() => {
+                    setPostContext('company')
+                    setCompanyId(company.id)
+                    setGroupId(null)
+                  }}
+                />
+              ))}
+              {groups.map((group) => (
+                <PostAsOptionRow
+                  key={`group-${group.id}`}
+                  icon={Icons.Users}
+                  title={group.title}
+                  description="Group"
+                  selected={postContext === 'group' && groupId === group.id}
+                  onPress={() => {
+                    setPostContext('group')
+                    setGroupId(group.id)
+                    setCompanyId(null)
+                  }}
+                />
+              ))}
+            </YStack>
+          ) : null}
+
+          <XStack paddingHorizontal={6} paddingTop={4}>
+            <Button
+              flex={1}
+              tone="primary"
+              onPress={() => setAudienceOpen(false)}
+              accessibilityLabel="Done"
+            >
+              Done
+            </Button>
+          </XStack>
         </YStack>
       </CommunityAdaptiveSheet>
     </>

@@ -202,9 +202,10 @@ export function buildPostDraftPrompt(input: {
   link?: { url: string; title?: string | null; description?: string | null } | null
 }): string {
   const parts: string[] = [
-    'Write a complete, ready-to-publish community post.',
-    'Expand the member’s notes into warm, specific copy. Do not repeat their instruction verbatim.',
-    'At most 2 hashtags. No markdown fences.',
+    'You are SHERPA writing for SHEconomy Community (women-led professionals).',
+    'Write a COMPLETE ready-to-publish post — not an outline and not a restatement of the instruction.',
+    'Use 2–4 short paragraphs (about 280–700 characters): hook, concrete insight/story, then a question or call to action.',
+    'Warm and specific. At most 2 hashtags at the end. No markdown fences.',
   ]
 
   const seed = input.seed?.trim() ?? ''
@@ -233,7 +234,7 @@ export function buildPostDraftPrompt(input: {
         `They are sharing this link: ${link.url}`,
         title ? `Link title: ${title}` : null,
         description ? `Link summary: ${description.slice(0, 280)}` : null,
-        'Weave the link into the post as the main subject.',
+        'Make the link the main subject of the post.',
       ]
         .filter(Boolean)
         .join('\n'),
@@ -287,22 +288,24 @@ export function fallbackPostDraft(prompt: string, mode: ComposeModeHint = 'text'
   const cleaned = prompt
     .replace(/^write (a |an |the )?(post |update )?(about|on|regarding)\s+/i, '')
     .replace(/^write about\s+/i, '')
+    .replace(/^rewrite this as a polished professional post:\s*/i, '')
+    .replace(/^turn this into a post with a clear call to action:\s*/i, '')
     .trim()
   const topic = cleaned.slice(0, 120) || 'this week’s update'
   if (mode === 'article') {
     return {
       title: `Notes on ${topic}`,
-      content: `I’ve been thinking about ${topic}.\n\nHere’s the short version of what I’m learning, what I’d do differently, and one question for this community.`,
+      content: `I’ve been thinking about ${topic}.\n\nHere’s the short version of what I’m learning, what I’d do differently next time, and one question for this community.\n\nWhat would you add from your experience?`,
     }
   }
   if (mode === 'celebration') {
     return {
       title: null,
-      content: `Excited to celebrate ${topic}! Grateful for everyone who supported this — looking forward to what’s next.`,
+      content: `Excited to celebrate ${topic}!\n\nGrateful for everyone who supported this journey — the encouragement from this community made a real difference.\n\nHere’s to what’s next. Who else is celebrating a win this week?`,
     }
   }
   return {
     title: null,
-    content: `Sharing a quick update on ${topic}.\n\nWould love perspectives from this community — what’s working for you right now?`,
+    content: `Sharing a quick update on ${topic}.\n\nA few things stood out for me as I’ve been exploring this — especially how it connects to the work women-led teams are doing right now.\n\nWould love perspectives from this community: what’s resonating for you, and what would you try next?`,
   }
 }
