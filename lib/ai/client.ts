@@ -46,10 +46,15 @@ async function invokeEdgeAssist<T>(
           ])
     const { data, error } = raced
     if (error) {
-      if (/abort|timed?\s*out/i.test(error.message || '')) {
+      const msg = error.message || ''
+      if (/abort|timed?\s*out/i.test(msg)) {
         throw new Error(`${AI_NAME} timed out. Tap Write with SHERPA to try again.`)
       }
-      throw new Error(error.message || `${AI_NAME} is unavailable right now.`)
+      // FunctionsFetchError — network/CORS/boot failure; keep message short for toast + fallback.
+      if (/Failed to send a request to the Edge Function/i.test(msg)) {
+        throw new Error(`${AI_NAME} could not reach the draft service. Try again.`)
+      }
+      throw new Error(msg || `${AI_NAME} is unavailable right now.`)
     }
     const payload = data as { error?: string } | null
     if (payload && typeof payload === 'object' && payload.error) {
@@ -321,13 +326,17 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
     usedFallback: Boolean(row.usedFallback),
   })
 
-  // Research + LinkedIn-style rewrite on the trained Gemini edge (can take longer).
+  // Prefer edge Gemini; fall back to owned SHERPA when the edge worker/network fails.
   let draft: PostDraftResult
   try {
-    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody, { timeoutMs: 28_000 }))
-  } catch (err) {
-    if (err instanceof Error) throw err
-    throw new Error(`${AI_NAME} could not draft this post. Try again.`)
+    draft = normalize(await invokeEdgeAssist<PostDraftResult>(requestBody, { timeoutMs: 45_000 }))
+  } catch (edgeErr) {
+    try {
+      draft = normalize(await invokeAiAssist<PostDraftResult>(requestBody))
+    } catch {
+      if (edgeErr instanceof Error) throw edgeErr
+      throw new Error(`${AI_NAME} could not draft this post. Try again.`)
+    }
   }
 
   requireSherpaDraft(draft)

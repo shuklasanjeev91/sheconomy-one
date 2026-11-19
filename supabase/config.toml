@@ -585,3 +585,7 @@ verify_jwt = true
 # Easyship server webhooks (label + tracking / RTO) — signature checked in-function.
 [functions.easyship-webhook]
 verify_jwt = false
+
+# SHERPA AI assist — auth checked inside the function (getUser).
+[functions.ai-assist]
+verify_jwt = false

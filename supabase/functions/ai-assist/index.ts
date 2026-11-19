@@ -1016,21 +1016,21 @@ function collectGeminiApiKeys(): Array<{ source: string; key: string }> {
   return keys
 }
 
+/** Current Gemini Developer API ids — 2.x flash/pro 404 for new keys. */
+const LIVE_GEMINI_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.8-flash',
+  'gemini-flash-latest',
+  'gemini-3.6-flash',
+] as const
+
 function preferredGeminiModels(): string[] {
   const preferred =
     Deno.env.get('GEMINI_MODEL')?.trim() ||
     Deno.env.get('GOOGLE_AI_MODEL')?.trim() ||
-    'gemini-2.5-flash'
-  return [
-    ...new Set([
-      preferred,
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-2.5-pro',
-      'gemini-flash-latest',
-      'gemini-2.0-flash-lite',
-    ]),
-  ]
+    'gemini-3.5-flash-lite'
+  // Prefer lite first — 3.8-flash often returns 503 under load; dead env models are skipped later.
+  return [...new Set([preferred, ...LIVE_GEMINI_MODELS])]
 }
 
 /** Flash-first list for vision describe (cheaper / less quota pressure than Pro). */
@@ -1038,17 +1038,8 @@ function preferredVisionModels(): string[] {
   const preferred =
     Deno.env.get('GEMINI_VISION_MODEL')?.trim() ||
     Deno.env.get('GEMINI_MODEL')?.trim() ||
-    'gemini-2.5-flash'
-  return [
-    ...new Set([
-      preferred,
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-2.0-flash-lite',
-      'gemini-2.5-pro',
-      'gemini-flash-latest',
-    ]),
-  ]
+    'gemini-3.5-flash-lite'
+  return [...new Set([preferred, ...LIVE_GEMINI_MODELS])]
 }
 
 type GeminiPart =
@@ -1131,7 +1122,7 @@ async function callGeminiOnce(
   if (options?.jsonMode && !options?.googleSearch) {
     generationConfig.responseMimeType = 'application/json'
   }
-  const payload: Record<string, unknown> = {
+  const requestBody: Record<string, unknown> = {
     systemInstruction: {
       parts: [{ text: systemPrompt }],
     },
@@ -1139,12 +1130,12 @@ async function callGeminiOnce(
     generationConfig,
   }
   if (options?.googleSearch) {
-    payload.tools = [{ google_search: {} }]
+    requestBody.tools = [{ google_search: {} }]
   }
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(requestBody),
   })
 
   if (!response.ok) {
@@ -1160,12 +1151,14 @@ async function callGeminiOnce(
     return { answer: null, error: `${response.status}: ${detail}` }
   }
 
-  const payload = await response.json()
-  const content = extractGeminiText(payload)
+  const responsePayload = await response.json()
+  const content = extractGeminiText(responsePayload)
   if (content) return { answer: content, error: null }
   const blockReason =
-    (payload as { promptFeedback?: { blockReason?: string } })?.promptFeedback?.blockReason ||
-    (payload as { candidates?: Array<{ finishReason?: string }> })?.candidates?.[0]?.finishReason
+    (responsePayload as { promptFeedback?: { blockReason?: string } })?.promptFeedback
+      ?.blockReason ||
+    (responsePayload as { candidates?: Array<{ finishReason?: string }> })?.candidates?.[0]
+      ?.finishReason
   return {
     answer: null,
     error: blockReason ? `blocked:${blockReason}` : 'empty_completion',
@@ -1201,8 +1194,22 @@ async function callGemini(
           return { answer: result.answer, model, error: null, keySource: source }
         }
         lastError = result.error
-        // Invalid key → try next key. Model errors → try next model with same key.
+        // Invalid key → try next key.
         if (result.error?.startsWith('401') || result.error?.startsWith('403')) break
+        // Free-tier exhausted / hard quota — further models on this key will also fail.
+        if (
+          result.error?.startsWith('429') &&
+          /quota|rate.?limit|limit:\s*0|free.?tier/i.test(result.error)
+        ) {
+          break
+        }
+        // Retired model id — skip quickly to the next candidate.
+        if (
+          result.error?.startsWith('404') &&
+          /no longer available|not found/i.test(result.error)
+        ) {
+          continue
+        }
       } catch (err) {
         lastError = err instanceof Error ? err.message : 'gemini_fetch_failed'
         console.error('Gemini fetch failed:', lastError)
@@ -1244,18 +1251,11 @@ async function researchTopicBrief(topic: string): Promise<string> {
   if (!cleaned || cleaned.length < 2) return ''
   const researchPrompt = [
     'You research topics for professional social posts.',
-    'Use web search when available. Return 4–7 short factual bullets about the topic.',
+    'Return 4–7 short factual bullets about the topic from reliable public knowledge.',
     'Focus on: what it is, who it serves, notable mission/products, why it matters for women-led professionals.',
     'No marketing fluff. No hashtags. No post draft — facts only. Max 600 characters.',
   ].join('\n')
-  const completion = await callGemini(
-    researchPrompt,
-    [],
-    `Collect global facts about: ${cleaned}`,
-    { googleSearch: true, temperature: 0.2, maxOutputTokens: 700 },
-  )
-  if (completion.answer?.trim()) return completion.answer.trim().slice(0, 900)
-  // Fallback without search — model prior knowledge only.
+  // Single local call — google_search + multi-model retries routinely exceed the client timeout.
   const local = await callGemini(
     researchPrompt,
     [],
@@ -2306,7 +2306,7 @@ Deno.serve(async (req) => {
             context: { ...context, shopping_query: shoppingQuery, schedule_requested: scheduleRequested },
             title: message.slice(0, 80),
             system_prompt: systemPrompt,
-            model: Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-pro',
+            model: Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash-lite',
             is_active: true,
           })
           .select('id')
