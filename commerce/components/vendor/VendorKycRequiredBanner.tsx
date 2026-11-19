@@ -46,7 +46,7 @@ export function VendorKycRequiredBanner({ ui, status }: VendorKycRequiredBannerP
         Verification required to sell
       </Text>
       <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-        {hint} Listings stay off the storefront and checkout is blocked until KYC is verified.
+        {hint} Complete verification so payouts can release after orders.
       </Text>
       <AppLink href={vendorRoutes.settingsSection('verification') as Href} asChild>
         <Button size="$3" tone="primary" alignSelf="flex-start">

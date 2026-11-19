@@ -33,7 +33,9 @@ import {
   LISTING_PUBLISH_DEFAULT_METADATA,
   LISTING_PUBLISH_IMAGE_HINTS,
   LISTING_PUBLISH_STEP_IDS,
+  PRODUCT_STRUCTURES,
   type ListingPublishStepId,
+  type ProductStructure,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 
 export function countWords(text: string): number {
@@ -74,6 +76,50 @@ export function readMetadataBoolean(meta: Record<string, unknown>, key: string, 
   if (value === 'true') return true
   if (value === 'false') return false
   return fallback
+}
+
+export function readMetadataStringList(meta: Record<string, unknown>, key: string): string[] {
+  const value = meta[key]
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => String(entry ?? '').trim()).filter(Boolean)
+}
+
+/**
+ * Infer WooCommerce-style product structure from metadata + variations.
+ * Existing listings with child SKUs → variable; otherwise simple.
+ */
+export function resolveProductStructure(formData: {
+  listing_metadata?: Record<string, unknown> | null
+  variations?: { variation_value?: string | null }[] | null
+}): ProductStructure {
+  const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
+  const raw = String(meta[LISTING_METADATA_KEYS.PRODUCT_STRUCTURE] ?? '').trim().toLowerCase()
+  if (
+    raw === PRODUCT_STRUCTURES.SIMPLE ||
+    raw === PRODUCT_STRUCTURES.VARIABLE ||
+    raw === PRODUCT_STRUCTURES.GROUPED
+  ) {
+    return raw
+  }
+  const hasChildren =
+    Array.isArray(formData.variations) &&
+    formData.variations.some((row) => String(row.variation_value ?? '').trim())
+  return hasChildren ? PRODUCT_STRUCTURES.VARIABLE : PRODUCT_STRUCTURES.SIMPLE
+}
+
+/** Parent price range from variation SKUs (for Pricing step summary). */
+export function variationPriceRange(
+  variations: { price?: number | string | null }[] | null | undefined,
+): { min: number; max: number; count: number } | null {
+  const prices = (variations ?? [])
+    .map((row) => Number(row.price))
+    .filter((n) => Number.isFinite(n) && n >= 0)
+  if (!prices.length) return null
+  return {
+    min: Math.min(...prices),
+    max: Math.max(...prices),
+    count: prices.length,
+  }
 }
 
 export function pickedImagesToDrafts(images: PickedImage[]): ListingImageDraft[] {
@@ -280,18 +326,34 @@ export function validatePublishStep(
       break
     }
     case LISTING_PUBLISH_STEP_IDS.DETAILS: {
+      const structure = resolveProductStructure(formData)
       if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
-        // Amazon-style: single-SKU listings need stock; variations/materials are optional.
-        if (!formData.variations?.length) {
+        if (structure === PRODUCT_STRUCTURES.SIMPLE) {
           if (formData.stock === '' || formData.stock === null || formData.stock === undefined) {
             errors.stock = 'Enter quantity in stock for this product.'
           }
-        } else {
-          const emptyChild = formData.variations.some(
-            (row) => !String(row.variation_value ?? '').trim(),
+        } else if (structure === PRODUCT_STRUCTURES.VARIABLE) {
+          const children = (formData.variations ?? []).filter((row) =>
+            String(row.variation_value ?? '').trim(),
           )
-          if (emptyChild) {
-            errors.variations = 'Each variation needs an option value, or turn off variations.'
+          if (!children.length) {
+            errors.variations = 'Add at least one variation SKU, or switch to Simple product.'
+          } else {
+            const missingPrice = children.some((row) => {
+              const n = Number(row.price)
+              return !Number.isFinite(n) || n < 0
+            })
+            if (missingPrice) {
+              errors.variations = 'Set a price on every variation SKU.'
+            }
+          }
+        } else if (structure === PRODUCT_STRUCTURES.GROUPED) {
+          const ids = readMetadataStringList(
+            (formData.listing_metadata ?? {}) as Record<string, unknown>,
+            LISTING_METADATA_KEYS.GROUPED_LISTING_IDS,
+          )
+          if (ids.length < 2) {
+            errors.grouped = 'Add at least two products to this grouped listing.'
           }
         }
         if (!formData.materials?.length) {
@@ -315,8 +377,12 @@ export function validatePublishStep(
       break
     }
     case LISTING_PUBLISH_STEP_IDS.PRICING: {
-      const price = validateListingField('price', formData.price)
-      if (!price.isValid && price.error) errors.price = price.error
+      const structure = resolveProductStructure(formData)
+      // Variable / grouped: price lives on child SKUs or linked products — not here.
+      if (structure === PRODUCT_STRUCTURES.SIMPLE) {
+        const price = validateListingField('price', formData.price)
+        if (!price.isValid && price.error) errors.price = price.error
+      }
       break
     }
     case LISTING_PUBLISH_STEP_IDS.CATEGORIES: {
@@ -360,10 +426,36 @@ export function validateDraftForm(formData: ListingFormData): StepValidationResu
 }
 
 export function validateFullPublishForm(formData: ListingFormData): StepValidationResult {
+  const structure = resolveProductStructure(formData)
   const result = validateListingData(formData)
   const quality = validateListingQuality(formData)
   const errors = { ...result.errors, ...quality.errors }
   const warnings = [...quality.warnings]
+
+  // Variable / grouped: parent price is derived or unused — drop false positives.
+  if (structure === PRODUCT_STRUCTURES.VARIABLE || structure === PRODUCT_STRUCTURES.GROUPED) {
+    delete errors.price
+  }
+  if (structure === PRODUCT_STRUCTURES.VARIABLE) {
+    const children = (formData.variations ?? []).filter((row) =>
+      String(row.variation_value ?? '').trim(),
+    )
+    if (!children.length) {
+      errors.variations = 'Add at least one variation SKU, or switch to Simple product.'
+    }
+  }
+  if (structure === PRODUCT_STRUCTURES.GROUPED) {
+    const ids = readMetadataStringList(
+      (formData.listing_metadata ?? {}) as Record<string, unknown>,
+      LISTING_METADATA_KEYS.GROUPED_LISTING_IDS,
+    )
+    if (ids.length < 2) {
+      errors.grouped = 'Add at least two products to this grouped listing.'
+    }
+    // Grouped parents don't need their own stock.
+    delete errors.stock
+  }
+
   return { isValid: Object.keys(errors).length === 0, errors, warnings }
 }
 
@@ -374,6 +466,7 @@ const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
   tags: LISTING_PUBLISH_STEP_IDS.BASIC,
   materials: LISTING_PUBLISH_STEP_IDS.DETAILS,
   variations: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  grouped: LISTING_PUBLISH_STEP_IDS.DETAILS,
   stock: LISTING_PUBLISH_STEP_IDS.DETAILS,
   quantity: LISTING_PUBLISH_STEP_IDS.DETAILS,
   weight: LISTING_PUBLISH_STEP_IDS.DETAILS,

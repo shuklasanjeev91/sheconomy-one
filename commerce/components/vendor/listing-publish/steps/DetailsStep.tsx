@@ -55,11 +55,18 @@ import {
 import type { ListingVariationInsert } from '~/lib/listing/listing.type'
 
 import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
-import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import {
+  LISTING_METADATA_KEYS,
+  PRODUCT_STRUCTURE_OPTIONS,
+  PRODUCT_STRUCTURES,
+  type ProductStructure,
+} from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import {
   patchListingProductInfo,
   readMetadataString,
+  readMetadataStringList,
   readProductInfoString,
+  resolveProductStructure,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
 type DetailsStepProps = {
@@ -107,13 +114,48 @@ export function DetailsStep({
     if (fromMeta.length) return fromMeta
     return []
   })
-  const [variationsEnabled, setVariationsEnabled] = useState(
-    () =>
-      (formData.variations?.some((row) => String(row.variation_value ?? '').trim()) ?? false) ||
-      parseVariationAxes(formData.listing_metadata).some((axis) => axis.values.length > 0),
-  )
+  const productStructure = resolveProductStructure(formData)
+  const isVariable = productStructure === PRODUCT_STRUCTURES.VARIABLE
+  const isGrouped = productStructure === PRODUCT_STRUCTURES.GROUPED
+  const isSimple = productStructure === PRODUCT_STRUCTURES.SIMPLE
+  const groupedIds = readMetadataStringList(meta, LISTING_METADATA_KEYS.GROUPED_LISTING_IDS)
+  const [groupedDraft, setGroupedDraft] = useState('')
   const [axisValueDraft, setAxisValueDraft] = useState<Record<number, string>>({})
   const [variantError, setVariantError] = useState<string | null>(null)
+
+  function setProductStructure(next: ProductStructure) {
+    onUpdateMetadata(LISTING_METADATA_KEYS.PRODUCT_STRUCTURE, next)
+    if (next === PRODUCT_STRUCTURES.SIMPLE) {
+      onUpdate('variations', [])
+      persistAxes([])
+      setVariantError(null)
+      onUpdateMetadata(LISTING_METADATA_KEYS.GROUPED_LISTING_IDS, [])
+    } else if (next === PRODUCT_STRUCTURES.VARIABLE) {
+      onUpdateMetadata(LISTING_METADATA_KEYS.GROUPED_LISTING_IDS, [])
+      if (!axes.length) persistAxes([{ name: 'Color', values: [] }])
+    } else if (next === PRODUCT_STRUCTURES.GROUPED) {
+      onUpdate('variations', [])
+      persistAxes([])
+      setVariantError(null)
+    }
+  }
+
+  function addGroupedListingId() {
+    const id = groupedDraft.trim()
+    if (!id || groupedIds.includes(id)) {
+      setGroupedDraft('')
+      return
+    }
+    onUpdateMetadata(LISTING_METADATA_KEYS.GROUPED_LISTING_IDS, [...groupedIds, id])
+    setGroupedDraft('')
+  }
+
+  function removeGroupedListingId(id: string) {
+    onUpdateMetadata(
+      LISTING_METADATA_KEYS.GROUPED_LISTING_IDS,
+      groupedIds.filter((row) => row !== id),
+    )
+  }
 
   function updateProductInfo(patch: Partial<ListingProductInfo>) {
     const next = patchListingProductInfo(formData.product_info, patch)
@@ -242,9 +284,12 @@ export function DetailsStep({
     })
 
     onUpdate('variations', next)
+    onUpdateMetadata(LISTING_METADATA_KEYS.PRODUCT_STRUCTURE, PRODUCT_STRUCTURES.VARIABLE)
     const stockSum = next.reduce((sum, row) => sum + (Number(row.stock) || 0), 0)
     onUpdate('stock', stockSum)
     onUpdate('quantity', stockSum)
+    const prices = next.map((row) => Number(row.price)).filter((n) => Number.isFinite(n) && n >= 0)
+    if (prices.length) onUpdate('price', Math.min(...prices))
     persistAxes(axes)
   }
 
@@ -255,6 +300,10 @@ export function DetailsStep({
       const stockSum = next.reduce((sum, row) => sum + (Number(row.stock) || 0), 0)
       onUpdate('stock', stockSum)
       onUpdate('quantity', stockSum)
+    }
+    if ('price' in patch) {
+      const prices = next.map((row) => Number(row.price)).filter((n) => Number.isFinite(n) && n >= 0)
+      if (prices.length) onUpdate('price', Math.min(...prices))
     }
   }
 
@@ -643,11 +692,48 @@ export function DetailsStep({
       )}
 
       {isDigital ? null : (
+        <ListingPublishCard ui={ui} title="Product type">
+          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
+            Like WooCommerce / Amazon — Simple has one price, Variable prices each option, Grouped
+            links related products.
+          </Text>
+          <XStack gap="$2" flexWrap="wrap">
+            {PRODUCT_STRUCTURE_OPTIONS.map((option) => {
+              const selected = productStructure === option.value
+              return (
+                <YStack
+                  key={option.value}
+                  flex={1}
+                  flexBasis={160}
+                  minWidth={160}
+                  gap="$1.5"
+                  padding="$3"
+                  borderRadius={14}
+                  borderWidth={selected ? 2 : 1}
+                  borderColor={selected ? ui.brand : ui.borderSubtle}
+                  backgroundColor={selected ? ui.roseSurface : ui.surface}
+                  cursor="pointer"
+                  onPress={() => setProductStructure(option.value)}
+                >
+                  <Text fontSize={13} fontWeight="800" color={ui.text}>
+                    {option.label}
+                  </Text>
+                  <Text fontSize={11.5} color={ui.textSecondary} lineHeight={16}>
+                    {option.description}
+                  </Text>
+                </YStack>
+              )
+            })}
+          </XStack>
+        </ListingPublishCard>
+      )}
+
+      {isDigital ? null : (
         <ListingPublishCard
           ui={ui}
-          title="Variations"
+          title={isVariable ? 'Variations & SKU prices' : isGrouped ? 'Grouped products' : 'SKU'}
           headerRight={
-            hasChildSkus || variationsEnabled ? (
+            isVariable ? (
               <XStack gap="$3" alignItems="center">
                 <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addAxis}>
                   + Option
@@ -659,57 +745,93 @@ export function DetailsStep({
             ) : null
           }
         >
-          <XStack alignItems="center" justifyContent="space-between" gap="$3" flexWrap="wrap">
-            <YStack flex={1} gap="$1" minWidth={200}>
-              <Text fontSize={14} fontWeight="800" color={ui.text}>
-                This product has variations
-              </Text>
-              <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-                Turn on for size, color, or style options — like Amazon. Leave off for a single SKU.
-              </Text>
-            </YStack>
-            <Switch
-              checked={variationsEnabled}
-              onCheckedChange={(checked) => {
-                setVariationsEnabled(checked)
-                if (!checked) {
-                  onUpdate('variations', [])
-                  persistAxes([])
-                  setVariantError(null)
-                } else if (!axes.length) {
-                  persistAxes([{ name: 'Color', values: [] }])
-                }
-              }}
-            />
-          </XStack>
+          {!isGrouped ? (
+            <Field label="Seller SKU">
+              <XStack gap="$2" alignItems="center">
+                <Input
+                  flex={1}
+                  value={formData.sku ?? ''}
+                  onChangeText={(value) => onUpdate('sku', value)}
+                  placeholder="Auto from title if empty"
+                />
+                <Button
+                  tone="outline"
+                  size="$3"
+                  onPress={() => onUpdate('sku', buildParentSkuFromTitle(formData.title))}
+                >
+                  Generate
+                </Button>
+              </XStack>
+            </Field>
+          ) : null}
+          <ListingPublishFieldError
+            ui={ui}
+            message={errors.sku || errors.variations || errors.grouped || variantError || undefined}
+          />
 
-          <Field label="SKU (seller SKU)">
-            <XStack gap="$2" alignItems="center">
-              <Input
-                flex={1}
-                value={formData.sku ?? ''}
-                onChangeText={(value) => onUpdate('sku', value)}
-                placeholder="Auto from title if empty"
-              />
-              <Button
-                tone="outline"
-                size="$3"
-                onPress={() => onUpdate('sku', buildParentSkuFromTitle(formData.title))}
-              >
-                Generate
-              </Button>
-            </XStack>
-          </Field>
-          <ListingPublishFieldError ui={ui} message={errors.sku || errors.variations || variantError || undefined} />
-
-          {!variationsEnabled ? (
+          {isSimple ? (
             <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-              Single product — set quantity under Shipping & inventory. You can add options anytime.
+              Simple product — set selling price on the Pricing step and quantity under Shipping &
+              inventory.
             </Text>
           ) : null}
 
-          {variationsEnabled ? (
+          {isGrouped ? (
+            <YStack gap="$3">
+              <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
+                Add listing IDs from your shop. Shoppers see this group and buy the linked products
+                (no price on the group itself).
+              </Text>
+              <XStack gap="$2" alignItems="flex-end" flexWrap="wrap">
+                <Field label="Listing ID" flex={1} minWidth={220}>
+                  <Input
+                    value={groupedDraft}
+                    onChangeText={setGroupedDraft}
+                    placeholder="Paste a product listing UUID"
+                    onSubmitEditing={addGroupedListingId}
+                  />
+                </Field>
+                <Button tone="outline" size="$3" onPress={addGroupedListingId}>
+                  Add product
+                </Button>
+              </XStack>
+              {groupedIds.length === 0 ? (
+                <Text fontSize={12} color={ui.textSecondary}>
+                  No products linked yet.
+                </Text>
+              ) : (
+                <YStack gap="$2">
+                  {groupedIds.map((id) => (
+                    <XStack
+                      key={id}
+                      alignItems="center"
+                      justifyContent="space-between"
+                      gap="$2"
+                      padding="$3"
+                      borderRadius={12}
+                      backgroundColor={ui.surfaceMuted}
+                    >
+                      <Text flex={1} fontSize={12} fontWeight="600" color={ui.text} numberOfLines={1}>
+                        {id}
+                      </Text>
+                      <Button
+                        tone="ghost"
+                        size="$2"
+                        icon={<Icons.X size={14} />}
+                        onPress={() => removeGroupedListingId(id)}
+                      />
+                    </XStack>
+                  ))}
+                </YStack>
+              )}
+            </YStack>
+          ) : null}
+
+          {isVariable ? (
           <>
+          <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
+            Set price, tax, and stock on each variation below — not on the Pricing step.
+          </Text>
           <YStack gap="$3">
             {axes.map((axis, axisIndex) => (
               <YStack
@@ -1103,17 +1225,26 @@ export function DetailsStep({
       {isDigital ? null : (
         <ListingPublishCard ui={ui} title="Shipping & inventory">
           <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
-            Quantity and package details for shipping rates. Variation stock is edited under each option above.
+            Package details for shipping. Stock for variable products is set on each variation SKU.
           </Text>
 
           <XStack gap="$3" flexWrap="wrap">
-            {hasChildSkus ? (
+            {isVariable || hasChildSkus ? (
               <YStack flex={1} minWidth={120} gap="$1" justifyContent="center">
                 <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
                   Quantity
                 </Text>
                 <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
                   Total across variations: {formData.stock ?? 0}. Edit stock on each SKU above.
+                </Text>
+              </YStack>
+            ) : isGrouped ? (
+              <YStack flex={1} minWidth={120} gap="$1" justifyContent="center">
+                <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
+                  Quantity
+                </Text>
+                <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
+                  Grouped products use each linked listing’s own stock.
                 </Text>
               </YStack>
             ) : (

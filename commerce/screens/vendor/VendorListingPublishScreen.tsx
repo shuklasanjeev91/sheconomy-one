@@ -845,6 +845,7 @@ function VendorListingPublishContent() {
               isDesktop={isDesktop}
               onUpdate={updateField}
               onUpdateMetadata={updateMetadata}
+              onGoToDetails={() => setActiveStep(LISTING_PUBLISH_STEP_IDS.DETAILS)}
             />
           ) : null}
 

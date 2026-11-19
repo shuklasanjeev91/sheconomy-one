@@ -38,15 +38,14 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
     label: 'Details',
     headline: 'Product details',
     subtitle:
-      'Identity, inventory, and optional variations (size, color) — like Amazon Seller Central.',
+      'Choose Simple, Variable, or Grouped — then fill identity, options, and inventory.',
     iconName: 'layers',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.PRICING,
     label: 'Pricing',
-    headline: 'Offer pricing',
-    subtitle:
-      'Set your selling price and tax. For variations, edit each SKU under Details → Variations.',
+    headline: 'Pricing',
+    subtitle: 'Offer price for simple products. Variable SKUs are priced under Details.',
     iconName: 'indian-rupee',
   },
   {
@@ -85,8 +84,40 @@ export const LISTING_PUBLISH_IMAGE_HINTS = {
   ACCEPTED_FORMATS_LABEL: 'JPG, PNG, WebP',
 } as const
 
+/** WooCommerce / Amazon-style catalog structure (independent of physical/digital/service). */
+export const PRODUCT_STRUCTURES = {
+  SIMPLE: 'simple',
+  VARIABLE: 'variable',
+  GROUPED: 'grouped',
+} as const
+
+export type ProductStructure =
+  (typeof PRODUCT_STRUCTURES)[keyof typeof PRODUCT_STRUCTURES]
+
+export const PRODUCT_STRUCTURE_OPTIONS = [
+  {
+    value: PRODUCT_STRUCTURES.SIMPLE,
+    label: 'Simple product',
+    description: 'One SKU — price and stock on the Pricing step.',
+  },
+  {
+    value: PRODUCT_STRUCTURES.VARIABLE,
+    label: 'Variable product',
+    description: 'Options like size/color — each variation has its own price & stock.',
+  },
+  {
+    value: PRODUCT_STRUCTURES.GROUPED,
+    label: 'Grouped product',
+    description: 'A collection of related products sold together (no own price).',
+  },
+] as const
+
 /** Keys stored inside `listing_metadata` for vendor-only form fields. */
 export const LISTING_METADATA_KEYS = {
+  /** simple | variable | grouped — Amazon/WooCommerce product data type */
+  PRODUCT_STRUCTURE: 'product_structure',
+  /** Listing IDs included in a grouped product */
+  GROUPED_LISTING_IDS: 'grouped_listing_ids',
   PRICING_NOTES: 'pricing_notes',
   MIN_ORDER_QUANTITY: 'min_order_quantity',
   LOW_STOCK_THRESHOLD: 'low_stock_threshold',
@@ -108,6 +139,8 @@ export const LISTING_METADATA_KEYS = {
 } as const
 
 export const LISTING_PUBLISH_DEFAULT_METADATA = {
+  [LISTING_METADATA_KEYS.PRODUCT_STRUCTURE]: PRODUCT_STRUCTURES.SIMPLE,
+  [LISTING_METADATA_KEYS.GROUPED_LISTING_IDS]: [] as string[],
   [LISTING_METADATA_KEYS.PRICING_NOTES]: '',
   [LISTING_METADATA_KEYS.MIN_ORDER_QUANTITY]: '1',
   [LISTING_METADATA_KEYS.LOW_STOCK_THRESHOLD]: '5',
