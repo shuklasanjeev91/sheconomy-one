@@ -41,17 +41,34 @@ describe('launchNativeApp', () => {
     const store = new Map<string, string>()
     const docListeners = new Map<string, () => void>()
     const winListeners = new Map<string, () => void>()
+    const appended: { src?: string }[] = []
     const doc = {
       visibilityState: 'visible',
+      body: {
+        appendChild: (node: { src?: string }) => {
+          appended.push(node)
+          return node
+        },
+      },
+      createElement: (tag: string) => {
+        if (tag !== 'iframe') throw new Error(`unexpected element ${tag}`)
+        return {
+          style: { display: '' },
+          setAttribute: () => undefined,
+          src: '',
+          remove: () => undefined,
+        }
+      },
       addEventListener: (type: string, fn: () => void) => docListeners.set(type, fn),
       removeEventListener: (type: string) => docListeners.delete(type),
     }
     const win = {
-      location: { href: '' },
+      location: { href: '', pathname: '/', search: '' },
       localStorage: {
         getItem: (key: string) => store.get(key) ?? null,
         setItem: (key: string, value: string) => store.set(key, value),
       },
+      open: vi.fn(() => null),
       addEventListener: (type: string, fn: () => void) => winListeners.set(type, fn),
       removeEventListener: (type: string) => winListeners.delete(type),
       setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
@@ -59,7 +76,7 @@ describe('launchNativeApp', () => {
     }
     vi.stubGlobal('window', win)
     vi.stubGlobal('document', doc)
-    return { win, doc, docListeners }
+    return { win, doc, docListeners, appended }
   }
 
   afterEach(() => {
@@ -67,12 +84,13 @@ describe('launchNativeApp', () => {
     vi.unstubAllGlobals()
   })
 
-  it('remembers the app is installed once the page is hidden by it', () => {
-    const { win, doc, docListeners } = fakeBrowser()
+  it('hands off via a hidden iframe without assigning window.location', () => {
+    const { win, doc, docListeners, appended } = fakeBrowser()
     const onResult = vi.fn()
     expect(readAppInstalledHint()).toBeNull()
     launchNativeApp('sheconomy://co-work/meeting/ABC', { onResult })
-    expect(win.location.href).toBe('sheconomy://co-work/meeting/ABC')
+    expect(win.location.href).toBe('')
+    expect(appended[0]?.src).toBe('sheconomy://co-work/meeting/ABC')
     doc.visibilityState = 'hidden'
     docListeners.get('visibilitychange')?.()
     expect(onResult).toHaveBeenCalledWith(true)

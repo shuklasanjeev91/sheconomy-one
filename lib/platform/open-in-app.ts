@@ -66,9 +66,9 @@ function writeAppInstalledHint(installed: boolean) {
 }
 
 /**
- * Navigate to an app URL and learn whether the app took over. Safari's
- * "Open in app?" prompt can take a few seconds to answer, hence the long window.
- * Only automatic attempts record a miss so a cancelled tap never forgets the app.
+ * Hand off to the native app without unloading the SPA shell.
+ * Custom schemes / intents use a hidden iframe; http(s) store links open in a new tab.
+ * Never assigns `window.location` (that hard-reloads the Vite SPA).
  */
 export function launchNativeApp(
   target: string,
@@ -92,7 +92,27 @@ export function launchNativeApp(
   document.addEventListener('visibilitychange', onVisibility)
   window.addEventListener('pagehide', onHidden)
   const timer = window.setTimeout(() => finish(false), 6000)
-  window.location.href = target
+
+  if (/^https?:\/\//i.test(target)) {
+    const opened = window.open(target, '_blank', 'noopener,noreferrer')
+    if (opened) {
+      // Store tabs do not hide this page; settle as not-installed for auto attempts.
+      return
+    }
+  }
+
+  const iframe = document.createElement('iframe')
+  iframe.style.display = 'none'
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.src = target
+  document.body.appendChild(iframe)
+  window.setTimeout(() => {
+    try {
+      iframe.remove()
+    } catch {
+      // ignore
+    }
+  }, 2500)
 }
 
 export function buildSmartAppBannerContent(path = getWebPathForApp()): string {

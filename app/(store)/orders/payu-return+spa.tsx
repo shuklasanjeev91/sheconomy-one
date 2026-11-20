@@ -1,4 +1,4 @@
-import { useRouter, useLocalSearchParams } from 'one'
+import { useLocalSearchParams } from 'one'
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
@@ -10,6 +10,7 @@ import {
 } from '~/commerce/lib/customer-orders'
 import { Spinner, Text, YStack } from '~/components/ui'
 import { FullWidthLayout } from '~/components/layout'
+import { navigateApp } from '~/lib/platform/navigate'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -20,7 +21,6 @@ import { useAppUi } from '~/lib/theme/useAppUi'
  */
 export default function PayUReturnRoute() {
   const ui = useAppUi()
-  const router = useRouter()
   const params = useLocalSearchParams<{ status?: string; embed?: string; cg?: string; txn?: string }>()
   const [message, setMessage] = useState('Confirming payment…')
 
@@ -47,6 +47,7 @@ export default function PayUReturnRoute() {
               awaitingExternalPayment: false,
             })
           }
+          // Parent checkout listens and soft-navigates — never touch window.top.location.
           window.parent?.postMessage(
             {
               type: 'payu-embed-return',
@@ -57,24 +58,10 @@ export default function PayUReturnRoute() {
             window.location.origin,
           )
 
-          if (window.top && window.top !== window.self) {
-            const origin = window.location.origin
-            const target = ok
-              ? pending?.orderIds?.length
-                ? String(commerceRoutes.orderSuccess(pending.orderIds))
-                : String(commerceRoutes.orders)
-              : String(commerceRoutes.checkout)
-            try {
-              window.top.location.href = target.startsWith('http') ? target : `${origin}${target}`
-            } catch {
-              // sandbox may block — parent postMessage is the primary path
-            }
-          }
-
           setMessage(ok ? 'Payment received' : 'Payment was not completed')
           return
         } catch {
-          // fall through to full navigation
+          // fall through to soft navigation
         }
       }
 
@@ -91,7 +78,7 @@ export default function PayUReturnRoute() {
           }
           await clearPendingOrderSuccess()
           if (cancelled) return
-          router.replace(commerceRoutes.cart)
+          navigateApp(commerceRoutes.cart)
           return
         }
         if (pending?.orderIds?.length) {
@@ -100,10 +87,10 @@ export default function PayUReturnRoute() {
             awaitingExternalPayment: true,
           })
           if (cancelled) return
-          router.replace(commerceRoutes.orderSuccess(pending.orderIds))
+          navigateApp(commerceRoutes.orderSuccess(pending.orderIds))
           return
         }
-        router.replace(commerceRoutes.cart)
+        navigateApp(commerceRoutes.cart)
         return
       }
 
@@ -114,15 +101,15 @@ export default function PayUReturnRoute() {
           awaitingExternalPayment: true,
         })
         if (cancelled) return
-        router.replace(commerceRoutes.orderSuccess(pending.orderIds))
+        navigateApp(commerceRoutes.orderSuccess(pending.orderIds))
         return
       }
-      router.replace(commerceRoutes.orders)
+      navigateApp(commerceRoutes.orders)
     })()
     return () => {
       cancelled = true
     }
-  }, [embedParam, params.status, params.cg, params.txn, router])
+  }, [embedParam, params.status, params.cg, params.txn])
 
   if (embedParam && Platform.OS === 'web') {
     return (

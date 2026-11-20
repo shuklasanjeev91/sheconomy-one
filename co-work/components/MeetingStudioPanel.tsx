@@ -33,7 +33,7 @@ import {
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { MeetingParticipant } from '~/co-work/lib/types'
 import { Button, Field, Icons, Input, ScrollView, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
-import { Linking, Platform } from 'react-native'
+import { Linking } from 'react-native'
 
 type StudioTab = 'agenda' | 'notes' | 'actions' | 'room' | 'after'
 
@@ -588,11 +588,8 @@ export function MeetingStudioPanel({
                     subject: `Recap: ${meetingTitle}`,
                     body,
                   })
-                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                    window.location.href = href
-                  } else {
-                    void Linking.openURL(href)
-                  }
+                  // mailto: — Linking only; never window.location (unloads SPA).
+                  void Linking.openURL(href)
                 }}
               >
                 Email recap

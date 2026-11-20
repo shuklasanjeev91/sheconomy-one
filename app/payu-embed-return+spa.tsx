@@ -6,11 +6,10 @@ import {
   loadPendingOrderSuccess,
   savePendingOrderSuccess,
 } from '~/commerce/lib/customer-orders'
-import { commerceRoutes } from '~/lib/routes'
 
 /**
  * Minimal PayU 3DS / bank return — loads inside an iframe only.
- * Notifies parent checkout via postMessage and breaks out to order success.
+ * Notifies parent checkout via postMessage; parent soft-navigates with router.push.
  */
 export default function PayUEmbedReturnRoute() {
   const params = useLocalSearchParams<{ status?: string; txn?: string }>()
@@ -32,9 +31,9 @@ export default function PayUEmbedReturnRoute() {
       }
 
       const orderIds = pending?.orderIds ?? []
-      const origin = window.location.origin
 
       try {
+        // Parent CheckoutPayuPanel soft-navigates — never touch window.top.location.
         window.parent?.postMessage(
           {
             type: 'payu-embed-return',
@@ -42,25 +41,10 @@ export default function PayUEmbedReturnRoute() {
             txn,
             orderIds,
           },
-          origin,
+          window.location.origin,
         )
       } catch {
         // ignore
-      }
-
-      if (window.top && window.top !== window.self) {
-        const target = ok
-          ? orderIds.length
-            ? `/orders/success?ids=${encodeURIComponent(orderIds.join(','))}`
-            : String(commerceRoutes.orders)
-          : String(commerceRoutes.checkout)
-        try {
-          window.top.location.replace(
-            target.startsWith('http') ? target : `${origin}${target}`,
-          )
-        } catch {
-          // sandbox may block — parent postMessage is the primary path
-        }
       }
     })()
 

@@ -652,10 +652,7 @@ export function CheckoutPayuPanel({
       }
 
       if (data.outcome === 'redirect' && data.redirect_url) {
-        if (Platform.OS === 'web') {
-          window.location.href = data.redirect_url
-          return
-        }
+        // Keep the SPA mounted — bank/wallet redirect runs inside the ACS iframe.
         setAcsTitle('Continue to your bank / wallet')
         setAcsHtml(
           `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta http-equiv="refresh" content="0;url=${data.redirect_url.replace(/"/g, '')}"/></head><body><p>Redirecting…</p><a href="${data.redirect_url.replace(/"/g, '')}">Continue</a></body></html>`,

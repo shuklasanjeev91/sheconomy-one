@@ -69,9 +69,10 @@ export function OpenInAppHost() {
     }
 
     const timer = window.setTimeout(() => {
-      window.location.href = device.isAndroid
-        ? buildAndroidAutoIntentUrl(path)
-        : buildOpenInAppSchemeUrl(path)
+      launchNativeApp(
+        device.isAndroid ? buildAndroidAutoIntentUrl(path) : buildOpenInAppSchemeUrl(path),
+        { automatic: true },
+      )
     }, 400)
 
     return () => window.clearTimeout(timer)
@@ -165,7 +166,7 @@ function openNativeApp(isAndroid: boolean) {
   }
   launchNativeApp(buildOpenInAppSchemeUrl(path), {
     onResult: (opened) => {
-      if (!opened) window.location.href = IOS_APP_STORE_URL
+      if (!opened) launchNativeApp(IOS_APP_STORE_URL)
     },
   })
 }

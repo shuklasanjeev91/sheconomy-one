@@ -517,6 +517,59 @@ if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoader
 if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoaderData)) void preloadRoute(href, true);`,
               )
             },
+            // Error "Go Home" used window.location.href="/" — unload SPA on every recovery.
+            'dist/esm/views/ErrorBoundary.mjs': (contents) => {
+              if (!contents || contents.includes('sheconomy-soft-home')) return
+              return contents.replace(
+                /onClick: \(\) => \{\s*if \(typeof window !== "undefined"\) \{\s*window\.location\.href = "\/";\s*\}\s*\}/,
+                `onClick: () => {
+              // sheconomy-soft-home: never hard-reload the SPA shell
+              if (typeof window !== "undefined") {
+                window.history.pushState({}, "", "/");
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              }
+            }`,
+              )
+            },
+            'dist/esm/views/RootErrorBoundary.mjs': (contents) => {
+              if (!contents || contents.includes('sheconomy-soft-home')) return
+              return contents.replace(
+                /onClick: \(\) => \{\s*if \(typeof window !== "undefined"\) window\.location\.href = "\/";\s*\}/,
+                `onClick: () => {
+                // sheconomy-soft-home: never hard-reload the SPA shell
+                if (typeof window !== "undefined") {
+                  window.history.pushState({}, "", "/");
+                  window.dispatchEvent(new PopStateEvent("popstate"));
+                }
+              }`,
+              )
+            },
+            'dist/cjs/views/ErrorBoundary.cjs': (contents) => {
+              if (!contents || contents.includes('sheconomy-soft-home')) return
+              return contents.replace(
+                /onClick: \(\) => \{\s*if \(typeof window !== "undefined"\) \{\s*window\.location\.href = "\/";\s*\}\s*\}/,
+                `onClick: () => {
+              // sheconomy-soft-home: never hard-reload the SPA shell
+              if (typeof window !== "undefined") {
+                window.history.pushState({}, "", "/");
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              }
+            }`,
+              )
+            },
+            'dist/cjs/views/RootErrorBoundary.cjs': (contents) => {
+              if (!contents || contents.includes('sheconomy-soft-home')) return
+              return contents.replace(
+                /onClick: \(\) => \{\s*if \(typeof window !== "undefined"\) window\.location\.href = "\/";\s*\}/,
+                `onClick: () => {
+                // sheconomy-soft-home: never hard-reload the SPA shell
+                if (typeof window !== "undefined") {
+                  window.history.pushState({}, "", "/");
+                  window.dispatchEvent(new PopStateEvent("popstate"));
+                }
+              }`,
+              )
+            },
           },
           'whatwg-fetch': {
             'fetch.js': (contents) => {

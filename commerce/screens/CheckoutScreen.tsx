@@ -143,7 +143,6 @@ export function CheckoutScreen() {
   payuCheckoutMetaRef.current = payuCheckoutMeta
   const ensurePayuInFlight = useRef<Promise<CheckoutPayuSession | null> | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isRedirectingToPayment, setIsRedirectingToPayment] = useState(false)
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
@@ -581,7 +580,6 @@ export function CheckoutScreen() {
     !payuSession &&
     !noneSelected &&
     !isSubmitting &&
-    !isRedirectingToPayment &&
     !isLoadingAddresses &&
     contactCheckoutReady &&
     addressReady
@@ -888,8 +886,6 @@ export function CheckoutScreen() {
     setIsSubmitting(true)
 
     let shippingAddressId = selectedAddressId
-    /** Web Razorpay same-tab handoff — leave the button in a busy state until navigation. */
-    let keepSubmittingForRedirect = false
 
     try {
       // Validate stock up-front so a multi-shop order never places some orders
@@ -1071,20 +1067,8 @@ export function CheckoutScreen() {
       }
 
       if (next.kind === 'external_pay') {
-        const isRazorpayDirect = hasDirectSteps && !hasShepaySteps
-        if (Platform.OS === 'web' && isRazorpayDirect && typeof window !== 'undefined') {
-          // Same-tab redirect: razorpay-return handles the callback.
-          // Do NOT set orderPlaced — the page is destroyed immediately after redirect.
-          // The button switches to "Redirecting to payment…" for the brief moment before navigation.
-          keepSubmittingForRedirect = true
-          setIsRedirectingToPayment(true)
-          setTimeout(() => {
-            window.location.href = next.url
-          }, 120)
-          return
-        }
-        // Native / non-Razorpay external: navigate first, then open payment (never await
-        // Linking.openURL — it can hang while Safari is open and looks like infinite loading).
+        // Soft navigate to success, then open gateway outside the SPA shell.
+        // Never assign window.location — that hard-reloads the Vite shell.
         setOrderPlaced(true)
         replaceApp(successHref)
         void refresh()
@@ -1127,9 +1111,7 @@ export function CheckoutScreen() {
     } catch {
       toast.show('Checkout failed', { tone: 'danger', message: 'Please try again.' })
     } finally {
-      if (!keepSubmittingForRedirect) {
-        setIsSubmitting(false)
-      }
+      setIsSubmitting(false)
     }
   }
 
@@ -1175,7 +1157,7 @@ export function CheckoutScreen() {
         disabled={!canPlace}
         onPress={handlePlaceOrderPress}
       >
-        {isRedirectingToPayment ? 'Redirecting to payment…' : isSubmitting ? submittingLabel : placeLabel}
+        {isSubmitting ? submittingLabel : placeLabel}
       </CommerceButton>
     </YStack>
   )
@@ -1819,9 +1801,9 @@ export function CheckoutScreen() {
         formattedSavings={displayTotals.promotion > 0 ? formatCheckoutMoney(displayTotals.promotion) : null}
         caption={`Order total · ${unitCount} ${unitCount === 1 ? 'item' : 'items'}`}
         savings={displayTotals.promotion > 0 ? displayTotals.promotion : null}
-        label={isRedirectingToPayment ? 'Redirecting to payment…' : isSubmitting ? submittingLabel : placeLabel}
+        label={isSubmitting ? submittingLabel : placeLabel}
         disabled={!canPlace}
-        isLoading={isSubmitting || isRedirectingToPayment}
+        isLoading={isSubmitting}
         onPress={handlePlaceOrderPress}
         onHeightChange={setCheckoutBarHeight}
       />
