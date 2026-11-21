@@ -16,13 +16,10 @@ const richDescription =
   'Handwoven cotton stole crafted on a traditional loom with natural dyes. Soft, breathable, and made for everyday wear across seasons.'
 
 describe('listing image quality', () => {
-  it('requires at least 3 images to publish', () => {
-    const result = validateListingImagesQuality([
-      { image_url: 'a.jpg', width: 1600, height: 1600 },
-      { image_url: 'b.jpg', width: 1600, height: 1600 },
-    ])
+  it('requires at least 1 photo to publish', () => {
+    const result = validateListingImagesQuality([])
     expect(result.isValid).toBe(false)
-    expect(result.errors.images).toMatch(/3/)
+    expect(result.errors.images).toMatch(/1/)
   })
 
   it('rejects main images below 1000px', () => {
@@ -35,11 +32,10 @@ describe('listing image quality', () => {
     expect(result.errors.images).toMatch(/1000/)
   })
 
-  it('accepts three sharp images', () => {
+  it('accepts one sharp photo and ignores a single video', () => {
     const result = validateListingImagesQuality([
       { image_url: 'a.jpg', is_primary: true, width: 1600, height: 1600 },
-      { image_url: 'b.jpg', width: 1600, height: 1600 },
-      { image_url: 'c.jpg', width: 1600, height: 1600 },
+      { image_url: 'clip.mp4', image_type: 'video' },
     ])
     expect(result.isValid).toBe(true)
   })
@@ -94,24 +90,17 @@ describe('validateListingQuality', () => {
         price: 899,
         stock: 12,
         materials: [{ material_name: 'Cotton' }],
-        variations: [{ variation_type: 'Color', variation_value: 'Indigo' }],
-        images: [
-          { image_url: 'a.jpg', is_primary: true, width: 1600, height: 1600 },
-          { image_url: 'b.jpg', width: 1600, height: 1600 },
-          { image_url: 'c.jpg', width: 1600, height: 1600 },
-        ],
-        product_type_id: 'apparel-type',
-        item_condition: 'new',
-        product_identifier: {
-          product_id_type: 'none',
-          product_id_value: '',
-          gtin_exemption: true,
-          gtin_exemption_reason: 'handmade',
+        categories: [{ category_id: 'stoles', is_primary: true }],
+        who_made: 'i_did',
+        when_made: 'made_to_order',
+        what_is_it: 'finished_product',
+        weight: 180,
+        listing_metadata: {
+          package_length_cm: '30',
+          package_width_cm: '20',
+          package_height_cm: '2',
         },
-        attribute_values: [{ attribute_id: 'material', value_text: 'Cotton' }],
-        compliance_documents: [
-          { requirement_code: 'origin', document_type: 'pdf', file_url: 'shops/docs/origin.pdf' },
-        ],
+        images: [{ image_url: 'a.jpg', is_primary: true, width: 1600, height: 1600 }],
         product_info: {
           brand: 'SheLoom',
           generic_name: 'Cotton stole',
@@ -123,36 +112,6 @@ describe('validateListingQuality', () => {
           hsn_code: '6214',
         },
       }),
-      {
-        catalog: {
-          id: 'apparel-type',
-          code: 'apparel',
-          name: 'Apparel',
-          family: 'apparel',
-          variationThemes: [],
-          attributes: [
-            {
-              id: 'material',
-              code: 'material',
-              label: 'Material',
-              data_type: 'text',
-              is_required: true,
-              is_recommended: false,
-              is_variation_axis: false,
-              display_order: 1,
-              options: [],
-            },
-          ],
-          compliance: [
-            {
-              code: 'origin',
-              label: 'Country of origin certificate',
-              is_required: true,
-              document_types: ['pdf'],
-            },
-          ],
-        },
-      },
     )
     expect(result.isValid).toBe(true)
     expect(result.score).toBeGreaterThanOrEqual(80)

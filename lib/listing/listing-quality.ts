@@ -16,12 +16,11 @@ import {
   type ListingImageDraft,
   type ListingType,
 } from "~/lib/listing/listing.type";
-import type { ProductTypeCatalog } from "~/lib/listing/product-catalog";
 import {
-  validateProductIdentifier,
-  validateRequiredAttributes,
-  validateRequiredCompliance,
+  MAX_VARIATION_PROPERTIES,
+  validatePersonalization,
 } from "~/lib/listing/product-catalog";
+import { parseVariationAxes } from "~/commerce/lib/listing-variant-skus";
 
 export type ListingQualityIssue = {
   field: string;
@@ -68,13 +67,15 @@ export function validateListingImagesQuality(
   const errors: Record<string, string> = {};
   const warnings: string[] = [];
   const list = images ?? [];
-  const count = list.length;
+  const photos = list.filter((image) => image.image_type !== "video");
+  const videos = list.filter((image) => image.image_type === "video");
+  const count = photos.length;
 
   if (count < LISTING_IMAGE_CONSTRAINTS.MIN_COUNT_PUBLISH) {
     pushIssue(issues, errors, warnings, {
       field: "images",
       severity: "error",
-      message: `Upload at least ${LISTING_IMAGE_CONSTRAINTS.MIN_COUNT_PUBLISH} product images (main + detail shots).`,
+      message: `Upload at least ${LISTING_IMAGE_CONSTRAINTS.MIN_COUNT_PUBLISH} product photo.`,
     });
   } else if (count < LISTING_IMAGE_CONSTRAINTS.MIN_COUNT_RECOMMENDED) {
     pushIssue(issues, errors, warnings, {
@@ -88,11 +89,19 @@ export function validateListingImagesQuality(
     pushIssue(issues, errors, warnings, {
       field: "images",
       severity: "error",
-      message: `Maximum ${LISTING_IMAGE_CONSTRAINTS.MAX_COUNT} images per listing.`,
+      message: `Maximum ${LISTING_IMAGE_CONSTRAINTS.MAX_COUNT} photos per listing.`,
     });
   }
 
-  const primary = list.find((img) => img.is_primary) ?? list[0];
+  if (videos.length > LISTING_IMAGE_CONSTRAINTS.MAX_VIDEOS) {
+    pushIssue(issues, errors, warnings, {
+      field: "images",
+      severity: "error",
+      message: "Add only one video.",
+    });
+  }
+
+  const primary = photos.find((img) => img.is_primary) ?? photos[0];
   if (primary) {
     const edge = imageLongEdge(primary);
     if (edge != null && edge < LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX) {
@@ -120,8 +129,8 @@ export function validateListingImagesQuality(
     }
   }
 
-  for (let i = 0; i < list.length; i++) {
-    const edge = imageLongEdge(list[i]!);
+  for (let i = 0; i < photos.length; i++) {
+    const edge = imageLongEdge(photos[i]!);
     if (edge != null && edge < LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX) {
       pushIssue(issues, errors, warnings, {
         field: "images",
@@ -231,9 +240,70 @@ export function validatePhysicalProductInfoQuality(
 }
 
 /** Full publish quality gate for create + edit. */
+function validateVariationQuality(formData: Partial<ListingFormData>): ListingQualityResult {
+  const issues: ListingQualityIssue[] = [];
+  const errors: Record<string, string> = {};
+  const warnings: string[] = [];
+  const axes = parseVariationAxes(formData.listing_metadata);
+  if (axes.length > MAX_VARIATION_PROPERTIES) {
+    pushIssue(issues, errors, warnings, {
+      field: "variations",
+      severity: "error",
+      message: `Use at most ${MAX_VARIATION_PROPERTIES} variation properties.`,
+    });
+  }
+  const children = (formData.variations ?? []).filter((row) =>
+    String(row.variation_value ?? "").trim(),
+  );
+  const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>;
+  const pricesVary = meta.variation_prices_vary !== false;
+  const quantitiesVary = meta.variation_quantities_vary !== false;
+
+  if (!children.length) {
+    if (
+      formData.stock === "" ||
+      formData.stock === null ||
+      formData.stock === undefined
+    ) {
+      pushIssue(issues, errors, warnings, {
+        field: "stock",
+        severity: "error",
+        message: "Enter how many you have.",
+      });
+    }
+    return finalizeQuality(issues, errors, warnings);
+  }
+
+  if (children.some((row) => !String(row.variation_value ?? "").trim())) {
+    pushIssue(issues, errors, warnings, {
+      field: "variations",
+      severity: "error",
+      message: "Each variation needs an option value.",
+    });
+  }
+  if (pricesVary && children.some((row) => !Number.isFinite(Number(row.price)) || Number(row.price) < 0)) {
+    pushIssue(issues, errors, warnings, {
+      field: "variations",
+      severity: "error",
+      message: "Set a price on every variation.",
+    });
+  }
+  if (
+    quantitiesVary &&
+    children.some((row) => row.stock == null || !Number.isFinite(Number(row.stock)))
+  ) {
+    pushIssue(issues, errors, warnings, {
+      field: "variations",
+      severity: "error",
+      message: "Set a quantity on every variation.",
+    });
+  }
+  return finalizeQuality(issues, errors, warnings);
+}
+
 export function validateListingQuality(
   formData: Partial<ListingFormData>,
-  options: { requireDimensions?: boolean; catalog?: ProductTypeCatalog | null } = {},
+  options: { requireDimensions?: boolean } = {},
 ): ListingQualityResult {
   const issues: ListingQualityIssue[] = [];
   const errors: Record<string, string> = {};
@@ -247,6 +317,30 @@ export function validateListingQuality(
       field: "title",
       severity: "error",
       message: `Title must be at least ${LISTING_VALIDATION.TITLE.MIN_LENGTH} characters.`,
+    });
+  } else if (title.length > LISTING_VALIDATION.TITLE.MAX_LENGTH) {
+    pushIssue(issues, errors, warnings, {
+      field: "title",
+      severity: "error",
+      message: `Title must be ${LISTING_VALIDATION.TITLE.MAX_LENGTH} characters or fewer.`,
+    });
+  }
+
+  const tags = (formData.tags ?? []).map((tag) => tag.trim()).filter(Boolean);
+  if (tags.length > LISTING_VALIDATION.TAGS.MAX_COUNT) {
+    pushIssue(issues, errors, warnings, {
+      field: "tags",
+      severity: "error",
+      message: `Use at most ${LISTING_VALIDATION.TAGS.MAX_COUNT} tags.`,
+    });
+  }
+
+  const categoryCount = (formData.categories ?? []).length;
+  if (listingType !== LISTING_TYPES.SERVICE && categoryCount !== 1) {
+    pushIssue(issues, errors, warnings, {
+      field: "categories",
+      severity: "error",
+      message: "Choose one category.",
     });
   }
 
@@ -269,91 +363,67 @@ export function validateListingQuality(
     );
     mergeQuality(issues, errors, warnings, productResult);
 
-    // Materials & variations are optional (Amazon-style single-SKU default).
     if (!Array.isArray(formData.materials) || formData.materials.length === 0) {
       pushIssue(issues, errors, warnings, {
         field: "materials",
         severity: "warning",
-        message: "Add materials when relevant to help shoppers compare products.",
+        message: "Add materials when they help shoppers compare products.",
       });
     }
-    if (
-      Array.isArray(formData.variations) &&
-      formData.variations.some((row) => !String(row.variation_value ?? "").trim())
-    ) {
+    mergeQuality(issues, errors, warnings, validateVariationQuality(formData));
+    const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>;
+    const weight = Number(formData.weight);
+    if (!Number.isFinite(weight) || weight <= 0) {
       pushIssue(issues, errors, warnings, {
-        field: "variations",
+        field: "weight",
         severity: "error",
-        message: "Each variation needs an option value, or remove empty variations.",
+        message: "Enter the item weight.",
       });
     }
-    const hasChildSkus =
-      Array.isArray(formData.variations) &&
-      formData.variations.some((row) => String(row.variation_value ?? "").trim());
-    if (
-      !hasChildSkus &&
-      (formData.stock === "" ||
-        formData.stock === null ||
-        formData.stock === undefined)
-    ) {
-      pushIssue(issues, errors, warnings, {
-        field: "stock",
-        severity: "error",
-        message: "Enter quantity in stock for this product.",
-      });
+    for (const [field, label] of [
+      ["package_length_cm", "length"],
+      ["package_width_cm", "width"],
+      ["package_height_cm", "height"],
+    ] as const) {
+      const size = Number(meta[field]);
+      if (!Number.isFinite(size) || size <= 0) {
+        pushIssue(issues, errors, warnings, {
+          field,
+          severity: "error",
+          message: `Enter the package ${label}.`,
+        });
+      }
     }
+  }
 
-    if (!formData.product_type_id) {
+  if (listingType === LISTING_TYPES.PHYSICAL || listingType === LISTING_TYPES.DIGITAL) {
+    if (!formData.who_made) {
       pushIssue(issues, errors, warnings, {
-        field: "product_type_id",
+        field: "who_made",
         severity: "error",
-        message: "Choose what kind of product this is.",
+        message: "Say who made it.",
       });
     }
-    if (!formData.item_condition) {
+    if (!formData.when_made) {
       pushIssue(issues, errors, warnings, {
-        field: "item_condition",
+        field: "when_made",
         severity: "error",
-        message: "Say whether this is new, used, or refurbished.",
+        message: "Say when it was made.",
       });
     }
-    const identifierErrors = validateProductIdentifier(formData.product_identifier, {
-      required: true,
-    });
-    for (const [field, message] of Object.entries(identifierErrors)) {
-      pushIssue(issues, errors, warnings, { field, severity: "error", message });
+    if (!formData.what_is_it) {
+      pushIssue(issues, errors, warnings, {
+        field: "what_is_it",
+        severity: "error",
+        message: "Say whether this is a finished product or a supply.",
+      });
     }
-    const attributeErrors = validateRequiredAttributes(
-      options.catalog,
-      formData.attribute_values,
-    );
-    for (const [field, message] of Object.entries(attributeErrors)) {
-      pushIssue(issues, errors, warnings, { field, severity: "error", message });
-    }
-    const complianceErrors = validateRequiredCompliance(
-      options.catalog,
-      formData.compliance_documents,
-    );
-    for (const [field, message] of Object.entries(complianceErrors)) {
+    for (const [field, message] of Object.entries(validatePersonalization(formData))) {
       pushIssue(issues, errors, warnings, { field, severity: "error", message });
     }
   }
 
   if (listingType === LISTING_TYPES.DIGITAL) {
-    if (!formData.product_type_id) {
-      pushIssue(issues, errors, warnings, {
-        field: "product_type_id",
-        severity: "error",
-        message: "Choose what kind of product this is.",
-      });
-    }
-    const attributeErrors = validateRequiredAttributes(
-      options.catalog,
-      formData.attribute_values,
-    );
-    for (const [field, message] of Object.entries(attributeErrors)) {
-      pushIssue(issues, errors, warnings, { field, severity: "error", message });
-    }
     if (!String(formData.digital_file_url ?? "").trim()) {
       pushIssue(issues, errors, warnings, {
         field: "digital_file_url",

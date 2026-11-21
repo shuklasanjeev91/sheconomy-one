@@ -38,8 +38,6 @@ import type { PickedImage } from '~/lib/media/pick-image'
 import { commerceRoutes } from '~/lib/routes'
 import { supabase, type Json, type Tables, type TablesInsert, type TablesUpdate } from '~/lib/supabase'
 import { uploadCategoryImage } from '~/lib/supabase/storage-upload'
-import { ProductTypeCatalogPanel } from '~/app/admin/components/ProductTypeCatalogPanel'
-
 type CategoryRow = Tables<'categories'>
 type CategoryInsert = TablesInsert<'categories'>
 type CategoryUpdate = TablesUpdate<'categories'>
@@ -420,8 +418,6 @@ function AdminCategoriesManager() {
         </YStack>
         <Button icon={Icons.Plus} onPress={() => openCreate(null)}>Create main category</Button>
       </XStack>
-
-      <ProductTypeCatalogPanel />
 
       {error ? (
         <YStack padding="$3" borderRadius={radius.card} backgroundColor="$red3" borderWidth={1} borderColor="$red7">

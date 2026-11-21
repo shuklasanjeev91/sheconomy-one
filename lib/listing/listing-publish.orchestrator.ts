@@ -723,15 +723,9 @@ export const listingPublishOrchestrator = {
               publishData.attributes,
             )
             if (!created.success) return created
-            const variationStep = publishResult.detailed_results?.[PUBLISH_STEPS.VARIATIONS] as
-              | { temp_key_to_variation_id?: Record<string, string> }
-              | undefined
-            const tempMap = new Map(Object.entries(variationStep?.temp_key_to_variation_id ?? {}))
             const catalog = await replaceListingCatalog(
               publishResult.listing_id as string,
               publishData,
-              publishData.shop_id,
-              tempMap,
             )
             if (!catalog.success) {
               return { success: false, error: catalog.error ?? 'Could not save product details.' }

@@ -1,16 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'one'
 
 import { ListingPublishErrorBoundary } from '~/commerce/components/ListingPublishErrorBoundary'
 import { PageCenter } from '~/components/layout'
 import { Button, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import type { ListingDraftFromImageResult } from '~/lib/ai/client'
-import { draftListingFromImage } from '~/lib/ai/client'
-import { listingImageDraftToDataUrl } from '~/commerce/lib/listing-image-data-url'
-import { searchCategories } from '~/lib/listing/listing-categories.service'
-import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
-import type { PickedImage } from '~/lib/media/pick-image'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { loadAttributes } from '~/lib/listing/listing-attributes.store'
 import { loadImages } from '~/lib/listing/listing-images.store'
@@ -27,7 +21,6 @@ import {
   LISTING_STATUS,
   LISTING_TYPES,
   type ListingFormData,
-  type ListingImageDraft,
   type ListingType,
 } from '~/lib/listing/listing.type'
 import { validateListingField } from '~/lib/listing/listing.validation'
@@ -47,60 +40,26 @@ import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
+import { EtsyListingForm, scrollToListingSection } from '~/commerce/components/vendor/listing-publish/EtsyListingForm'
 import { ListingPublishFooter } from '~/commerce/components/vendor/listing-publish/ListingPublishFooter'
-import {
-  ListingPublishPageHeader,
-  ListingPublishStepNav,
-} from '~/commerce/components/vendor/listing-publish/ListingPublishStepNav'
-import { ListingTypeChooser } from '~/commerce/components/vendor/listing-publish/ListingTypeChooser'
-import {
-  getListingPublishSteps,
-  LISTING_PUBLISH_COPY,
-  LISTING_PUBLISH_STEP_IDS,
-  type ListingPublishStepId,
-} from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import { ListingPublishPageHeader } from '~/commerce/components/vendor/listing-publish/ListingPublishStepNav'
+import { LISTING_PUBLISH_COPY } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import {
   buildFormFromListingDetails,
   ensureImageBlobsForPublish,
   findStepForErrors,
   formDataToPublishPayload,
   mergeListingMetadata,
-  resolveProductStructure,
   updateListingMetadataField,
   validateDraftForm,
   validateFullPublishForm,
-  validatePublishStep,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 import { fetchShopAddressDetails } from '~/commerce/lib/shop-address'
 import { seedDefaultWarehouseFromListing } from '~/commerce/lib/warehouse-inventory'
-import { BasicInfoStep } from '~/commerce/components/vendor/listing-publish/steps/BasicInfoStep'
-import { CategoriesStep } from '~/commerce/components/vendor/listing-publish/steps/CategoriesStep'
-import { DetailsStep } from '~/commerce/components/vendor/listing-publish/steps/DetailsStep'
-import { ImagesStep } from '~/commerce/components/vendor/listing-publish/steps/ImagesStep'
-import { PricingStep } from '~/commerce/components/vendor/listing-publish/steps/PricingStep'
-import { SeoStep } from '~/commerce/components/vendor/listing-publish/steps/SeoStep'
-import { IdentityStep } from '~/commerce/components/vendor/listing-publish/steps/IdentityStep'
-import { ComplianceStep } from '~/commerce/components/vendor/listing-publish/steps/ComplianceStep'
-import { AplusStep } from '~/commerce/components/vendor/listing-publish/steps/AplusStep'
 import { resolveCountryCode } from '~/lib/geo'
 import { supabase } from '~/lib/supabase'
-import { variationAxisNames, type ProductTypeCatalog } from '~/lib/listing/product-catalog'
-import {
-  getProductTypeCatalog,
-  listActiveProductTypes,
-  loadListingCatalogChildren,
-} from '~/lib/listing/product-catalog.service'
+import { loadListingCatalogChildren } from '~/lib/listing/product-catalog.service'
 
-function pickedToDraft(picked: PickedImage, order: number): ListingImageDraft {
-  return {
-    image_url: picked.uri,
-    mimeType: picked.mimeType,
-    fileName: picked.fileName,
-    blob: picked.file,
-    is_primary: order === 0,
-    display_order: order,
-  }
-}
 async function settleOr<T>(promise: Promise<T>, fallback: T): Promise<T> {
   try {
     return await promise
@@ -158,26 +117,15 @@ function VendorListingPublishContent() {
   const publishProgress = useAppSelector(selectPublishProgressInfo)
   const { currencySymbol } = useVendorCurrency()
 
-  const [activeStep, setActiveStep] = useState<ListingPublishStepId>(LISTING_PUBLISH_STEP_IDS.BASIC)
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({})
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
-  const [hydrated, setHydrated] = useState(!isEditMode)
+  const [hydrated, setHydrated] = useState(!hydrateListingId)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [writingListing, setWritingListing] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
-  // New listings start on the type chooser; the form is built around that answer.
-  const [typeConfirmed, setTypeConfirmed] = useState(isEditMode)
-  // The form seeds a physical listing, but nothing is "chosen" until the vendor says so.
-  const [typePicked, setTypePicked] = useState(isEditMode)
-  const [sellerCountryCode, setSellerCountryCode] = useState(
-    shop?.shop_currency === 'INR' ? 'IN' : 'IN',
-  )
-  const [productTypes, setProductTypes] = useState<
-    { id: string; name: string; family: string; category_id: string | null }[]
-  >([])
-  const [productCatalog, setProductCatalog] = useState<ProductTypeCatalog | null>(null)
+  const [sellerCountryCode, setSellerCountryCode] = useState('IN')
   const [deliveryProfiles, setDeliveryProfiles] = useState<{ id: string; profile_name: string }[]>([])
   const [returnPolicies, setReturnPolicies] = useState<{ id: string; policy_name: string }[]>([])
+  const [shopSections, setShopSections] = useState<{ id: string; section_name: string }[]>([])
 
   useEffect(() => {
     if (!shop?.id) return
@@ -190,16 +138,6 @@ function VendorListingPublishContent() {
       cancelled = true
     }
   }, [shop?.id])
-
-  useEffect(() => {
-    let cancelled = false
-    void listActiveProductTypes().then((result) => {
-      if (!cancelled && result.success) setProductTypes(result.data ?? [])
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
     if (!shop?.id) return
@@ -215,42 +153,21 @@ function VendorListingPublishContent() {
         .select('id, policy_name')
         .eq('shop_id', shop.id)
         .eq('is_active', true),
-    ]).then(([delivery, returns]) => {
+      supabase
+        .from('shop_sections')
+        .select('id, section_name')
+        .eq('shop_id', shop.id)
+        .eq('is_active', true),
+    ]).then(([delivery, returns, sections]) => {
       if (cancelled) return
       setDeliveryProfiles(delivery.data ?? [])
       setReturnPolicies(returns.data ?? [])
+      setShopSections(sections.data ?? [])
     })
     return () => {
       cancelled = true
     }
   }, [shop?.id])
-
-  useEffect(() => {
-    const typeId = formData.product_type_id
-    if (!typeId) {
-      setProductCatalog(null)
-      return
-    }
-    let cancelled = false
-    void getProductTypeCatalog(typeId).then((result) => {
-      if (!cancelled) setProductCatalog(result.success ? result.data : null)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [formData.product_type_id])
-
-  useEffect(() => {
-    if (formData.product_type_id || !productTypes.length) return
-    const primary =
-      formData.categories?.find((row) => row.is_primary) ?? formData.categories?.[0]
-    if (!primary) return
-    const match = productTypes.find((type) => type.category_id === primary.category_id)
-    if (match) dispatch(updateListingField({ field: 'product_type_id', value: match.id }))
-  }, [dispatch, formData.categories, formData.product_type_id, productTypes])
-
-  const shopSlug =
-    shop?.slug || shop?.shop_name?.toLowerCase().replace(/\s+/g, '-') || 'shop'
 
   useEffect(() => {
     if (!hydrateListingId) {
@@ -277,11 +194,11 @@ function VendorListingPublishContent() {
       // whole composer — hydrate what loaded and let the vendor re-enter the rest.
       const [imagesResult, variationsResult, materialsResult, attributesResult, categoriesResult, catalogResult] =
         await Promise.all([
-          settleOr(dispatch(loadImages(listingId)).unwrap(), { items: [] }),
-          settleOr(dispatch(loadVariations(listingId)).unwrap(), { items: [] }),
-          settleOr(dispatch(loadMaterials(listingId)).unwrap(), { items: [] }),
-          settleOr(dispatch(loadAttributes(listingId)).unwrap(), { items: [] }),
-          settleOr(dispatch(loadListingCategories(listingId)).unwrap(), { rows: [] }),
+          settleOr(dispatch(loadImages(listingId)).unwrap(), { listingId, items: [] }),
+          settleOr(dispatch(loadVariations(listingId)).unwrap(), { listingId, items: [] }),
+          settleOr(dispatch(loadMaterials(listingId)).unwrap(), { listingId, items: [] }),
+          settleOr(dispatch(loadAttributes(listingId)).unwrap(), { listingId, items: [] }),
+          settleOr(dispatch(loadListingCategories(listingId)).unwrap(), { listingId, rows: [] }),
           loadListingCatalogChildren(listingId),
         ])
       if (cancelled) return
@@ -301,9 +218,6 @@ function VendorListingPublishContent() {
 
       dispatch(loadFormFromListing(hydratedForm))
       if (isDuplicateMode) {
-        setTypePicked(true)
-        setTypeConfirmed(true)
-        setActiveStep(LISTING_PUBLISH_STEP_IDS.IDENTITY)
         toast.show('Listing copied', {
           tone: 'success',
           message: 'Review the copy, then save as draft or publish.',
@@ -369,42 +283,6 @@ function VendorListingPublishContent() {
     [dispatch, formData.listing_metadata],
   )
 
-  const handleChangeType = useCallback(
-    (type: ListingType) => {
-      if (type === formData.listing_type) return
-      // Swap only the type-specific fields — everything the vendor already typed carries over.
-      dispatch(
-        loadFormFromListing({
-          ...seedFormForType(type, shop?.id),
-          title: formData.title,
-          description: formData.description,
-          tags: formData.tags,
-          categories: formData.categories,
-          images: formData.images,
-          price: formData.price,
-          quantity: formData.quantity,
-          is_featured: formData.is_featured,
-          slug: formData.slug,
-          meta_title: formData.meta_title,
-          meta_description: formData.meta_description,
-          listing_metadata: formData.listing_metadata,
-        }),
-      )
-      setLastSavedAt(new Date().toISOString())
-    },
-    [dispatch, formData, shop?.id],
-  )
-
-  const handleConfirmType = useCallback(
-    (type: ListingType) => {
-      handleChangeType(type)
-      setTypePicked(true)
-      setTypeConfirmed(true)
-      setActiveStep(LISTING_PUBLISH_STEP_IDS.IDENTITY)
-    },
-    [handleChangeType],
-  )
-
   const handleAddTag = useCallback(
     (tag: string) => {
       const normalized = tag.trim()
@@ -428,13 +306,10 @@ function VendorListingPublishContent() {
       const current = formData.categories ?? []
       const exists = current.some((row) => row.category_id === categoryId)
       if (exists) {
-        updateField(
-          'categories',
-          current.filter((row) => row.category_id !== categoryId),
-        )
+        updateField('categories', [])
         return
       }
-      updateField('categories', [...current, { category_id: categoryId, is_primary: current.length === 0 }])
+      updateField('categories', [{ category_id: categoryId, is_primary: true }])
     },
     [formData.categories, updateField],
   )
@@ -450,133 +325,6 @@ function VendorListingPublishContent() {
     [updateField],
   )
 
-  const handleApplyAiDraft = useCallback(
-    async (draft: ListingDraftFromImageResult) => {
-      updateField('title', draft.title)
-      updateField('description', draft.description)
-      if (draft.tags.length) {
-        const existing = new Set((formData.tags ?? []).map((tag) => tag.toLowerCase()))
-        const merged = [...(formData.tags ?? [])]
-        for (const tag of draft.tags) {
-          const normalized = tag.trim()
-          if (!normalized || existing.has(normalized.toLowerCase())) continue
-          existing.add(normalized.toLowerCase())
-          merged.push(normalized)
-        }
-        updateField('tags', merged.slice(0, 12))
-      }
-      if (draft.suggestedPriceInr != null && draft.suggestedPriceInr > 0) {
-        const currentPrice = Number(formData.price ?? 0)
-        if (!currentPrice) {
-          updateField('price', draft.suggestedPriceInr)
-        }
-      }
-      if (draft.metaTitle) updateField('meta_title', draft.metaTitle)
-      if (draft.metaDescription) updateField('meta_description', draft.metaDescription)
-      const hint = draft.categoryHint?.trim() ?? ''
-      if (hint.length >= 2) {
-        const found = await searchCategories(hint, { limit: 8 })
-        const rows = found.data ?? []
-        const lowered = hint.toLowerCase()
-        const match =
-          rows.find((row) => row.category.toLowerCase() === lowered) ??
-          rows.find(
-            (row) =>
-              row.category.toLowerCase().includes(lowered) ||
-              lowered.includes(row.category.toLowerCase()),
-          )
-        const current = formData.categories ?? []
-        if (match && !current.some((row) => row.category_id === match.category_id)) {
-          updateField('categories', [
-            ...current,
-            { category_id: match.category_id, is_primary: current.length === 0 },
-          ])
-        }
-      }
-      toast.show('Listing draft ready', {
-        tone: 'success',
-        message: draft.priceNote || 'Review the title, description, and price before publishing.',
-      })
-      setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
-    },
-    [formData.categories, formData.price, formData.tags, toast, updateField],
-  )
-
-  const writeWithAi = useCallback(async () => {
-    if (writingListing) return
-    setWritingListing(true)
-    try {
-      let primary = (formData.images ?? []).find((image) => image.is_primary) ?? formData.images?.[0]
-      if (!primary) {
-        const picked = await pickImagesWithCrop({
-          multiple: false,
-          maxCount: 1,
-          aspect: 'listing',
-          cropTitle: 'Crop listing photo',
-        })
-        const file = picked[0]
-        if (!file) return
-        const image = pickedToDraft(file, 0)
-        updateField('images', [image])
-        primary = image
-      }
-      const dataUrl = await listingImageDraftToDataUrl(primary)
-      const draft = await draftListingFromImage({ dataUrl })
-      await handleApplyAiDraft(draft)
-    } catch (error) {
-      toast.show('Could not draft listing', {
-        tone: 'danger',
-        message:
-          error instanceof Error
-            ? error.message
-            : "Couldn't read this photo. Try a clearer product picture.",
-      })
-    } finally {
-      setWritingListing(false)
-    }
-  }, [formData.images, handleApplyAiDraft, toast, updateField, writingListing])
-
-  const productStructure = resolveProductStructure(formData)
-  const visibleSteps = useMemo(
-    () => getListingPublishSteps(productStructure),
-    [productStructure],
-  )
-  const stepIndex = useMemo(
-    () => Math.max(0, visibleSteps.findIndex((step) => step.id === activeStep)),
-    [activeStep, visibleSteps],
-  )
-  const stepConfig = visibleSteps[stepIndex] ?? visibleSteps[0]
-  const furthestStepIndex = visibleSteps.length - 1
-  const isLastStep = stepIndex >= visibleSteps.length - 1
-
-  const goToStep = useCallback((step: ListingPublishStepId) => {
-    setActiveStep(step)
-  }, [])
-
-  const goNext = useCallback(() => {
-    if (isLastStep) return
-    const result = validatePublishStep(activeStep, formData, productCatalog)
-    setStepErrors(result.errors)
-    if (!result.isValid) {
-      toast.show('Fix this tab to continue', {
-        tone: 'danger',
-        message: Object.values(result.errors)[0] ?? `Complete ${stepConfig.label}.`,
-      })
-      return
-    }
-    const next = visibleSteps[stepIndex + 1]
-    if (next) setActiveStep(next.id)
-  }, [activeStep, formData, isLastStep, productCatalog, stepConfig.label, stepIndex, toast, visibleSteps])
-
-  const goBack = useCallback(() => {
-    if (stepIndex === 0) {
-      router.push(vendorRoutes.products)
-      return
-    }
-    const prev = visibleSteps[stepIndex - 1]
-    if (prev) setActiveStep(prev.id)
-  }, [router, stepIndex, visibleSteps])
-
   const saveDraft = useCallback(async () => {
     if (!shop?.id) {
       toast.show('No shop selected', { tone: 'danger', message: 'Create a shop before adding products.' })
@@ -586,7 +334,7 @@ function VendorListingPublishContent() {
     const draft = validateDraftForm(formData)
     if (!draft.isValid) {
       setStepErrors(draft.errors)
-      setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
+      scrollToListingSection('about')
       toast.show('Add a title first', {
         tone: 'danger',
         message: Object.values(draft.errors)[0] ?? 'Please complete required fields.',
@@ -663,11 +411,11 @@ function VendorListingPublishContent() {
       return
     }
 
-    const full = validateFullPublishForm(formData, productCatalog)
+    const full = validateFullPublishForm(formData)
     if (!full.isValid) {
       setStepErrors(full.errors)
       const failingStep = findStepForErrors(full.errors)
-      if (failingStep) setActiveStep(failingStep)
+      if (failingStep) scrollToListingSection(failingStep)
       toast.show('Fix validation errors', {
         tone: 'danger',
         message: Object.values(full.errors)[0] ?? 'Please complete required fields.',
@@ -736,7 +484,6 @@ function VendorListingPublishContent() {
     kycAllowsSelling,
     kycLoading,
     router,
-    productCatalog,
     shop?.id,
     toast,
   ])
@@ -808,25 +555,11 @@ function VendorListingPublishContent() {
   // Room for the fixed footer so the last fields stay scrollable above it.
   const footerClearance = isDesktop ? 96 : 120
 
-  if (!typeConfirmed) {
-    return (
-      <YStack flex={1} minHeight={0} width="100%" backgroundColor={ui.background}>
-        <YStack
-          width="100%"
-          paddingHorizontal={isDesktop ? '$6' : '$3'}
-          paddingTop={isDesktop ? '$5' : '$3'}
-          gap="$4"
-        >
-          <ListingTypeChooser
-            ui={ui}
-            isDesktop={isDesktop}
-            selected={typePicked ? formData.listing_type : undefined}
-            onSelect={handleConfirmType}
-          />
-        </YStack>
-      </YStack>
-    )
-  }
+  const pageTitle = isEditMode
+    ? LISTING_PUBLISH_COPY.PAGE_TITLE_EDIT
+    : isDuplicateMode
+      ? LISTING_PUBLISH_COPY.PAGE_TITLE_DUPLICATE
+      : LISTING_PUBLISH_COPY.PAGE_TITLE_CREATE
 
   return (
     <YStack
@@ -852,148 +585,28 @@ function VendorListingPublishContent() {
         <ListingPublishPageHeader
           ui={ui}
           isDesktop={isDesktop}
-          headline={stepConfig.headline}
-          subtitle={stepConfig.subtitle}
+          headline={pageTitle}
+          subtitle="Photos, price, variations, shipping, and who made it. Save a draft any time."
         />
 
-        <ListingPublishStepNav
+        <EtsyListingForm
           ui={ui}
-          activeStep={activeStep}
-          steps={visibleSteps}
-          furthestStepIndex={furthestStepIndex}
+          formData={formData}
+          errors={displayErrors}
           isDesktop={isDesktop}
-          onSelect={goToStep}
+          currencySymbol={currencySymbol}
+          sellerCountryCode={sellerCountryCode}
+          deliveryProfiles={deliveryProfiles}
+          returnPolicies={returnPolicies}
+          shopSections={shopSections}
+          onUpdate={updateField}
+          onUpdateMetadata={updateMetadata}
+          onChangeImages={handleChangeImages}
+          onAddTag={handleAddTag}
+          onRemoveTag={handleRemoveTag}
+          onToggleCategory={handleToggleCategory}
+          onClearCategories={handleClearCategories}
         />
-
-        <YStack flex={1} minWidth={280} gap="$4" width="100%">
-          {activeStep === LISTING_PUBLISH_STEP_IDS.IDENTITY ? (
-            <IdentityStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              productTypes={productTypes}
-              onUpdate={updateField}
-            />
-          ) : null}
-
-          {activeStep === LISTING_PUBLISH_STEP_IDS.BASIC ? (
-            <BasicInfoStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              isDesktop={isDesktop}
-              onEditType={() => setTypeConfirmed(false)}
-              onUpdate={updateField}
-              onAddTag={handleAddTag}
-              onRemoveTag={handleRemoveTag}
-              onWriteWithAi={() => void writeWithAi()}
-              writingWithAi={writingListing}
-            />
-          ) : null}
-
-          {activeStep === LISTING_PUBLISH_STEP_IDS.IMAGES ? (
-            <ImagesStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              isDesktop={isDesktop}
-              onChangeImages={handleChangeImages}
-              onApplyAiDraft={handleApplyAiDraft}
-            />
-          ) : null}
-
-          {activeStep === LISTING_PUBLISH_STEP_IDS.VARIANTS ? (
-            <PricingStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              currencySymbol={currencySymbol}
-              isDesktop={isDesktop}
-              sellerCountryCode={sellerCountryCode}
-              panel="variants"
-              axisNames={variationAxisNames(productCatalog)}
-              onUpdate={updateField}
-              onUpdateMetadata={updateMetadata}
-            />
-          ) : null}
-
-          {activeStep === LISTING_PUBLISH_STEP_IDS.PRICING ? (
-            <PricingStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              currencySymbol={currencySymbol}
-              isDesktop={isDesktop}
-              sellerCountryCode={sellerCountryCode}
-              panel="type-and-price"
-              onUpdate={updateField}
-              onUpdateMetadata={updateMetadata}
-            />
-          ) : null}
-
-          {activeStep === LISTING_PUBLISH_STEP_IDS.DETAILS ? (
-            <DetailsStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              sellerCountryCode={sellerCountryCode}
-              section="details"
-              catalog={productCatalog}
-              onUpdate={updateField}
-              onUpdateMetadata={updateMetadata}
-            />
-          ) : null}
-
-          {activeStep === LISTING_PUBLISH_STEP_IDS.COMPLIANCE ? (
-            <ComplianceStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              catalog={productCatalog}
-              onUpdate={updateField}
-            />
-          ) : null}
-
-          {activeStep === LISTING_PUBLISH_STEP_IDS.APLUS ? (
-            <AplusStep ui={ui} formData={formData} onUpdate={updateField} />
-          ) : null}
-
-          {activeStep === LISTING_PUBLISH_STEP_IDS.SHIPPING ? (
-            <DetailsStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              sellerCountryCode={sellerCountryCode}
-              section="shipping"
-              deliveryProfiles={deliveryProfiles}
-              returnPolicies={returnPolicies}
-              onUpdate={updateField}
-              onUpdateMetadata={updateMetadata}
-            />
-          ) : null}
-
-          {activeStep === LISTING_PUBLISH_STEP_IDS.CATEGORIES ? (
-            <CategoriesStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              onToggleCategory={handleToggleCategory}
-              onClearCategories={handleClearCategories}
-            />
-          ) : null}
-
-          {activeStep === LISTING_PUBLISH_STEP_IDS.SEO ? (
-            <SeoStep
-              ui={ui}
-              formData={formData}
-              errors={displayErrors}
-              shopSlug={shopSlug}
-              isDesktop={isDesktop}
-              onUpdate={updateField}
-              onUpdateMetadata={updateMetadata}
-            />
-          ) : null}
-        </YStack>
       </YStack>
 
       <YStack
@@ -1015,10 +628,10 @@ function VendorListingPublishContent() {
           lastSavedAt={lastSavedAt}
           isSaving={isSaving}
           isPublishing={publishProgress.isPublishing}
-          showPublish={isLastStep || isDesktop}
-          isFirstStep={stepIndex === 0}
-          onBack={goBack}
-          onNext={goNext}
+          showPublish
+          isFirstStep
+          onBack={() => router.push(vendorRoutes.products)}
+          onNext={() => void publishListingNow()}
           onSaveDraft={() => void saveDraft()}
           onPublish={() => void publishListingNow()}
         />

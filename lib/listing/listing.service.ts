@@ -28,11 +28,7 @@ import { replaceAttributes } from '~/lib/listing/listing-attributes.service'
 import { replaceMaterials } from '~/lib/listing/listing-materials.service'
 import { replaceVariations } from '~/lib/listing/listing-variations.service'
 import { listingCompletenessHint } from '~/lib/listing/product-catalog'
-import {
-  getProductTypeCatalog,
-  loadListingCatalogChildren,
-  replaceListingCatalog,
-} from '~/lib/listing/product-catalog.service'
+import { loadListingCatalogChildren, replaceListingCatalog } from '~/lib/listing/product-catalog.service'
 import {
   LISTING_PAGE_SIZE,
   LISTING_STATUS,
@@ -87,6 +83,13 @@ export type ListingDetails = ListingDetailsView & {
   price_includes_tax?: boolean | null
   tax_percent?: number | null
   product_info?: Listing['product_info'] | null
+  who_made?: string | null
+  when_made?: string | null
+  what_is_it?: string | null
+  personalization_enabled?: boolean | null
+  personalization_instructions?: string | null
+  personalization_char_limit?: number | null
+  personalization_required?: boolean | null
 }
 
 // ============= SHOP CATALOGUE (owner / admin) =============
@@ -180,11 +183,8 @@ export async function getShopListings(
         `
         id, title, slug, description, price, quantity, listing_type, listing_status,
         is_active, is_featured, is_online, created_at, updated_at, sku,
-        product_type_id, item_condition,
-        listing_images ( image_url, is_primary, display_order ),
-        listing_product_identifiers ( product_id_type, product_id_value, gtin_exemption, gtin_exemption_reason, variation_id ),
-        listing_compliance_documents ( requirement_code, file_url ),
-        listing_attribute_values ( attribute_id, value_text, value_number, value_boolean, value_json )
+        who_made, when_made, what_is_it,
+        listing_images ( image_url, is_primary, display_order )
       `,
       )
       .eq('shop_id', shopId)
@@ -210,61 +210,22 @@ export async function getShopListings(
 
     const rows = (data ?? []) as Array<
       ListingCatalogRow & {
-        product_type_id?: string | null
-        item_condition?: string | null
-        listing_product_identifiers?: Array<{
-          product_id_type: string
-          product_id_value: string | null
-          gtin_exemption: boolean
-          gtin_exemption_reason: string | null
-          variation_id: string | null
-        }> | null
-        listing_compliance_documents?: Array<{
-          requirement_code: string
-          file_url: string
-        }> | null
-        listing_attribute_values?: Array<{
-          attribute_id: string
-          value_text: string | null
-          value_number: number | null
-          value_boolean: boolean | null
-          value_json: unknown
-        }> | null
+        who_made?: string | null
+        when_made?: string | null
+        what_is_it?: string | null
       }
     >
-    const typeIds = [
-      ...new Set(rows.map((row) => row.product_type_id).filter((id): id is string => Boolean(id))),
-    ]
-    const catalogPairs = await Promise.all(
-      typeIds.map(async (id) => {
-        const catalog = await getProductTypeCatalog(id)
-        return [id, catalog.data] as const
-      }),
-    )
-    const catalogById = new Map(catalogPairs)
     return ok(
-      rows.map((row) => {
-        const parent = (row.listing_product_identifiers ?? []).find((item) => !item.variation_id)
-        return {
-          ...mapCatalogRowToShopListing(row),
-          completeness_hint: listingCompletenessHint({
-            listingType: row.listing_type,
-            productTypeId: row.product_type_id,
-            itemCondition: row.item_condition,
-            identifier: parent
-              ? {
-                  product_id_type: parent.product_id_type as 'upc' | 'ean' | 'gtin' | 'isbn' | 'none',
-                  product_id_value: parent.product_id_value,
-                  gtin_exemption: parent.gtin_exemption,
-                  gtin_exemption_reason: parent.gtin_exemption_reason,
-                }
-              : null,
-            attributeValues: row.listing_attribute_values ?? [],
-            documents: row.listing_compliance_documents ?? [],
-            catalog: row.product_type_id ? catalogById.get(row.product_type_id) ?? null : null,
-          }),
-        }
-      }),
+      rows.map((row) => ({
+        ...mapCatalogRowToShopListing(row),
+        completeness_hint: listingCompletenessHint({
+          listingType: row.listing_type,
+          title: row.title,
+          whoMade: row.who_made,
+          whenMade: row.when_made,
+          whatIsIt: row.what_is_it,
+        }),
+      })),
     )
   } catch (error) {
     return fail(error)
@@ -500,7 +461,9 @@ export async function getListingDetails(
       // View omits MRP / tax / product_info — load from the base table for edit.
       supabase
         .from('listings')
-        .select('mrp, price_includes_tax, tax_percent, product_info')
+        .select(
+          'mrp, price_includes_tax, tax_percent, product_info, who_made, when_made, what_is_it, personalization_enabled, personalization_instructions, personalization_char_limit, personalization_required',
+        )
         .eq('id', listing.id as string)
         .maybeSingle(),
     ])
@@ -512,6 +475,17 @@ export async function getListingDetails(
       price_includes_tax: pricing?.price_includes_tax ?? true,
       tax_percent: pricing?.tax_percent ?? null,
       product_info: pricing?.product_info ?? {},
+      who_made: pricing?.who_made ?? listing.who_made ?? null,
+      when_made: pricing?.when_made ?? listing.when_made ?? null,
+      what_is_it: pricing?.what_is_it ?? listing.what_is_it ?? null,
+      personalization_enabled:
+        pricing?.personalization_enabled ?? listing.personalization_enabled ?? false,
+      personalization_instructions:
+        pricing?.personalization_instructions ?? listing.personalization_instructions ?? null,
+      personalization_char_limit:
+        pricing?.personalization_char_limit ?? listing.personalization_char_limit ?? null,
+      personalization_required:
+        pricing?.personalization_required ?? listing.personalization_required ?? false,
     })
   } catch (error) {
     return fail(error)
@@ -717,12 +691,7 @@ async function persistListingChildren(
     }
   }
 
-  const catalog = await replaceListingCatalog(
-    listingId,
-    formData,
-    formData.shop_id,
-    tempKeyToVariationId,
-  )
+  const catalog = await replaceListingCatalog(listingId, formData)
   if (!catalog.success) {
     throw new Error(catalog.error ?? 'Could not save product details.')
   }
@@ -931,10 +900,7 @@ async function assertListingMeetsQuality(
     variations: variationsRes.data ?? [],
     catalog: catalogChildren.data ?? undefined,
   })
-  const catalog = form.product_type_id
-    ? await getProductTypeCatalog(form.product_type_id)
-    : null
-  const quality = validateListingQuality(form, { catalog: catalog?.data ?? null })
+  const quality = validateListingQuality(form)
   if (quality.isValid) return { ok: true }
 
   const firstError = Object.values(quality.errors)[0] || 'Listing does not meet publish quality.'

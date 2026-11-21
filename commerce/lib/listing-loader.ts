@@ -36,6 +36,13 @@ export type ListingDetail = Pick<
   | 'price_includes_tax'
   | 'tax_percent'
   | 'product_info'
+  | 'who_made'
+  | 'when_made'
+  | 'what_is_it'
+  | 'personalization_enabled'
+  | 'personalization_instructions'
+  | 'personalization_char_limit'
+  | 'personalization_required'
   | 'digital_file_url'
   | 'digital_file_type'
   | 'digital_file_size'
@@ -98,33 +105,18 @@ export type ListingShop = Pick<
   }> | null
 }
 
-export type ListingAplusModuleRow = {
-  id: string
-  module_type: string
-  display_order: number
-  headline: string | null
-  body: string | null
-  image_url: string | null
-  payload: Record<string, unknown> | null
-}
-
-export type ListingTypedAttributeRow = {
-  attribute_id: string
-  value_text: string | null
-  value_number: number | null
-  value_boolean: boolean | null
-  value_json: unknown
-  product_type_attributes?: { label: string; display_order: number; unit: string | null } | null
+export type ListingMaterialRow = {
+  material_name: string
+  percentage?: number | null
+  is_primary?: boolean | null
 }
 
 export type ListingRow = ListingDetail & {
   slug?: string | null
-  item_condition?: string | null
   listing_images: ListingImage[] | null
   listing_variations: ListingVariation[] | null
   listing_attributes: ListingAttribute[] | null
-  listing_attribute_values?: ListingTypedAttributeRow[] | null
-  listing_aplus_modules?: ListingAplusModuleRow[] | null
+  listing_materials?: ListingMaterialRow[] | null
   listing_delivery_profiles: Array<{ delivery_profiles: DeliveryProfile | null }> | null
   shops: ListingShop | null
 }
@@ -134,23 +126,21 @@ export const LISTING_CORE_SELECT = `
   id, slug, title, description, price, listing_type, listing_status, is_active,
   average_rating, total_reviews, stock, quantity, category, tags,
   shop_id, created_at, sku, weight, dimensions, listing_metadata,
-  mrp, price_includes_tax, tax_percent, product_info, item_condition,
+  mrp, price_includes_tax, tax_percent, product_info,
+  who_made, when_made, what_is_it,
+  personalization_enabled, personalization_instructions, personalization_char_limit, personalization_required,
   digital_file_url, digital_file_type, digital_file_size, download_limit, shipping_required,
   listing_images(id, image_url, is_primary, display_order, alt_text, image_type, image_metadata, variation_id),
   listing_variations(
     id, variation_name, variation_value, price_adjustment, price, mrp, tax_percent,
-    price_includes_tax, hsn_code, weight, stock, sku, is_available, display_order,
-    variation_metadata
+    price_includes_tax, hsn_code, weight, stock, sku, is_available, is_visible, display_order,
+    processing_time_min, processing_time_max, variation_metadata
   ),
   listing_attributes(
     id, attribute_name, attribute_value, display_order
   ),
-  listing_attribute_values(
-    attribute_id, value_text, value_number, value_boolean, value_json,
-    product_type_attributes(label, display_order, unit)
-  ),
-  listing_aplus_modules(
-    id, module_type, display_order, headline, body, image_url, payload
+  listing_materials(
+    material_name, percentage, is_primary
   ),
   shops(
     id, shop_name, logo_url, shop_currency, verified, slug, shop_metadata, user_id,
@@ -259,7 +249,7 @@ async function fetchListingCoreById(id: string): Promise<ListingLoaderResult> {
     return { data: null, error: 'Listing not found' }
   }
 
-  return { data: data as ListingRow, error: null }
+  return { data: data as unknown as ListingRow, error: null }
 }
 
 /** Attach shop shipping rails after first paint (separate from core PDP query). */
@@ -344,6 +334,7 @@ export function listingRowFromSummary(listing: {
           display_order: image.display_order ?? index,
           alt_text: listing.title,
           image_type: null as string | null,
+          variation_id: null,
         }))
       : urls.map((image_url, index) => ({
           id: `${listing.id}-img-${index}`,
@@ -352,6 +343,7 @@ export function listingRowFromSummary(listing: {
           display_order: index,
           alt_text: listing.title,
           image_type: null as string | null,
+          variation_id: null,
         }))
 
   return {
@@ -379,6 +371,13 @@ export function listingRowFromSummary(listing: {
     price_includes_tax: listing.price_includes_tax ?? null,
     tax_percent: listing.tax_percent ?? null,
     product_info: null,
+    who_made: null,
+    when_made: null,
+    what_is_it: null,
+    personalization_enabled: false,
+    personalization_instructions: null,
+    personalization_char_limit: null,
+    personalization_required: false,
     digital_file_url: null,
     digital_file_type: null,
     digital_file_size: null,
@@ -402,7 +401,7 @@ export function listingRowFromSummary(listing: {
           user_id: null as unknown as string,
         }
       : null,
-  } as ListingRow
+  } as unknown as ListingRow
 }
 
 export function listingLoaderResultFromSummary(

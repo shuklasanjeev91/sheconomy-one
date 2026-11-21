@@ -206,11 +206,13 @@ export const listingSchema = baseListingSchema
     categories: z.array(z.unknown()).optional(),
     /** Keep product_info so manufacturer/brand quality rules can see it. */
     product_info: z.record(z.string(), z.unknown()).optional().default({}),
-    product_type_id: z.string().nullable().optional(),
-    item_condition: z.string().nullable().optional(),
-    product_identifier: z.unknown().optional(),
-    attribute_values: z.array(z.unknown()).optional(),
-    compliance_documents: z.array(z.unknown()).optional(),
+    who_made: z.string().nullable().optional(),
+    when_made: z.string().nullable().optional(),
+    what_is_it: z.string().nullable().optional(),
+    personalization_enabled: z.boolean().optional(),
+    personalization_instructions: z.string().nullable().optional(),
+    personalization_char_limit: z.union([z.number(), z.string()]).nullable().optional(),
+    personalization_required: z.boolean().optional(),
     listing_metadata: z.record(z.string(), z.unknown()).optional().default({}),
     images: z.array(z.unknown()).optional(),
   })

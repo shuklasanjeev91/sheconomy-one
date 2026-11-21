@@ -36,12 +36,13 @@ export function ImagesStep({
   const [isPicking, setIsPicking] = useState(false)
   const [isDrafting, setIsDrafting] = useState(false)
   const images = formData.images ?? []
-  const showBanner = images.length < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED
+  const photos = images.filter((image) => image.image_type !== 'video')
+  const showBanner = photos.length < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED
 
   const handlePick = useCallback(async () => {
     setIsPicking(true)
     try {
-      const remaining = Math.max(0, LISTING_PUBLISH_IMAGE_HINTS.MAX_COUNT - images.length)
+      const remaining = Math.max(0, LISTING_PUBLISH_IMAGE_HINTS.MAX_COUNT - photos.length)
       if (remaining <= 0) {
         toast.show(`Maximum ${LISTING_PUBLISH_IMAGE_HINTS.MAX_COUNT} images`, {
           tone: 'info',

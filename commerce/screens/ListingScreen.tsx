@@ -64,7 +64,6 @@ import { useEmailCommerceActions } from '~/commerce/hooks/useEmailCommerceAction
 import { useShopFollow } from '~/commerce/hooks/useShopFollow'
 import { recordListingView } from '~/commerce/lib/recently-viewed'
 import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
-import { ListingAplusContent } from '~/commerce/components/ListingAplusContent'
 import { effectiveUnitPrice } from '~/lib/listing/product-catalog'
 import { readMetadataBoolean } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 import { useListingReviews } from '~/commerce/hooks/useListingReviews'
@@ -561,24 +560,21 @@ export function ListingScreen({
     category: listing.category,
     listingType: listing.listing_type,
     attributes,
-    itemCondition: listing.item_condition,
-    typedAttributes: (listing.listing_attribute_values ?? []).flatMap((row) => {
-      const label = row.product_type_attributes?.label
-      if (!label) return []
-      let value = row.value_text?.trim() || ''
-      if (!value && row.value_number != null) {
-        value = row.product_type_attributes?.unit
-          ? `${row.value_number} ${row.product_type_attributes.unit}`
-          : String(row.value_number)
-      }
-      if (!value && typeof row.value_boolean === 'boolean') value = row.value_boolean ? 'Yes' : 'No'
-      if (!value && Array.isArray(row.value_json)) value = row.value_json.map(String).filter(Boolean).join(', ')
-      if (!value && row.value_json && typeof row.value_json === 'object' && 'value' in row.value_json) {
-        const measured = row.value_json as { value?: unknown; unit?: string }
-        value = `${measured.value ?? ''} ${measured.unit || row.product_type_attributes?.unit || ''}`.trim()
-      }
-      return value ? [{ label, value }] : []
-    }),
+    whoMade: listing.who_made,
+    whenMade: listing.when_made,
+    whatIsIt: listing.what_is_it,
+    materials: (listing.listing_materials ?? [])
+      .map((row) => row.material_name)
+      .filter(Boolean)
+      .join(', '),
+    personalization: listing.personalization_enabled
+      ? [
+          listing.personalization_required ? 'Required' : 'Optional',
+          listing.personalization_instructions?.trim(),
+        ]
+          .filter(Boolean)
+          .join(' — ')
+      : null,
     tags: listing.tags,
     productInfoSpecs: buildManufacturingSpecifications({
       ...baseProductInfo,
@@ -878,9 +874,20 @@ export function ListingScreen({
         </MarketplaceCard>
       ) : null}
 
-      {(listing.listing_aplus_modules ?? []).length > 0 ? (
+      {listing.personalization_enabled && listing.personalization_instructions?.trim() ? (
         <MarketplaceCard hasSideRails={hasSideRails}>
-          <ListingAplusContent modules={listing.listing_aplus_modules ?? []} />
+          <YStack gap="$2" padding="$4">
+            <Text fontSize={16} fontWeight="800" color={ui.text}>
+              Personalization
+            </Text>
+            <Text fontSize={14} color={ui.textSecondary} lineHeight={21}>
+              {listing.personalization_required ? 'Required. ' : ''}
+              {listing.personalization_instructions.trim()}
+              {listing.personalization_char_limit
+                ? ` Up to ${listing.personalization_char_limit} characters.`
+                : ''}
+            </Text>
+          </YStack>
         </MarketplaceCard>
       ) : null}
 

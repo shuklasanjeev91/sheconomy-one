@@ -1,5 +1,5 @@
 import type { Json } from '~/lib/supabase'
-import { conditionLabel } from '~/lib/listing/product-catalog'
+import { whatIsItLabel, whenMadeLabel, whoMadeLabel } from '~/lib/listing/product-catalog'
 import {
   axisGroupsFromChildSkus,
   getChildMrp,
@@ -27,6 +27,7 @@ export type ListingVariation = {
   stock: number | null
   sku: string | null
   is_available: boolean
+  is_visible?: boolean | null
   display_order: number
   variation_metadata?: Json | null
 }
@@ -58,8 +59,9 @@ type DimensionsJson = {
 }
 
 export function groupListingVariations(variations: ListingVariation[]): VariationGroup[] {
-  if (isChildSkuMode(variations as ChildSkuLike[])) {
-    const axes = axisGroupsFromChildSkus(variations as ChildSkuLike[])
+  const visible = variations.filter((variation) => variation.is_visible !== false)
+  if (isChildSkuMode(visible as ChildSkuLike[])) {
+    const axes = axisGroupsFromChildSkus(visible as ChildSkuLike[])
     return axes.map((axis) => ({
       name: axis.name,
       mode: 'child_sku' as const,
@@ -78,7 +80,7 @@ export function groupListingVariations(variations: ListingVariation[]): Variatio
 
   const groups = new Map<string, ListingVariation[]>()
 
-  for (const variation of [...variations].sort((a, b) => a.display_order - b.display_order)) {
+  for (const variation of [...visible].sort((a, b) => a.display_order - b.display_order)) {
     if (!variation.is_available) continue
 
     const options = groups.get(variation.variation_name) ?? []
@@ -108,8 +110,9 @@ export function getSelectedVariations(
   variations: ListingVariation[],
   selection: Record<string, string>,
 ): ListingVariation[] {
-  if (isChildSkuMode(variations as ChildSkuLike[])) {
-    const child = resolveChildSku(variations as ChildSkuLike[], selection)
+  const visible = variations.filter((variation) => variation.is_visible !== false)
+  if (isChildSkuMode(visible as ChildSkuLike[])) {
+    const child = resolveChildSku(visible as ChildSkuLike[], selection)
     return child ? [child as ListingVariation] : []
   }
 
@@ -205,8 +208,11 @@ export function buildListingSpecifications(input: {
   tags?: string[] | null
   /** Extra manufacturing / legal rows (brand, origin, HSN, etc.). */
   productInfoSpecs?: ListingSpecification[]
-  itemCondition?: string | null
-  typedAttributes?: ListingSpecification[]
+  whoMade?: string | null
+  whenMade?: string | null
+  whatIsIt?: string | null
+  materials?: string | null
+  personalization?: string | null
 }): ListingSpecification[] {
   const specs: ListingSpecification[] = []
   const seen = new Set<string>()
@@ -222,13 +228,11 @@ export function buildListingSpecifications(input: {
     specs.push({ label, value: trimmed })
   }
 
-  if (input.itemCondition) {
-    add('Condition', conditionLabel(input.itemCondition) || input.itemCondition)
-  }
-
-  for (const extra of input.typedAttributes ?? []) {
-    add(extra.label, extra.value)
-  }
+  add('Who made it', whoMadeLabel(input.whoMade))
+  add('When made', whenMadeLabel(input.whenMade))
+  add('What is it', whatIsItLabel(input.whatIsIt))
+  add('Materials', input.materials)
+  add('Personalization', input.personalization)
 
   for (const attribute of [...(input.attributes ?? [])].sort(
     (a, b) => a.display_order - b.display_order,

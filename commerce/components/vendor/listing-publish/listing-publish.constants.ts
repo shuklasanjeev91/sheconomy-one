@@ -4,19 +4,16 @@ import {
   LISTING_VALIDATION,
 } from '~/lib/listing/listing.type'
 
-/** Amazon-style top-tab identifiers — stable keys for navigation + validation. */
+/** Etsy-style section anchors — one scrolling page, not a wizard. */
 export const LISTING_PUBLISH_STEP_IDS = {
-  IDENTITY: 'identity',
-  BASIC: 'basic',
-  IMAGES: 'images',
-  VARIANTS: 'variants',
-  PRICING: 'pricing',
-  DETAILS: 'details',
-  COMPLIANCE: 'compliance',
-  APLUS: 'aplus',
+  PHOTOS: 'photos',
+  ABOUT: 'about',
+  PRICE: 'price',
+  VARIATIONS: 'variations',
+  PERSONALIZATION: 'personalization',
   SHIPPING: 'shipping',
-  CATEGORIES: 'categories',
-  SEO: 'seo',
+  RETURNS: 'returns',
+  DETAILS: 'details',
 } as const
 
 export type ListingPublishStepId =
@@ -36,88 +33,64 @@ export type ListingPublishStepConfig = {
     | 'search'
     | 'sliders'
     | 'truck'
-    | 'barcode'
-    | 'shield'
-    | 'layout'
 }
 
-/** Amazon Seller Central tab order: Vital info → Images → Variations → Offer → … */
+/** One-page section order, matching the Etsy listing editor. */
 export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
   {
-    id: LISTING_PUBLISH_STEP_IDS.IDENTITY,
-    label: 'Start',
-    headline: 'What are you selling?',
-    subtitle: 'Pick the kind of product, say if it is new, and add a barcode if you have one.',
-    iconName: 'barcode',
-  },
-  {
-    id: LISTING_PUBLISH_STEP_IDS.BASIC,
-    label: 'Name',
-    headline: 'Name and description',
-    subtitle: 'The name shoppers see, a short story, and a few tags.',
-    iconName: 'info',
-  },
-  {
-    id: LISTING_PUBLISH_STEP_IDS.IMAGES,
+    id: LISTING_PUBLISH_STEP_IDS.PHOTOS,
     label: 'Photos',
-    headline: 'Photos of the product',
-    subtitle: 'Start with the main photo, then add close-ups and other angles.',
+    headline: 'Photos and video',
+    subtitle: 'Add up to 10 photos and 1 video. The first photo is the thumbnail.',
     iconName: 'image',
   },
   {
-    id: LISTING_PUBLISH_STEP_IDS.VARIANTS,
-    label: 'Options',
-    headline: 'Sizes, colors, and options',
-    subtitle: 'One product is enough. Add sizes or colors only if you sell more than one.',
+    id: LISTING_PUBLISH_STEP_IDS.ABOUT,
+    label: 'About',
+    headline: 'About this listing',
+    subtitle: 'Title, description, one category, and whether it is physical or digital.',
+    iconName: 'info',
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.PRICE,
+    label: 'Price',
+    headline: 'Price and inventory',
+    subtitle: 'What you charge, how many you have, and an optional SKU.',
+    iconName: 'indian-rupee',
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.VARIATIONS,
+    label: 'Variations',
+    headline: 'Variations',
+    subtitle: 'Up to two properties, such as color and size.',
     iconName: 'sliders',
   },
   {
-    id: LISTING_PUBLISH_STEP_IDS.PRICING,
-    label: 'Price',
-    headline: 'Your price and stock',
-    subtitle: 'What you charge, how many you have, and a sale if you are running one.',
-    iconName: 'indian-rupee',
+    id: LISTING_PUBLISH_STEP_IDS.PERSONALIZATION,
+    label: 'Personalization',
+    headline: 'Personalization',
+    subtitle: 'Optional instructions when a buyer should add a name or note.',
+    iconName: 'layers',
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+    label: 'Shipping',
+    headline: 'Shipping',
+    subtitle: 'Delivery profile, item weight, and package size. Digital listings use a file link instead.',
+    iconName: 'truck',
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.RETURNS,
+    label: 'Returns',
+    headline: 'Returns and exchanges',
+    subtitle: 'The return policy shoppers see on this listing.',
+    iconName: 'tags',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.DETAILS,
     label: 'Details',
-    headline: 'Who made it',
-    subtitle: 'Your brand, where it was made, and the details this kind of product needs.',
-    iconName: 'layers',
-  },
-  {
-    id: LISTING_PUBLISH_STEP_IDS.COMPLIANCE,
-    label: 'Papers',
-    headline: 'Papers for this product',
-    subtitle: 'Upload a licence or certificate only when this kind of product asks for one.',
-    iconName: 'shield',
-  },
-  {
-    id: LISTING_PUBLISH_STEP_IDS.APLUS,
-    label: 'Story',
-    headline: 'Extra story on the product page',
-    subtitle: 'Optional photos and lines under the description. Skip this until you are ready.',
-    iconName: 'layout',
-  },
-  {
-    id: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-    label: 'Delivery',
-    headline: 'How you send it',
-    subtitle: 'Parcel weight, size, and the delivery and return options you already set up.',
-    iconName: 'truck',
-  },
-  {
-    id: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
-    label: 'Category',
-    headline: 'Where shoppers browse',
-    subtitle: 'Pick the shelves this product belongs on. Up to 10.',
-    iconName: 'tags',
-  },
-  {
-    id: LISTING_PUBLISH_STEP_IDS.SEO,
-    label: 'Search',
-    headline: 'Words shoppers search',
-    subtitle: 'The link name, a search title, and extra words that stay off the product page.',
+    headline: 'Item details',
+    subtitle: 'Shop section, tags, materials, and who made it.',
     iconName: 'search',
   },
 ] as const
@@ -159,15 +132,20 @@ export const PRODUCT_STRUCTURE_OPTIONS = [
   },
 ] as const
 
-/** All Amazon listing tabs — Variations is always visible (Yes/No gate lives on that tab). */
+/** Every section on the single listing page. */
 export function getListingPublishSteps(_structure?: ProductStructure): ListingPublishStepConfig[] {
   return [...LISTING_PUBLISH_STEPS]
 }
 
 /** Keys stored inside `listing_metadata` for vendor-only form fields. */
 export const LISTING_METADATA_KEYS = {
-  /** simple | variable — Amazon product offer type */
+  /** simple | variable — whether this listing uses variation rows */
   PRODUCT_STRUCTURE: 'product_structure',
+  VARIATION_PRICES_VARY: 'variation_prices_vary',
+  VARIATION_QUANTITIES_VARY: 'variation_quantities_vary',
+  VARIATION_SKUS_VARY: 'variation_skus_vary',
+  VARIATION_PROCESSING_VARIES: 'variation_processing_varies',
+  VARIATION_VISIBILITY_VARIES: 'variation_visibility_varies',
   /** Legacy grouped listing IDs (no longer edited in UI) */
   GROUPED_LISTING_IDS: 'grouped_listing_ids',
   PRICING_NOTES: 'pricing_notes',
@@ -197,6 +175,11 @@ export const LISTING_METADATA_KEYS = {
 
 export const LISTING_PUBLISH_DEFAULT_METADATA = {
   [LISTING_METADATA_KEYS.PRODUCT_STRUCTURE]: PRODUCT_STRUCTURES.SIMPLE,
+  [LISTING_METADATA_KEYS.VARIATION_PRICES_VARY]: true,
+  [LISTING_METADATA_KEYS.VARIATION_QUANTITIES_VARY]: true,
+  [LISTING_METADATA_KEYS.VARIATION_SKUS_VARY]: false,
+  [LISTING_METADATA_KEYS.VARIATION_PROCESSING_VARIES]: false,
+  [LISTING_METADATA_KEYS.VARIATION_VISIBILITY_VARIES]: false,
   [LISTING_METADATA_KEYS.GROUPED_LISTING_IDS]: [] as string[],
   [LISTING_METADATA_KEYS.PRICING_NOTES]: '',
   [LISTING_METADATA_KEYS.MIN_ORDER_QUANTITY]: '1',
@@ -224,8 +207,8 @@ export const LISTING_PUBLISH_DEFAULT_METADATA = {
 } as const
 
 export const LISTING_PUBLISH_COPY = {
-  PAGE_TITLE_CREATE: 'Add a product',
-  PAGE_TITLE_EDIT: 'Edit product',
+  PAGE_TITLE_CREATE: 'Add a listing',
+  PAGE_TITLE_EDIT: 'Edit listing',
   PAGE_TITLE_DUPLICATE: 'Copy product',
   SAVE_DRAFT: 'Save draft',
   PUBLISH: 'Publish',
@@ -244,12 +227,12 @@ export const LISTING_PUBLISH_COPY = {
   LAST_SAVED_PREFIX: 'Last saved:',
   LAST_SAVED_NEVER: 'Not saved yet',
   IMAGES_REQUIRED_BANNER:
-    'Upload at least 3 product photos (main + details). Main image ≥1000px, clean background, no watermarks.',
+    'Add at least 1 photo. You can upload up to 10 photos and 1 video. The first photo is the thumbnail.',
   IMAGE_GUIDELINES: [
-    'Main image: product fills the frame on a clean / white background.',
+    'The first photo is the thumbnail buyers see in search.',
     `At least ${LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX}px on the longest side (1600px+ recommended).`,
-    `Upload ${LISTING_IMAGE_CONSTRAINTS.MIN_COUNT_PUBLISH}–${LISTING_IMAGE_CONSTRAINTS.MAX_COUNT} photos: MAIN, angle, detail, lifestyle.`,
-    'No watermarks, logos, or text overlays on the main image.',
-    'Use natural lighting; keep colours accurate to the product.',
+    `Upload up to ${LISTING_IMAGE_CONSTRAINTS.MAX_COUNT} photos and 1 video.`,
+    'Drag is not required — the first photo stays the thumbnail.',
+    'Use natural lighting and keep colours accurate to the product.',
   ] as const,
 } as const

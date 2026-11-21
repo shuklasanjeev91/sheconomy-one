@@ -10,12 +10,7 @@ import type {
   ListingVariation,
 } from '~/lib/listing/listing.type'
 import { LISTING_STATUS, LISTING_TYPES } from '~/lib/listing/listing.type'
-import type { ProductTypeCatalog } from '~/lib/listing/product-catalog'
-import {
-  validateProductIdentifier,
-  validateRequiredAttributes,
-  validateRequiredCompliance,
-} from '~/lib/listing/product-catalog'
+import { validatePersonalization } from '~/lib/listing/product-catalog'
 import type { ListingCatalogChildren } from '~/lib/listing/product-catalog.service'
 import { generateListingSlug } from '~/lib/listing/listing.utils'
 import {
@@ -160,6 +155,14 @@ export function listingImagesToDrafts(images: ListingImage[]): ListingImageDraft
     }))
 }
 
+function readFirstSectionId(sections: unknown): string | null {
+  if (!Array.isArray(sections) || !sections.length) return null
+  const first = sections[0]
+  if (!first || typeof first !== 'object') return null
+  const id = (first as { id?: unknown }).id
+  return typeof id === 'string' ? id : null
+}
+
 export function buildFormFromListingDetails(
   listing: ListingDetails,
   extras?: {
@@ -257,21 +260,14 @@ export function buildFormFromListingDetails(
     variations,
     attributes,
     materials,
-    product_type_id: listing.product_type_id ?? null,
-    item_condition: listing.item_condition ?? 'new',
-    product_identifier: extras?.catalog?.productIdentifier,
-    variation_identifiers: (extras?.catalog?.variationIdentifiers ?? []).map((row) =>
-      asDuplicate ? { ...row, variation_id: null } : row,
-    ),
-    attribute_values: (extras?.catalog?.attributeValues ?? []).map((row) =>
-      asDuplicate ? { ...row, id: undefined, variation_id: null } : row,
-    ),
-    compliance_documents: (extras?.catalog?.complianceDocuments ?? []).map((row) =>
-      asDuplicate ? { ...row, id: undefined } : row,
-    ),
-    aplus_modules: (extras?.catalog?.aplusModules ?? []).map((row) =>
-      asDuplicate ? { ...row, id: undefined } : row,
-    ),
+    who_made: listing.who_made ?? null,
+    when_made: listing.when_made ?? null,
+    what_is_it: listing.what_is_it ?? null,
+    personalization_enabled: Boolean(listing.personalization_enabled),
+    personalization_instructions: listing.personalization_instructions ?? '',
+    personalization_char_limit: listing.personalization_char_limit ?? 256,
+    personalization_required: Boolean(listing.personalization_required),
+    shop_section_id: readFirstSectionId(listing.sections),
     delivery_profile_id: extras?.catalog?.deliveryProfileId ?? null,
     return_policy_id: extras?.catalog?.returnPolicyId ?? null,
   }
@@ -330,6 +326,7 @@ export function formDataToPublishPayload(
     description: formData.description ?? '',
     product_info: productInfo,
     listing_metadata,
+    shop_sections: formData.shop_section_id ? [formData.shop_section_id] : [],
   }
 }
 
@@ -339,36 +336,66 @@ export type StepValidationResult = {
   warnings: string[]
 }
 
+function sectionErrors(
+  formData: ListingFormData,
+  fields: string[],
+): Record<string, string> {
+  const quality = validateListingQuality(formData)
+  const picked: Record<string, string> = {}
+  for (const field of fields) {
+    if (quality.errors[field]) picked[field] = quality.errors[field]
+  }
+  return picked
+}
+
 export function validatePublishStep(
   stepId: ListingPublishStepId,
   formData: ListingFormData,
-  catalog?: ProductTypeCatalog | null,
 ): StepValidationResult {
   const errors: Record<string, string> = {}
   const warnings: string[] = []
 
   switch (stepId) {
-    case LISTING_PUBLISH_STEP_IDS.IDENTITY: {
-      if (formData.listing_type === LISTING_TYPES.SERVICE) break
-      if (!formData.product_type_id) errors.product_type_id = 'Choose what kind of product this is.'
-      if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
-        if (!formData.item_condition) errors.item_condition = 'Say whether this is new, used, or refurbished.'
-        Object.assign(
-          errors,
-          validateProductIdentifier(formData.product_identifier, { required: true }),
-        )
-      }
+    case LISTING_PUBLISH_STEP_IDS.PHOTOS:
+      Object.assign(errors, sectionErrors(formData, ['images']))
       break
-    }
-    case LISTING_PUBLISH_STEP_IDS.BASIC: {
-      // Only the fields this step renders — price lives on the pricing step.
+    case LISTING_PUBLISH_STEP_IDS.ABOUT: {
       const title = validateListingField('title', formData.title ?? '')
       if (!title.isValid && title.error) errors.title = title.error
       const desc = validateListingField('description', formData.description ?? '')
       if (!desc.isValid && desc.error) errors.description = desc.error
-      if (!formData.listing_type) errors.listing_type = 'Please select a listing type.'
+      if (!formData.listing_type) errors.listing_type = 'Choose physical or digital.'
+      const cat = validateCategoryData(formData.categories)
+      if (!cat.isValid && cat.error) errors.categories = cat.error
       break
     }
+    case LISTING_PUBLISH_STEP_IDS.PRICE: {
+      const price = validateListingField('price', formData.price)
+      if (!price.isValid && price.error) errors.price = price.error
+      Object.assign(errors, sectionErrors(formData, ['stock']))
+      break
+    }
+    case LISTING_PUBLISH_STEP_IDS.VARIATIONS:
+      Object.assign(errors, sectionErrors(formData, ['variations']))
+      break
+    case LISTING_PUBLISH_STEP_IDS.PERSONALIZATION:
+      Object.assign(errors, validatePersonalization(formData))
+      break
+    case LISTING_PUBLISH_STEP_IDS.SHIPPING:
+      if (formData.listing_type === LISTING_TYPES.DIGITAL) {
+        if (!formData.digital_file_url?.trim()) {
+          errors.digital_file_url = 'A download URL is required for digital products.'
+        }
+        if (!formData.digital_file_type?.trim()) {
+          errors.digital_file_type = 'File type is required for digital products.'
+        }
+      } else {
+        Object.assign(
+          errors,
+          sectionErrors(formData, ['weight', 'package_length_cm', 'package_width_cm', 'package_height_cm']),
+        )
+      }
+      break
     case LISTING_PUBLISH_STEP_IDS.DETAILS: {
       if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
         const productQuality = validatePhysicalProductInfoQuality(
@@ -378,97 +405,7 @@ export function validatePublishStep(
         Object.assign(errors, productQuality.errors)
         warnings.push(...productQuality.warnings)
       }
-      if (formData.listing_type !== LISTING_TYPES.SERVICE) {
-        Object.assign(errors, validateRequiredAttributes(catalog, formData.attribute_values))
-      }
-      if (formData.listing_type === LISTING_TYPES.DIGITAL) {
-        if (!formData.digital_file_url?.trim()) {
-          errors.digital_file_url = 'A download URL is required for digital products.'
-        }
-        if (!formData.digital_file_type?.trim()) {
-          errors.digital_file_type = 'File type is required for digital products.'
-        }
-      }
-      break
-    }
-    case LISTING_PUBLISH_STEP_IDS.SHIPPING: {
-      // Package fields are optional — no hard gates.
-      break
-    }
-    case LISTING_PUBLISH_STEP_IDS.COMPLIANCE: {
-      if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
-        Object.assign(errors, validateRequiredCompliance(catalog, formData.compliance_documents))
-      }
-      break
-    }
-    case LISTING_PUBLISH_STEP_IDS.PRICING: {
-      const structure = resolveProductStructure(formData)
-      if (structure === PRODUCT_STRUCTURES.SIMPLE) {
-        const price = validateListingField('price', formData.price)
-        if (!price.isValid && price.error) errors.price = price.error
-        if (
-          formData.listing_type === LISTING_TYPES.PHYSICAL &&
-          (formData.stock === '' || formData.stock === null || formData.stock === undefined)
-        ) {
-          errors.stock = 'Enter quantity available for this offer.'
-        }
-      }
-      const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
-      const saleStart = String(meta[LISTING_METADATA_KEYS.SALE_START_AT] ?? '')
-      const saleEnd = String(meta[LISTING_METADATA_KEYS.SALE_END_AT] ?? '')
-      if (saleStart && saleEnd && saleEnd < saleStart) {
-        errors.sale_end_at = 'Sale end must be on or after the sale start.'
-      }
-      break
-    }
-    case LISTING_PUBLISH_STEP_IDS.VARIANTS: {
-      const structure = resolveProductStructure(formData)
-      if (structure === PRODUCT_STRUCTURES.VARIABLE) {
-        const children = (formData.variations ?? []).filter((row) =>
-          String(row.variation_value ?? '').trim(),
-        )
-        if (!children.length) {
-          errors.variations =
-            'Add at least one variation SKU, or answer No to “Does this product have variations?”.'
-        } else {
-          const missingPrice = children.some((row) => {
-            const n = Number(row.price)
-            return !Number.isFinite(n) || n < 0
-          })
-          if (missingPrice) {
-            errors.variations = 'Set a price on every variation SKU.'
-          }
-        }
-      }
-      break
-    }
-    case LISTING_PUBLISH_STEP_IDS.CATEGORIES: {
-      const cat = validateCategoryData(formData.categories)
-      if (!cat.isValid && cat.error) errors.categories = cat.error
-      if (cat.warning) warnings.push(cat.warning)
-      break
-    }
-    case LISTING_PUBLISH_STEP_IDS.IMAGES: {
-      const imageQuality = validateListingImagesQuality(formData.images)
-      Object.assign(errors, imageQuality.errors)
-      warnings.push(...imageQuality.warnings)
-      break
-    }
-    case LISTING_PUBLISH_STEP_IDS.SEO: {
-      const slug = validateListingField('slug', formData.slug ?? generateListingSlug(formData.title))
-      if (!slug.isValid && slug.error) errors.slug = slug.error
-      const metaTitle = validateListingField('meta_title', formData.meta_title ?? '')
-      if (!metaTitle.isValid && metaTitle.error) errors.meta_title = metaTitle.error
-      const metaDesc = validateListingField('meta_description', formData.meta_description ?? '')
-      if (!metaDesc.isValid && metaDesc.error) errors.meta_description = metaDesc.error
-      const searchTerms = String(
-        ((formData.listing_metadata ?? {}) as Record<string, unknown>)[
-          LISTING_METADATA_KEYS.BACKEND_SEARCH_TERMS
-        ] ?? '',
-      )
-      if (searchTerms.length > 250) {
-        errors.backend_search_terms = 'Backend search terms must be 250 characters or fewer.'
-      }
+      Object.assign(errors, sectionErrors(formData, ['who_made', 'when_made', 'what_is_it', 'tags']))
       break
     }
     default:
@@ -490,72 +427,51 @@ export function validateDraftForm(formData: ListingFormData): StepValidationResu
   return { isValid: Object.keys(errors).length === 0, errors, warnings: [] }
 }
 
-export function validateFullPublishForm(
-  formData: ListingFormData,
-  catalog?: ProductTypeCatalog | null,
-): StepValidationResult {
+export function validateFullPublishForm(formData: ListingFormData): StepValidationResult {
   const structure = resolveProductStructure(formData)
   const result = validateListingData(formData)
-  const quality = validateListingQuality(formData, { catalog })
+  const quality = validateListingQuality(formData)
   const errors = { ...result.errors, ...quality.errors }
   const warnings = [...quality.warnings]
 
-  // Variable: parent price is derived from child SKUs — drop false positives.
   if (structure === PRODUCT_STRUCTURES.VARIABLE) {
     delete errors.price
     delete errors.stock
-    const children = (formData.variations ?? []).filter((row) =>
-      String(row.variation_value ?? '').trim(),
-    )
-    if (!children.length) {
-      errors.variations =
-        'Add at least one variation SKU, or answer No to “Does this product have variations?”.'
-    }
   }
-  // Materials table removed from Amazon-style form — ignore legacy material errors.
-  delete errors.materials
 
   return { isValid: Object.keys(errors).length === 0, errors, warnings }
 }
 
 const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
-  product_type_id: LISTING_PUBLISH_STEP_IDS.IDENTITY,
-  item_condition: LISTING_PUBLISH_STEP_IDS.IDENTITY,
-  product_id_value: LISTING_PUBLISH_STEP_IDS.IDENTITY,
-  gtin_exemption_reason: LISTING_PUBLISH_STEP_IDS.IDENTITY,
-  title: LISTING_PUBLISH_STEP_IDS.BASIC,
-  description: LISTING_PUBLISH_STEP_IDS.BASIC,
-  listing_type: LISTING_PUBLISH_STEP_IDS.BASIC,
-  tags: LISTING_PUBLISH_STEP_IDS.BASIC,
-  materials: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  variations: LISTING_PUBLISH_STEP_IDS.VARIANTS,
-  stock: LISTING_PUBLISH_STEP_IDS.PRICING,
-  quantity: LISTING_PUBLISH_STEP_IDS.PRICING,
+  images: LISTING_PUBLISH_STEP_IDS.PHOTOS,
+  title: LISTING_PUBLISH_STEP_IDS.ABOUT,
+  description: LISTING_PUBLISH_STEP_IDS.ABOUT,
+  listing_type: LISTING_PUBLISH_STEP_IDS.ABOUT,
+  categories: LISTING_PUBLISH_STEP_IDS.ABOUT,
+  price: LISTING_PUBLISH_STEP_IDS.PRICE,
+  stock: LISTING_PUBLISH_STEP_IDS.PRICE,
+  quantity: LISTING_PUBLISH_STEP_IDS.PRICE,
+  sku: LISTING_PUBLISH_STEP_IDS.PRICE,
+  variations: LISTING_PUBLISH_STEP_IDS.VARIATIONS,
+  personalization_instructions: LISTING_PUBLISH_STEP_IDS.PERSONALIZATION,
+  personalization_char_limit: LISTING_PUBLISH_STEP_IDS.PERSONALIZATION,
   weight: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  package_length_cm: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  package_width_cm: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  package_height_cm: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  digital_file_url: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  digital_file_type: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  who_made: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  when_made: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  what_is_it: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  tags: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  materials: LISTING_PUBLISH_STEP_IDS.DETAILS,
   manufacturer_name: LISTING_PUBLISH_STEP_IDS.DETAILS,
   manufacturer_address: LISTING_PUBLISH_STEP_IDS.DETAILS,
   brand: LISTING_PUBLISH_STEP_IDS.DETAILS,
   generic_name: LISTING_PUBLISH_STEP_IDS.DETAILS,
   key_features: LISTING_PUBLISH_STEP_IDS.DETAILS,
   country_of_origin: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  net_quantity: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  hsn_code: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  expiry_date: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  manufacturing_date: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  digital_file_url: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  digital_file_type: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  booking_duration_minutes: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  price: LISTING_PUBLISH_STEP_IDS.PRICING,
-  mrp: LISTING_PUBLISH_STEP_IDS.PRICING,
-  tax_percent: LISTING_PUBLISH_STEP_IDS.PRICING,
-  sku: LISTING_PUBLISH_STEP_IDS.PRICING,
-  categories: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
-  images: LISTING_PUBLISH_STEP_IDS.IMAGES,
-  slug: LISTING_PUBLISH_STEP_IDS.SEO,
-  meta_title: LISTING_PUBLISH_STEP_IDS.SEO,
-  meta_description: LISTING_PUBLISH_STEP_IDS.SEO,
-  sale_end_at: LISTING_PUBLISH_STEP_IDS.PRICING,
-  backend_search_terms: LISTING_PUBLISH_STEP_IDS.SEO,
 }
 
 /** Which step owns the first offending field, so we can jump the vendor there. */
@@ -563,13 +479,7 @@ export function findStepForErrors(
   errors: Record<string, string>,
 ): ListingPublishStepId | undefined {
   for (const field of Object.keys(errors)) {
-    const step =
-      FIELD_STEP_LOOKUP[field] ??
-      (field.startsWith('attr_')
-        ? LISTING_PUBLISH_STEP_IDS.DETAILS
-        : field.startsWith('compliance_')
-          ? LISTING_PUBLISH_STEP_IDS.COMPLIANCE
-          : undefined)
+    const step = FIELD_STEP_LOOKUP[field]
     if (step) return step
   }
   return undefined

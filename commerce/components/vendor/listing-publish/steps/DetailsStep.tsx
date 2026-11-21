@@ -42,17 +42,13 @@ import {
   readMetadataString,
   readProductInfoString,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
-import { TypedAttributesPanel } from '~/commerce/components/vendor/listing-publish/steps/TypedAttributesPanel'
-import type { ProductTypeCatalog } from '~/lib/listing/product-catalog'
-
 type DetailsStepProps = {
   ui: AppUiTokens
   formData: ListingFormData
   errors: Record<string, string>
   sellerCountryCode?: string | null
-  /** Amazon tabs: product details vs shipping package. */
-  section?: 'details' | 'shipping' | 'all'
-  catalog?: ProductTypeCatalog | null
+  /** Which block of this form to render. */
+  section?: 'details' | 'shipping' | 'returns' | 'all'
   deliveryProfiles?: { id: string; profile_name: string }[]
   returnPolicies?: { id: string; policy_name: string }[]
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
@@ -64,7 +60,6 @@ export function DetailsStep({
   formData,
   errors,
   section = 'all',
-  catalog = null,
   deliveryProfiles = [],
   returnPolicies = [],
   onUpdate,
@@ -81,6 +76,7 @@ export function DetailsStep({
   )
   const showDetails = section === 'details' || section === 'all'
   const showShipping = section === 'shipping' || section === 'all'
+  const showReturns = section === 'returns' || section === 'all'
 
   function updateProductInfo(patch: Partial<ListingProductInfo>) {
     const next = patchListingProductInfo(formData.product_info, patch)
@@ -397,16 +393,6 @@ export function DetailsStep({
       ) : null}
 
       {showDetails && !isDigital ? (
-        <TypedAttributesPanel
-          ui={ui}
-          formData={formData}
-          errors={errors}
-          catalog={catalog ?? null}
-          onUpdate={onUpdate}
-        />
-      ) : null}
-
-      {showDetails && !isDigital ? (
         <ListingPublishCard
           ui={ui}
           title="Materials"
@@ -555,7 +541,7 @@ export function DetailsStep({
               />
             </XStack>
           </ListingFormRow>
-          <ListingFormRow ui={ui} label="How you deliver">
+          <ListingFormRow ui={ui} label="Shipping profile">
             <Select
               value={formData.delivery_profile_id || 'shop-default'}
               onValueChange={(value) =>
@@ -579,7 +565,12 @@ export function DetailsStep({
               </SelectContent>
             </Select>
           </ListingFormRow>
-          <ListingFormRow ui={ui} label="Returns">
+        </ListingPublishCard>
+      ) : null}
+
+      {showReturns && !isDigital ? (
+        <ListingPublishCard ui={ui} title="Returns and exchanges">
+          <ListingFormRow ui={ui} label="Return policy">
             <Select
               value={formData.return_policy_id || 'shop-default'}
               onValueChange={(value) =>

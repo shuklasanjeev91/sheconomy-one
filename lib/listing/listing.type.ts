@@ -1,10 +1,5 @@
 import type { Database, Tables, TablesInsert, TablesUpdate } from '~/lib/supabase'
-import type {
-  ListingAplusModuleDraft,
-  ListingAttributeValueDraft,
-  ListingComplianceDocumentDraft,
-  ListingProductIdentifierDraft,
-} from '~/lib/listing/product-catalog'
+import type { WhatIsIt, WhenMade, WhoMade } from '~/lib/listing/product-catalog'
 
 /**
  * Shared shape returned by every listing service call.
@@ -99,10 +94,16 @@ export type ListingFormData = {
   tax_percent?: number | string | null
   /** Manufacturing / legal bag stored on `listings.product_info`. */
   product_info?: Record<string, unknown>
-  /** Amazon product type. Column on `listings`. */
-  product_type_id?: string | null
-  /** New / used / refurbished. Column on `listings`. */
-  item_condition?: string | null
+  /** Etsy maker facts. Columns on `listings`. */
+  who_made?: WhoMade | string | null
+  when_made?: WhenMade | string | null
+  what_is_it?: WhatIsIt | string | null
+  personalization_enabled?: boolean
+  personalization_instructions?: string | null
+  personalization_char_limit?: number | string | null
+  personalization_required?: boolean
+  /** One shop section. Persisted through the publish orchestrator. */
+  shop_section_id?: string | null
 
   // Physical
   stock?: number | string
@@ -130,14 +131,6 @@ export type ListingFormData = {
   variations?: Partial<ListingVariationInsert>[]
   attributes?: Partial<ListingAttributeInsert>[]
   materials?: Partial<ListingMaterialInsert>[]
-  /** Parent barcode or GTIN exemption. */
-  product_identifier?: ListingProductIdentifierDraft
-  /** Optional barcode per child SKU. */
-  variation_identifiers?: ListingProductIdentifierDraft[]
-  /** Values for the product type's attribute definitions. */
-  attribute_values?: ListingAttributeValueDraft[]
-  compliance_documents?: ListingComplianceDocumentDraft[]
-  aplus_modules?: ListingAplusModuleDraft[]
   delivery_profile_id?: string | null
   return_policy_id?: string | null
 }
@@ -362,7 +355,7 @@ export const DIMENSION_UNITS: readonly { value: string; label: string }[] = [
 
 /** Field length / count limits shared by validation + form UIs. No magic numbers in code. */
 export const LISTING_VALIDATION = {
-  TITLE: { MIN_LENGTH: 3, MAX_LENGTH: 200 },
+  TITLE: { MIN_LENGTH: 3, MAX_LENGTH: 140 },
   /** Description must be substantive before going live. */
   DESCRIPTION: { MIN_LENGTH: 50, MAX_LENGTH: 2000 },
   SKU: { MAX_LENGTH: 100 },
@@ -374,7 +367,8 @@ export const LISTING_VALIDATION = {
   STOCK: { MIN: 0 },
   BOOKING_DURATION: { MIN: 1 },
   MAX_ATTENDEES: { MIN: 1 },
-  CATEGORIES: { MAX_SELECTED: 10 },
+  CATEGORIES: { MAX_SELECTED: 1 },
+  TAGS: { MAX_COUNT: 13 },
   DIGITAL_FILE_TYPE: { MAX_LENGTH: 50 },
   /** Key-feature bullets (physical products). */
   KEY_FEATURES: { MIN_COUNT: 3, MAX_COUNT: 5, MIN_LENGTH: 10, MAX_LENGTH: 500 },
@@ -384,11 +378,12 @@ export const LISTING_VALIDATION = {
 export const LISTING_IMAGE_CONSTRAINTS = {
   MAX_SIZE_BYTES: 10 * 1024 * 1024,
   ALLOWED_MIME_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'] as const,
-  /** Hard gate to publish — at least 3 product images. */
-  MIN_COUNT_PUBLISH: 3,
+  /** Hard gate to publish — at least one photo. Video does not count. */
+  MIN_COUNT_PUBLISH: 1,
   /** Soft recommendation for lifestyle / detail shots. */
   MIN_COUNT_RECOMMENDED: 5,
-  MAX_COUNT: 9,
+  MAX_COUNT: 10,
+  MAX_VIDEOS: 1,
   /** Longest edge must be ≥ 1000px when dimensions are known. */
   MIN_LONG_EDGE_PX: 1000,
   /** Guidance target for crisp zooms. */
@@ -428,18 +423,14 @@ export function getDefaultListingFormData(
     variations: [],
     attributes: [],
     materials: [],
-    product_type_id: null,
-    item_condition: 'new',
-    product_identifier: {
-      product_id_type: 'none',
-      product_id_value: '',
-      gtin_exemption: false,
-      gtin_exemption_reason: null,
-    },
-    variation_identifiers: [],
-    attribute_values: [],
-    compliance_documents: [],
-    aplus_modules: [],
+    who_made: null,
+    when_made: null,
+    what_is_it: null,
+    personalization_enabled: false,
+    personalization_instructions: '',
+    personalization_char_limit: 256,
+    personalization_required: false,
+    shop_section_id: null,
     delivery_profile_id: null,
     return_policy_id: null,
   }
