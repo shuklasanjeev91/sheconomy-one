@@ -2,7 +2,19 @@ import type { PickedImage } from '~/lib/media/pick-image'
 import { type CropRect } from '~/lib/media/crop-geometry'
 
 export type { CropRect } from '~/lib/media/crop-geometry'
-export { centeredCropRect } from '~/lib/media/crop-geometry'
+export { aspectFitCropRect, centeredCropRect } from '~/lib/media/crop-geometry'
+
+export type PreparedCropImage = {
+  image: PickedImage
+  width: number
+  height: number
+}
+
+/** Web images already report their displayed size. Native bakes rotation first. */
+export async function prepareImageForCrop(image: PickedImage): Promise<PreparedCropImage> {
+  const size = await getImageSize(image.uri)
+  return { image, width: size.width, height: size.height }
+}
 
 /** Web: crop via canvas. Native: use crop-image.native.ts. */
 export async function cropPickedImage(

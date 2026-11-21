@@ -182,7 +182,7 @@ export const CropStage = forwardRef<CropStageHandle, CropStageProps>(function Cr
         height: imageHeight,
         marginLeft: -imageWidth / 2,
         marginTop: -imageHeight / 2,
-        objectFit: 'cover',
+        objectFit: 'fill',
         transformOrigin: 'center center',
         willChange: 'transform',
         pointerEvents: 'none',

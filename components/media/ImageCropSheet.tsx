@@ -25,9 +25,9 @@ import {
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { aspectLabel, type AspectRatioTuple } from '~/lib/media/aspect'
 import {
-  centeredCropRect,
+  aspectFitCropRect,
   cropPickedImage,
-  getImageSize,
+  prepareImageForCrop,
   type CropRect,
 } from '~/lib/media/crop-image'
 import type { CropShape } from '~/lib/media/crop-session'
@@ -71,6 +71,7 @@ export function ImageCropSheet({
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
 
   const [sourceSize, setSourceSize] = useState<{ width: number; height: number } | null>(null)
+  const [prepared, setPrepared] = useState<PickedImage | null>(null)
   const [viewport, setViewport] = useState<Viewport>({
     width: windowWidth,
     height: Math.max(280, windowHeight - 220),
@@ -143,16 +144,19 @@ export function ImageCropSheet({
   useEffect(() => {
     if (!open || !image) {
       setSourceSize(null)
+      setPrepared(null)
       setError(null)
       setBusy(false)
       return
     }
     let active = true
     setError(null)
-    void getImageSize(image.uri)
-      .then((size) => {
+    setPrepared(null)
+    void prepareImageForCrop(image)
+      .then((ready) => {
         if (!active) return
-        setSourceSize(size)
+        setPrepared(ready.image)
+        setSourceSize({ width: ready.width, height: ready.height })
         resetTransform()
       })
       .catch(() => {
@@ -218,15 +222,9 @@ export function ImageCropSheet({
     width = Math.max(1, Math.min(width, sourceSize.width - originX))
     height = Math.max(1, Math.min(height, sourceSize.height - originY))
 
-    if (aspect) {
-      const target = aspect[0] / aspect[1]
-      const current = width / height
-      if (Math.abs(current - target) > 0.02) {
-        return centeredCropRect(sourceSize.width, sourceSize.height, aspect)
-      }
-    }
-
-    return { originX, originY, width, height }
+    const rect = { originX, originY, width, height }
+    if (!aspect) return rect
+    return aspectFitCropRect(rect, sourceSize.width, sourceSize.height, aspect)
   }
 
   const handleConfirm = useCallback(async () => {
@@ -235,8 +233,8 @@ export function ImageCropSheet({
     setError(null)
     try {
       const crop = computeCropRect()
-      if (!crop) throw new Error('Could not crop this image.')
-      const result = await cropPickedImage(image, crop)
+      if (!crop || !prepared) throw new Error('Could not crop this image.')
+      const result = await cropPickedImage(prepared, crop)
       // Resolve the pending picker only after the cropped file is fully ready.
       // The host closes this sheet and ImageUploadField then receives the new preview.
       onConfirm(result)
@@ -244,7 +242,7 @@ export function ImageCropSheet({
       setError(err instanceof Error ? err.message : 'Could not crop this image.')
       setBusy(false)
     }
-  }, [aspect, busy, fitted, frame.height, frame.width, image, onConfirm, sourceSize])
+  }, [aspect, busy, fitted, frame.height, frame.width, image, onConfirm, prepared, sourceSize])
 
   const ratioHint = aspectLabel(aspect)
   const headerTitle =
@@ -354,10 +352,10 @@ export function ImageCropSheet({
                 pointerEvents="none"
                 style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000' }]}
               />
-              {fitted && image ? (
+              {fitted && prepared ? (
                 <CropStage
                   ref={stageRef}
-                  uri={image.uri}
+                  uri={prepared.uri}
                   imageWidth={fitted.width}
                   imageHeight={fitted.height}
                   frameWidth={frame.width}
@@ -380,7 +378,7 @@ export function ImageCropSheet({
               )}
 
               {/* Dim outside the crop window only after the photo is on stage. */}
-              {fitted && image && viewport.width > 0 && viewport.height > 0 ? (
+              {fitted && prepared && viewport.width > 0 && viewport.height > 0 ? (
                 <View pointerEvents="none" style={StyleSheet.absoluteFill}>
                   <Svg width={viewport.width} height={viewport.height}>
                     <Defs>
@@ -417,7 +415,7 @@ export function ImageCropSheet({
                     <SvgRect
                       width={viewport.width}
                       height={viewport.height}
-                      fill="rgba(0,0,0,0.72)"
+                      fill="rgba(0,0,0,0.4)"
                       mask={`url(#${maskId})`}
                     />
                     {isCircle ? (
@@ -460,7 +458,7 @@ export function ImageCropSheet({
               zIndex={3}
             >
               <Text fontSize={13} color="rgba(255,255,255,0.55)" textAlign="center">
-                Drag to reposition
+                Drag the photo into the frame
                 {Platform.OS !== 'web' ? ' · Pinch to zoom' : ' · Scroll to zoom'}
               </Text>
 
@@ -516,7 +514,7 @@ export function ImageCropSheet({
                 tone="primary"
                 size="$5"
                 width="100%"
-                disabled={busy || !image}
+                disabled={busy || !prepared}
                 onPress={handleConfirm}
                 borderRadius={24}
                 accessibilityLabel={busy ? 'Saving cropped photo' : 'Use cropped photo'}

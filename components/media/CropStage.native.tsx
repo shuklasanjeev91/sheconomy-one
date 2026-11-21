@@ -157,7 +157,13 @@ export const CropStage = forwardRef<CropStageHandle, CropStageProps>(function Cr
         <Animated.View
           style={[{ width: imageWidth, height: imageHeight }, animatedStyle]}
         >
-          <Image src={uri} width="100%" height="100%" objectFit="cover" alt="" />
+          <Image
+            src={uri}
+            width={imageWidth}
+            height={imageHeight}
+            objectFit="fill"
+            alt=""
+          />
         </Animated.View>
       </GestureDetector>
     </View>
