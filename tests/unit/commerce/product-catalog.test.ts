@@ -93,7 +93,7 @@ describe('product identifier gate', () => {
       },
       { required: true },
     )
-    expect(errors.product_id_value).toMatch(/exemption/i)
+    expect(errors.product_id_value).toMatch(/barcode/i)
   })
 
   it('rejects a missing barcode when there is no exemption', () => {
@@ -190,7 +190,7 @@ describe('inventory hints and sale windows', () => {
         listingType: 'physical',
         productTypeId: null,
       }),
-    ).toBe('Choose a product type')
+    ).toBe('Choose what you are selling')
     expect(
       listingCompletenessHint({
         listingType: 'physical',
@@ -204,7 +204,7 @@ describe('inventory hints and sale windows', () => {
         attributeValues: [{ attribute_id: 'ingredients', value_text: 'Rose' }],
         documents: [{ requirement_code: 'ingredient_declaration', file_url: 'doc.pdf' }],
       }),
-    ).toBe('Add a barcode or GTIN exemption')
+    ).toBe('Add a barcode, or say there is none')
   })
 
   it('applies a sale price only inside its window', () => {

@@ -350,9 +350,9 @@ export function validatePublishStep(
   switch (stepId) {
     case LISTING_PUBLISH_STEP_IDS.IDENTITY: {
       if (formData.listing_type === LISTING_TYPES.SERVICE) break
-      if (!formData.product_type_id) errors.product_type_id = 'Choose a product type.'
+      if (!formData.product_type_id) errors.product_type_id = 'Choose what kind of product this is.'
       if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
-        if (!formData.item_condition) errors.item_condition = 'Choose the item condition.'
+        if (!formData.item_condition) errors.item_condition = 'Say whether this is new, used, or refurbished.'
         Object.assign(
           errors,
           validateProductIdentifier(formData.product_identifier, { required: true }),

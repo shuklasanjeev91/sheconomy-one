@@ -64,15 +64,15 @@ export function AplusStep({ ui, formData, onUpdate }: AplusStepProps) {
 
   return (
     <YStack gap="$4" width="100%">
-      <ListingPublishCard ui={ui} title="A+ content">
+      <ListingPublishCard ui={ui} title="Add a little more of the story">
         <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-          Optional modules shown under the product description. Leave this empty to publish without
-          enhanced content.
+          Optional. These blocks sit under the description on the product page. Leave this empty if
+          you want to publish with the photos and description you already added.
         </Text>
         <XStack gap="$2" flexWrap="wrap">
           {APLUS_MODULE_TYPES.map((type) => (
             <Button key={type.value} tone="outline" size="$2" onPress={() => add(type.value)}>
-              + {type.label}
+              Add {type.label.toLowerCase()}
             </Button>
           ))}
         </XStack>

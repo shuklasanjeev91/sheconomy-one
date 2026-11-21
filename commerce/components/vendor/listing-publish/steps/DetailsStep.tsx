@@ -555,7 +555,7 @@ export function DetailsStep({
               />
             </XStack>
           </ListingFormRow>
-          <ListingFormRow ui={ui} label="Shipping template">
+          <ListingFormRow ui={ui} label="How you deliver">
             <Select
               value={formData.delivery_profile_id || 'shop-default'}
               onValueChange={(value) =>
@@ -563,12 +563,12 @@ export function DetailsStep({
               }
             >
               <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
-                <Select.Value placeholder="Shop default" />
+                <Select.Value placeholder="Use my shop default" />
               </SelectTrigger>
               <SelectContent zIndex={300000}>
                 <SelectViewport>
                   <SelectItem index={0} value="shop-default">
-                    <Select.ItemText>Shop default</Select.ItemText>
+                    <Select.ItemText>Use my shop default</Select.ItemText>
                   </SelectItem>
                   {deliveryProfiles.map((profile, index) => (
                     <SelectItem key={profile.id} index={index + 1} value={profile.id}>
@@ -579,7 +579,7 @@ export function DetailsStep({
               </SelectContent>
             </Select>
           </ListingFormRow>
-          <ListingFormRow ui={ui} label="Return policy">
+          <ListingFormRow ui={ui} label="Returns">
             <Select
               value={formData.return_policy_id || 'shop-default'}
               onValueChange={(value) =>
@@ -587,12 +587,12 @@ export function DetailsStep({
               }
             >
               <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
-                <Select.Value placeholder="Shop default" />
+                <Select.Value placeholder="Use my shop default" />
               </SelectTrigger>
               <SelectContent zIndex={300000}>
                 <SelectViewport>
                   <SelectItem index={0} value="shop-default">
-                    <Select.ItemText>Shop default</Select.ItemText>
+                    <Select.ItemText>Use my shop default</Select.ItemText>
                   </SelectItem>
                   {returnPolicies.map((policy, index) => (
                     <SelectItem key={policy.id} index={index + 1} value={policy.id}>

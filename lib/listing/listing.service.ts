@@ -940,7 +940,7 @@ async function assertListingMeetsQuality(
   const firstError = Object.values(quality.errors)[0] || 'Listing does not meet publish quality.'
   return {
     ok: false,
-    error: `${firstError} Open Edit listing and fix quality issues before going live.`,
+    error: `${firstError} Open Edit product and finish the missing details before showing it in your shop.`,
   }
 }
 

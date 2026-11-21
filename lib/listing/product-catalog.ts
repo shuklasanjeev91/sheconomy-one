@@ -25,20 +25,20 @@ export const PRODUCT_ID_TYPES = [
 export type ProductIdType = (typeof PRODUCT_ID_TYPES)[number]['value']
 
 export const GTIN_EXEMPTION_REASONS = [
-  { value: 'handmade', label: 'Handmade, no barcode' },
-  { value: 'private_label', label: 'Private label without a barcode' },
-  { value: 'bundle', label: 'Bundle or multipack' },
-  { value: 'part', label: 'Part or accessory' },
-  { value: 'brand_exemption', label: 'Brand GTIN exemption' },
+  { value: 'handmade', label: 'I made this by hand' },
+  { value: 'private_label', label: 'My own brand, no barcode yet' },
+  { value: 'bundle', label: 'It is a set or bundle' },
+  { value: 'part', label: 'It is a spare part' },
+  { value: 'brand_exemption', label: 'My brand is already exempt' },
 ] as const
 
 export type GtinExemptionReason = (typeof GTIN_EXEMPTION_REASONS)[number]['value']
 
 export const APLUS_MODULE_TYPES = [
-  { value: 'image_text', label: 'Image and text' },
-  { value: 'three_image_text', label: 'Three images and text' },
-  { value: 'comparison', label: 'Comparison chart' },
-  { value: 'text', label: 'Text' },
+  { value: 'image_text', label: 'Photo and words' },
+  { value: 'three_image_text', label: 'Three photos' },
+  { value: 'comparison', label: 'Compare options' },
+  { value: 'text', label: 'Words only' },
 ] as const
 
 export type AplusModuleType = (typeof APLUS_MODULE_TYPES)[number]['value']
@@ -209,21 +209,21 @@ export function validateProductIdentifier(
 
   if (exempt) {
     if (!draft.gtin_exemption_reason) {
-      errors.gtin_exemption_reason = 'Choose why this product has no barcode.'
+      errors.gtin_exemption_reason = 'Tell us why there is no barcode.'
     }
     if (value) {
-      errors.product_id_value = 'Remove the product ID or turn off the GTIN exemption.'
+      errors.product_id_value = 'Clear the barcode, or switch to “I have a barcode”.'
     }
     return errors
   }
 
   if (draft.product_id_type === 'none' || !value) {
-    errors.product_id_value = 'Enter a UPC, EAN, GTIN, or ISBN, or request a GTIN exemption.'
+    errors.product_id_value = 'Enter the barcode, or choose “No barcode”.'
     return errors
   }
 
   if (!isValidProductId(draft.product_id_type, value)) {
-    errors.product_id_value = 'That product ID failed its check digit. Re-enter the barcode.'
+    errors.product_id_value = 'That barcode does not look right. Check the digits and try again.'
   }
   return errors
 }
@@ -296,7 +296,7 @@ export function validateRequiredAttributes(
   for (const def of catalog.attributes) {
     if (!def.is_required) continue
     if (!attributeValuePresent(def, byId.get(def.id))) {
-      errors[`attr_${def.code}`] = `${def.label} is required for this product type.`
+      errors[`attr_${def.code}`] = `${def.label} is needed before you can publish.`
     }
   }
   return errors
@@ -316,7 +316,7 @@ export function validateRequiredCompliance(
         (Boolean(doc.file_url?.trim()) || Boolean(doc.blob)),
     )
     if (!uploaded) {
-      errors[`compliance_${requirement.code}`] = `Upload ${requirement.label}.`
+      errors[`compliance_${requirement.code}`] = `Add ${requirement.label}.`
     }
   }
   return errors
@@ -351,17 +351,17 @@ export function listingCompletenessHint(input: CompletenessInput): string | null
   if (input.listingType && input.listingType !== 'physical' && input.listingType !== 'digital') {
     return null
   }
-  if (!input.productTypeId) return 'Choose a product type'
+  if (!input.productTypeId) return 'Choose what you are selling'
   if (input.listingType !== 'digital') {
-    if (!input.itemCondition) return 'Set item condition'
+    if (!input.itemCondition) return 'Say if this is new or used'
     const idErrors = validateProductIdentifier(input.identifier, { required: true })
-    if (Object.keys(idErrors).length) return 'Add a barcode or GTIN exemption'
+    if (Object.keys(idErrors).length) return 'Add a barcode, or say there is none'
   }
   const attrErrors = validateRequiredAttributes(input.catalog, input.attributeValues)
-  if (Object.keys(attrErrors).length) return 'Missing required attribute'
+  if (Object.keys(attrErrors).length) return 'A required detail is still empty'
   if (input.listingType !== 'digital') {
     const docErrors = validateRequiredCompliance(input.catalog, input.documents)
-    if (Object.keys(docErrors).length) return 'Missing compliance document'
+    if (Object.keys(docErrors).length) return 'A required paper is still missing'
   }
   return null
 }

@@ -44,8 +44,8 @@ export function SeoStep({
   return (
     <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
       <YStack flex={1} minWidth={isDesktop ? 300 : '100%'} gap="$4">
-        <ListingPublishCard ui={ui} title="Identity & Reach" titleAccent>
-          <Field label="URL Slug" error={errors.slug}>
+        <ListingPublishCard ui={ui} title="How shoppers find this" titleAccent>
+          <Field label="Link name" error={errors.slug}>
             <XStack alignItems="center" gap="$1" flexWrap="wrap">
               <Text fontSize={13} color={ui.textMuted} fontWeight="600">
                 {shopSlug}/shop/
@@ -73,16 +73,16 @@ export function SeoStep({
             />
           </Field>
           <Text fontSize={11} color={ui.textMuted}>
-            Tags from Vital info are shown to shoppers. They are separate from backend search terms.
+            Tags from the name step are shown on the product. The box below stays hidden.
           </Text>
-          <Field label="Backend search terms" error={errors.backend_search_terms}>
+          <Field label="Extra search words, hidden from shoppers" error={errors.backend_search_terms}>
             <TextArea
               minHeight={72}
               value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.BACKEND_SEARCH_TERMS)}
               onChangeText={(value) =>
                 onUpdateMetadata(LISTING_METADATA_KEYS.BACKEND_SEARCH_TERMS, value.slice(0, 250))
               }
-              placeholder="Hidden terms shoppers never see. 250 characters."
+              placeholder="silk stole, handloom, gift for her"
             />
           </Field>
           <ListingPublishFieldError ui={ui} message={errors.backend_search_terms} />

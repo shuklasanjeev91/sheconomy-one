@@ -538,7 +538,7 @@ export function VendorListingsProductsTab({
         title="Delete product?"
         description={
           deleteTarget
-            ? `“${deleteTarget.title}” will be permanently removed from your catalogue.`
+            ? `“${deleteTarget.title}” will leave your shop, along with its photos, price, and papers. This cannot be undone.`
             : undefined
         }
         confirmLabel={deleting ? 'Deleting…' : 'Delete'}
@@ -597,26 +597,26 @@ function ProductListingActionsMenu({
         <YStack gap={2}>
           <MenuActionRow
             ui={ui}
-            label="Edit listing"
+            label="Edit product"
             icon={<Icons.Pencil size={16} color={ui.textSecondary} />}
             onPress={() => runAction(() => actions.onEdit(row.id))}
           />
           <MenuActionRow
             ui={ui}
-            label="View details"
+            label="See the shop page"
             icon={<Icons.Eye size={16} color={ui.textSecondary} />}
             onPress={() => runAction(() => actions.onView(row.id))}
           />
           <MenuActionRow
             ui={ui}
-            label="Duplicate listing"
+            label="Copy into a new draft"
             icon={<Icons.Copy size={16} color={ui.textSecondary} />}
             onPress={() => runAction(() => actions.onDuplicate(row.id))}
           />
           {row.listing_type === LISTING_TYPES.PHYSICAL ? (
             <MenuActionRow
               ui={ui}
-              label="Edit quantity"
+              label="Change how many you have"
               icon={<Icons.Package size={16} color={ui.textSecondary} />}
               onPress={() => runAction(() => actions.onManageStock(row.id))}
             />
@@ -626,7 +626,7 @@ function ProductListingActionsMenu({
 
           <YStack paddingHorizontal="$1" paddingBottom="$1">
             <Text fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.4}>
-              LISTING STATUS
+              SHOW IN THE SHOP
             </Text>
           </YStack>
 
@@ -642,11 +642,11 @@ function ProductListingActionsMenu({
                     : ui.textSecondary
             const label =
               action.value === 'active'
-                ? 'Active'
+                ? 'Show in the shop'
                 : action.value === 'paused'
-                  ? 'Inactive'
+                  ? 'Hide for now'
                   : action.value === 'archived'
-                    ? 'Close listing'
+                    ? 'Close this product'
                     : action.label
             return (
               <MenuActionRow

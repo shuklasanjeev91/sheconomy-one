@@ -359,7 +359,7 @@ export function ProductStructurePricingPanel({
   return (
     <YStack gap="$4" width="100%">
       {showOffer && isSimple ? (
-        <ListingPublishCard ui={ui} title="Offer">
+        <ListingPublishCard ui={ui} title="Your price">
           <ListingFormRow ui={ui} label="Your price" required error={errors.price}>
             <XStack alignItems="center" gap="$2">
               <Text fontSize={15} fontWeight="700" color={ui.textMuted}>
@@ -378,7 +378,7 @@ export function ProductStructurePricingPanel({
 
           <ListingFormRow
             ui={ui}
-            label="List price (MRP)"
+            label="Printed price (MRP)"
             hint="Optional. Shown struck through when higher than Your price."
             error={errors.mrp}
           >
@@ -444,7 +444,7 @@ export function ProductStructurePricingPanel({
             />
           </ListingFormRow>
 
-          <ListingFormRow ui={ui} label="Seller SKU">
+          <ListingFormRow ui={ui} label="Your product code">
             <XStack gap="$2" alignItems="center">
               <Input
                 flex={1}
@@ -465,17 +465,16 @@ export function ProductStructurePricingPanel({
       ) : null}
 
       {showOffer && isVariable ? (
-        <ListingPublishCard ui={ui} title="Offer">
+        <ListingPublishCard ui={ui} title="Your price">
           <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-            Your price and quantity are set per variation. Open the Variations tab to edit each
-            child SKU.
+            Price and quantity are set on each option. Open Options to edit them.
           </Text>
         </ListingPublishCard>
       ) : null}
 
       {showOffer ? (
-        <ListingPublishCard ui={ui} title="Offer settings">
-          <ListingFormRow ui={ui} label="Minimum order quantity">
+        <ListingPublishCard ui={ui} title="Sale and stock alerts">
+          <ListingFormRow ui={ui} label="Smallest order">
             <Input
               value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.MIN_ORDER_QUANTITY)}
               onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.MIN_ORDER_QUANTITY, value)}
@@ -483,7 +482,7 @@ export function ProductStructurePricingPanel({
               placeholder="1"
             />
           </ListingFormRow>
-          <ListingFormRow ui={ui} label="Low-stock threshold">
+          <ListingFormRow ui={ui} label="Warn me when stock falls below">
             <Input
               value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.LOW_STOCK_THRESHOLD)}
               onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.LOW_STOCK_THRESHOLD, value)}
@@ -491,7 +490,7 @@ export function ProductStructurePricingPanel({
               placeholder="5"
             />
           </ListingFormRow>
-          <ListingFormRow ui={ui} label="Handling time (days)">
+          <ListingFormRow ui={ui} label="Days before you ship">
             <Input
               value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.HANDLING_TIME_DAYS)}
               onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.HANDLING_TIME_DAYS, value)}
@@ -521,7 +520,7 @@ export function ProductStructurePricingPanel({
               placeholder="YYYY-MM-DD"
             />
           </ListingFormRow>
-          <ListingFormRow ui={ui} label="Allow preorder">
+          <ListingFormRow ui={ui} label="Take orders before it is ready">
             <Switch
               checked={Boolean(
                 (formData.listing_metadata as Record<string, unknown> | undefined)?.[
@@ -547,7 +546,7 @@ export function ProductStructurePricingPanel({
         <ListingPublishCard ui={ui} title="Does this product have variations?">
           {isDigital ? (
             <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-              Digital products are sold as a single SKU. Set Your price on the Offer tab.
+              A download is one product. Set the price on the Price step.
             </Text>
           ) : (
             <XStack gap="$2" flexWrap="wrap">
@@ -570,7 +569,7 @@ export function ProductStructurePricingPanel({
           )}
           {!isDigital && isSimple ? (
             <Text fontSize={13} color={ui.textSecondary} lineHeight={20} marginTop="$2">
-              Sold as a single SKU — set Your price on the Offer tab.
+              One product, one price. Set it on the Price step.
             </Text>
           ) : null}
         </ListingPublishCard>
@@ -580,7 +579,7 @@ export function ProductStructurePricingPanel({
         <>
           <ListingPublishCard
             ui={ui}
-            title="Variation attributes"
+            title="Options such as size or color"
             headerRight={
               <XStack gap="$3" alignItems="center">
                 <Text
@@ -604,7 +603,7 @@ export function ProductStructurePricingPanel({
               </XStack>
             }
           >
-            <ListingFormRow ui={ui} label="Parent SKU">
+            <ListingFormRow ui={ui} label="Your code for the whole product">
               <XStack gap="$2" alignItems="center">
                 <Input
                   flex={1}
@@ -716,10 +715,10 @@ export function ProductStructurePricingPanel({
             </YStack>
           </ListingPublishCard>
 
-          <ListingPublishCard ui={ui} title="Variation listing">
+          <ListingPublishCard ui={ui} title="Each option">
             {variations.length === 0 ? (
               <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-                Add theme values, then press Apply to generate SKU rows.
+                Add a size or color, then press Apply to list each option.
               </Text>
             ) : (
               <YStack gap="$2" width="100%">
@@ -733,7 +732,7 @@ export function ProductStructurePricingPanel({
                   >
                     {[
                       { label: 'Variation', flex: 1.4 },
-                      { label: 'Seller SKU', flex: 1.2 },
+                      { label: 'Your code', flex: 1.2 },
                       { label: 'Your price', flex: 0.9 },
                       { label: 'MRP', flex: 0.8 },
                       { label: 'Qty', flex: 0.7 },
@@ -776,7 +775,7 @@ export function ProductStructurePricingPanel({
                       <XStack gap="$2" flexWrap="wrap" alignItems="flex-start">
                         <YStack flex={1.4} minWidth={120} gap={2} paddingTop={8}>
                           <Text fontSize={13} fontWeight="800" color={ui.text}>
-                            {variation.variation_value || 'Child SKU'}
+                            {variation.variation_value || 'Option'}
                           </Text>
                           <Text fontSize={11} color={ui.textMuted}>
                             {variation.variation_name}
@@ -786,7 +785,7 @@ export function ProductStructurePricingPanel({
                         <YStack flex={1.2} minWidth={120} gap="$1">
                           {!showSkuTableHeader ? (
                             <Text fontSize={11} fontWeight="600" color={ui.textMuted}>
-                              Seller SKU
+                              Your code
                             </Text>
                           ) : null}
                           <XStack gap="$1.5" alignItems="center">
@@ -794,7 +793,7 @@ export function ProductStructurePricingPanel({
                               flex={1}
                               value={variation.sku ?? ''}
                               onChangeText={(value) => updateVariation(index, { sku: value })}
-                              placeholder="SKU"
+                              placeholder="Your code"
                             />
                             <Button
                               tone="outline"

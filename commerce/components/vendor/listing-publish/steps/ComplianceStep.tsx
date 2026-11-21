@@ -24,9 +24,9 @@ export function ComplianceStep({ ui, formData, errors, catalog, onUpdate }: Comp
 
   if (isDigital) {
     return (
-      <ListingPublishCard ui={ui} title="Safety and compliance">
+      <ListingPublishCard ui={ui} title="Papers">
         <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-          Digital products do not need compliance documents.
+          Downloads do not need a licence or certificate.
         </Text>
       </ListingPublishCard>
     )
@@ -79,10 +79,10 @@ export function ComplianceStep({ ui, formData, errors, catalog, onUpdate }: Comp
 
   return (
     <YStack gap="$4" width="100%">
-      <ListingPublishCard ui={ui} title="Safety and compliance">
+      <ListingPublishCard ui={ui} title="Papers buyers or the law may ask for">
         {requirements.length === 0 ? (
           <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-            This product type has no required compliance documents. You can still publish.
+            This kind of product does not need extra papers. You can move on.
           </Text>
         ) : (
           requirements.map((requirement) => {
@@ -93,7 +93,7 @@ export function ComplianceStep({ ui, formData, errors, catalog, onUpdate }: Comp
               <YStack key={requirement.code} gap="$2" padding="$3" borderWidth={1} borderColor={ui.borderSubtle} borderRadius={10}>
                 <Text fontSize={14} fontWeight="800" color={ui.text}>
                   {requirement.label}
-                  {requirement.is_required ? ' *' : ''}
+                  {requirement.is_required ? ' · needed to publish' : ' · optional'}
                 </Text>
                 {requirement.description ? (
                   <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
@@ -101,7 +101,7 @@ export function ComplianceStep({ ui, formData, errors, catalog, onUpdate }: Comp
                   </Text>
                 ) : null}
                 <Text fontSize={12} color={ui.textSecondary}>
-                  Accepted: {requirement.document_types.join(', ') || 'PDF or image'}
+                  A photo or PDF is fine{requirement.document_types.length ? ` (${requirement.document_types.join(', ')})` : ''}.
                 </Text>
                 <XStack gap="$2" flexWrap="wrap" alignItems="center">
                   <Button
@@ -110,7 +110,7 @@ export function ComplianceStep({ ui, formData, errors, catalog, onUpdate }: Comp
                     disabled={picking === requirement.code}
                     onPress={() => void pickFile(requirement.code, documentType)}
                   >
-                    {attached ? 'Replace file' : 'Upload file'}
+                    {attached ? 'Replace this paper' : 'Add a photo or PDF'}
                   </Button>
                   {attached ? (
                     <Text fontSize={12} color={ui.text} fontWeight="700">
@@ -118,13 +118,13 @@ export function ComplianceStep({ ui, formData, errors, catalog, onUpdate }: Comp
                     </Text>
                   ) : null}
                 </XStack>
-                <Field label="Expires on">
+                <Field label="Expiry date, if this paper has one">
                   <Input
                     value={doc?.expires_on ?? ''}
                     onChangeText={(value) =>
                       upsert(requirement.code, { document_type: documentType, expires_on: value })
                     }
-                    placeholder="YYYY-MM-DD"
+                    placeholder="2027-03-01"
                   />
                 </Field>
                 <ListingPublishFieldError ui={ui} message={errors[`compliance_${requirement.code}`]} />

@@ -307,14 +307,14 @@ export function validateListingQuality(
       pushIssue(issues, errors, warnings, {
         field: "product_type_id",
         severity: "error",
-        message: "Choose a product type.",
+        message: "Choose what kind of product this is.",
       });
     }
     if (!formData.item_condition) {
       pushIssue(issues, errors, warnings, {
         field: "item_condition",
         severity: "error",
-        message: "Choose the item condition.",
+        message: "Say whether this is new, used, or refurbished.",
       });
     }
     const identifierErrors = validateProductIdentifier(formData.product_identifier, {
@@ -344,7 +344,7 @@ export function validateListingQuality(
       pushIssue(issues, errors, warnings, {
         field: "product_type_id",
         severity: "error",
-        message: "Choose a product type.",
+        message: "Choose what kind of product this is.",
       });
     }
     const attributeErrors = validateRequiredAttributes(
