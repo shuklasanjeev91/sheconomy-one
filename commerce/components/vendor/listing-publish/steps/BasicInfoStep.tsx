@@ -1,157 +1,141 @@
 import { useMemo, useState } from 'react'
 
 import {
-  Button,
+  Checkbox,
+  Field,
   Icons,
   Input,
-  Spinner,
+  Switch,
   Text,
   TextArea,
   XStack,
   YStack,
 } from '~/components/ui'
-import { LISTING_TYPE_OPTIONS_SELECTABLE, LISTING_VALIDATION } from '~/lib/listing/listing.type'
-import type { ListingFormData } from '~/lib/listing/listing.type'
+import { LISTING_TYPE_OPTIONS, LISTING_VALIDATION } from '~/lib/listing/listing.type'
+import type { ListingFormData, ListingType } from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import {
-  ListingFormRow,
-  ListingPublishCard,
-} from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
-import { listingTypeIcon } from '~/commerce/components/vendor/listing-publish/ListingTypeChooser'
-import { countWords } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
+import { ListingPublishCard, ListingPublishFieldError } from '../ListingPublishCard'
+import { countWords } from '../listing-publish.utils'
 
 type BasicInfoStepProps = {
   ui: AppUiTokens
   formData: ListingFormData
   errors: Record<string, string>
-  isDesktop: boolean
-  onEditType: () => void
+  featuredCredits?: number
+  onChangeType: (type: ListingType) => void
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onAddTag: (tag: string) => void
   onRemoveTag: (tag: string) => void
-  onWriteWithAi?: () => void
-  writingWithAi?: boolean
+}
+
+function typeIcon(icon: string, color: string) {
+  switch (icon) {
+    case 'package':
+      return <Icons.Package size={22} color={color} />
+    case 'download':
+      return <Icons.Cloud size={22} color={color} />
+    case 'zap':
+      return <Icons.Wand2 size={22} color={color} />
+    default:
+      return <Icons.Box size={22} color={color} />
+  }
 }
 
 export function BasicInfoStep({
   ui,
   formData,
   errors,
-  onEditType,
+  featuredCredits = 3,
+  onChangeType,
   onUpdate,
   onAddTag,
   onRemoveTag,
-  onWriteWithAi,
-  writingWithAi,
 }: BasicInfoStepProps) {
   const titleLength = formData.title?.length ?? 0
   const wordCount = useMemo(() => countWords(formData.description ?? ''), [formData.description])
-  const selectedType = LISTING_TYPE_OPTIONS_SELECTABLE.find(
-    (option) => option.value === formData.listing_type,
-  )
 
   return (
-    <YStack gap="$4" width="100%">
-      {selectedType ? (
-        <XStack
-          width="100%"
-          alignItems="center"
-          gap="$3"
-          paddingHorizontal="$4"
-          paddingVertical="$3"
-          borderRadius={16}
-          borderWidth={1}
-          borderColor={ui.borderSubtle}
-          backgroundColor={ui.roseSurface}
-        >
-          {listingTypeIcon(selectedType.icon, ui.brand)}
-          <YStack flex={1} minWidth={0} gap={2}>
-            <Text fontSize={14} fontWeight="800" color={ui.text}>
-              {selectedType.label}
-            </Text>
-            <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
-              {selectedType.description}
-            </Text>
-          </YStack>
-          <Text
-            fontSize={13}
-            fontWeight="800"
-            color={ui.brand}
-            cursor="pointer"
-            onPress={onEditType}
-          >
-            Change
+    <YStack gap="$4">
+      <XStack gap="$3" flexWrap="wrap">
+        {LISTING_TYPE_OPTIONS.map((option) => {
+          const selected = formData.listing_type === option.value
+          const disabled = option.disabled
+          return (
+            <YStack
+              key={option.value}
+              flex={1}
+              minWidth={200}
+              maxWidth={320}
+              gap="$2"
+              padding="$4"
+              borderRadius={16}
+              borderWidth={selected ? 2 : 1}
+              borderColor={selected ? ui.brand : ui.borderSubtle}
+              backgroundColor={selected ? ui.roseSurface : ui.surface}
+              opacity={disabled ? 0.55 : 1}
+              cursor={disabled ? 'not-allowed' : 'pointer'}
+              onPress={() => {
+                if (!disabled) onChangeType(option.value)
+              }}
+            >
+              <XStack alignItems="center" justifyContent="space-between">
+                {typeIcon(option.icon, selected ? ui.brand : ui.textSecondary)}
+                {selected ? <Icons.CheckCircle2 size={18} color={ui.brand} /> : null}
+                {disabled ? (
+                  <Text fontSize={10} fontWeight="800" color={ui.textMuted} letterSpacing={0.5}>
+                    SOON
+                  </Text>
+                ) : null}
+              </XStack>
+              <Text fontSize={14} fontWeight="800" color={ui.text}>
+                {option.label}
+              </Text>
+              <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+                {option.description}
+              </Text>
+            </YStack>
+          )
+        })}
+      </XStack>
+
+      <ListingPublishCard
+        ui={ui}
+        title="Listing Title"
+        headerRight={
+          <Text fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.4}>
+            {titleLength} / {LISTING_VALIDATION.TITLE.MAX_LENGTH} CHARACTERS
           </Text>
-        </XStack>
-      ) : null}
+        }
+      >
+        <Field error={errors.title}>
+          <XStack alignItems="center" position="relative">
+            <Input
+              width="100%"
+              value={formData.title}
+              onChangeText={(value) => onUpdate('title', value)}
+              placeholder="Premium Silk Velvet Evening Scarf - Amethyst"
+              maxLength={LISTING_VALIDATION.TITLE.MAX_LENGTH}
+              invalid={!!errors.title}
+            />
+            <YStack position="absolute" right={12} pointerEvents="none">
+              <Icons.Sparkles size={16} color={ui.brand} />
+            </YStack>
+          </XStack>
+        </Field>
+        <ListingPublishFieldError ui={ui} message={errors.title} />
+      </ListingPublishCard>
 
-      {onWriteWithAi ? (
-        <XStack
-          width="100%"
-          alignItems="center"
-          justifyContent="space-between"
-          gap="$3"
-          flexWrap="wrap"
-          paddingHorizontal="$4"
-          paddingVertical="$3"
-          borderRadius={16}
-          borderWidth={1}
-          borderColor={ui.borderSubtle}
-          backgroundColor={ui.surface}
-        >
-          <YStack flex={1} minWidth={220} gap={2}>
-            <Text fontSize={14} fontWeight="800" color={ui.text}>
-              Write with AI
-            </Text>
-            <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
-              Use a product photo to suggest the title, description, price, category, and SEO. Review
-              everything before you publish.
-            </Text>
-          </YStack>
-          <Button
-            tone="outline"
-            borderRadius={999}
-            disabled={writingWithAi}
-            icon={
-              writingWithAi ? (
-                <Spinner size="small" color={ui.brand} />
-              ) : (
-                <Icons.Sparkles size={15} color={ui.brand} />
-              )
-            }
-            onPress={onWriteWithAi}
-          >
-            {writingWithAi ? 'Writing with AI…' : 'Write with AI'}
-          </Button>
-        </XStack>
-      ) : null}
-
-      <ListingPublishCard ui={ui} title="Vital info">
-        <ListingFormRow
-          ui={ui}
-          label="Product name"
-          required
-          hint={`${titleLength} / ${LISTING_VALIDATION.TITLE.MAX_LENGTH} characters`}
-          error={errors.title}
-        >
-          <Input
-            width="100%"
-            value={formData.title}
-            onChangeText={(value) => onUpdate('title', value)}
-            placeholder="Premium Silk Velvet Evening Scarf - Amethyst"
-            maxLength={LISTING_VALIDATION.TITLE.MAX_LENGTH}
-            invalid={!!errors.title}
-          />
-        </ListingFormRow>
-
-        <ListingFormRow
-          ui={ui}
-          label="Product description"
-          required
-          hint={`${wordCount} words · min ${LISTING_VALIDATION.DESCRIPTION.MIN_LENGTH} characters`}
-          error={errors.description}
-        >
+      <ListingPublishCard
+        ui={ui}
+        title="Description"
+        headerRight={
+          <Text fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.4}>
+            {wordCount} WORDS
+          </Text>
+        }
+      >
+        <Field error={errors.description}>
           <TextArea
             width="100%"
             minHeight={140}
@@ -161,12 +145,15 @@ export function BasicInfoStep({
             maxLength={LISTING_VALIDATION.DESCRIPTION.MAX_LENGTH}
             invalid={!!errors.description}
           />
-        </ListingFormRow>
+        </Field>
+        <ListingPublishFieldError ui={ui} message={errors.description} />
+      </ListingPublishCard>
 
-        <ListingFormRow ui={ui} label="Search terms / tags">
-          <YStack gap="$2" width="100%">
+      <XStack gap="$4" flexWrap="wrap" alignItems="stretch">
+        <YStack flex={1} minWidth={260}>
+          <ListingPublishCard ui={ui} title="Tags">
             <TagInput ui={ui} onAdd={onAddTag} />
-            <XStack gap="$2" flexWrap="wrap">
+            <XStack gap="$2" flexWrap="wrap" marginTop="$2">
               {(formData.tags ?? []).map((tag) => (
                 <XStack
                   key={tag}
@@ -174,7 +161,7 @@ export function BasicInfoStep({
                   gap={6}
                   paddingHorizontal={10}
                   paddingVertical={6}
-                  borderRadius={8}
+                  borderRadius={999}
                   backgroundColor={ui.chip}
                 >
                   <Text fontSize={12} fontWeight="700" color={ui.brand}>
@@ -186,9 +173,31 @@ export function BasicInfoStep({
                 </XStack>
               ))}
             </XStack>
-          </YStack>
-        </ListingFormRow>
-      </ListingPublishCard>
+          </ListingPublishCard>
+        </YStack>
+
+        <YStack flex={1} minWidth={260}>
+          <ListingPublishCard ui={ui} title="Feature Listing">
+            <XStack alignItems="flex-start" gap="$3">
+              <Checkbox
+                checked={!!formData.is_featured}
+                onCheckedChange={(checked) => onUpdate('is_featured', !!checked)}
+              />
+              <YStack flex={1} gap="$1">
+                <Text fontSize={13} fontWeight="700" color={ui.text}>
+                  Feature this listing
+                </Text>
+                <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+                  Elevate your product to the top of the feed for 48 hours.
+                </Text>
+                <Text fontSize={12} fontWeight="800" color={ui.brand}>
+                  {featuredCredits} credits remain
+                </Text>
+              </YStack>
+            </XStack>
+          </ListingPublishCard>
+        </YStack>
+      </XStack>
     </YStack>
   )
 }

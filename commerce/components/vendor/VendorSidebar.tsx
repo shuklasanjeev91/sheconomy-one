@@ -77,7 +77,7 @@ export function VendorSidebar({
                 {shopName || 'My Shop'}
               </Text>
               <Text fontSize={11} color={ui.textMuted} fontWeight="600" numberOfLines={1}>
-                Shop manager
+                Vendor console
               </Text>
             </YStack>
           ) : null}

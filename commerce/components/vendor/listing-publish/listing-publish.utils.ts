@@ -9,36 +9,23 @@ import type {
   ListingMaterial,
   ListingVariation,
 } from '~/lib/listing/listing.type'
-import { LISTING_STATUS, LISTING_TYPES } from '~/lib/listing/listing.type'
-import { validatePersonalization } from '~/lib/listing/product-catalog'
-import type { ListingCatalogChildren } from '~/lib/listing/product-catalog.service'
+import { LISTING_TYPES } from '~/lib/listing/listing.type'
 import { generateListingSlug } from '~/lib/listing/listing.utils'
 import {
-  validateListingQuality,
-  validateListingImagesQuality,
-  validatePhysicalProductInfoQuality,
-} from '~/lib/listing/listing-quality'
-import {
   validateCategoryData,
+  validateListingCore,
   validateListingData,
   validateListingField,
 } from '~/lib/listing/listing.validation'
 import type { PublishListingData } from '~/lib/listing/listing-publish.orchestrator'
-import {
-  parseListingProductInfo,
-  serializeListingProductInfo,
-  type ListingProductInfo,
-} from '~/commerce/lib/listing-product-info'
 
 import {
   LISTING_METADATA_KEYS,
   LISTING_PUBLISH_DEFAULT_METADATA,
   LISTING_PUBLISH_IMAGE_HINTS,
   LISTING_PUBLISH_STEP_IDS,
-  PRODUCT_STRUCTURES,
   type ListingPublishStepId,
-  type ProductStructure,
-} from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+} from './listing-publish.constants'
 
 export function countWords(text: string): number {
   const trimmed = text.trim()
@@ -66,12 +53,8 @@ export function mergeListingMetadata(
   return { ...LISTING_PUBLISH_DEFAULT_METADATA, ...(existing ?? {}) }
 }
 
-export function readMetadataString(
-  meta: Record<string, unknown> | undefined,
-  key: string,
-  fallback = '',
-): string {
-  const value = meta?.[key]
+export function readMetadataString(meta: Record<string, unknown>, key: string, fallback = ''): string {
+  const value = meta[key]
   if (value === null || value === undefined) return fallback
   return String(value)
 }
@@ -82,48 +65,6 @@ export function readMetadataBoolean(meta: Record<string, unknown>, key: string, 
   if (value === 'true') return true
   if (value === 'false') return false
   return fallback
-}
-
-export function readMetadataStringList(meta: Record<string, unknown>, key: string): string[] {
-  const value = meta[key]
-  if (!Array.isArray(value)) return []
-  return value.map((entry) => String(entry ?? '').trim()).filter(Boolean)
-}
-
-/**
- * Infer product structure from metadata + variations.
- * Child SKUs always win — default metadata is "simple", which must not hide
- * existing variable listings that never wrote product_structure=variable.
- */
-export function resolveProductStructure(formData: {
-  listing_metadata?: Record<string, unknown> | null
-  variations?: { variation_value?: string | null }[] | null
-}): ProductStructure {
-  const hasChildren =
-    Array.isArray(formData.variations) &&
-    formData.variations.some((row) => String(row.variation_value ?? '').trim())
-  if (hasChildren) return PRODUCT_STRUCTURES.VARIABLE
-
-  const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
-  const raw = String(meta[LISTING_METADATA_KEYS.PRODUCT_STRUCTURE] ?? '').trim().toLowerCase()
-  if (raw === PRODUCT_STRUCTURES.VARIABLE) return PRODUCT_STRUCTURES.VARIABLE
-  // simple | grouped | unset → Simple when there are no child SKUs
-  return PRODUCT_STRUCTURES.SIMPLE
-}
-
-/** Parent price range from variation SKUs (for Pricing step summary). */
-export function variationPriceRange(
-  variations: { price?: number | string | null }[] | null | undefined,
-): { min: number; max: number; count: number } | null {
-  const prices = (variations ?? [])
-    .map((row) => Number(row.price))
-    .filter((n) => Number.isFinite(n) && n >= 0)
-  if (!prices.length) return null
-  return {
-    min: Math.min(...prices),
-    max: Math.max(...prices),
-    count: prices.length,
-  }
 }
 
 export function pickedImagesToDrafts(images: PickedImage[]): ListingImageDraft[] {
@@ -151,16 +92,7 @@ export function listingImagesToDrafts(images: ListingImage[]): ListingImageDraft
       height: img.height,
       file_size: img.file_size,
       image_type: img.image_type,
-      variation_id: img.variation_id ?? null,
     }))
-}
-
-function readFirstSectionId(sections: unknown): string | null {
-  if (!Array.isArray(sections) || !sections.length) return null
-  const first = sections[0]
-  if (!first || typeof first !== 'object') return null
-  const id = (first as { id?: unknown }).id
-  return typeof id === 'string' ? id : null
 }
 
 export function buildFormFromListingDetails(
@@ -171,67 +103,29 @@ export function buildFormFromListingDetails(
     attributes?: ListingAttribute[]
     materials?: ListingMaterial[]
     categoryIds?: { category_id: string; is_primary?: boolean }[]
-    catalog?: ListingCatalogChildren
-    /** Prefill the editor as a duplicate of an existing listing. */
-    asDuplicate?: boolean
   },
 ): ListingFormData {
-  const asDuplicate = Boolean(extras?.asDuplicate)
-  const baseTitle = listing.title ?? ''
-  const title = asDuplicate
-    ? baseTitle.toLowerCase().startsWith('copy of ')
-      ? baseTitle
-      : `Copy of ${baseTitle}`
-    : baseTitle
-
-  const images = extras?.images ? listingImagesToDrafts(extras.images) : []
-  const variations = (extras?.variations ?? []).map((row) =>
-    asDuplicate
-      ? {
-          ...row,
-          id: undefined,
-          listing_id: undefined,
-        }
-      : row,
-  )
-  const hasChildren = variations.some((row) => String(row.variation_value ?? '').trim())
-  const meta = mergeListingMetadata({
-    ...((listing.listing_metadata as Record<string, unknown> | null) ?? {}),
-    ...(hasChildren
-      ? { [LISTING_METADATA_KEYS.PRODUCT_STRUCTURE]: PRODUCT_STRUCTURES.VARIABLE }
-      : {}),
-  })
-  const productInfo = serializeListingProductInfo(
-    parseListingProductInfo(listing.product_info, listing.listing_metadata),
-  )
-  const materials = (extras?.materials ?? []).map((row) =>
-    asDuplicate ? { ...row, id: undefined, listing_id: undefined } : row,
-  )
-  const attributes = (extras?.attributes ?? []).map((row) =>
-    asDuplicate ? { ...row, id: undefined, listing_id: undefined } : row,
+  const meta = mergeListingMetadata(
+    (listing.listing_metadata as Record<string, unknown> | null) ?? undefined,
   )
 
   return {
     shop_id: listing.shop_id ?? undefined,
-    title,
+    title: listing.title ?? '',
     description: listing.description ?? '',
     listing_type: listing.listing_type ?? LISTING_TYPES.PHYSICAL,
     price: listing.price ?? '',
-    mrp: listing.mrp ?? '',
-    price_includes_tax: listing.price_includes_tax ?? true,
-    tax_percent: listing.tax_percent ?? '18',
-    product_info: productInfo,
     quantity: listing.quantity ?? 1,
-    is_featured: asDuplicate ? false : (listing.is_featured ?? false),
-    is_active: asDuplicate ? false : (listing.is_active ?? true),
-    listing_status: asDuplicate ? LISTING_STATUS.DRAFT : listing.listing_status ?? undefined,
-    slug: asDuplicate ? '' : (listing.slug ?? ''),
-    meta_title: asDuplicate ? '' : (listing.meta_title ?? ''),
+    is_featured: listing.is_featured ?? false,
+    is_active: listing.is_active ?? true,
+    listing_status: listing.listing_status ?? undefined,
+    slug: listing.slug ?? '',
+    meta_title: listing.meta_title ?? '',
     meta_description: listing.meta_description ?? '',
     tags: listing.tags ?? [],
     listing_metadata: meta,
     stock: listing.stock ?? 0,
-    sku: asDuplicate && listing.sku ? `${listing.sku}-COPY` : (listing.sku ?? ''),
+    sku: listing.sku ?? '',
     weight: listing.weight ?? null,
     dimensions: (listing.dimensions as Record<string, unknown>) ?? {},
     shipping_required: listing.shipping_required ?? true,
@@ -250,63 +144,11 @@ export function buildFormFromListingDetails(
         category_id: row.category_id,
         is_primary: row.is_primary ?? false,
       })),
-    images: asDuplicate
-      ? images.map((img) => ({
-          ...img,
-          id: undefined,
-          variation_id: null,
-        }))
-      : images,
-    variations,
-    attributes,
-    materials,
-    who_made: listing.who_made ?? null,
-    when_made: listing.when_made ?? null,
-    what_is_it: listing.what_is_it ?? null,
-    personalization_enabled: Boolean(listing.personalization_enabled),
-    personalization_instructions: listing.personalization_instructions ?? '',
-    personalization_char_limit: listing.personalization_char_limit ?? 256,
-    personalization_required: Boolean(listing.personalization_required),
-    shop_section_id: readFirstSectionId(listing.sections),
-    delivery_profile_id: extras?.catalog?.deliveryProfileId ?? null,
-    return_policy_id: extras?.catalog?.returnPolicyId ?? null,
+    images: extras?.images ? listingImagesToDrafts(extras.images) : [],
+    variations: extras?.variations ?? [],
+    attributes: extras?.attributes ?? [],
+    materials: extras?.materials ?? [],
   }
-}
-
-/** Read a single product_info string for the publish form. */
-export function readProductInfoString(
-  productInfo: Record<string, unknown> | undefined,
-  key: string,
-  fallback = '',
-): string {
-  const value = productInfo?.[key]
-  if (value === null || value === undefined) return fallback
-  return String(value)
-}
-
-/** Patch camelCase UI fields into the snake_case `product_info` bag. */
-export function patchListingProductInfo(
-  current: Record<string, unknown> | undefined,
-  patch: Partial<ListingProductInfo>,
-): Record<string, string> {
-  const existing = parseListingProductInfo(current)
-  return serializeListingProductInfo({ ...existing, ...patch })
-}
-
-/** Mirror origin / HSN onto listing_metadata for shipping / customs. */
-export function mirrorProductInfoToListingMetadata(
-  metadata: Record<string, unknown> | undefined,
-  productInfo: Record<string, unknown> | undefined,
-): Record<string, unknown> {
-  const parsed = parseListingProductInfo(productInfo)
-  const next = mergeListingMetadata(metadata)
-  if (parsed.countryOfOrigin) {
-    next[LISTING_METADATA_KEYS.COUNTRY_OF_ORIGIN] = parsed.countryOfOrigin
-  }
-  if (parsed.hsnCode) {
-    next[LISTING_METADATA_KEYS.HS_CODE] = parsed.hsnCode
-  }
-  return next
 }
 
 export function formDataToPublishPayload(
@@ -314,19 +156,12 @@ export function formDataToPublishPayload(
   shopId: string,
 ): PublishListingData {
   const slug = formData.slug?.trim() || generateListingSlug(formData.title)
-  const productInfo = serializeListingProductInfo(parseListingProductInfo(formData.product_info))
-  const listing_metadata = mirrorProductInfoToListingMetadata(
-    formData.listing_metadata as Record<string, unknown>,
-    productInfo,
-  )
   return {
     ...formData,
     shop_id: shopId,
     slug,
     description: formData.description ?? '',
-    product_info: productInfo,
-    listing_metadata,
-    shop_sections: formData.shop_section_id ? [formData.shop_section_id] : [],
+    listing_metadata: mergeListingMetadata(formData.listing_metadata as Record<string, unknown>),
   }
 }
 
@@ -334,18 +169,6 @@ export type StepValidationResult = {
   isValid: boolean
   errors: Record<string, string>
   warnings: string[]
-}
-
-function sectionErrors(
-  formData: ListingFormData,
-  fields: string[],
-): Record<string, string> {
-  const quality = validateListingQuality(formData)
-  const picked: Record<string, string> = {}
-  for (const field of fields) {
-    if (quality.errors[field]) picked[field] = quality.errors[field]
-  }
-  return picked
 }
 
 export function validatePublishStep(
@@ -356,66 +179,56 @@ export function validatePublishStep(
   const warnings: string[] = []
 
   switch (stepId) {
-    case LISTING_PUBLISH_STEP_IDS.PHOTOS:
-      Object.assign(errors, sectionErrors(formData, ['images']))
-      break
-    case LISTING_PUBLISH_STEP_IDS.CATEGORY: {
-      if (!formData.listing_type) errors.listing_type = 'Choose physical or digital.'
-      const cat = validateCategoryData(formData.categories)
-      if (!cat.isValid && cat.error) errors.categories = cat.error
-      Object.assign(errors, sectionErrors(formData, ['when_made']))
-      break
-    }
-    case LISTING_PUBLISH_STEP_IDS.ABOUT: {
-      const title = validateListingField('title', formData.title ?? '')
-      if (!title.isValid && title.error) errors.title = title.error
+    case LISTING_PUBLISH_STEP_IDS.BASIC: {
+      const core = validateListingCore(formData)
+      Object.assign(errors, core.errors)
       const desc = validateListingField('description', formData.description ?? '')
       if (!desc.isValid && desc.error) errors.description = desc.error
-      if (formData.listing_type === LISTING_TYPES.DIGITAL) {
-        if (!formData.digital_file_url?.trim()) {
-          errors.digital_file_url = 'A download URL is required for digital products.'
+      break
+    }
+    case LISTING_PUBLISH_STEP_IDS.DETAILS: {
+      if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
+        if (!formData.materials?.length) {
+          errors.materials = 'At least one material is required for physical products.'
         }
-        if (!formData.digital_file_type?.trim()) {
-          errors.digital_file_type = 'File type is required for digital products.'
+        if (!formData.variations?.length) {
+          errors.variations = 'At least one product variation is required for physical products.'
+        }
+        if (formData.stock === '' || formData.stock === null || formData.stock === undefined) {
+          errors.stock = 'Stock quantity is required for physical products.'
         }
       }
       break
     }
-    case LISTING_PUBLISH_STEP_IDS.PRICE: {
+    case LISTING_PUBLISH_STEP_IDS.PRICING: {
       const price = validateListingField('price', formData.price)
       if (!price.isValid && price.error) errors.price = price.error
-      Object.assign(errors, sectionErrors(formData, ['stock']))
       break
     }
-    case LISTING_PUBLISH_STEP_IDS.VARIATIONS:
-      if (formData.listing_type !== LISTING_TYPES.DIGITAL) {
-        Object.assign(errors, sectionErrors(formData, ['variations']))
-      }
-      Object.assign(errors, validatePersonalization(formData))
-      Object.assign(errors, sectionErrors(formData, ['tags']))
+    case LISTING_PUBLISH_STEP_IDS.CATEGORIES: {
+      const cat = validateCategoryData(formData.categories)
+      if (!cat.isValid && cat.error) errors.categories = cat.error
+      if (cat.warning) warnings.push(cat.warning)
       break
-    case LISTING_PUBLISH_STEP_IDS.PERSONALIZATION:
-      Object.assign(errors, validatePersonalization(formData))
-      break
-    case LISTING_PUBLISH_STEP_IDS.SHIPPING:
-      if (formData.listing_type !== LISTING_TYPES.DIGITAL) {
-        Object.assign(
-          errors,
-          sectionErrors(formData, ['weight', 'package_length_cm', 'package_width_cm', 'package_height_cm']),
+    }
+    case LISTING_PUBLISH_STEP_IDS.IMAGES: {
+      const count = formData.images?.length ?? 0
+      if (count < LISTING_PUBLISH_IMAGE_HINTS.MIN_REQUIRED_PUBLISH) {
+        errors.images = 'At least one image is required to save or publish.'
+      } else if (count < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED) {
+        warnings.push(
+          `Upload at least ${LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED} images for best results.`,
         )
-        const productQuality = validatePhysicalProductInfoQuality(
-          formData.product_info,
-          formData.listing_metadata,
-        )
-        Object.assign(errors, productQuality.errors)
-        warnings.push(...productQuality.warnings)
       }
       break
-    case LISTING_PUBLISH_STEP_IDS.MADE:
-      Object.assign(errors, sectionErrors(formData, ['who_made', 'what_is_it']))
-      break
-    case LISTING_PUBLISH_STEP_IDS.DETAILS: {
-      Object.assign(errors, sectionErrors(formData, ['who_made', 'when_made', 'what_is_it', 'tags']))
+    }
+    case LISTING_PUBLISH_STEP_IDS.SEO: {
+      const slug = validateListingField('slug', formData.slug ?? generateListingSlug(formData.title))
+      if (!slug.isValid && slug.error) errors.slug = slug.error
+      const metaTitle = validateListingField('meta_title', formData.meta_title ?? '')
+      if (!metaTitle.isValid && metaTitle.error) errors.meta_title = metaTitle.error
+      const metaDesc = validateListingField('meta_description', formData.meta_description ?? '')
+      if (!metaDesc.isValid && metaDesc.error) errors.meta_description = metaDesc.error
       break
     }
     default:
@@ -425,74 +238,16 @@ export function validatePublishStep(
   return { isValid: Object.keys(errors).length === 0, errors, warnings }
 }
 
-/**
- * Drafts are deliberately permissive: a vendor should be able to park a
- * half-finished listing. Only what the row needs to exist is required.
- */
-export function validateDraftForm(formData: ListingFormData): StepValidationResult {
-  const errors: Record<string, string> = {}
-  const title = validateListingField('title', formData.title ?? '')
-  if (!title.isValid && title.error) errors.title = title.error
-  if (!formData.listing_type) errors.listing_type = 'Please select a listing type.'
-  return { isValid: Object.keys(errors).length === 0, errors, warnings: [] }
-}
-
 export function validateFullPublishForm(formData: ListingFormData): StepValidationResult {
-  const structure = resolveProductStructure(formData)
   const result = validateListingData(formData)
-  const quality = validateListingQuality(formData)
-  const errors = { ...result.errors, ...quality.errors }
-  const warnings = [...quality.warnings]
-
-  if (structure === PRODUCT_STRUCTURES.VARIABLE) {
-    delete errors.price
-    delete errors.stock
+  const warnings: string[] = []
+  const imageCount = formData.images?.length ?? 0
+  if (imageCount < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED) {
+    warnings.push(
+      `Upload at least ${LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED} images for best conversion.`,
+    )
   }
-
-  return { isValid: Object.keys(errors).length === 0, errors, warnings }
-}
-
-const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
-  images: LISTING_PUBLISH_STEP_IDS.PHOTOS,
-  title: LISTING_PUBLISH_STEP_IDS.ABOUT,
-  description: LISTING_PUBLISH_STEP_IDS.ABOUT,
-  listing_type: LISTING_PUBLISH_STEP_IDS.CATEGORY,
-  categories: LISTING_PUBLISH_STEP_IDS.CATEGORY,
-  price: LISTING_PUBLISH_STEP_IDS.PRICE,
-  stock: LISTING_PUBLISH_STEP_IDS.PRICE,
-  quantity: LISTING_PUBLISH_STEP_IDS.PRICE,
-  sku: LISTING_PUBLISH_STEP_IDS.PRICE,
-  variations: LISTING_PUBLISH_STEP_IDS.VARIATIONS,
-  personalization_instructions: LISTING_PUBLISH_STEP_IDS.PERSONALIZATION,
-  personalization_char_limit: LISTING_PUBLISH_STEP_IDS.PERSONALIZATION,
-  weight: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  package_length_cm: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  package_width_cm: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  package_height_cm: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  digital_file_url: LISTING_PUBLISH_STEP_IDS.ABOUT,
-  digital_file_type: LISTING_PUBLISH_STEP_IDS.ABOUT,
-  who_made: LISTING_PUBLISH_STEP_IDS.MADE,
-  when_made: LISTING_PUBLISH_STEP_IDS.CATEGORY,
-  what_is_it: LISTING_PUBLISH_STEP_IDS.MADE,
-  tags: LISTING_PUBLISH_STEP_IDS.VARIATIONS,
-  materials: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  manufacturer_name: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  manufacturer_address: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  brand: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  generic_name: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  key_features: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  country_of_origin: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-}
-
-/** Which step owns the first offending field, so we can jump the vendor there. */
-export function findStepForErrors(
-  errors: Record<string, string>,
-): ListingPublishStepId | undefined {
-  for (const field of Object.keys(errors)) {
-    const step = FIELD_STEP_LOOKUP[field]
-    if (step) return step
-  }
-  return undefined
+  return { isValid: result.isValid, errors: result.errors, warnings }
 }
 
 export async function ensureImageBlobsForPublish(

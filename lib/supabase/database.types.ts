@@ -6839,14 +6839,11 @@ export type Database = {
           hsn_code: string | null
           id: string
           is_available: boolean
-          is_visible: boolean
           listing_id: string
           mrp: number | null
           price: number | null
           price_adjustment: number | null
           price_includes_tax: boolean | null
-          processing_time_max: number | null
-          processing_time_min: number | null
           sku: string | null
           stock: number | null
           tax_percent: number | null
@@ -6862,14 +6859,11 @@ export type Database = {
           hsn_code?: string | null
           id?: string
           is_available?: boolean
-          is_visible?: boolean
           listing_id: string
           mrp?: number | null
           price?: number | null
           price_adjustment?: number | null
           price_includes_tax?: boolean | null
-          processing_time_max?: number | null
-          processing_time_min?: number | null
           sku?: string | null
           stock?: number | null
           tax_percent?: number | null
@@ -6885,14 +6879,11 @@ export type Database = {
           hsn_code?: string | null
           id?: string
           is_available?: boolean
-          is_visible?: boolean
           listing_id?: string
           mrp?: number | null
           price?: number | null
           price_adjustment?: number | null
           price_includes_tax?: boolean | null
-          processing_time_max?: number | null
-          processing_time_min?: number | null
           sku?: string | null
           stock?: number | null
           tax_percent?: number | null
@@ -6961,10 +6952,6 @@ export type Database = {
           price: number
           price_includes_tax: boolean
           product_info: Json
-          personalization_char_limit: number | null
-          personalization_enabled: boolean
-          personalization_instructions: string | null
-          personalization_required: boolean
           published_at: string | null
           quantity: number | null
           requires_approval: boolean | null
@@ -6980,9 +6967,6 @@ export type Database = {
           total_reviews: number | null
           updated_at: string
           weight: number | null
-          what_is_it: string | null
-          when_made: string | null
-          who_made: string | null
         }
         Insert: {
           average_rating?: number | null
@@ -7011,10 +6995,6 @@ export type Database = {
           price: number
           price_includes_tax?: boolean
           product_info?: Json
-          personalization_char_limit?: number | null
-          personalization_enabled?: boolean
-          personalization_instructions?: string | null
-          personalization_required?: boolean
           published_at?: string | null
           quantity?: number | null
           requires_approval?: boolean | null
@@ -7030,9 +7010,6 @@ export type Database = {
           total_reviews?: number | null
           updated_at?: string
           weight?: number | null
-          what_is_it?: string | null
-          when_made?: string | null
-          who_made?: string | null
         }
         Update: {
           average_rating?: number | null
@@ -7061,10 +7038,6 @@ export type Database = {
           price?: number
           price_includes_tax?: boolean
           product_info?: Json
-          personalization_char_limit?: number | null
-          personalization_enabled?: boolean
-          personalization_instructions?: string | null
-          personalization_required?: boolean
           published_at?: string | null
           quantity?: number | null
           requires_approval?: boolean | null
@@ -7080,9 +7053,6 @@ export type Database = {
           total_reviews?: number | null
           updated_at?: string
           weight?: number | null
-          what_is_it?: string | null
-          when_made?: string | null
-          who_made?: string | null
         }
         Relationships: [
           {
@@ -17052,13 +17022,6 @@ export type Database = {
           updated_at: string | null
           variations: Json | null
           weight: number | null
-          who_made: string | null
-          when_made: string | null
-          what_is_it: string | null
-          personalization_enabled: boolean | null
-          personalization_instructions: string | null
-          personalization_char_limit: number | null
-          personalization_required: boolean | null
         }
         Relationships: [
           {

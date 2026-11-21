@@ -91,9 +91,6 @@ describe('validateListingQuality', () => {
         stock: 12,
         materials: [{ material_name: 'Cotton' }],
         categories: [{ category_id: 'stoles', is_primary: true }],
-        who_made: 'i_did',
-        when_made: 'made_to_order',
-        what_is_it: 'finished_product',
         weight: 180,
         listing_metadata: {
           package_length_cm: '30',

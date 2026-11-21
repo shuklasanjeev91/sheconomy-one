@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import { validateDraftForm, validateFullPublishForm } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 import { validateListingQuality } from '~/lib/listing/listing-quality'
 import { EMPTY_LISTING_FORM_DATA, LISTING_TYPES } from '~/lib/listing/listing.type'
 import type { ListingFormData } from '~/lib/listing/listing.type'
@@ -44,14 +43,10 @@ describe('draft versus publish', () => {
     images: [],
   })
 
-  it('saves a draft without maker details', () => {
-    expect(validateDraftForm(thin).isValid).toBe(true)
-  })
-
-  it('blocks publish until maker details, a photo, and shipping size are present', () => {
+  it('blocks publish until a photo and shipping size are present', () => {
     const blocked = validateListingQuality(thin)
     expect(blocked.isValid).toBe(false)
-    expect(blocked.errors.who_made).toBeTruthy()
+    expect(blocked.errors.who_made).toBeUndefined()
     expect(blocked.errors.images).toBeTruthy()
 
     const ready = form({
@@ -79,7 +74,7 @@ describe('draft versus publish', () => {
         key_features: 'Weekly rose clay mask\nSmall-batch mix\nSoft finish after rinse',
       },
     })
-    const published = validateFullPublishForm(ready)
+    const published = validateListingQuality(ready)
     expect(published.errors.who_made).toBeUndefined()
     expect(published.errors.images).toBeUndefined()
     expect(published.isValid).toBe(true)
@@ -89,22 +84,7 @@ describe('draft versus publish', () => {
 describe('inventory hints and sale windows', () => {
   it('names the first missing handmade detail', () => {
     expect(listingCompletenessHint({ listingType: 'physical', title: '' })).toBe('Add a title')
-    expect(
-      listingCompletenessHint({
-        listingType: 'physical',
-        title: 'Rose clay mask',
-        whoMade: 'i_did',
-      }),
-    ).toBe('Say who made it')
-    expect(
-      listingCompletenessHint({
-        listingType: 'physical',
-        title: 'Rose clay mask',
-        whoMade: 'i_did',
-        whenMade: 'made_to_order',
-        whatIsIt: 'finished_product',
-      }),
-    ).toBeNull()
+    expect(listingCompletenessHint({ listingType: 'physical', title: 'Rose clay mask' })).toBeNull()
   })
 
   it('applies a sale price only inside its window', () => {

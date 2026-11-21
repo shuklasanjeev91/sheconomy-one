@@ -1,6 +1,3 @@
-import { useMemo, useState } from 'react'
-
-import { GeoSelectField } from '~/components/geo/GeoSelectField'
 import {
   Button,
   Field,
@@ -13,108 +10,62 @@ import {
   SelectViewport,
   Switch,
   Text,
-  TextArea,
   XStack,
   YStack,
 } from '~/components/ui'
-import { DIGITAL_FILE_TYPES, LISTING_TYPES } from '~/lib/listing/listing.type'
 import type { ListingFormData } from '~/lib/listing/listing.type'
-import { detectFileTypeFromExtension } from '~/lib/listing/listing.utils'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
-import {
-  countryToOption,
-  getAllGeoCountries,
-  getCountryName,
-  resolveCountryCode,
-} from '~/lib/geo'
-import {
-  parseListingProductInfo,
-  type ListingProductInfo,
-} from '~/commerce/lib/listing-product-info'
-import {
-  ListingFormRow,
-  ListingPublishCard,
-  ListingPublishFieldError,
-} from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
-import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
-import {
-  patchListingProductInfo,
-  readMetadataString,
-  readProductInfoString,
-} from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
+
+import { ListingPublishCard, ListingPublishFieldError } from '../ListingPublishCard'
+import { LISTING_METADATA_KEYS } from '../listing-publish.constants'
+import { readMetadataString } from '../listing-publish.utils'
+
 type DetailsStepProps = {
   ui: AppUiTokens
   formData: ListingFormData
   errors: Record<string, string>
-  sellerCountryCode?: string | null
-  /** Which block of this form to render. */
-  section?: 'details' | 'shipping' | 'returns' | 'all'
-  deliveryProfiles?: { id: string; profile_name: string }[]
-  returnPolicies?: { id: string; policy_name: string }[]
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
 }
 
-export function DetailsStep({
-  ui,
-  formData,
-  errors,
-  section = 'all',
-  deliveryProfiles = [],
-  returnPolicies = [],
-  onUpdate,
-  onUpdateMetadata,
-}: DetailsStepProps) {
+const VARIATION_TYPES = ['Color', 'Size', 'Material', 'Style'] as const
+
+export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }: DetailsStepProps) {
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
-  const attributes = formData.attributes ?? []
   const materials = formData.materials ?? []
-  const isDigital = formData.listing_type === LISTING_TYPES.DIGITAL
-  const productInfo = parseListingProductInfo(formData.product_info)
-  const countryOptions = useMemo(() => getAllGeoCountries().map(countryToOption), [])
-  const [showPackerImporter, setShowPackerImporter] = useState(
-    Boolean(productInfo.packerName || productInfo.packerAddress || productInfo.importerName),
-  )
-  const showDetails = section === 'details' || section === 'all'
-  const showShipping = section === 'shipping' || section === 'all'
-  const showReturns = section === 'returns' || section === 'all'
-
-  function updateProductInfo(patch: Partial<ListingProductInfo>) {
-    const next = patchListingProductInfo(formData.product_info, patch)
-    onUpdate('product_info', next)
-    if (patch.countryOfOrigin !== undefined) {
-      onUpdateMetadata(LISTING_METADATA_KEYS.COUNTRY_OF_ORIGIN, patch.countryOfOrigin ?? '')
-    }
-    if (patch.hsnCode !== undefined) {
-      onUpdateMetadata(LISTING_METADATA_KEYS.HS_CODE, patch.hsnCode ?? '')
-    }
-  }
-
-  function updateDigitalUrl(value: string) {
-    onUpdate('digital_file_url', value)
-    if (!formData.digital_file_type?.trim() && value.trim()) {
-      onUpdate('digital_file_type', detectFileTypeFromExtension(value))
-    }
-  }
-
-
-
+  const variations = formData.variations ?? []
+  const attributes = formData.attributes ?? []
 
   function addMaterial() {
-    onUpdate('materials', [...materials, { material_name: '', percentage: null, is_primary: materials.length === 0 }])
+    onUpdate('materials', [
+      ...materials,
+      { material_name: '', percentage: null, certification: '' },
+    ])
   }
 
   function updateMaterial(index: number, patch: Record<string, unknown>) {
-    onUpdate(
-      'materials',
-      materials.map((row, i) => (i === index ? { ...row, ...patch } : row)),
-    )
+    const next = materials.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    onUpdate('materials', next)
   }
 
   function removeMaterial(index: number) {
-    onUpdate(
-      'materials',
-      materials.filter((_, i) => i !== index),
-    )
+    onUpdate('materials', materials.filter((_, i) => i !== index))
+  }
+
+  function addVariation() {
+    onUpdate('variations', [
+      ...variations,
+      { variation_name: 'Color', variation_value: '', price_adjustment: 0, stock: 0 },
+    ])
+  }
+
+  function updateVariation(index: number, patch: Record<string, unknown>) {
+    const next = variations.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    onUpdate('variations', next)
+  }
+
+  function removeVariation(index: number) {
+    onUpdate('variations', variations.filter((_, i) => i !== index))
   }
 
   function addAttribute() {
@@ -131,313 +82,120 @@ export function DetailsStep({
   }
 
   return (
-    <YStack gap="$4" width="100%">
-      {showDetails && isDigital ? (
-        <ListingPublishCard ui={ui} title="Digital Delivery">
-          <Field label="Download URL" error={errors.digital_file_url}>
-            <Input
-              width="100%"
-              value={formData.digital_file_url ?? ''}
-              onChangeText={updateDigitalUrl}
-              placeholder="https://drive.example.com/my-pattern.pdf"
-              autoCapitalize="none"
-              keyboardType="url"
-              invalid={!!errors.digital_file_url}
-            />
-          </Field>
-          <Text fontSize={11} color={ui.textMuted}>
-            Buyers receive this link once their payment is confirmed.
-          </Text>
-          <ListingPublishFieldError ui={ui} message={errors.digital_file_url} />
-
-          <XStack gap="$3" flexWrap="wrap">
-            <Field label="File Type" flex={1} minWidth={160} error={errors.digital_file_type}>
-              <Select
-                value={formData.digital_file_type ?? ''}
-                onValueChange={(value) => onUpdate('digital_file_type', value)}
-              >
-                <SelectTrigger
-                  width="100%"
-                  iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}
-                >
-                  <Select.Value placeholder="Select a file type" />
-                </SelectTrigger>
-                <SelectContent zIndex={300000}>
-                  <SelectViewport>
-                    {DIGITAL_FILE_TYPES.map((fileType, index) => (
-                      <SelectItem key={fileType.value} index={index} value={fileType.value}>
-                        <Select.ItemText>{fileType.label}</Select.ItemText>
-                      </SelectItem>
-                    ))}
-                  </SelectViewport>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Download Limit (Optional)" flex={1} minWidth={160}>
-              <Input
-                value={formData.download_limit != null ? String(formData.download_limit) : ''}
-                onChangeText={(value) => onUpdate('download_limit', value === '' ? null : value)}
-                placeholder="Unlimited"
-                keyboardType="numeric"
-              />
-            </Field>
-          </XStack>
-          <ListingPublishFieldError ui={ui} message={errors.digital_file_type} />
-        </ListingPublishCard>
-      ) : null}
-
-      {showDetails && !isDigital ? (
-        <ListingPublishCard ui={ui} title="Product details">
-          <ListingFormRow ui={ui} label="Brand" required error={errors.brand}>
-            <Input
-              value={readProductInfoString(formData.product_info, 'brand')}
-              onChangeText={(value) => updateProductInfo({ brand: value })}
-              placeholder="Your brand name"
-              invalid={!!errors.brand}
-            />
-          </ListingFormRow>
-
-          <ListingFormRow ui={ui} label="Generic name" required error={errors.generic_name}>
-            <Input
-              value={readProductInfoString(formData.product_info, 'generic_name')}
-              onChangeText={(value) => updateProductInfo({ genericName: value })}
-              placeholder="e.g. Handwoven cotton stole"
-              invalid={!!errors.generic_name}
-            />
-          </ListingFormRow>
-
-          <ListingFormRow
-            ui={ui}
-            label="Key features"
-            required
-            hint="One bullet per line. Add at least 3."
-            error={errors.key_features}
-          >
-            <TextArea
-              minHeight={110}
-              value={readProductInfoString(formData.product_info, 'key_features')}
-              onChangeText={(value) => updateProductInfo({ keyFeatures: value })}
-              placeholder={
-                'Handwoven on a traditional loom\n100% handloom cotton\nNatural vegetable dyes\n'
-              }
-              invalid={!!errors.key_features}
-            />
-          </ListingFormRow>
-
-          <ListingFormRow ui={ui} label="Manufacturer" required error={errors.manufacturer_name}>
-            <Input
-              value={readProductInfoString(formData.product_info, 'manufacturer_name')}
-              onChangeText={(value) => updateProductInfo({ manufacturerName: value })}
-              placeholder="Legal manufacturer / maker name"
-              invalid={!!errors.manufacturer_name}
-            />
-          </ListingFormRow>
-
-          <ListingFormRow
-            ui={ui}
-            label="Manufacturer address"
-            required
-            error={errors.manufacturer_address}
-          >
-            <TextArea
-              minHeight={72}
-              value={readProductInfoString(formData.product_info, 'manufacturer_address')}
-              onChangeText={(value) => updateProductInfo({ manufacturerAddress: value })}
-              placeholder="Full manufacturing address"
-              invalid={!!errors.manufacturer_address}
-            />
-          </ListingFormRow>
-
-          <YStack gap="$1.5" width="100%">
-            <GeoSelectField
-              label="Country of origin"
-              value={resolveCountryCode(
-                productInfo.countryOfOrigin ||
-                  readMetadataString(meta, LISTING_METADATA_KEYS.COUNTRY_OF_ORIGIN),
-              )}
-              displayValue={
-                productInfo.countryOfOrigin ||
-                getCountryName(
-                  resolveCountryCode(
-                    readMetadataString(meta, LISTING_METADATA_KEYS.COUNTRY_OF_ORIGIN),
-                  ),
-                ) ||
-                undefined
-              }
-              placeholder="Select country"
-              options={countryOptions}
-              onChange={(code, option) => {
-                updateProductInfo({
-                  countryOfOrigin: option.label || getCountryName(code) || code,
-                })
-              }}
-              sheetTitle="Select country of origin"
-              searchPlaceholder="Search countries"
-              showFlags
-              required
-            />
-            <ListingPublishFieldError ui={ui} message={errors.country_of_origin} />
-          </YStack>
-
-          <ListingFormRow ui={ui} label="Manufactured on" error={errors.manufacturing_date}>
-            <Input
-              value={readProductInfoString(formData.product_info, 'manufacturing_date')}
-              onChangeText={(value) => updateProductInfo({ manufacturingDate: value })}
-              placeholder="YYYY-MM-DD"
-            />
-          </ListingFormRow>
-
-          <ListingFormRow ui={ui} label="Best before / Expiry" error={errors.expiry_date}>
-            <Input
-              value={readProductInfoString(formData.product_info, 'expiry_date')}
-              onChangeText={(value) => updateProductInfo({ expiryDate: value })}
-              placeholder="YYYY-MM-DD"
-              invalid={!!errors.expiry_date}
-            />
-          </ListingFormRow>
-
-          <ListingFormRow ui={ui} label="Shelf life">
-            <Input
-              value={readProductInfoString(formData.product_info, 'shelf_life')}
-              onChangeText={(value) => updateProductInfo({ shelfLife: value })}
-              placeholder="e.g. 12 months from manufacture"
-            />
-          </ListingFormRow>
-
-          <ListingFormRow ui={ui} label="Net quantity">
-            <Input
-              value={readProductInfoString(formData.product_info, 'net_quantity')}
-              onChangeText={(value) => updateProductInfo({ netQuantity: value })}
-              placeholder="e.g. 1 piece, 250 g"
-            />
-          </ListingFormRow>
-
-          <ListingFormRow ui={ui} label="HSN code">
-            <Input
-              value={
-                readProductInfoString(formData.product_info, 'hsn_code') ||
-                readMetadataString(meta, LISTING_METADATA_KEYS.HS_CODE)
-              }
-              onChangeText={(value) => updateProductInfo({ hsnCode: value })}
-              placeholder="e.g. 6911"
-              keyboardType="numeric"
-            />
-          </ListingFormRow>
-
-          <ListingFormRow ui={ui} label="Model / item no.">
-            <Input
-              value={readProductInfoString(formData.product_info, 'model_number')}
-              onChangeText={(value) => updateProductInfo({ modelNumber: value })}
-              placeholder="Optional style code"
-            />
-          </ListingFormRow>
-
-          <ListingFormRow ui={ui} label="Warranty">
-            <Input
-              value={readProductInfoString(formData.product_info, 'warranty')}
-              onChangeText={(value) => updateProductInfo({ warranty: value })}
-              placeholder="e.g. 6 months against defects"
-            />
-          </ListingFormRow>
-
-          <ListingFormRow ui={ui} label="Material / composition">
-            <Input
-              value={readProductInfoString(formData.product_info, 'material_composition')}
-              onChangeText={(value) => updateProductInfo({ materialComposition: value })}
-              placeholder="e.g. 100% cotton, ceramic, brass"
-            />
-          </ListingFormRow>
-
-          <ListingFormRow ui={ui} label="Care instructions">
-            <TextArea
-              minHeight={72}
-              value={readProductInfoString(formData.product_info, 'care_instructions')}
-              onChangeText={(value) => updateProductInfo({ careInstructions: value })}
-              placeholder="Wash, storage, and handling notes"
-            />
-          </ListingFormRow>
-
-          <Text
-            fontSize={12}
-            fontWeight="700"
-            color={ui.brand}
-            cursor="pointer"
-            onPress={() => setShowPackerImporter((open) => !open)}
-          >
-            {showPackerImporter ? 'Hide packer / importer' : '+ Packer / importer (optional)'}
-          </Text>
-          {showPackerImporter ? (
-            <YStack gap="$3">
-              <ListingFormRow ui={ui} label="Packer name">
-                <Input
-                  value={readProductInfoString(formData.product_info, 'packer_name')}
-                  onChangeText={(value) => updateProductInfo({ packerName: value })}
-                />
-              </ListingFormRow>
-              <ListingFormRow ui={ui} label="Packer address">
-                <TextArea
-                  minHeight={64}
-                  value={readProductInfoString(formData.product_info, 'packer_address')}
-                  onChangeText={(value) => updateProductInfo({ packerAddress: value })}
-                />
-              </ListingFormRow>
-              <ListingFormRow ui={ui} label="Importer name">
-                <Input
-                  value={readProductInfoString(formData.product_info, 'importer_name')}
-                  onChangeText={(value) => updateProductInfo({ importerName: value })}
-                />
-              </ListingFormRow>
-            </YStack>
-          ) : null}
-        </ListingPublishCard>
-      ) : null}
-
-      {showDetails && !isDigital ? (
-        <ListingPublishCard
-          ui={ui}
-          title="Materials"
-          headerRight={
-            <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addMaterial}>
-              + Add material
-            </Text>
-          }
-        >
-          {materials.length === 0 ? (
-            <Text fontSize={13} color={ui.textSecondary}>
-              Add fabric, metal, or other materials when they help shoppers compare.
-            </Text>
-          ) : (
-            materials.map((material, index) => (
-              <XStack key={`material-${index}`} gap="$2" flexWrap="wrap" alignItems="flex-end">
-                <Field label="Material" flex={1} minWidth={140}>
-                  <Input
-                    value={material.material_name ?? ''}
-                    onChangeText={(value) => updateMaterial(index, { material_name: value })}
-                    placeholder="Cotton"
-                  />
-                </Field>
-                <Field label="%" width={90}>
-                  <Input
-                    value={material.percentage != null ? String(material.percentage) : ''}
-                    onChangeText={(value) => updateMaterial(index, { percentage: value })}
-                    keyboardType="decimal-pad"
-                    placeholder="80"
-                  />
-                </Field>
-                <Button tone="ghost" size="$2" icon={<Icons.X size={14} />} onPress={() => removeMaterial(index)} />
-              </XStack>
-            ))
-          )}
-        </ListingPublishCard>
-      ) : null}
-
-      {showDetails ? (
+    <YStack gap="$4">
       <ListingPublishCard
         ui={ui}
-        title="Additional attributes (optional)"
+        title="Materials & Composition"
+        headerRight={
+          <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addMaterial}>
+            + Add Material
+          </Text>
+        }
+      >
+        <Text fontSize={11} color={ui.danger} fontWeight="700">
+          * Required
+        </Text>
+        <ListingPublishFieldError ui={ui} message={errors.materials} />
+        <YStack gap="$2">
+          {materials.map((material, index) => (
+            <XStack
+              key={`material-${index}`}
+              gap="$2"
+              alignItems="flex-end"
+              flexWrap="wrap"
+              padding="$3"
+              borderRadius={12}
+              backgroundColor={ui.roseSurface}
+            >
+              <Field label="NAME" flex={1} minWidth={140}>
+                <Input
+                  value={material.material_name ?? ''}
+                  onChangeText={(value) => updateMaterial(index, { material_name: value })}
+                />
+              </Field>
+              <Field label="PERCENTAGE" width={100}>
+                <Input
+                  value={material.percentage != null ? String(material.percentage) : ''}
+                  onChangeText={(value) => updateMaterial(index, { percentage: value })}
+                  keyboardType="numeric"
+                />
+              </Field>
+              <Field label="CERTIFICATION" flex={1} minWidth={140}>
+                <Input
+                  value={material.certification ?? ''}
+                  onChangeText={(value) => updateMaterial(index, { certification: value })}
+                />
+              </Field>
+              <Button tone="ghost" size="$2" icon={<Icons.Trash2 size={14} />} onPress={() => removeMaterial(index)} />
+            </XStack>
+          ))}
+        </YStack>
+      </ListingPublishCard>
+
+      <ListingPublishCard
+        ui={ui}
+        title="Product Variations"
+        headerRight={
+          <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addVariation}>
+            + Add Variation
+          </Text>
+        }
+      >
+        <ListingPublishFieldError ui={ui} message={errors.variations} />
+        <YStack gap="$2">
+          {variations.map((variation, index) => (
+            <XStack key={`variation-${index}`} gap="$2" alignItems="flex-end" flexWrap="wrap">
+              <Field label="Type" width={140}>
+                <Select
+                  value={variation.variation_name ?? 'Color'}
+                  onValueChange={(value) => updateVariation(index, { variation_name: value })}
+                >
+                  <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
+                    <Select.Value placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent zIndex={300000}>
+                    <SelectViewport>
+                      {VARIATION_TYPES.map((type, typeIndex) => (
+                        <SelectItem key={type} index={typeIndex} value={type}>
+                          <Select.ItemText>{type}</Select.ItemText>
+                        </SelectItem>
+                      ))}
+                    </SelectViewport>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Value" flex={1} minWidth={120}>
+                <Input
+                  value={variation.variation_value ?? ''}
+                  onChangeText={(value) => updateVariation(index, { variation_value: value })}
+                />
+              </Field>
+              <Field label="Price Adj." width={100}>
+                <Input
+                  value={String(variation.price_adjustment ?? 0)}
+                  onChangeText={(value) => updateVariation(index, { price_adjustment: value })}
+                  keyboardType="numeric"
+                />
+              </Field>
+              <Field label="Stock" width={80}>
+                <Input
+                  value={String(variation.stock ?? 0)}
+                  onChangeText={(value) => updateVariation(index, { stock: value })}
+                  keyboardType="numeric"
+                />
+              </Field>
+              <Button tone="ghost" size="$2" icon={<Icons.X size={14} />} onPress={() => removeVariation(index)} />
+            </XStack>
+          ))}
+        </YStack>
+      </ListingPublishCard>
+
+      <ListingPublishCard
+        ui={ui}
+        title="Additional Attributes (Optional)"
         headerRight={
           <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addAttribute}>
-            + Add attribute
+            + Add Attribute
           </Text>
         }
       >
@@ -457,15 +215,7 @@ export function DetailsStep({
         ) : (
           <YStack gap="$2">
             {attributes.map((attr, index) => (
-              <XStack
-                key={`attr-${index}`}
-                gap="$2"
-                alignItems="flex-end"
-                flexWrap="wrap"
-                padding="$3"
-                borderRadius={12}
-                backgroundColor={ui.surfaceMuted}
-              >
+              <XStack key={`attr-${index}`} gap="$2" alignItems="flex-end" flexWrap="wrap">
                 <Field label="Name" flex={1} minWidth={120}>
                   <Input
                     value={attr.attribute_name ?? ''}
@@ -484,118 +234,99 @@ export function DetailsStep({
           </YStack>
         )}
       </ListingPublishCard>
-      ) : null}
 
-      {showShipping && !isDigital ? (
-        <ListingPublishCard ui={ui} title="Package">
-          <ListingFormRow ui={ui} label="Weight (grams)">
+      <ListingPublishCard ui={ui} title="Logistics & Inventory">
+        <Field label="SKU (Stock Keeping Unit)">
+          <XStack gap="$2" alignItems="center">
+            <Input
+              flex={1}
+              value={formData.sku ?? ''}
+              onChangeText={(value) => onUpdate('sku', value)}
+              placeholder="Auto-generated if empty"
+            />
+            <Button
+              tone="outline"
+              size="$3"
+              onPress={() => onUpdate('sku', `SKU-${Date.now().toString(36).toUpperCase()}`)}
+            >
+              Generate
+            </Button>
+          </XStack>
+        </Field>
+
+        <XStack gap="$3" flexWrap="wrap">
+          <Field label="Initial Quantity" flex={1} minWidth={120} error={errors.stock}>
+            <Input
+              value={String(formData.stock ?? '')}
+              onChangeText={(value) => onUpdate('stock', value)}
+              keyboardType="numeric"
+              invalid={!!errors.stock}
+            />
+          </Field>
+          <Field label="Weight (grams)" flex={1} minWidth={120}>
             <Input
               value={formData.weight != null ? String(formData.weight) : ''}
               onChangeText={(value) => onUpdate('weight', value)}
               keyboardType="numeric"
             />
-          </ListingFormRow>
-          <ListingFormRow ui={ui} label="Dimensions (L × W × H cm)">
-            <XStack gap="$2" flexWrap="wrap" width="100%">
-              <Input
-                flex={1}
-                minWidth={80}
-                placeholder="Length"
-                value={readMetadataString(meta, LISTING_METADATA_KEYS.PACKAGE_LENGTH_CM)}
-                onChangeText={(value) =>
-                  onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_LENGTH_CM, value)
-                }
-                keyboardType="numeric"
-              />
-              <Input
-                flex={1}
-                minWidth={80}
-                placeholder="Width"
-                value={readMetadataString(meta, LISTING_METADATA_KEYS.PACKAGE_WIDTH_CM)}
-                onChangeText={(value) =>
-                  onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_WIDTH_CM, value)
-                }
-                keyboardType="numeric"
-              />
-              <Input
-                flex={1}
-                minWidth={80}
-                placeholder="Height"
-                value={readMetadataString(meta, LISTING_METADATA_KEYS.PACKAGE_HEIGHT_CM)}
-                onChangeText={(value) =>
-                  onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_HEIGHT_CM, value)
-                }
-                keyboardType="numeric"
-              />
-            </XStack>
-          </ListingFormRow>
-          <ListingFormRow
-            ui={ui}
-            label="Shipping required"
-            hint="Turn off only for digital downloads or services without delivery."
-          >
-            <XStack alignItems="center" minHeight={40}>
-              <Switch
-                checked={formData.shipping_required ?? true}
-                onCheckedChange={(checked) => onUpdate('shipping_required', !!checked)}
-              />
-            </XStack>
-          </ListingFormRow>
-          <ListingFormRow ui={ui} label="Shipping profile">
-            <Select
-              value={formData.delivery_profile_id || 'shop-default'}
-              onValueChange={(value) =>
-                onUpdate('delivery_profile_id', value === 'shop-default' ? null : value)
-              }
-            >
-              <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
-                <Select.Value placeholder="Use my shop default" />
-              </SelectTrigger>
-              <SelectContent zIndex={300000}>
-                <SelectViewport>
-                  <SelectItem index={0} value="shop-default">
-                    <Select.ItemText>Use my shop default</Select.ItemText>
-                  </SelectItem>
-                  {deliveryProfiles.map((profile, index) => (
-                    <SelectItem key={profile.id} index={index + 1} value={profile.id}>
-                      <Select.ItemText>{profile.profile_name}</Select.ItemText>
-                    </SelectItem>
-                  ))}
-                </SelectViewport>
-              </SelectContent>
-            </Select>
-          </ListingFormRow>
-        </ListingPublishCard>
-      ) : null}
+          </Field>
+          <Field label="HS Code" flex={1} minWidth={120}>
+            <Input
+              value={readMetadataString(meta, LISTING_METADATA_KEYS.HS_CODE)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.HS_CODE, value)}
+              keyboardType="numeric"
+            />
+          </Field>
+        </XStack>
 
-      {showReturns && !isDigital ? (
-        <ListingPublishCard ui={ui} title="Returns and exchanges">
-          <ListingFormRow ui={ui} label="Return policy">
-            <Select
-              value={formData.return_policy_id || 'shop-default'}
-              onValueChange={(value) =>
-                onUpdate('return_policy_id', value === 'shop-default' ? null : value)
-              }
-            >
-              <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
-                <Select.Value placeholder="Use my shop default" />
-              </SelectTrigger>
-              <SelectContent zIndex={300000}>
-                <SelectViewport>
-                  <SelectItem index={0} value="shop-default">
-                    <Select.ItemText>Use my shop default</Select.ItemText>
-                  </SelectItem>
-                  {returnPolicies.map((policy, index) => (
-                    <SelectItem key={policy.id} index={index + 1} value={policy.id}>
-                      <Select.ItemText>{policy.policy_name}</Select.ItemText>
-                    </SelectItem>
-                  ))}
-                </SelectViewport>
-              </SelectContent>
-            </Select>
-          </ListingFormRow>
-        </ListingPublishCard>
-      ) : null}
+        <Field label="Package Dimensions (L × W × H cm)">
+          <XStack gap="$2" flexWrap="wrap">
+            <Input
+              flex={1}
+              minWidth={80}
+              placeholder="Length"
+              value={readMetadataString(meta, LISTING_METADATA_KEYS.PACKAGE_LENGTH_CM)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_LENGTH_CM, value)}
+              keyboardType="numeric"
+            />
+            <Input
+              flex={1}
+              minWidth={80}
+              placeholder="Width"
+              value={readMetadataString(meta, LISTING_METADATA_KEYS.PACKAGE_WIDTH_CM)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_WIDTH_CM, value)}
+              keyboardType="numeric"
+            />
+            <Input
+              flex={1}
+              minWidth={80}
+              placeholder="Height"
+              value={readMetadataString(meta, LISTING_METADATA_KEYS.PACKAGE_HEIGHT_CM)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.PACKAGE_HEIGHT_CM, value)}
+              keyboardType="numeric"
+            />
+          </XStack>
+        </Field>
+
+        <ListingPublishFieldError ui={ui} message={errors.stock} />
+      </ListingPublishCard>
+
+      <ListingPublishCard ui={ui}>
+        <XStack alignItems="center" justifyContent="space-between" gap="$3">
+          <YStack flex={1} gap="$1">
+            <Text fontSize={14} fontWeight="800" color={ui.text}>
+              Physical Product
+            </Text>
+            <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+              This item requires physical delivery and will use the calculated shipping rates.
+            </Text>
+          </YStack>
+          <Switch
+            checked={formData.shipping_required ?? true}
+            onCheckedChange={(checked) => onUpdate('shipping_required', !!checked)}
+          />
+        </XStack>
+      </ListingPublishCard>
     </YStack>
   )
 }

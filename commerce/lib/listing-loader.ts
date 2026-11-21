@@ -127,14 +127,12 @@ export const LISTING_CORE_SELECT = `
   average_rating, total_reviews, stock, quantity, category, tags,
   shop_id, created_at, sku, weight, dimensions, listing_metadata,
   mrp, price_includes_tax, tax_percent, product_info,
-  who_made, when_made, what_is_it,
-  personalization_enabled, personalization_instructions, personalization_char_limit, personalization_required,
   digital_file_url, digital_file_type, digital_file_size, download_limit, shipping_required,
   listing_images(id, image_url, is_primary, display_order, alt_text, image_type, image_metadata, variation_id),
   listing_variations(
     id, variation_name, variation_value, price_adjustment, price, mrp, tax_percent,
-    price_includes_tax, hsn_code, weight, stock, sku, is_available, is_visible, display_order,
-    processing_time_min, processing_time_max, variation_metadata
+    price_includes_tax, hsn_code, weight, stock, sku, is_available, display_order,
+    variation_metadata
   ),
   listing_attributes(
     id, attribute_name, attribute_value, display_order

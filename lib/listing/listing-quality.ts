@@ -16,10 +16,7 @@ import {
   type ListingImageDraft,
   type ListingType,
 } from "~/lib/listing/listing.type";
-import {
-  MAX_VARIATION_PROPERTIES,
-  validatePersonalization,
-} from "~/lib/listing/product-catalog";
+import { MAX_VARIATION_PROPERTIES } from "~/lib/listing/product-catalog";
 import { parseVariationAxes } from "~/commerce/lib/listing-variant-skus";
 
 export type ListingQualityIssue = {
@@ -393,33 +390,6 @@ export function validateListingQuality(
           message: `Enter the package ${label}.`,
         });
       }
-    }
-  }
-
-  if (listingType === LISTING_TYPES.PHYSICAL || listingType === LISTING_TYPES.DIGITAL) {
-    if (!formData.who_made) {
-      pushIssue(issues, errors, warnings, {
-        field: "who_made",
-        severity: "error",
-        message: "Say who made it.",
-      });
-    }
-    if (!formData.when_made) {
-      pushIssue(issues, errors, warnings, {
-        field: "when_made",
-        severity: "error",
-        message: "Say when it was made.",
-      });
-    }
-    if (!formData.what_is_it) {
-      pushIssue(issues, errors, warnings, {
-        field: "what_is_it",
-        severity: "error",
-        message: "Say whether this is a finished product or a supply.",
-      });
-    }
-    for (const [field, message] of Object.entries(validatePersonalization(formData))) {
-      pushIssue(issues, errors, warnings, { field, severity: "error", message });
     }
   }
 

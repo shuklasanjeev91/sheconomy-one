@@ -91,7 +91,6 @@ export function listingCompletenessHint(input: CompletenessInput): string | null
     return null
   }
   if (!input.title?.trim()) return 'Add a title'
-  if (!input.whoMade || !input.whenMade || !input.whatIsIt) return 'Say who made it'
   return null
 }
 

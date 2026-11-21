@@ -183,7 +183,6 @@ export async function getShopListings(
         `
         id, title, slug, description, price, quantity, listing_type, listing_status,
         is_active, is_featured, is_online, created_at, updated_at, sku,
-        who_made, when_made, what_is_it,
         listing_images ( image_url, is_primary, display_order )
       `,
       )
@@ -221,9 +220,6 @@ export async function getShopListings(
         completeness_hint: listingCompletenessHint({
           listingType: row.listing_type,
           title: row.title,
-          whoMade: row.who_made,
-          whenMade: row.when_made,
-          whatIsIt: row.what_is_it,
         }),
       })),
     )
@@ -462,7 +458,7 @@ export async function getListingDetails(
       supabase
         .from('listings')
         .select(
-          'mrp, price_includes_tax, tax_percent, product_info, who_made, when_made, what_is_it, personalization_enabled, personalization_instructions, personalization_char_limit, personalization_required',
+          'mrp, price_includes_tax, tax_percent, product_info',
         )
         .eq('id', listing.id as string)
         .maybeSingle(),
@@ -475,17 +471,6 @@ export async function getListingDetails(
       price_includes_tax: pricing?.price_includes_tax ?? true,
       tax_percent: pricing?.tax_percent ?? null,
       product_info: pricing?.product_info ?? {},
-      who_made: pricing?.who_made ?? listing.who_made ?? null,
-      when_made: pricing?.when_made ?? listing.when_made ?? null,
-      what_is_it: pricing?.what_is_it ?? listing.what_is_it ?? null,
-      personalization_enabled:
-        pricing?.personalization_enabled ?? listing.personalization_enabled ?? false,
-      personalization_instructions:
-        pricing?.personalization_instructions ?? listing.personalization_instructions ?? null,
-      personalization_char_limit:
-        pricing?.personalization_char_limit ?? listing.personalization_char_limit ?? null,
-      personalization_required:
-        pricing?.personalization_required ?? listing.personalization_required ?? false,
     })
   } catch (error) {
     return fail(error)

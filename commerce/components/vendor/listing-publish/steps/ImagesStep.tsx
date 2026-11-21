@@ -1,85 +1,41 @@
 import { useCallback, useState } from 'react'
-import { Image as RNImage, Platform } from 'react-native'
 
-import { listingImageDraftToDataUrl } from '~/commerce/lib/listing-image-data-url'
 import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { draftListingFromImage, type ListingDraftFromImageResult } from '~/lib/ai/client'
-import { type PickedImage } from '~/lib/media/pick-image'
-import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
-import { LISTING_IMAGE_CONSTRAINTS, type ListingFormData, type ListingImageDraft } from '~/lib/listing/listing.type'
+import { pickImages, type PickedImage } from '~/lib/media/pick-image'
+import type { ListingFormData, ListingImageDraft } from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
+import { ListingPublishCard, ListingPublishFieldError } from '../ListingPublishCard'
 import {
   LISTING_PUBLISH_COPY,
   LISTING_PUBLISH_IMAGE_HINTS,
-} from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+} from '../listing-publish.constants'
 
 type ImagesStepProps = {
   ui: AppUiTokens
   formData: ListingFormData
   errors: Record<string, string>
-  isDesktop: boolean
   onChangeImages: (images: ListingImageDraft[]) => void
-  onApplyAiDraft?: (draft: ListingDraftFromImageResult) => void
 }
 
-export function ImagesStep({
-  ui,
-  formData,
-  errors,
-  isDesktop,
-  onChangeImages,
-  onApplyAiDraft,
-}: ImagesStepProps) {
+export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepProps) {
   const toast = useAppToast()
   const [isPicking, setIsPicking] = useState(false)
-  const [isDrafting, setIsDrafting] = useState(false)
   const images = formData.images ?? []
-  const photos = images.filter((image) => image.image_type !== 'video')
-  const showBanner = photos.length < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED
+  const showBanner = images.length < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED
 
   const handlePick = useCallback(async () => {
     setIsPicking(true)
     try {
-      const remaining = Math.max(0, LISTING_PUBLISH_IMAGE_HINTS.MAX_COUNT - photos.length)
-      if (remaining <= 0) {
-        toast.show(`Maximum ${LISTING_PUBLISH_IMAGE_HINTS.MAX_COUNT} images`, {
-          tone: 'info',
-          message: 'Remove an image before adding another (max images reached).',
-        })
-        return
-      }
-      const picked = await pickImagesWithCrop({
-        multiple: true,
-        maxCount: remaining,
-        aspect: 'listing',
-        cropTitle: 'Crop listing photo',
-      })
+      const picked = await pickImages({ multiple: true, maxCount: 12 })
       if (!picked.length) return
 
       const next = [...images]
-      const rejected: string[] = []
       for (const file of picked) {
-        const draft = await pickedToDraft(file, next.length)
-        const edge =
-          draft.width && draft.height ? Math.max(draft.width, draft.height) : null
-        if (edge != null && edge < LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX) {
-          rejected.push(
-            `${file.fileName || 'Photo'} is ${edge}px (need ≥${LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX}px)`,
-          )
-          continue
-        }
-        next.push(draft)
+        next.push(pickedToDraft(file, next.length))
       }
       normalizePrimary(next)
       onChangeImages(next)
-      if (rejected.length) {
-        toast.show('Some photos were too small', {
-          tone: 'danger',
-          message: rejected.slice(0, 2).join(' · '),
-        })
-      }
     } catch (error) {
       toast.show('Could not add images', {
         tone: 'danger',
@@ -101,34 +57,9 @@ export function ImagesStep({
     onChangeImages(next)
   }
 
-  const handleAiDraft = useCallback(async () => {
-    if (!onApplyAiDraft) return
-    const primary = images.find((img) => img.is_primary) ?? images[0]
-    if (!primary) {
-      toast.show('Add a photo first', {
-        tone: 'info',
-        message: 'AI drafts title and description from your primary listing photo.',
-      })
-      return
-    }
-    setIsDrafting(true)
-    try {
-      const dataUrl = await listingImageDraftToDataUrl(primary)
-      const draft = await draftListingFromImage({ dataUrl })
-      onApplyAiDraft(draft)
-    } catch (error) {
-      toast.show('Could not draft listing', {
-        tone: 'danger',
-        message: error instanceof Error ? error.message : "Couldn't read this photo. Try a clearer product picture.",
-      })
-    } finally {
-      setIsDrafting(false)
-    }
-  }, [images, onApplyAiDraft, toast])
-
   return (
-    <YStack width="100%" gap="$4">
-      <YStack width="100%" minWidth={0} gap="$4">
+    <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
+      <YStack flex={1} minWidth={280} gap="$4">
         {showBanner ? (
           <XStack
             gap="$2"
@@ -148,6 +79,7 @@ export function ImagesStep({
 
         <ListingPublishCard ui={ui} noPadding>
           <YStack
+            padding="$6"
             alignItems="center"
             justifyContent="center"
             gap="$3"
@@ -155,8 +87,7 @@ export function ImagesStep({
             borderStyle="dashed"
             borderColor={ui.borderSubtle}
             borderRadius={16}
-            margin={isDesktop ? '$5' : '$3'}
-            padding={isDesktop ? '$6' : '$4'}
+            margin="$5"
             minHeight={180}
             cursor="pointer"
             hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
@@ -180,47 +111,13 @@ export function ImagesStep({
 
           <ListingPublishFieldError ui={ui} message={errors.images} />
 
-          {onApplyAiDraft && images.length > 0 ? (
-            <XStack paddingHorizontal="$5" paddingBottom="$3">
-              <Button
-                tone="outline"
-                borderRadius={999}
-                disabled={isDrafting}
-                icon={
-                  isDrafting ? (
-                    <Spinner size="small" color={ui.brand} />
-                  ) : (
-                    <Icons.Sparkles size={15} color={ui.brand} />
-                  )
-                }
-                onPress={() => void handleAiDraft()}
-              >
-                {isDrafting ? 'Drafting with AI…' : 'Draft listing from photo'}
-              </Button>
-            </XStack>
-          ) : null}
-
-          <XStack
-            gap="$3"
-            flexWrap="wrap"
-            justifyContent={isDesktop ? 'flex-start' : 'space-between'}
-            paddingHorizontal={isDesktop ? '$5' : '$4'}
-            paddingBottom="$5"
-          >
+          <XStack gap="$3" flexWrap="wrap" paddingHorizontal="$5" paddingBottom="$5">
             {images.map((image, index) => (
-              <YStack
-                key={`${image.id ?? image.image_url}-${index}`}
-                width="47%"
-                maxWidth={180}
-                minWidth={104}
-                flexGrow={1}
-                gap="$1.5"
-                position="relative"
-              >
+              <YStack key={`${image.id ?? image.image_url}-${index}`} width={140} gap="$1.5" position="relative">
                 <Image
                   source={{ uri: image.image_url }}
-                  width="100%"
-                  aspectRatio={1}
+                  width={140}
+                  height={140}
                   borderRadius={12}
                   backgroundColor={ui.surfaceMuted}
                 />
@@ -239,7 +136,14 @@ export function ImagesStep({
                     </Text>
                   </XStack>
                 ) : (
-                  <Button tone="ghost" size="$2" onPress={() => setPrimary(index)}>
+                  <Button
+                    tone="ghost"
+                    size="$2"
+                    position="absolute"
+                    top={6}
+                    right={6}
+                    onPress={() => setPrimary(index)}
+                  >
                     Set primary
                   </Button>
                 )}
@@ -250,11 +154,8 @@ export function ImagesStep({
             ))}
 
             <YStack
-              width="47%"
-              maxWidth={180}
-              minWidth={104}
-              flexGrow={1}
-              aspectRatio={1}
+              width={140}
+              height={140}
               borderRadius={12}
               borderWidth={2}
               borderStyle="dashed"
@@ -270,7 +171,7 @@ export function ImagesStep({
         </ListingPublishCard>
       </YStack>
 
-      <YStack width="100%" maxWidth="100%" gap="$3">
+      <YStack width={280} maxWidth="100%" gap="$3">
         <ListingPublishCard ui={ui} title="Image Guidelines">
           <YStack gap="$2">
             {LISTING_PUBLISH_COPY.IMAGE_GUIDELINES.map((line) => (
@@ -282,45 +183,16 @@ export function ImagesStep({
               </XStack>
             ))}
           </YStack>
+          <Text fontSize={12} color={ui.textMuted} fontStyle="italic" marginTop="$2">
+            Tip: Quality images increase conversion rates by up to 40%.
+          </Text>
         </ListingPublishCard>
       </YStack>
-    </YStack>
+    </XStack>
   )
 }
 
-async function probeImageSize(uri: string): Promise<{ width: number; height: number } | null> {
-  if (!uri) return null
-  if (Platform.OS === 'web' && typeof createImageBitmap === 'function') {
-    try {
-      const response = await fetch(uri)
-      const blob = await response.blob()
-      const bitmap = await createImageBitmap(blob)
-      const size = { width: bitmap.width, height: bitmap.height }
-      bitmap.close?.()
-      return size
-    } catch {
-      // Fall through to Image() / RNImage.
-    }
-  }
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.Image === 'function') {
-    return new Promise((resolve) => {
-      const img = new window.Image()
-      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
-      img.onerror = () => resolve(null)
-      img.src = uri
-    })
-  }
-  return new Promise((resolve) => {
-    RNImage.getSize(
-      uri,
-      (width, height) => resolve({ width, height }),
-      () => resolve(null),
-    )
-  })
-}
-
-async function pickedToDraft(picked: PickedImage, order: number): Promise<ListingImageDraft> {
-  const size = await probeImageSize(picked.uri)
+function pickedToDraft(picked: PickedImage, order: number): ListingImageDraft {
   return {
     image_url: picked.uri,
     mimeType: picked.mimeType,
@@ -328,9 +200,6 @@ async function pickedToDraft(picked: PickedImage, order: number): Promise<Listin
     blob: picked.file,
     is_primary: order === 0,
     display_order: order,
-    width: size?.width ?? null,
-    height: size?.height ?? null,
-    file_size: picked.file?.size ?? null,
   }
 }
 

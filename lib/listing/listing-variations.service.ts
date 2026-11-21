@@ -51,9 +51,6 @@ function toVariationInsert(
     weight: toNumber(variation.weight),
     display_order: toNumber(variation.display_order) ?? 0,
     is_available: variation.is_available !== false,
-    is_visible: variation.is_visible !== false,
-    processing_time_min: toNumber(variation.processing_time_min),
-    processing_time_max: toNumber(variation.processing_time_max),
     variation_metadata: variation.variation_metadata ?? {},
   }
 }

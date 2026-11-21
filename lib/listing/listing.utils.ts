@@ -336,13 +336,6 @@ const LISTING_TABLE_FIELDS: (keyof ListingInsert)[] = [
   'price_includes_tax',
   'tax_percent',
   'product_info',
-  'who_made',
-  'when_made',
-  'what_is_it',
-  'personalization_enabled',
-  'personalization_instructions',
-  'personalization_char_limit',
-  'personalization_required',
   'quantity',
   'category',
   'is_featured',
@@ -404,21 +397,6 @@ export function prepareListingDataForSubmission(formData: Partial<ListingFormDat
 
   if (payload.price_includes_tax !== undefined) {
     payload.price_includes_tax = Boolean(payload.price_includes_tax)
-  }
-  if (payload.who_made === '') payload.who_made = null
-  if (payload.when_made === '') payload.when_made = null
-  if (payload.what_is_it === '') payload.what_is_it = null
-  if (payload.personalization_enabled !== undefined) {
-    payload.personalization_enabled = Boolean(payload.personalization_enabled)
-  }
-  if (payload.personalization_required !== undefined) {
-    payload.personalization_required = Boolean(payload.personalization_required)
-  }
-  if (payload.personalization_char_limit !== undefined) {
-    payload.personalization_char_limit = toNumberOrNull(payload.personalization_char_limit)
-  }
-  if (typeof payload.personalization_instructions === 'string') {
-    payload.personalization_instructions = payload.personalization_instructions.trim() || null
   }
 
   // Clean tags array.
