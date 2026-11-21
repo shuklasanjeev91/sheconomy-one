@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Share } from 'react-native'
 
-import { useRouter } from 'expo-router'
+import { useRouter } from 'one'
 
 import { Avatar, Button, Checkbox, Icons, Popover, PopoverContent, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
