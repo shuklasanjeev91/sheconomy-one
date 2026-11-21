@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   linkImagesToVariationKeys,
+  listingUsesVariantPricing,
   stampVariationTempKeys,
   variationPriceFields,
+  withVariantListingPrice,
 } from '~/lib/listing/variation-draft'
 
 describe('variation drafts', () => {
@@ -19,5 +21,28 @@ describe('variation drafts', () => {
       [variation],
     )
     expect(linked.variant_temp_key).toBe('old-1')
+  })
+
+  it('uses the first named option as the listing price', () => {
+    expect(listingUsesVariantPricing([{ variation_value: '' }])).toBe(false)
+    expect(
+      withVariantListingPrice({
+        price: '10',
+        mrp: '12',
+        variations: [
+          { variation_value: '', price: 99, mrp: 100 },
+          { variation_value: 'Red', price: 300, mrp: 350 },
+          { variation_value: 'Blue', price: 280, mrp: null },
+        ],
+      }),
+    ).toEqual({
+      price: '300',
+      mrp: '350',
+      variations: [
+        { variation_value: '', price: 99, mrp: 100 },
+        { variation_value: 'Red', price: 300, mrp: 350 },
+        { variation_value: 'Blue', price: 280, mrp: null },
+      ],
+    })
   })
 })

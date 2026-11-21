@@ -139,12 +139,22 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
         }
       >
         <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-          Each option can have its own selling price, MRP, SKU, and stock. Leave price blank to use the listing price.
+          Each option has its own selling price. The first option is selected for buyers, and its selling price is the product price. MRP is crossed out only when it is higher.
         </Text>
         <ListingPublishFieldError ui={ui} message={errors.variations} />
         <YStack gap="$2">
-          {variations.map((variation, index) => (
-            <XStack key={`variation-${index}`} gap="$2" alignItems="flex-end" flexWrap="wrap">
+          {variations.map((variation, index) => {
+            const isDefault =
+              Boolean(variation.variation_value?.trim()) &&
+              variations.findIndex((row) => Boolean(row.variation_value?.trim())) === index
+            return (
+            <YStack key={`variation-${index}`} gap="$1">
+            {isDefault ? (
+              <Text fontSize={11} fontWeight="800" color={ui.brand}>
+                Default
+              </Text>
+            ) : null}
+            <XStack gap="$2" alignItems="flex-end" flexWrap="wrap">
               <Field label="Type" width={140}>
                 <Select
                   value={variation.variation_name ?? 'Color'}
@@ -170,14 +180,14 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
                   onChangeText={(value) => updateVariation(index, { variation_value: value })}
                 />
               </Field>
-              <Field label="Price" width={110}>
+              <Field label="Selling price" width={120}>
                 <Input
                   value={variation.price != null ? String(variation.price) : ''}
                   onChangeText={(value) =>
                     updateVariation(index, variationPriceFields(formData.price, value))
                   }
                   keyboardType="decimal-pad"
-                  placeholder={formData.price ? String(formData.price) : '0'}
+                  placeholder="Required"
                 />
               </Field>
               <Field label="MRP" width={110}>
@@ -207,7 +217,9 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
               </Field>
               <Button tone="ghost" size="$2" icon={<Icons.X size={14} />} onPress={() => removeVariation(index)} />
             </XStack>
-          ))}
+            </YStack>
+            )
+          })}
         </YStack>
       </ListingPublishCard>
 

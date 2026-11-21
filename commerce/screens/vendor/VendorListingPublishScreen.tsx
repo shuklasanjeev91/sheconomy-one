@@ -55,10 +55,12 @@ import {
   ensureImageBlobsForPublish,
   formDataToPublishPayload,
   mergeListingMetadata,
+  listingUsesVariantPricing,
   newVariationDraft,
   updateListingMetadataField,
   validateFullPublishForm,
   validatePublishStep,
+  withVariantListingPrice,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 import { BasicInfoStep } from '~/commerce/components/vendor/listing-publish/steps/BasicInfoStep'
 import { CategoriesStep } from '~/commerce/components/vendor/listing-publish/steps/CategoriesStep'
@@ -104,6 +106,18 @@ function VendorListingPublishContent() {
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({})
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(!isEditMode)
+
+  const usesVariantPricing = listingUsesVariantPricing(formData.variations)
+  const hiddenStepIds = useMemo(
+    () => (usesVariantPricing ? [LISTING_PUBLISH_STEP_IDS.PRICING] : []),
+    [usesVariantPricing],
+  )
+
+  useEffect(() => {
+    if (usesVariantPricing && activeStep === LISTING_PUBLISH_STEP_IDS.PRICING) {
+      setActiveStep(LISTING_PUBLISH_STEP_IDS.DETAILS)
+    }
+  }, [activeStep, usesVariantPricing])
 
   const stepConfig = useMemo(
     () => LISTING_PUBLISH_STEPS.find((step) => step.id === activeStep) ?? LISTING_PUBLISH_STEPS[0],
@@ -270,7 +284,8 @@ function VendorListingPublishContent() {
       return
     }
 
-    const full = validateFullPublishForm(formData)
+    const priced = withVariantListingPrice(formData)
+    const full = validateFullPublishForm(priced)
     if (!full.isValid) {
       setStepErrors(full.errors)
       toast.show('Fix validation errors', {
@@ -282,7 +297,7 @@ function VendorListingPublishContent() {
 
     try {
       if (isEditMode && editListingId) {
-        const payload = formDataToPublishPayload(formData, shop.id)
+        const payload = formDataToPublishPayload(priced, shop.id)
         await dispatch(
           updateListingWithDetails({ listingId: editListingId, formData: payload }),
         ).unwrap()
@@ -291,8 +306,8 @@ function VendorListingPublishContent() {
         return
       }
 
-      const images = await ensureImageBlobsForPublish(formData.images)
-      const payload = formDataToPublishPayload({ ...formData, images }, shop.id)
+      const images = await ensureImageBlobsForPublish(priced.images)
+      const payload = formDataToPublishPayload({ ...priced, images }, shop.id)
       const result = await dispatch(
         publishListing({ listingData: payload, options: { publishImmediately: false } }),
       ).unwrap()
@@ -324,7 +339,8 @@ function VendorListingPublishContent() {
       return
     }
 
-    const full = validateFullPublishForm(formData)
+    const priced = withVariantListingPrice(formData)
+    const full = validateFullPublishForm(priced)
     if (!full.isValid) {
       setStepErrors(full.errors)
       toast.show('Fix validation errors', {
@@ -336,8 +352,8 @@ function VendorListingPublishContent() {
 
     try {
       if (isEditMode && editListingId) {
-        const images = await ensureImageBlobsForPublish(formData.images)
-        const payload = formDataToPublishPayload({ ...formData, images }, shop.id)
+        const images = await ensureImageBlobsForPublish(priced.images)
+        const payload = formDataToPublishPayload({ ...priced, images }, shop.id)
         await dispatch(
           updateListingWithDetails({
             listingId: editListingId,
@@ -352,8 +368,8 @@ function VendorListingPublishContent() {
         return
       }
 
-      const images = await ensureImageBlobsForPublish(formData.images)
-      const payload = formDataToPublishPayload({ ...formData, images }, shop.id)
+      const images = await ensureImageBlobsForPublish(priced.images)
+      const payload = formDataToPublishPayload({ ...priced, images }, shop.id)
       const result = await dispatch(
         publishListing({ listingData: payload, options: { publishImmediately: true } }),
       ).unwrap()
@@ -442,6 +458,7 @@ function VendorListingPublishContent() {
           ui={ui}
           activeStep={activeStep}
           isDesktop={isDesktop}
+          hiddenStepIds={hiddenStepIds}
           onSelect={(step) => {
             runStepValidation(activeStep)
             setActiveStep(step)
@@ -496,7 +513,7 @@ function VendorListingPublishContent() {
           />
         ) : null}
 
-        {activeStep === LISTING_PUBLISH_STEP_IDS.PRICING ? (
+        {activeStep === LISTING_PUBLISH_STEP_IDS.PRICING && !usesVariantPricing ? (
           <PricingStep
             ui={ui}
             formData={formData}

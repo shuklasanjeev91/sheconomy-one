@@ -44,6 +44,28 @@ describe('publish section validation', () => {
     expect(validatePublishStep(LISTING_PUBLISH_STEP_IDS.PRICING, form({ price: '250' })).isValid).toBe(true)
   })
 
+  it('skips the listing price when a named option has its own selling price', () => {
+    const priced = form({
+      price: '',
+      variations: [{ variation_name: 'Color', variation_value: 'Red', price: 300 }],
+    })
+    expect(validatePublishStep(LISTING_PUBLISH_STEP_IDS.PRICING, priced).isValid).toBe(true)
+    expect(validatePublishStep(LISTING_PUBLISH_STEP_IDS.DETAILS, priced).errors.variations).toBeUndefined()
+  })
+
+  it('requires a selling price on each named option', () => {
+    const result = validatePublishStep(
+      LISTING_PUBLISH_STEP_IDS.DETAILS,
+      form({
+        listing_type: LISTING_TYPES.PHYSICAL,
+        materials: [{ material_name: 'Cotton' }],
+        stock: '4',
+        variations: [{ variation_name: 'Color', variation_value: 'Red', price: null }],
+      }),
+    )
+    expect(result.errors.variations).toMatch(/selling price/i)
+  })
+
   it('asks physical listings for a material, a variation, and stock', () => {
     const missing = validatePublishStep(
       LISTING_PUBLISH_STEP_IDS.DETAILS,

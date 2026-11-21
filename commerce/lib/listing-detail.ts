@@ -81,7 +81,8 @@ export function groupListingVariations(variations: ListingVariation[]): Variatio
   const groups = new Map<string, ListingVariation[]>()
 
   for (const variation of [...visible].sort((a, b) => a.display_order - b.display_order)) {
-    if (!variation.is_available) continue
+    if (variation.is_available === false) continue
+    if (!variation.variation_value?.trim()) continue
 
     const options = groups.get(variation.variation_name) ?? []
     options.push(variation)
@@ -99,7 +100,8 @@ export function getDefaultVariantSelection(groups: VariationGroup[]): Record<str
   const selection: Record<string, string> = {}
 
   for (const group of groups) {
-    const firstAvailable = group.options.find((option) => option.is_available)
+    const firstAvailable =
+      group.options.find((option) => option.is_available !== false) ?? group.options[0]
     if (firstAvailable) selection[group.name] = firstAvailable.id
   }
 

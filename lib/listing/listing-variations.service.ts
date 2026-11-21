@@ -196,10 +196,11 @@ export async function replaceVariations(
       .eq('listing_id', listingId)
     if (deleteError) return fail(deleteError)
 
-    if (!variations.length) return ok([])
+    const named = variations.filter((variation) => (variation.variation_value ?? '').trim())
+    if (!named.length) return ok([])
 
-    const rows = variations.map((variation) =>
-      toVariationInsert(listingId, variation, listingBasePrice),
+    const rows = named.map((variation, index) =>
+      toVariationInsert(listingId, { ...variation, display_order: index }, listingBasePrice),
     )
     const { data, error } = await supabase.from('listing_variations').insert(rows).select('*')
     if (error) return fail(error)

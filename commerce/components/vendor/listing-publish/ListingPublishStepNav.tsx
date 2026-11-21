@@ -31,9 +31,17 @@ type ListingPublishStepNavProps = {
   activeStep: ListingPublishStepId
   onSelect: (step: ListingPublishStepId) => void
   isDesktop: boolean
+  hiddenStepIds?: readonly ListingPublishStepId[]
 }
 
-export function ListingPublishStepNav({ ui, activeStep, onSelect, isDesktop }: ListingPublishStepNavProps) {
+export function ListingPublishStepNav({
+  ui,
+  activeStep,
+  onSelect,
+  isDesktop,
+  hiddenStepIds,
+}: ListingPublishStepNavProps) {
+  const steps = LISTING_PUBLISH_STEPS.filter((step) => !hiddenStepIds?.includes(step.id))
   return (
     <XStack
       gap={isDesktop ? '$4' : '$3'}
@@ -43,7 +51,7 @@ export function ListingPublishStepNav({ ui, activeStep, onSelect, isDesktop }: L
       borderBottomWidth={1}
       borderBottomColor={ui.borderSubtle}
     >
-      {LISTING_PUBLISH_STEPS.map((step) => {
+      {steps.map((step) => {
         const active = step.id === activeStep
         return (
           <XStack

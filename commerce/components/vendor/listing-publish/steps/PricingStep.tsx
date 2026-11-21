@@ -38,7 +38,7 @@ export function PricingStep({
     <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
       <YStack flex={1} minWidth={280} gap="$4">
         <ListingPublishCard ui={ui} title="Core Pricing">
-          <Field label={`Price (${currencySymbol})`} error={errors.price}>
+          <Field label={`Selling price (${currencySymbol})`} error={errors.price}>
             <XStack alignItems="center" gap="$2">
               <Text fontSize={16} fontWeight="700" color={ui.textMuted}>
                 {currencySymbol}
@@ -53,10 +53,28 @@ export function PricingStep({
               />
             </XStack>
           </Field>
-          <Text fontSize={11} color={ui.textMuted}>
-            Customer will see total after taxes.
+          <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+            What the buyer pays. This is the price on the product page.
           </Text>
           <ListingPublishFieldError ui={ui} message={errors.price} />
+
+          <Field label={`MRP (${currencySymbol})`}>
+            <XStack alignItems="center" gap="$2">
+              <Text fontSize={16} fontWeight="700" color={ui.textMuted}>
+                {currencySymbol}
+              </Text>
+              <Input
+                flex={1}
+                value={formData.mrp != null ? String(formData.mrp) : ''}
+                onChangeText={(value) => onUpdate('mrp', value)}
+                placeholder="Same as selling price"
+                keyboardType="decimal-pad"
+              />
+            </XStack>
+          </Field>
+          <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+            Maximum retail price. It is crossed out only when it is higher than the selling price. Leave it blank when they are the same.
+          </Text>
 
           <Field label="Quantity Available">
             <Input

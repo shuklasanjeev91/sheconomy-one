@@ -253,6 +253,13 @@ export function ListingScreen({
   const [shareChatOpen, setShareChatOpen] = useState(false)
   const [shareMenuOpen, setShareMenuOpen] = useState(false)
   const variationGroups = useMemo(() => groupListingVariations(variations), [variations])
+  const variationKey = useMemo(
+    () =>
+      variations
+        .map((variation) => `${variation.id}:${variation.display_order}:${variation.is_available === false ? 0 : 1}`)
+        .join('|'),
+    [variations],
+  )
   const [variantSelection, setVariantSelection] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -267,21 +274,11 @@ export function ListingScreen({
   }, [hasSideRails])
 
   useEffect(() => {
-    setVariantSelection((current) => {
-      const next = getDefaultVariantSelection(variationGroups)
-      const keys = Object.keys(next)
-      if (
-        keys.length === Object.keys(current).length &&
-        keys.every((key) => current[key] === next[key])
-      ) {
-        return current
-      }
-      return next
-    })
-    // Reset only when the listing identity changes — `variationGroups` is derived
-    // and must not re-trigger setState every render (React #185).
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- listing id gate
-  }, [listing?.id])
+    setVariantSelection(getDefaultVariantSelection(groupListingVariations(variations)))
+    // `variationKey` changes when options arrive. Depending on the groups array
+    // retriggers setState every render (React #185).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by variation ids
+  }, [listing?.id, variationKey])
 
   useEffect(() => {
     if (!listing?.id) return

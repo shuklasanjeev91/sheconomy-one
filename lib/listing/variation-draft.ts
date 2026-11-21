@@ -67,6 +67,41 @@ export function variationPriceFields(
   return { price, price_adjustment: adjustment }
 }
 
+export function namedListingVariations<T extends { variation_value?: string | null }>(
+  variations: readonly T[] | null | undefined,
+): T[] {
+  return (variations ?? []).filter((row) => Boolean(row.variation_value?.trim()))
+}
+
+/** A named option owns the price. The listing price tab stays hidden. */
+export function listingUsesVariantPricing(
+  variations: readonly { variation_value?: string | null }[] | null | undefined,
+): boolean {
+  return namedListingVariations(variations).length > 0
+}
+
+/**
+ * The first named option is the default buyers see. Its selling price and MRP
+ * become the listing price so checkout still has one number.
+ */
+export function withVariantListingPrice<
+  T extends {
+    price?: string | number | null
+    mrp?: string | number | null
+    variations?: Array<{
+      variation_value?: string | null
+      price?: string | number | null
+      mrp?: string | number | null
+    }> | null
+  },
+>(form: T): T {
+  const first = namedListingVariations(form.variations)[0]
+  if (!first || first.price == null || String(first.price).trim() === '') return form
+  const mrp =
+    first.mrp == null || String(first.mrp).trim() === '' ? '' : String(first.mrp)
+  return { ...form, price: String(first.price), mrp }
+}
+
 export function variationOptionLabel(variation: {
   variation_name?: string | null
   variation_value?: string | null

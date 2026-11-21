@@ -20,7 +20,10 @@ import {
 import type { PublishListingData } from '~/lib/listing/listing-publish.orchestrator'
 import {
   linkImagesToVariationKeys,
+  listingUsesVariantPricing,
+  namedListingVariations,
   stampVariationTempKeys,
+  withVariantListingPrice,
 } from '~/lib/listing/variation-draft'
 
 import {
@@ -33,11 +36,14 @@ import {
 
 export {
   linkImagesToVariationKeys,
+  listingUsesVariantPricing,
+  namedListingVariations,
   newVariationDraft,
   readVariationTempKey,
   stampVariationTempKeys,
   variationOptionLabel,
   variationPriceFields,
+  withVariantListingPrice,
 } from '~/lib/listing/variation-draft'
 
 export function countWords(text: string): number {
@@ -198,8 +204,11 @@ export function validatePublishStep(
 
   switch (stepId) {
     case LISTING_PUBLISH_STEP_IDS.BASIC: {
-      const core = validateListingCore(formData)
+      const core = validateListingCore(
+        listingUsesVariantPricing(formData.variations) ? withVariantListingPrice(formData) : formData,
+      )
       Object.assign(errors, core.errors)
+      if (listingUsesVariantPricing(formData.variations)) delete errors.price
       const desc = validateListingField('description', formData.description ?? '')
       if (!desc.isValid && desc.error) errors.description = desc.error
       break
@@ -216,9 +225,18 @@ export function validatePublishStep(
           errors.stock = 'Stock quantity is required for physical products.'
         }
       }
+      if (listingUsesVariantPricing(formData.variations)) {
+        const missingPrice = namedListingVariations(formData.variations).some(
+          (row) => row.price == null || String(row.price).trim() === '',
+        )
+        if (missingPrice) {
+          errors.variations = 'Enter a selling price for each option. The first option is the price buyers see first.'
+        }
+      }
       break
     }
     case LISTING_PUBLISH_STEP_IDS.PRICING: {
+      if (listingUsesVariantPricing(formData.variations)) break
       const price = validateListingField('price', formData.price)
       if (!price.isValid && price.error) errors.price = price.error
       break
@@ -257,7 +275,19 @@ export function validatePublishStep(
 }
 
 export function validateFullPublishForm(formData: ListingFormData): StepValidationResult {
-  const result = validateListingData(formData)
+  const priced = withVariantListingPrice(formData)
+  const result = validateListingData(priced)
+  if (listingUsesVariantPricing(formData.variations)) {
+    const missingPrice = namedListingVariations(formData.variations).some(
+      (row) => row.price == null || String(row.price).trim() === '',
+    )
+    if (missingPrice) {
+      result.errors.variations =
+        'Enter a selling price for each option. The first option is the price buyers see first.'
+      delete result.errors.price
+      result.isValid = false
+    }
+  }
   const warnings: string[] = []
   const imageCount = formData.images?.length ?? 0
   if (imageCount < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED) {
