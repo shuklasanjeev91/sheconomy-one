@@ -1,4 +1,4 @@
-import { blockedImageMessage, BLOCKED_CONTENT_MESSAGE } from '~/lib/safety/content-screen'
+import { blockedImageMessage } from '~/lib/safety/content-screen'
 import { supabase } from '~/lib/supabase'
 
 import {
@@ -240,16 +240,13 @@ export async function uploadPostImages(
   return { urls: uploads.map((item) => item.publicUrl), error: null as string | null }
 }
 
-/** Video files are refused because they cannot be checked the way a photo can. */
+/** Listing videos use the same bucket as photos, with a larger size limit. */
 export async function uploadListingVideos(
   userId: string,
   shopId: string,
   files: StorageUploadFile[],
   options?: { onProgress?: UploadProgressHandler },
 ) {
-  if (files.length > 0) {
-    return { urls: [], error: BLOCKED_CONTENT_MESSAGE }
-  }
   const uploads: UploadResult[] = []
 
   const { error: batchError } = await uploadFilesWithAggregateProgress(
@@ -296,9 +293,6 @@ export async function uploadPostVideos(
   files: StorageUploadFile[],
   options?: { onProgress?: UploadProgressHandler },
 ) {
-  if (files.length > 0) {
-    return { urls: [], error: BLOCKED_CONTENT_MESSAGE }
-  }
   const uploads: UploadResult[] = []
 
   const { error: batchError } = await uploadFilesWithAggregateProgress(

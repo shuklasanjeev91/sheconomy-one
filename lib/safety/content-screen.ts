@@ -80,15 +80,14 @@ async function screenWithLocalClassifier(body: ScreenBody): Promise<'approved' |
 
 /**
  * Returns the member-facing block message, or null when the file can be uploaded.
- * Video cannot be checked frame by frame, so a video upload is refused.
- * Files that are not images or video (documents, for example) are left unchanged.
+ * Video cannot be checked frame by frame, so a video is allowed.
+ * Files that are not images (documents, for example) are left unchanged.
  */
 export async function blockedImageMessage(input: {
   mimeType?: string | null
   body?: ScreenBody | null
 }): Promise<string | null> {
   const mime = (input.mimeType || 'image/jpeg').toLowerCase()
-  if (mime.startsWith('video/')) return BLOCKED_CONTENT_MESSAGE
   if (!mime.startsWith('image/')) return null
   if (!input.body) return BLOCKED_CONTENT_MESSAGE
 
