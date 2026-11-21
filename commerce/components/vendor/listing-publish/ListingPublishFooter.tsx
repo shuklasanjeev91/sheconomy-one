@@ -1,4 +1,3 @@
-import { Platform } from 'react-native'
 import { Link } from 'one'
 
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
@@ -17,6 +16,8 @@ type ListingPublishFooterProps = {
   isSaving: boolean
   isPublishing: boolean
   showPublish: boolean
+  /** Saved variants, photos, and other facts already on this listing. */
+  existingSummary?: string | null
   onSaveDraft: () => void
   onPublish?: () => void
 }
@@ -29,6 +30,7 @@ export function ListingPublishFooter({
   isSaving,
   isPublishing,
   showPublish,
+  existingSummary,
   onSaveDraft,
   onPublish,
 }: ListingPublishFooterProps) {
@@ -50,12 +52,9 @@ export function ListingPublishFooter({
       borderTopWidth={1}
       borderTopColor={ui.borderSubtle}
       backgroundColor={ui.surface}
-      style={{
-        ...getShadowStyle('md'),
-        ...(Platform.OS === 'web'
-          ? ({ position: 'sticky', bottom: 0, zIndex: 20 } as const)
-          : undefined),
-      }}
+      flexShrink={0}
+      zIndex={20}
+      style={getShadowStyle('md')}
     >
       <Link href={vendorRoutes.products} asChild>
         <Button tone="ghost" size="$3" borderRadius={999} disabled={busy}>
@@ -63,17 +62,22 @@ export function ListingPublishFooter({
         </Button>
       </Link>
 
-      <Text
-        fontSize={12}
-        color={ui.textMuted}
-        fontWeight="600"
+      <YStack
         flex={isDesktop ? 1 : undefined}
-        textAlign="center"
         minWidth={isDesktop ? 0 : '100%'}
+        alignItems="center"
+        gap={2}
         order={isDesktop ? 0 : 3}
       >
-        {savedLabel}
-      </Text>
+        <Text fontSize={12} color={ui.textMuted} fontWeight="600" textAlign="center">
+          {savedLabel}
+        </Text>
+        {existingSummary ? (
+          <Text fontSize={12} color={ui.text} fontWeight="700" textAlign="center" numberOfLines={2}>
+            {existingSummary}
+          </Text>
+        ) : null}
+      </YStack>
 
       <XStack gap="$2" alignItems="center" flexShrink={0}>
         {showPublish ? (

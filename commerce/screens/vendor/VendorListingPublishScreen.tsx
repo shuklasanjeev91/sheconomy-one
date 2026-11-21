@@ -3,8 +3,9 @@ import { useLocalSearchParams, useRouter } from 'one'
 
 import { ListingPublishErrorBoundary } from '~/commerce/components/ListingPublishErrorBoundary'
 import { PageCenter } from '~/components/layout'
-import { Spinner, YStack, useAppToast } from '~/components/ui'
+import { ScrollView, Spinner, Text, YStack, useAppToast } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { APP_LAYOUT } from '~/lib/layout/constants'
 import { loadAttributes } from '~/lib/listing/listing-attributes.store'
 import { loadImages } from '~/lib/listing/listing-images.store'
 import { loadMaterials } from '~/lib/listing/listing-materials.store'
@@ -85,6 +86,7 @@ function VendorListingPublishContent() {
   const toast = useAppToast()
   const dispatch = useAppDispatch()
   const { isDesktop, safeBottom } = useAppLayout()
+  const footerSafeBottom = isDesktop ? safeBottom : safeBottom + APP_LAYOUT.mobileTabBarHeight
   const params = useLocalSearchParams<{ id?: string }>()
 
   const editListingId = typeof params.id === 'string' ? params.id : undefined
@@ -159,6 +161,8 @@ function VendorListingPublishContent() {
       })
 
       dispatch(loadFormFromListing(hydratedForm))
+      const savedAt = (details as { updated_at?: string | null }).updated_at
+      if (savedAt) setLastSavedAt(savedAt)
       setHydrated(true)
     }
 
@@ -385,17 +389,40 @@ function VendorListingPublishContent() {
 
   const displayErrors = { ...validation.errors, ...stepErrors }
   const showPublish = activeStep === LISTING_PUBLISH_STEP_IDS.SEO
+  const savedVariations = (formData.variations ?? []).filter((row) =>
+    Boolean(row.variation_value?.trim() || row.id),
+  )
+  const existingSummary = [
+    savedVariations.length
+      ? `${savedVariations.length} variant${savedVariations.length === 1 ? '' : 's'}`
+      : null,
+    (formData.images ?? []).length
+      ? `${formData.images?.length} photo${formData.images?.length === 1 ? '' : 's'}`
+      : null,
+    (formData.materials ?? []).filter((row) => row.material_name?.trim()).length
+      ? `${(formData.materials ?? []).filter((row) => row.material_name?.trim()).length} material${(formData.materials ?? []).filter((row) => row.material_name?.trim()).length === 1 ? '' : 's'}`
+      : null,
+    formData.sku?.trim() ? `SKU ${formData.sku.trim()}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
-    <YStack flex={1} width="100%" backgroundColor={ui.background}>
-      <YStack
+    <YStack flex={1} minHeight={0} width="100%" backgroundColor={ui.background}>
+      <ScrollView
         flex={1}
+        minHeight={0}
+        width="100%"
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+      <YStack
         width="100%"
         maxWidth={1200}
         alignSelf="center"
         paddingHorizontal={isDesktop ? '$6' : '$4'}
         paddingTop={isDesktop ? '$5' : '$3'}
-        paddingBottom="$2"
+        paddingBottom="$6"
         gap="$4"
       >
         <ListingPublishTopBar
@@ -421,6 +448,32 @@ function VendorListingPublishContent() {
             setActiveStep(step)
           }}
         />
+
+        {isEditMode && existingSummary ? (
+          <YStack
+            padding="$3"
+            borderRadius={12}
+            borderWidth={1}
+            borderColor={ui.borderSubtle}
+            backgroundColor={ui.surface}
+            gap="$1"
+          >
+            <Text fontSize={13} fontWeight="800" color={ui.text}>
+              Saved on this listing
+            </Text>
+            <Text fontSize={13} color={ui.textSecondary}>
+              {existingSummary}
+              {savedVariations.length
+                ? ` — ${savedVariations
+                    .map((row) =>
+                      [row.variation_name, row.variation_value].filter(Boolean).join(': '),
+                    )
+                    .filter(Boolean)
+                    .join(', ')}`
+                : ''}
+            </Text>
+          </YStack>
+        ) : null}
 
         {activeStep === LISTING_PUBLISH_STEP_IDS.BASIC ? (
           <BasicInfoStep
@@ -485,15 +538,17 @@ function VendorListingPublishContent() {
           />
         ) : null}
       </YStack>
+      </ScrollView>
 
       <ListingPublishFooter
         ui={ui}
         isDesktop={isDesktop}
-        safeBottom={safeBottom}
+        safeBottom={footerSafeBottom}
         lastSavedAt={lastSavedAt}
         isSaving={isSaving}
         isPublishing={publishProgress.isPublishing}
         showPublish={showPublish}
+        existingSummary={existingSummary || null}
         onSaveDraft={() => void saveDraft()}
         onPublish={() => void publishListingNow()}
       />

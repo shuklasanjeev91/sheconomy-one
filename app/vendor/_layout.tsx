@@ -51,6 +51,7 @@ export function VendorLayout() {
     !isDesktop ? APP_LAYOUT.mobileTabBarHeight + Math.max(safeBottom, 8) : 0
   const showKycBanner = Boolean(currentShop?.id) && !kycLoading && !allowsSelling
   const onVerificationRoute = pathname.includes('/vendor/settings')
+  const isListingEditor = pathname.includes('/vendor/create-listing')
 
   useEffect(() => {
     // Always refresh on entering the vendor area so `myShops`/`currentShop` are
@@ -175,7 +176,15 @@ export function VendorLayout() {
               </XStack>
             ) : null}
 
-            {/* Content */}
+            {/* Listing editor owns its own scroll so the save bar stays at the bottom. */}
+            {isListingEditor ? (
+              <YStack flex={1} minHeight={0} width="100%">
+                {showKycBanner && !onVerificationRoute ? (
+                  <VendorKycRequiredBanner ui={ui} status={kycStatus} />
+                ) : null}
+                <Slot />
+              </YStack>
+            ) : (
             <ScrollView
               flex={1}
               width="100%"
@@ -204,6 +213,7 @@ export function VendorLayout() {
               ) : null}
               <Slot />
             </ScrollView>
+            )}
           </YStack>
         </XStack>
 

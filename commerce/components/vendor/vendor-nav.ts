@@ -52,6 +52,14 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         ready: true,
       },
       {
+        id: 'bundles',
+        label: 'Bundles',
+        description: 'Kit products at a bundle price.',
+        icon: Icons.Layers,
+        href: vendorRoutes.bundles,
+        ready: true,
+      },
+      {
         id: 'orders',
         label: 'Orders',
         description: 'Track and fulfil customer orders.',
@@ -73,6 +81,14 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         ready: true,
       },
       {
+        id: 'customers',
+        label: 'Customers',
+        description: 'Who bought, and how they came back.',
+        icon: Icons.Users,
+        href: vendorRoutes.customers,
+        ready: true,
+      },
+      {
         id: 'delivery',
         label: 'Delivery',
         description: 'Shipping options and fulfilment.',
@@ -86,6 +102,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Campaigns and promotions.',
         icon: Icons.Megaphone,
         href: vendorRoutes.ads,
+        alsoActive: [vendorRoutes.discounts],
         ready: true,
       },
       {
@@ -94,6 +111,27 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Customer ratings and feedback.',
         icon: Icons.Star,
         href: vendorRoutes.reviews,
+        ready: true,
+      },
+    ],
+  },
+  {
+    title: 'Money',
+    items: [
+      {
+        id: 'wallet',
+        label: 'Wallet',
+        description: 'Balance for shipping, ads, and referral rewards.',
+        icon: Icons.Wallet,
+        href: vendorRoutes.wallet,
+        ready: true,
+      },
+      {
+        id: 'settings-verification',
+        label: 'Verification',
+        description: 'KYC, tax, and bank documents for payout review.',
+        icon: Icons.BadgeCheck,
+        href: settingsHref('verification'),
         ready: true,
       },
     ],
@@ -147,6 +185,14 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
             description: 'Sign-in, team access, and permissions.',
             icon: Icons.ShieldCheck,
             href: settingsHref('security'),
+            ready: true,
+          },
+          {
+            id: 'settings-warehouse',
+            label: 'Warehouse',
+            description: 'Ship-from address used for labels and inventory.',
+            icon: Icons.Building2,
+            href: settingsHref('warehouse'),
             ready: true,
           },
           {
