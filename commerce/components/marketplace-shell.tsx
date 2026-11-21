@@ -478,11 +478,14 @@ export function MarketplacePdpShopLink({
 export function MarketplacePdpTitle({
   children,
   hasSideRails = true,
+  lines = 1,
 }: {
   children: string
   hasSideRails?: boolean
+  lines?: number
 }) {
   const e = useMarketplaceShellPalette()
+  const wrap = lines > 1
   return (
     <Text
       fontSize={hasSideRails ? 22 : 18}
@@ -492,12 +495,12 @@ export function MarketplacePdpTitle({
       lineHeight={hasSideRails ? 28 : 24}
       width="100%"
       maxWidth="100%"
-      numberOfLines={1}
+      numberOfLines={lines}
       ellipsizeMode="tail"
       style={
         Platform.OS === 'web'
           ? ({
-              whiteSpace: 'nowrap',
+              whiteSpace: wrap ? 'normal' : 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               display: 'block',

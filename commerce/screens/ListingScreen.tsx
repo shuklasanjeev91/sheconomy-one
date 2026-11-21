@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, memo } from 'react'
+import { useEffect, useMemo, useRef, useState, memo, type ReactNode } from 'react'
 import { Alert, Platform } from 'react-native'
 import { useParams } from 'one'
 
@@ -68,7 +68,8 @@ import { effectiveUnitPrice } from '~/lib/listing/product-catalog'
 import { readMetadataBoolean } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
-import { FullWidthLayout, LAYOUT_STRETCH, PageCenter, PageSection, StickyRail } from '~/components/layout'
+import { FullWidthLayout, LAYOUT_STRETCH, PageCenter, PageSection } from '~/components/layout'
+import { STICKY_RAIL_TOP } from '~/components/layout/sticky'
 import { ShareActionRow, ShareSheet } from '~/components/share'
 import { openComposer } from '~/community/lib/composer-store'
 import { ShareListingSheet } from '~/chat/components/ShareListingSheet'
@@ -123,6 +124,41 @@ import { navigateApp } from '~/lib/platform/navigate'
 type ListingScreenProps = {
   initial?: ListingLoaderResult | null
   awaitingInitial?: boolean
+}
+
+/** Large-screen PDP column. Grows beside the buy box, or stays a fixed rail. */
+function PdpStickyColumn({
+  children,
+  grow = false,
+  width,
+}: {
+  children: ReactNode
+  grow?: boolean
+  width?: number
+}) {
+  if (Platform.OS === 'web') {
+    return (
+      <div
+        style={{
+          flex: grow ? '1 1 0%' : `0 0 ${width ?? 420}px`,
+          width: grow ? undefined : width ?? 420,
+          minWidth: grow ? 0 : width ?? 420,
+          maxWidth: grow ? undefined : width ?? 420,
+          alignSelf: 'flex-start',
+          position: 'sticky',
+          top: STICKY_RAIL_TOP,
+        }}
+      >
+        {children}
+      </div>
+    )
+  }
+
+  return (
+    <YStack flex={grow ? 1 : undefined} minWidth={grow ? 0 : undefined} width={grow ? undefined : width} flexShrink={grow ? 1 : 0}>
+      {children}
+    </YStack>
+  )
 }
 
 // ─── Memoized thumbnail component for desktop ──────────────────────────────
@@ -1096,7 +1132,7 @@ export function ListingScreen({
         : 'Add to cart'
 
   const imageGallery = (
-    <StickyRail flex={1.2} minWidth={0} flexShrink={1} maxWidth="100%">
+    <PdpStickyColumn grow>
       <MarketplaceCard hasSideRails padding="$3" gap="$3">
         <XStack gap="$3" width="100%" alignItems="flex-start" justifyContent="flex-start">
           {sortedImages.length > 1 ? (
@@ -1170,19 +1206,23 @@ export function ListingScreen({
           />
         ) : null}
       </MarketplaceCard>
-    </StickyRail>
+    </PdpStickyColumn>
   )
 
   const buyPanel = (
-    <YStack
-      width="42%"
-      minWidth={320}
-      maxWidth={480}
-      flexGrow={0}
-      flexShrink={0}
-      flexBasis="42%"
-    >
+    <PdpStickyColumn width={420}>
       <MarketplaceBuyBox>
+        <XStack alignItems="flex-start" justifyContent="space-between" gap="$3" width="100%">
+          {listing.shops?.shop_name ? (
+            <MarketplacePdpShopLink shopName={listing.shops.shop_name} onPress={openShop} />
+          ) : (
+            <Text fontSize={13} color={ui.textMuted} fontWeight="600">
+              {BRAND_SHOP_LABEL}
+            </Text>
+          )}
+          <XStack flexShrink={0}>{listingShareButton}</XStack>
+        </XStack>
+        <MarketplacePdpTitle lines={3}>{listing.title}</MarketplacePdpTitle>
         {fromCommunityPost && communityPostId ? (
           <CommunityAttributionStrip postId={communityPostId} />
         ) : null}
@@ -1271,7 +1311,7 @@ export function ListingScreen({
 
         {shopCard}
       </MarketplaceBuyBox>
-    </YStack>
+    </PdpStickyColumn>
   )
 
   return (
@@ -1283,31 +1323,13 @@ export function ListingScreen({
           {...LAYOUT_STRETCH}
         >
           <YStack width="100%" maxWidth="100%" alignSelf="stretch" gap="$4">
-            <YStack width="100%" gap="$2.5">
-              <XStack
-                width="100%"
-                alignItems="center"
-                justifyContent="space-between"
-                gap="$3"
-              >
-                {listing.shops?.shop_name ? (
-                  <MarketplacePdpShopLink shopName={listing.shops.shop_name} onPress={openShop} />
-                ) : (
-                  <Text fontSize={13} color={ui.textMuted} fontWeight="600">
-                    {BRAND_SHOP_LABEL}
-                  </Text>
-                )}
-                <XStack flexShrink={0}>{listingShareButton}</XStack>
-              </XStack>
-              <MarketplacePdpTitle>{listing.title}</MarketplacePdpTitle>
-            </YStack>
-
             <XStack
               width="100%"
               maxWidth="100%"
               alignSelf="stretch"
-              gap="$4"
+              gap="$5"
               alignItems="flex-start"
+              flexWrap="nowrap"
             >
               {imageGallery}
               {buyPanel}
