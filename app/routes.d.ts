@@ -49,6 +49,7 @@ declare module 'one' {
         | `/admin/components/AdminCmsManager`
         | `/admin/components/AdminCompanyPagesManager`
         | `/admin/components/AdminGroupsManager`
+        | `/admin/components/AdminPayuHubSetup`
         | `/admin/components/AdminPayuKycQueue`
         | `/admin/components/AdminSaleEventsManager`
         | `/admin/components/AdminSettingsManager`
@@ -86,9 +87,11 @@ declare module 'one' {
         | `/admin/staff-console`
         | `/admin/users`
         | `/auth`
+        | `/auth/`
         | `/auth/callback`
         | `/auth/complete-profile`
         | `/auth/import-contacts`
+        | `/auth/logout`
         | `/auth/qr`
         | `/auth/sign-in`
         | `/auth/sign-up`
@@ -152,6 +155,10 @@ declare module 'one' {
         | `/legal/privacy`
         | `/legal/terms`
         | `/listing`
+        | `/log-in`
+        | `/log-out`
+        | `/login`
+        | `/logout`
         | `/notifications`
         | `/orders`
         | `/orders/payu`
@@ -184,6 +191,10 @@ declare module 'one' {
         | `/settings/shop`
         | `/shop`
         | `/shops`
+        | `/sign-in`
+        | `/sign-up`
+        | `/signin`
+        | `/signup`
         | `/ui-kit`
         | `/ui-kit/UiKitScreen`
         | `/vendor`
@@ -195,6 +206,7 @@ declare module 'one' {
         | `/vendor/create-listing`
         | `/vendor/customers`
         | `/vendor/delivery`
+        | `/vendor/discounts`
         | `/vendor/myshop`
         | `/vendor/myshop/edit`
         | `/vendor/orders`
@@ -202,6 +214,7 @@ declare module 'one' {
         | `/vendor/reviews`
         | `/vendor/settings`
         | `/vendor/wallet`
+        | `/wallet`
       DynamicRoutes:
         | `/(store)/browse/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/category/${OneRouter.SingleRoutePart<T>}`

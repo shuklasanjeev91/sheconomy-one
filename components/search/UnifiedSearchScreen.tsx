@@ -414,7 +414,12 @@ export function UnifiedSearchScreen({
   return (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$5" gap="$4">
-        <YStack gap="$3" width="100%">
+        <YStack
+          gap="$3"
+          width="100%"
+          maxWidth={scope === 'listings' ? undefined : 760}
+          alignSelf="flex-start"
+        >
           <Text fontSize={22} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
             {aiMode && query
               ? `AI results for “${query}”`
@@ -813,6 +818,11 @@ export function UnifiedSearchScreen({
             ) : null}
             {!loading && result ? (
               <>
+                {visibleSections.some((section) => section.pick(result).length > 0) ? (
+                  <Text fontSize={13} color={ui.textSecondary}>
+                    {summarizeSections(visibleSections, result)}
+                  </Text>
+                ) : null}
                 {visibleSections.map((section) => {
                   const hits = section.pick(result)
                   if (!hits.length) return null
@@ -820,10 +830,16 @@ export function UnifiedSearchScreen({
                     <ResultSection
                       key={section.key}
                       title={section.title}
+                      count={hits.length}
                       onSeeAll={scope === 'all' ? () => setScope(section.scope) : undefined}
                     >
-                      {hits.map((hit) => (
-                        <SearchHitRow key={`${hit.kind}-${hit.id}`} hit={hit} />
+                      {hits.map((hit, index) => (
+                        <SearchHitRow
+                          key={`${hit.kind}-${hit.id}`}
+                          hit={hit}
+                          showKind={false}
+                          bordered={index < hits.length - 1}
+                        />
                       ))}
                     </ResultSection>
                   )
@@ -846,37 +862,95 @@ export function UnifiedSearchScreen({
   )
 }
 
+const SECTION_NOUN: Record<SectionKey, [string, string]> = {
+  listings: ['product', 'products'],
+  categories: ['category', 'categories'],
+  shops: ['shop', 'shops'],
+  people: ['person', 'people'],
+  companies: ['page', 'pages'],
+  groups: ['group', 'groups'],
+  jobs: ['job', 'jobs'],
+  posts: ['post', 'posts'],
+  programs: ['class', 'classes'],
+  meetings: ['meeting', 'meetings'],
+}
+
+function summarizeSections(
+  sections: Array<{ key: SectionKey; pick: (result: FederatedSearchResult) => SearchHit[] }>,
+  result: FederatedSearchResult,
+): string {
+  return sections
+    .map((section) => {
+      const count = section.pick(result).length
+      if (!count) return null
+      const [one, many] = SECTION_NOUN[section.key]
+      return `${count} ${count === 1 ? one : many}`
+    })
+    .filter((part): part is string => !!part)
+    .join(' · ')
+}
+
 function ResultSection({
   title,
+  count,
   children,
   onSeeAll,
 }: {
   title: string
+  count: number
   children: ReactNode
   onSeeAll?: () => void
 }) {
   const ui = useAppUi()
   return (
-    <YStack gap="$2" width="100%">
-      <XStack alignItems="center" justifyContent="space-between" gap="$2">
-        <Text fontSize={16} fontWeight="800" color={ui.text}>
-          {title}
-        </Text>
+    <YStack
+      width="100%"
+      backgroundColor={ui.surface}
+      borderRadius={16}
+      borderWidth={1}
+      borderColor={ui.borderSubtle}
+      overflow="hidden"
+    >
+      <XStack
+        alignItems="center"
+        justifyContent="space-between"
+        gap="$2"
+        paddingHorizontal="$4"
+        paddingVertical="$3"
+        borderBottomWidth={1}
+        borderBottomColor={ui.borderSubtle}
+        backgroundColor={ui.surface}
+      >
+        <XStack alignItems="center" gap="$2">
+          <Text fontSize={15} fontWeight="800" color={ui.text}>
+            {title}
+          </Text>
+          <Text
+            fontSize={12}
+            fontWeight="700"
+            color={ui.textMuted}
+            backgroundColor={ui.surfaceMuted}
+            paddingHorizontal="$2"
+            paddingVertical={2}
+            borderRadius={999}
+          >
+            {count}
+          </Text>
+        </XStack>
         {onSeeAll ? (
           <Text
             fontSize={13}
-            fontWeight="600"
+            fontWeight="700"
             color={ui.brand}
             cursor="pointer"
             onPress={onSeeAll}
+            accessibilityRole="button"
           >
             See all
           </Text>
         ) : null}
       </XStack>
-      <YStack gap="$1" width="100%">
-        {children}
-      </YStack>
+      <YStack width="100%">{children}</YStack>
     </YStack>
   )
 }

@@ -1,3 +1,4 @@
+import { htmlToPlainText } from '~/community/lib/post-text'
 import { searchListingsPage, type ListingSummary } from '~/commerce/lib/commerce'
 import { searchJobs } from '~/community/lib/jobs'
 import { searchProfiles, searchProfilesForIntent } from '~/community/lib/network'
@@ -17,7 +18,12 @@ import {
 import { supabase } from '~/lib/supabase/client'
 
 import { blockedSearchScopes, scopesToQuery, type AccessTier } from '~/lib/search/access'
-import { suggestAsksForWomen, suggestFocusTokens, suggestIntent } from '~/lib/search/suggest-intent'
+import {
+  looksLikePersonName,
+  suggestAsksForWomen,
+  suggestFocusTokens,
+  suggestIntent,
+} from '~/lib/search/suggest-intent'
 import type {
   CategoryHit,
   CompanyHit,
@@ -49,10 +55,45 @@ function listingToHit(listing: ListingSummary): ListingHit {
   }
 }
 
-function snippet(text: string, max = 90): string {
-  const cleaned = text.replace(/\s+/g, ' ').trim()
+/** Plain one-line preview. Stored posts can contain HTML. */
+export function toSearchSnippet(text: string, max = 90): string {
+  const cleaned = htmlToPlainText(text)
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\bwww\.\S+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!cleaned) return ''
   if (cleaned.length <= max) return cleaned
-  return `${cleaned.slice(0, max - 1)}…`
+  return `${cleaned.slice(0, max - 1).trim()}…`
+}
+
+function snippet(text: string, max = 90): string {
+  return toSearchSnippet(text, max)
+}
+
+function uniqueHits<T extends { id: string; title: string; subtitle: string | null; imageUrl: string | null }>(
+  rows: T[],
+): T[] {
+  const seen = new Set<string>()
+  const unique: T[] = []
+  for (const row of rows) {
+    const idKey = `id:${row.id}`
+    const visual = `look:${row.title.trim().toLowerCase()}|${(row.subtitle ?? '').trim().toLowerCase()}|${row.imageUrl ?? ''}`
+    if (seen.has(idKey) || seen.has(visual)) continue
+    seen.add(idKey)
+    seen.add(visual)
+    unique.push(row)
+  }
+  return unique
+}
+
+function mentionsQuery(text: string | null | undefined, query: string): boolean {
+  const haystack = (text ?? '').toLowerCase()
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((token) => token.length >= 3)
+    .some((token) => haystack.includes(token))
 }
 
 async function searchPersonalizedListings(
@@ -101,19 +142,23 @@ async function searchListingHits(
   limit: number,
   options: FederateOptions,
 ): Promise<ListingHit[]> {
-  if (options.userId && (options.latitude != null || options.longitude != null)) {
-    const personalized = await searchPersonalizedListings(
+  const page = await searchListingsPage(query, 0, { pageSize: limit })
+  let hits = page.items.map(listingToHit)
+
+  if (!hits.length && options.userId && (options.latitude != null || options.longitude != null)) {
+    hits = (await searchPersonalizedListings(
       query,
       options.userId,
       options.latitude,
       options.longitude,
       limit,
-    )
-    if (personalized?.length) return personalized
+    )) ?? []
   }
 
-  const page = await searchListingsPage(query, 0, { pageSize: limit })
-  return page.items.map(listingToHit)
+  if (looksLikePersonName(query)) {
+    hits = hits.filter((hit) => mentionsQuery(`${hit.title} ${hit.subtitle ?? ''}`, query))
+  }
+  return uniqueHits(hits)
 }
 
 async function searchCategoryHits(query: string, limit: number): Promise<CategoryHit[]> {
@@ -172,20 +217,20 @@ async function searchPeopleHits(
         memberLocation ?? '',
       )
     : await searchProfiles(query, limit)
-  return rows.map((row) => {
+  return uniqueHits(rows.map((row) => {
     const handle = row.username?.trim() || row.id
-    const detail =
-      ('occupation' in row && row.occupation) || row.headline || (row.username ? `@${row.username}` : null)
+    const occupation = 'occupation' in row && typeof row.occupation === 'string' ? row.occupation.trim() : ''
+    const detail = occupation || row.headline?.trim() || (row.username ? `@${row.username}` : null)
     return {
       kind: 'person' as const,
       id: row.id,
       title: row.full_name?.trim() || row.username || 'Member',
-      subtitle: detail,
+      subtitle: detail || null,
       imageUrl: row.avatar_url,
       href: String(communityRoutes.userProfile(handle)),
       username: row.username,
     }
-  })
+  }))
 }
 
 async function searchCompanyHits(query: string, limit: number): Promise<CompanyHit[]> {
@@ -237,8 +282,8 @@ async function searchPostHits(query: string, limit: number): Promise<PostHit[]> 
   return rows.map((row) => ({
     kind: 'post' as const,
     id: row.id,
-    title: snippet(row.content || 'Post', 80) || 'Post',
-    subtitle: row.author_name ? `by ${row.author_name}` : null,
+    title: snippet(row.content || 'Post', 88) || 'Post',
+    subtitle: row.author_name,
     imageUrl: row.image_url ?? row.author_avatar,
     href: String(communityRoutes.post(row.id)),
   }))
@@ -384,6 +429,16 @@ export async function federatedSearch(
   }
 
   await Promise.allSettled(tasks)
+  result.listings = uniqueHits(result.listings)
+  result.categories = uniqueHits(result.categories)
+  result.shops = uniqueHits(result.shops)
+  result.people = uniqueHits(result.people)
+  result.companies = uniqueHits(result.companies)
+  result.groups = uniqueHits(result.groups)
+  result.jobs = uniqueHits(result.jobs)
+  result.posts = uniqueHits(result.posts)
+  result.programs = uniqueHits(result.programs)
+  result.meetings = uniqueHits(result.meetings)
   return result
 }
 
