@@ -53,7 +53,7 @@ const FULFILLMENT_DETAIL_SELECT = `
 
 const VENDOR_FULFILLMENT_SELECT = `
   *,
-  order_items!inner ( id, product_title, vendor_id, orders ( order_number, user_id, profiles ( full_name, email ) ) )
+  order_items!inner ( id, product_title, vendor_id, order_id, orders ( order_number, user_id, profiles ( full_name, email ) ) )
 `
 
 const TRACK_FULFILLMENT_SELECT = `

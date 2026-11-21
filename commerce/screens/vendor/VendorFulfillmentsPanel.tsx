@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Share } from 'react-native'
 
+import { useRouter } from 'expo-router'
+
 import { Avatar, Button, Checkbox, Icons, Popover, PopoverContent, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -21,6 +23,7 @@ import {
 } from '~/lib/orders/fulfillment.store'
 import {
   FULFILLMENT_CONTROL_LANE_LABELS,
+  canBuyEasyshipLabel,
   canExportFulfillmentShipList,
   filterFulfillmentsByControlLane,
   fulfillmentsToShipListCsv,
@@ -35,8 +38,10 @@ import {
   sortFulfillmentsByUrgency,
   summarizeFulfillmentQueue,
 } from '~/lib/orders/fulfillment.utils'
+import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
+import { processEasyshipShipment } from '~/lib/vendor-shipping/easyship-shipping-credit'
 
 import {
   FulfillmentPriorityBadge,
@@ -98,6 +103,7 @@ export function VendorFulfillmentsPanel({
   tabs,
 }: VendorFulfillmentsPanelProps) {
   const toast = useAppToast()
+  const router = useRouter()
   const dispatch = useAppDispatch()
   const { safeBottom } = useAppLayout()
 
@@ -184,6 +190,53 @@ export function VendorFulfillmentsPanel({
     setTracking('')
     setReason('')
     dispatch(setCurrentFulfillment(null))
+  }
+
+  const buyLabel = async (fulfillment: EnrichedFulfillment) => {
+    const orderId = fulfillment.order_items?.order_id
+    const orderItemId = fulfillment.order_items?.id ?? fulfillment.order_item_id
+    if (!shopId || !orderId || !orderItemId) {
+      toast.show('Could not buy label', {
+        tone: 'danger',
+        message: 'This shipment is missing its order. Refresh and try again.',
+      })
+      return
+    }
+    setSubmitting(true)
+    try {
+      const result = await processEasyshipShipment({
+        shopId,
+        orderId,
+        orderItemIds: [orderItemId],
+      })
+      if (!result.success) {
+        if (result.code === 'seller_origin_incomplete') {
+          toast.show('Fulfillment address required', {
+            tone: 'warning',
+            message: result.error ?? 'Add your warehouse address, then buy the label again.',
+          })
+          router.push((result.setupPath || vendorRoutes.settingsSection('warehouse')) as never)
+          return
+        }
+        toast.show('Could not create shipping label', {
+          tone: 'danger',
+          message: result.error ?? 'Check your wallet and try again.',
+        })
+        return
+      }
+      toast.show('Shipment created', {
+        tone: 'success',
+        message: result.trackingNumber
+          ? `Tracking ${result.trackingNumber} added. The buyer is notified automatically.`
+          : 'Shipping label purchased. The buyer is notified automatically.',
+      })
+      loadPage()
+      if (selectedId === fulfillment.id) {
+        void dispatch(fetchFulfillmentDetails({ fulfillmentId: fulfillment.id }))
+      }
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const runAction = async (fulfillment: EnrichedFulfillment, action: VendorFulfillmentAction) => {
@@ -472,6 +525,7 @@ export function VendorFulfillmentsPanel({
             selectedIds={selectedIds}
             onOpen={openDetail}
             onAction={runAction}
+            onBuyLabel={buyLabel}
             onToggleSelected={toggleSelected}
           />
         ) : (
@@ -485,6 +539,7 @@ export function VendorFulfillmentsPanel({
                 selected={selectedIds.includes(fulfillment.id)}
                 onOpen={openDetail}
                 onAction={runAction}
+                onBuyLabel={buyLabel}
                 onToggleSelected={toggleSelected}
               />
             ))}
@@ -541,6 +596,7 @@ export function VendorFulfillmentsPanel({
         onReasonChange={setReason}
         onClose={closeDetail}
         onAction={runAction}
+        onBuyLabel={buyLabel}
       />
     </>
   )
@@ -557,10 +613,11 @@ type TableProps = {
   selectedIds: string[]
   onOpen: (fulfillment: EnrichedFulfillment) => void
   onAction: (fulfillment: EnrichedFulfillment, action: VendorFulfillmentAction) => void
+  onBuyLabel: (fulfillment: EnrichedFulfillment) => void
   onToggleSelected: (id: string) => void
 }
 
-function FulfillmentsTable({ ui, fulfillments, submitting, selectedIds, onOpen, onAction, onToggleSelected }: TableProps) {
+function FulfillmentsTable({ ui, fulfillments, submitting, selectedIds, onOpen, onAction, onBuyLabel, onToggleSelected }: TableProps) {
   return (
     <YStack
       borderRadius={radius.card}
@@ -754,6 +811,17 @@ function FulfillmentRow({ ui, fulfillment, submitting, selected, isLast, onOpen,
 
       {/* Actions */}
       <XStack flex={1.9} minWidth={0} justifyContent="flex-end" gap="$1.5" flexWrap="wrap">
+        {canBuyEasyshipLabel(fulfillment) ? (
+          <Button
+            tone="primary"
+            size="$2"
+            borderRadius={999}
+            disabled={submitting}
+            onPress={() => onBuyLabel(fulfillment)}
+          >
+            Buy label
+          </Button>
+        ) : null}
         {actions.map((action) => (
           <VendorActionButton
             key={action.key}
@@ -784,10 +852,11 @@ type CardProps = {
   selected: boolean
   onOpen: (fulfillment: EnrichedFulfillment) => void
   onAction: (fulfillment: EnrichedFulfillment, action: VendorFulfillmentAction) => void
+  onBuyLabel: (fulfillment: EnrichedFulfillment) => void
   onToggleSelected: (id: string) => void
 }
 
-function FulfillmentCard({ ui, fulfillment, submitting, selected, onOpen, onAction, onToggleSelected }: CardProps) {
+function FulfillmentCard({ ui, fulfillment, submitting, selected, onOpen, onAction, onBuyLabel, onToggleSelected }: CardProps) {
   const item = fulfillment.order_items
   const actions = inlineActions(fulfillment)
   const control = getFulfillmentControlRow(fulfillment)
@@ -894,6 +963,18 @@ function FulfillmentCard({ ui, fulfillment, submitting, selected, onOpen, onActi
             onPress={() => onToggleSelected(fulfillment.id)}
           >
             {selected ? 'Selected for ship list' : 'Select for ship list'}
+          </Button>
+        ) : null}
+        {canBuyEasyshipLabel(fulfillment) ? (
+          <Button
+            tone="primary"
+            size="$3"
+            borderRadius={999}
+            flex={1}
+            disabled={submitting}
+            onPress={() => onBuyLabel(fulfillment)}
+          >
+            Buy label
           </Button>
         ) : null}
         {actions.map((action) => (
@@ -1089,7 +1170,7 @@ function FulfillmentsEmptyState({ ui, hasFilters }: { ui: AppUiTokens; hasFilter
       <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360} lineHeight={20}>
         {hasFilters
           ? 'Try clearing the filters to see the rest of your queue.'
-          : 'Start a fulfilment from an order to track picking, packing, and delivery here.'}
+          : 'Paid orders appear here. Buy a shipping label to hand the parcel to the carrier.'}
       </Text>
     </YStack>
   )

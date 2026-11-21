@@ -18,7 +18,7 @@ import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 import { ListingPublishCard, ListingPublishFieldError } from '../ListingPublishCard'
 import { LISTING_METADATA_KEYS } from '../listing-publish.constants'
-import { readMetadataString } from '../listing-publish.utils'
+import { readMetadataString, newVariationDraft, variationPriceFields } from '../listing-publish.utils'
 
 type DetailsStepProps = {
   ui: AppUiTokens
@@ -53,10 +53,7 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
   }
 
   function addVariation() {
-    onUpdate('variations', [
-      ...variations,
-      { variation_name: 'Color', variation_value: '', price_adjustment: 0, stock: 0 },
-    ])
+    onUpdate('variations', [...variations, newVariationDraft()])
   }
 
   function updateVariation(index: number, patch: Record<string, unknown>) {
@@ -141,6 +138,9 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
           </Text>
         }
       >
+        <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+          Each option can have its own selling price, MRP, SKU, and stock. Leave price blank to use the listing price.
+        </Text>
         <ListingPublishFieldError ui={ui} message={errors.variations} />
         <YStack gap="$2">
           {variations.map((variation, index) => (
@@ -170,11 +170,32 @@ export function DetailsStep({ ui, formData, errors, onUpdate, onUpdateMetadata }
                   onChangeText={(value) => updateVariation(index, { variation_value: value })}
                 />
               </Field>
-              <Field label="Price Adj." width={100}>
+              <Field label="Price" width={110}>
                 <Input
-                  value={String(variation.price_adjustment ?? 0)}
-                  onChangeText={(value) => updateVariation(index, { price_adjustment: value })}
-                  keyboardType="numeric"
+                  value={variation.price != null ? String(variation.price) : ''}
+                  onChangeText={(value) =>
+                    updateVariation(index, variationPriceFields(formData.price, value))
+                  }
+                  keyboardType="decimal-pad"
+                  placeholder={formData.price ? String(formData.price) : '0'}
+                />
+              </Field>
+              <Field label="MRP" width={110}>
+                <Input
+                  value={variation.mrp != null ? String(variation.mrp) : ''}
+                  onChangeText={(value) =>
+                    updateVariation(index, { mrp: value.trim() ? Number(value) : null })
+                  }
+                  keyboardType="decimal-pad"
+                  placeholder="Optional"
+                />
+              </Field>
+              <Field label="SKU" width={120}>
+                <Input
+                  value={variation.sku ?? ''}
+                  onChangeText={(value) => updateVariation(index, { sku: value })}
+                  autoCapitalize="characters"
+                  placeholder="Optional"
                 />
               </Field>
               <Field label="Stock" width={80}>

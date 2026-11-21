@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 
-import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Icons, Image, Select, SelectContent, SelectItem, SelectTrigger, SelectViewport, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { pickImages, type PickedImage } from '~/lib/media/pick-image'
 import type { ListingFormData, ListingImageDraft } from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
@@ -10,6 +10,7 @@ import {
   LISTING_PUBLISH_COPY,
   LISTING_PUBLISH_IMAGE_HINTS,
 } from '../listing-publish.constants'
+import { readVariationTempKey, variationOptionLabel } from '../listing-publish.utils'
 
 type ImagesStepProps = {
   ui: AppUiTokens
@@ -22,9 +23,15 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
   const toast = useAppToast()
   const [isPicking, setIsPicking] = useState(false)
   const images = formData.images ?? []
-  const showBanner = images.length < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED
+  const showBanner = images.filter((image) => !image.variant_temp_key).length < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED
+  const variationOptions = (formData.variations ?? [])
+    .map((variation) => {
+      const key = readVariationTempKey(variation)
+      return key ? { key, label: variationOptionLabel(variation) } : null
+    })
+    .filter((option): option is { key: string; label: string } => Boolean(option))
 
-  const handlePick = useCallback(async () => {
+  const handlePick = useCallback(async (variantKey: string | null = null) => {
     setIsPicking(true)
     try {
       const picked = await pickImages({ multiple: true, maxCount: 12 })
@@ -32,7 +39,7 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
 
       const next = [...images]
       for (const file of picked) {
-        next.push(pickedToDraft(file, next.length))
+        next.push(pickedToDraft(file, next.length, variantKey))
       }
       normalizePrimary(next)
       onChangeImages(next)
@@ -45,6 +52,16 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
       setIsPicking(false)
     }
   }, [images, onChangeImages, toast])
+
+  function assignVariant(index: number, key: string) {
+    const next = images.map((image, imageIndex) => {
+      if (imageIndex !== index) return image
+      if (key === 'all') return { ...image, variant_temp_key: null, variation_id: null }
+      return { ...image, variant_temp_key: key, variation_id: null, is_primary: false }
+    })
+    normalizePrimary(next)
+    onChangeImages(next)
+  }
 
   function removeAt(index: number) {
     const next = images.filter((_, i) => i !== index)
@@ -91,7 +108,7 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
             minHeight={180}
             cursor="pointer"
             hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
-            onPress={() => void handlePick()}
+            onPress={() => void handlePick(null)}
           >
             {isPicking ? (
               <Spinner size="large" />
@@ -121,7 +138,22 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
                   borderRadius={12}
                   backgroundColor={ui.surfaceMuted}
                 />
-                {image.is_primary ? (
+                {image.variant_temp_key ? (
+                  <XStack
+                    position="absolute"
+                    top={8}
+                    left={8}
+                    paddingHorizontal={8}
+                    paddingVertical={3}
+                    borderRadius={999}
+                    backgroundColor={ui.text}
+                    maxWidth={120}
+                  >
+                    <Text fontSize={10} fontWeight="800" color="white" numberOfLines={1}>
+                      {variationOptions.find((option) => option.key === image.variant_temp_key)?.label ?? 'Option'}
+                    </Text>
+                  </XStack>
+                ) : image.is_primary ? (
                   <XStack
                     position="absolute"
                     top={8}
@@ -150,6 +182,28 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
                 <Button tone="ghost" size="$2" icon={<Icons.X size={12} />} onPress={() => removeAt(index)}>
                   Remove
                 </Button>
+                {variationOptions.length > 0 ? (
+                  <Select
+                    value={image.variant_temp_key || 'all'}
+                    onValueChange={(value) => assignVariant(index, value)}
+                  >
+                    <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={12} color={ui.textMuted} />}>
+                      <Select.Value placeholder="All photos" />
+                    </SelectTrigger>
+                    <SelectContent zIndex={300000}>
+                      <SelectViewport>
+                        <SelectItem index={0} value="all">
+                          <Select.ItemText>All photos</Select.ItemText>
+                        </SelectItem>
+                        {variationOptions.map((option, optionIndex) => (
+                          <SelectItem key={option.key} index={optionIndex + 1} value={option.key}>
+                            <Select.ItemText>{option.label}</Select.ItemText>
+                          </SelectItem>
+                        ))}
+                      </SelectViewport>
+                    </SelectContent>
+                  </Select>
+                ) : null}
               </YStack>
             ))}
 
@@ -163,11 +217,27 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
               alignItems="center"
               justifyContent="center"
               cursor="pointer"
-              onPress={() => void handlePick()}
+              onPress={() => void handlePick(null)}
             >
               <Icons.Plus size={28} color={ui.textMuted} />
             </YStack>
           </XStack>
+          {variationOptions.length > 0 ? (
+            <XStack gap="$2" flexWrap="wrap" paddingHorizontal="$5" paddingBottom="$5">
+              {variationOptions.map((option) => (
+                <Button
+                  key={option.key}
+                  tone="outline"
+                  size="$2"
+                  borderRadius={999}
+                  disabled={isPicking}
+                  onPress={() => void handlePick(option.key)}
+                >
+                  {`Add photos for ${option.label}`}
+                </Button>
+              ))}
+            </XStack>
+          ) : null}
         </ListingPublishCard>
       </YStack>
 
@@ -192,22 +262,25 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
   )
 }
 
-function pickedToDraft(picked: PickedImage, order: number): ListingImageDraft {
+function pickedToDraft(picked: PickedImage, order: number, variantKey: string | null): ListingImageDraft {
   return {
     image_url: picked.uri,
     mimeType: picked.mimeType,
     fileName: picked.fileName,
     blob: picked.file,
-    is_primary: order === 0,
+    is_primary: order === 0 && !variantKey,
     display_order: order,
+    variant_temp_key: variantKey,
+    variation_id: null,
   }
 }
 
 function normalizePrimary(images: ListingImageDraft[]) {
-  if (!images.length) return
-  const hasPrimary = images.some((img) => img.is_primary)
-  if (!hasPrimary) images[0].is_primary = true
   images.forEach((img, index) => {
     img.display_order = index
+    if (img.variant_temp_key) img.is_primary = false
   })
+  const shared = images.filter((img) => !img.variant_temp_key)
+  if (!shared.length) return
+  if (!shared.some((img) => img.is_primary)) shared[0].is_primary = true
 }

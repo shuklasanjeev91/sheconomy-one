@@ -23,10 +23,15 @@ import { fail, isAdminUser, ok, resolveUserId, verifyListingManageAccess, verify
 import { blockedContentMessage } from '~/lib/safety/content-screen'
 import { prepareListingDataForSubmission } from '~/lib/listing/listing.utils'
 import { validateCategoryData } from '~/lib/listing/listing.validation'
-import { addImage, uploadAndAttachImage } from '~/lib/listing/listing-images.service'
+import { addImage, deleteImage, getImages, updateImage, uploadAndAttachImage } from '~/lib/listing/listing-images.service'
 import { replaceAttributes } from '~/lib/listing/listing-attributes.service'
 import { replaceMaterials } from '~/lib/listing/listing-materials.service'
 import { replaceVariations } from '~/lib/listing/listing-variations.service'
+import {
+  linkImagesToVariationKeys,
+  readVariationTempKey,
+  stampVariationTempKeys,
+} from '~/lib/listing/variation-draft'
 import { listingCompletenessHint } from '~/lib/listing/product-catalog'
 import { loadListingCatalogChildren, replaceListingCatalog } from '~/lib/listing/product-catalog.service'
 import {
@@ -624,14 +629,14 @@ async function persistListingChildren(
   userId: string,
 ): Promise<void> {
   const tempKeyToVariationId = new Map<string, string>()
-  if (Array.isArray(formData.variations)) {
-    const variationRes = await replaceVariations(listingId, formData.variations)
+  const stampedVariations = Array.isArray(formData.variations)
+    ? stampVariationTempKeys(formData.variations)
+    : null
+  if (stampedVariations) {
+    const variationRes = await replaceVariations(listingId, stampedVariations)
     for (const row of variationRes.data ?? []) {
-      const meta = row.variation_metadata
-      if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
-        const tempKey = (meta as { tempKey?: unknown }).tempKey
-        if (typeof tempKey === 'string' && tempKey) tempKeyToVariationId.set(tempKey, row.id)
-      }
+      const key = readVariationTempKey(row)
+      if (key) tempKeyToVariationId.set(key, row.id)
     }
   }
   if (Array.isArray(formData.attributes)) await replaceAttributes(listingId, formData.attributes)
@@ -640,29 +645,45 @@ async function persistListingChildren(
     await assignCategories(listingId, formData.categories, userId)
   }
   if (Array.isArray(formData.images)) {
-    for (const [index, image] of formData.images.entries()) {
-      const variationId =
-        image.variation_id ??
-        (image.variant_temp_key ? tempKeyToVariationId.get(image.variant_temp_key) ?? null : null)
+    const images = linkImagesToVariationKeys(formData.images, stampedVariations ?? [])
+    const keptIds = new Set<string>()
+    for (const [index, image] of images.entries()) {
+      const variationId = image.variant_temp_key
+        ? tempKeyToVariationId.get(image.variant_temp_key) ?? null
+        : null
+      const isPrimary = !variationId && (image.is_primary ?? index === 0)
       if (image.blob && image.mimeType) {
-        await uploadAndAttachImage(
+        const uploaded = await uploadAndAttachImage(
           listingId,
           { blob: image.blob, mimeType: image.mimeType, fileName: image.fileName },
           {
             alt_text: image.alt_text ?? null,
-            is_primary: image.is_primary ?? (index === 0 && !variationId),
+            is_primary: isPrimary,
+            display_order: image.display_order ?? index,
+            variation_id: variationId,
+          },
+          userId,
+        )
+        if (uploaded.data?.id) keptIds.add(uploaded.data.id)
+      } else if (image.id && image.image_url) {
+        keptIds.add(image.id)
+        await updateImage(
+          image.id,
+          {
+            alt_text: image.alt_text ?? null,
+            is_primary: isPrimary,
             display_order: image.display_order ?? index,
             variation_id: variationId,
           },
           userId,
         )
       } else if (image.image_url) {
-        await addImage(
+        const added = await addImage(
           listingId,
           {
             image_url: image.image_url,
             alt_text: image.alt_text ?? null,
-            is_primary: image.is_primary ?? (index === 0 && !variationId),
+            is_primary: isPrimary,
             display_order: image.display_order ?? index,
             width: image.width ?? null,
             height: image.height ?? null,
@@ -672,7 +693,13 @@ async function persistListingChildren(
           },
           userId,
         )
+        if (added.data?.id) keptIds.add(added.data.id)
       }
+    }
+
+    const existing = await getImages(listingId)
+    for (const row of existing.data ?? []) {
+      if (!keptIds.has(row.id)) await deleteImage(row.id, userId)
     }
   }
 

@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 
-import { Icons, Input, Text, TextArea, XStack, YStack } from '~/components/ui'
+import { Button, Icons, Input, Text, TextArea, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import type { EnrichedFulfillment } from '~/lib/orders/fulfillment.type'
 import {
+  canBuyEasyshipLabel,
   getFulfillmentControlRow,
   fulfillmentEventLabel,
   getFulfillmentProgress,
@@ -46,6 +47,7 @@ type VendorFulfillmentDetailDrawerProps = {
   onReasonChange: (value: string) => void
   onClose: () => void
   onAction: (fulfillment: EnrichedFulfillment, action: VendorFulfillmentAction) => void
+  onBuyLabel?: (fulfillment: EnrichedFulfillment) => void
 }
 
 export function VendorFulfillmentDetailDrawer({
@@ -61,6 +63,7 @@ export function VendorFulfillmentDetailDrawer({
   onReasonChange,
   onClose,
   onAction,
+  onBuyLabel,
 }: VendorFulfillmentDetailDrawerProps) {
   const actions = useMemo(
     () => (fulfillment ? getVendorFulfillmentActions(fulfillment) : []),
@@ -106,6 +109,7 @@ export function VendorFulfillmentDetailDrawer({
 
   const needsTracking = actions.some((action) => action.prompt === 'tracking')
   const needsReason = actions.some((action) => action.prompt === 'reason')
+  const buyLabel = Boolean(onBuyLabel) && canBuyEasyshipLabel(fulfillment)
 
   return (
     <VendorDrawerShell
@@ -118,8 +122,17 @@ export function VendorFulfillmentDetailDrawer({
       loading={loading}
       onClose={onClose}
       footer={
-        actions.length > 0 ? (
+        actions.length > 0 || buyLabel ? (
           <YStack gap="$2.5">
+            {buyLabel ? (
+              <Button
+                tone="primary"
+                disabled={submitting}
+                onPress={() => onBuyLabel?.(fulfillment)}
+              >
+                Buy shipping label
+              </Button>
+            ) : null}
             {needsTracking ? (
               <YStack gap="$1.5">
                 <Text fontSize={11} fontWeight="800" color={ui.textMuted} letterSpacing={0.3}>

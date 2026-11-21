@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { FULFILLMENT_STATUS } from '~/lib/orders/order.constants'
 import {
+  canBuyEasyshipLabel,
   canExportFulfillmentShipList,
   fulfillmentsToShipListCsv,
   getFulfillmentControlRow,
@@ -76,5 +77,27 @@ describe('fulfillment control tower helpers', () => {
     expect(canExportFulfillmentShipList([rows[0]])).toBe(true)
     expect(canExportFulfillmentShipList([rows[1]])).toBe(false)
     expect(fulfillmentsToShipListCsv([rows[0]])).toContain('FUL-1001')
+  })
+
+  it('offers an EasyShip label only while the shipment is open and untracked', () => {
+    expect(
+      canBuyEasyshipLabel(
+        fulfillment({
+          fulfillment_status: FULFILLMENT_STATUS.PROCESSING,
+          tracking_number: null,
+          order_items: { order_id: 'order-1' },
+        }),
+      ),
+    ).toBe(true)
+    expect(canBuyEasyshipLabel(fulfillment({ tracking_number: 'AWB1' }))).toBe(false)
+    expect(
+      canBuyEasyshipLabel(
+        fulfillment({
+          fulfillment_status: FULFILLMENT_STATUS.SHIPPED,
+          tracking_number: null,
+          order_items: { order_id: 'order-1' },
+        }),
+      ),
+    ).toBe(false)
   })
 })

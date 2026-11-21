@@ -579,6 +579,24 @@ export function summarizeFulfillmentQueue(
   return summary
 }
 
+const EASYSHIP_LABEL_STATUSES: FulfillmentStatus[] = [
+  FULFILLMENT_STATUS.PENDING,
+  FULFILLMENT_STATUS.PROCESSING,
+  FULFILLMENT_STATUS.READY_TO_SHIP,
+]
+
+/** Open shipment with no tracking yet — seller can buy an EasyShip label. */
+export function canBuyEasyshipLabel(fulfillment: {
+  fulfillment_status?: string | null
+  tracking_number?: string | null
+  order_items?: { order_id?: string | null } | null
+}): boolean {
+  const status = fulfillment.fulfillment_status
+  if (!status || !EASYSHIP_LABEL_STATUSES.includes(status as FulfillmentStatus)) return false
+  if (fulfillment.tracking_number?.trim()) return false
+  return Boolean(fulfillment.order_items?.order_id)
+}
+
 /** Remaining units still to fulfil on a record. */
 export function outstandingQuantity(fulfillment: {
   quantity_to_fulfill?: number | null

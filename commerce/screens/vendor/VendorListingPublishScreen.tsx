@@ -55,6 +55,7 @@ import {
   ensureImageBlobsForPublish,
   formDataToPublishPayload,
   mergeListingMetadata,
+  newVariationDraft,
   updateListingMetadataField,
   validateFullPublishForm,
   validatePublishStep,
@@ -123,9 +124,7 @@ function VendorListingPublishContent() {
           shop_id: shop?.id,
           listing_metadata: mergeListingMetadata(undefined),
           materials: [{ material_name: '', percentage: null, certification: '' }],
-          variations: [
-            { variation_name: 'Color', variation_value: '', price_adjustment: 0, stock: 0 },
-          ],
+          variations: [newVariationDraft()],
         }),
       )
       setHydrated(true)

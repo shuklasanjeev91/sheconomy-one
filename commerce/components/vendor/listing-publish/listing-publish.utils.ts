@@ -18,6 +18,10 @@ import {
   validateListingField,
 } from '~/lib/listing/listing.validation'
 import type { PublishListingData } from '~/lib/listing/listing-publish.orchestrator'
+import {
+  linkImagesToVariationKeys,
+  stampVariationTempKeys,
+} from '~/lib/listing/variation-draft'
 
 import {
   LISTING_METADATA_KEYS,
@@ -26,6 +30,15 @@ import {
   LISTING_PUBLISH_STEP_IDS,
   type ListingPublishStepId,
 } from './listing-publish.constants'
+
+export {
+  linkImagesToVariationKeys,
+  newVariationDraft,
+  readVariationTempKey,
+  stampVariationTempKeys,
+  variationOptionLabel,
+  variationPriceFields,
+} from '~/lib/listing/variation-draft'
 
 export function countWords(text: string): number {
   const trimmed = text.trim()
@@ -92,6 +105,7 @@ export function listingImagesToDrafts(images: ListingImage[]): ListingImageDraft
       height: img.height,
       file_size: img.file_size,
       image_type: img.image_type,
+      variation_id: img.variation_id ?? null,
     }))
 }
 
@@ -108,6 +122,7 @@ export function buildFormFromListingDetails(
   const meta = mergeListingMetadata(
     (listing.listing_metadata as Record<string, unknown> | null) ?? undefined,
   )
+  const variations = stampVariationTempKeys(extras?.variations ?? [])
 
   return {
     shop_id: listing.shop_id ?? undefined,
@@ -144,8 +159,11 @@ export function buildFormFromListingDetails(
         category_id: row.category_id,
         is_primary: row.is_primary ?? false,
       })),
-    images: extras?.images ? listingImagesToDrafts(extras.images) : [],
-    variations: extras?.variations ?? [],
+    images: linkImagesToVariationKeys(
+      extras?.images ? listingImagesToDrafts(extras.images) : [],
+      variations,
+    ),
+    variations,
     attributes: extras?.attributes ?? [],
     materials: extras?.materials ?? [],
   }
