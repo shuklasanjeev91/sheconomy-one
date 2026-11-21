@@ -34,6 +34,7 @@ import type {
 } from '~/community/lib/community'
 import { castPollVote } from '~/community/lib/polls'
 import { collectPostMedia, type PostMediaItem } from '~/community/lib/post-media'
+import { PostAudienceMark } from '~/community/components/PostAudiencePicker'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { QA } from '~/lib/qa/test-ids'
 import { extractFirstUrl, parseVideoProvider } from '~/lib/link-preview'
@@ -331,7 +332,7 @@ export const FeedPostCard = memo(function FeedPostCard({
               <Text fontSize={12} color={communityUi.textSubtle}>
                 ·
               </Text>
-              <Icons.Globe size={12} color={communityUi.textSubtle} />
+              <PostAudienceMark visibility={post.visibility} color={communityUi.textSubtle} />
             </XStack>
             {sponsoredMatchReason ? (
               <Text fontSize={11} color={communityUi.textSubtle} numberOfLines={2}>

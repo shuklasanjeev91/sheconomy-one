@@ -141,15 +141,15 @@ export type FederateOptions = {
 
 export const SEARCH_SCOPE_LABELS: Record<SearchScope, string> = {
   all: 'All',
-  listings: 'Listings',
+  listings: 'Products',
   categories: 'Categories',
   shops: 'Shops',
   people: 'People',
-  companies: 'Companies',
+  companies: 'Pages',
   groups: 'Groups',
   jobs: 'Jobs',
   posts: 'Posts',
-  programs: 'Programs',
+  programs: 'Classes',
   meetings: 'Meetings',
 }
 
@@ -168,14 +168,14 @@ export const SEARCH_SCOPE_PLACEHOLDERS: Record<SearchScope, string> = {
 }
 
 export const SEARCH_HIT_KIND_LABELS: Record<SearchHit['kind'], string> = {
-  listing: 'Listing',
+  listing: 'Product',
   category: 'Category',
   shop: 'Shop',
-  person: 'People',
-  company: 'Company',
+  person: 'Person',
+  company: 'Page',
   group: 'Group',
   job: 'Job',
   post: 'Post',
-  program: 'Program',
+  program: 'Class',
   meeting: 'Meeting',
 }

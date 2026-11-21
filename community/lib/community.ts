@@ -9,6 +9,11 @@ import { notifyHashtagFollowers } from '~/community/lib/hashtag-follows'
 import { isVideoMediaUrl, normalizeUrlList } from '~/community/lib/post-media'
 import { extractFirstUrl, parseVideoProvider } from '~/lib/link-preview'
 import { blockedContentMessage } from '~/lib/safety/content-screen'
+import {
+  normalizePostVisibility,
+  postVisibleTo,
+  type PostVisibility,
+} from '~/community/lib/post-visibility'
 
 export const COMMUNITY_PAGE_SIZE = 20
 
@@ -146,6 +151,8 @@ export type CommunityPost = {
   repost_comment: string | null
   originalPost: OriginalPostPreview | null
   is_pinned: boolean
+  /** Who can see the post. Missing rows are treated as public. */
+  visibility?: PostVisibility | null
 }
 
 export type OriginalPostPreview = {
@@ -235,7 +242,7 @@ export type CreatePostInput = {
 
 /** Columns available on `posts_with_stats` (includes image_urls / video_urls from posts). */
 const POST_STATS_SELECT =
-  'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, love_count, celebrate_count, support_count, insightful_count, funny_count, total_comments, engagement_score, total_reactions, author_verified, author_name, author_headline, author_avatar, event_title, event_description, event_start_time, event_end_time, event_location, event_rsvp_enabled, original_post_id, repost_comment, is_pinned'
+  'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, love_count, celebrate_count, support_count, insightful_count, funny_count, total_comments, engagement_score, total_reactions, author_verified, author_name, author_headline, author_avatar, event_title, event_description, event_start_time, event_end_time, event_location, event_rsvp_enabled, original_post_id, repost_comment, is_pinned, visibility'
 
 type PostRow = {
   id: string
@@ -271,6 +278,7 @@ type PostRow = {
   original_post_id?: string | null
   repost_comment?: string | null
   is_pinned?: boolean | null
+  visibility?: string | null
 }
 
 function mapReactionCounts(row: PostRow): Partial<Record<string, number>> {
@@ -340,6 +348,7 @@ function mapPost(row: PostRow, username?: string | null): CommunityPost {
     repost_comment: row.repost_comment ?? null,
     originalPost: null,
     is_pinned: !!row.is_pinned,
+    visibility: normalizePostVisibility(row.visibility),
   }
 }
 
@@ -803,18 +812,66 @@ type PostFilter = {
 }
 
 async function applyFeedExclusions(posts: CommunityPost[]): Promise<CommunityPost[]> {
+  if (posts.length === 0) return posts
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const userId = session?.user?.id
-  if (!userId || posts.length === 0) return posts
+  let visible = posts
+  if (userId) {
+    const { hiddenPostIds, blockedUserIds } = await getFeedExclusion(userId)
+    if (hiddenPostIds.length || blockedUserIds.length) {
+      const hidden = new Set(hiddenPostIds)
+      const blocked = new Set(blockedUserIds)
+      visible = posts.filter((post) => !hidden.has(post.id) && !blocked.has(post.user_id))
+    }
+  }
+  return restrictPostsByAudience(visible)
+}
 
-  const { hiddenPostIds, blockedUserIds } = await getFeedExclusion(userId)
-  if (!hiddenPostIds.length && !blockedUserIds.length) return posts
-
-  const hidden = new Set(hiddenPostIds)
-  const blocked = new Set(blockedUserIds)
-  return posts.filter((post) => !hidden.has(post.id) && !blocked.has(post.user_id))
+/** Drop posts the signed-in member is not allowed to see. */
+export async function restrictPostsByAudience<
+  T extends { user_id: string | null; visibility?: string | null },
+>(posts: T[]): Promise<T[]> {
+  if (posts.length === 0) return posts
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const viewerId = session?.user?.id ?? null
+  const authorIds = [
+    ...new Set(
+      posts
+        .filter(
+          (post) =>
+            normalizePostVisibility(post.visibility) === 'connections' &&
+            post.user_id &&
+            post.user_id !== viewerId,
+        )
+        .map((post) => post.user_id as string),
+    ),
+  ]
+  const connected = new Set<string>()
+  if (viewerId && authorIds.length) {
+    const idList = authorIds.join(',')
+    const { data } = await supabase
+      .from('connections')
+      .select('sender_id, receiver_id')
+      .eq('status', 'accepted')
+      .or(
+        `and(sender_id.eq.${viewerId},receiver_id.in.(${idList})),and(receiver_id.eq.${viewerId},sender_id.in.(${idList}))`,
+      )
+    for (const row of data ?? []) {
+      connected.add(row.sender_id === viewerId ? row.receiver_id : row.sender_id)
+    }
+  }
+  return posts.filter((post) =>
+    postVisibleTo({
+      visibility: post.visibility,
+      authorId: post.user_id,
+      viewerId,
+      connectedAuthorIds: connected,
+    }),
+  )
 }
 
 async function fetchPostsPage(
@@ -928,7 +985,7 @@ async function fetchFilteredPostsPage(
   }
 
   const mapped = ((data ?? []) as PostRow[]).map((row) => mapPost(row))
-  const items = await enrichPosts(mapped)
+  const items = await applyFeedExclusions(await enrichPosts(mapped))
 
   return {
     items,
@@ -1001,7 +1058,8 @@ export async function fetchPostById(id: string): Promise<ApiResult<CommunityPost
   if (!data) return fail('Post not found.')
 
   const mapped = mapPost(data as PostRow)
-  const [post] = await enrichPosts([mapped])
+  const [post] = await restrictPostsByAudience(await enrichPosts([mapped]))
+  if (!post) return fail('Post not found.')
   return ok(post)
 }
 
@@ -1060,7 +1118,7 @@ export async function fetchHashtagFeedPage(
   }
 
   const mapped = ((data ?? []) as PostRow[]).map((row) => mapPost(row))
-  let items = await enrichPosts(mapped)
+  let items = await applyFeedExclusions(await enrichPosts(mapped))
 
   if (options?.shoppableOnly) {
     items = items.filter((post) => (post.products?.length ?? 0) > 0 || Boolean(post.product))
@@ -1397,6 +1455,7 @@ const NON_EDITABLE_POST_TYPES = new Set(['poll', 'event', 'celebration', 'produc
 
 export type UpdatePostInput = {
   content: string
+  visibility?: PostVisibility
 }
 
 /** Update text content on the author's own post (LinkedIn-style edit). */
@@ -1434,6 +1493,7 @@ export async function updateCommunityPost(
       content,
       tags: tags.length ? tags : null,
       mentions: mentions.length ? mentions : null,
+      ...(input.visibility ? { visibility: normalizePostVisibility(input.visibility) } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', postId)

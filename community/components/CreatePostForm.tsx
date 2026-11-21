@@ -9,6 +9,12 @@ import { EmojiPickerSheet } from '~/components/emoji/EmojiPickerSheet'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { MentionInput } from '~/community/components/MentionInput'
 import { PostComposeAiBar } from '~/community/components/PostComposeAiBar'
+import { PostAudiencePicker, postAudienceIcon } from '~/community/components/PostAudiencePicker'
+import {
+  POST_AUDIENCES,
+  normalizePostVisibility,
+  type PostVisibility,
+} from '~/community/lib/post-visibility'
 import { PostLinkPreviewCard } from '~/community/components/PostLinkPreviewCard'
 import {
   createCommunityPost,
@@ -102,13 +108,6 @@ const CELEBRATION_OCCASIONS: {
   { value: 'welcome', label: 'Welcome', emoji: '👋', placeholder: 'e.g. Welcome Priya to the team' },
 ]
 
-type Visibility = 'public' | 'connections' | 'private'
-const AUDIENCE: Record<Visibility, { label: string; description: string; icon: typeof Icons.Globe }> = {
-  public: { label: 'Anyone', description: 'Anyone on and off the platform', icon: Icons.Globe },
-  connections: { label: 'Connections only', description: 'Only your connections', icon: Icons.Users },
-  private: { label: 'Only me', description: 'Only you can see this post', icon: Icons.Lock },
-}
-
 type PostContext = 'profile' | 'company' | 'group'
 type ComposeMode = 'text' | 'poll' | 'event' | 'celebration' | 'product' | 'shop' | 'article'
 
@@ -171,7 +170,7 @@ export function CreatePostForm({
   const [gifOpen, setGifOpen] = useState(false)
   const [audienceOpen, setAudienceOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
-  const [visibility, setVisibility] = useState<Visibility>('public')
+  const [visibility, setVisibility] = useState<PostVisibility>('public')
   const encodedContentRef = useRef('')
   const [postContext, setPostContext] = useState<PostContext>('profile')
   const [companyId, setCompanyId] = useState<string | null>(initialCompanyId ?? null)
@@ -441,6 +440,7 @@ export function CreatePostForm({
         form.fields.content.setValue(draft.content)
       }
       if (draft.articleTitle) setArticleTitle(draft.articleTitle)
+      if (draft.visibility) setVisibility(normalizePostVisibility(draft.visibility))
       if (
         draft.mode === 'poll' ||
         draft.mode === 'event' ||
@@ -466,10 +466,11 @@ export function CreatePostForm({
         content: form.fields.content.value,
         articleTitle,
         mode: composeMode,
+        visibility,
       })
     }, 600)
     return () => clearTimeout(timer)
-  }, [articleTitle, composeMode, form.fields.content.value])
+  }, [articleTitle, composeMode, form.fields.content.value, visibility])
 
   // Apply overlay/sheet options once on mount (takes precedence over query params).
   const initializedRef = useRef(false)
@@ -1043,7 +1044,8 @@ export function CreatePostForm({
               ? 'Share what makes your shop special…'
               : 'What do you want to talk about?'
 
-  const audience = AUDIENCE[visibility]
+  const audience = POST_AUDIENCES[visibility]
+  const AudienceIcon = postAudienceIcon(visibility)
   const selectedCompany =
     postContext === 'company' ? companies.find((company) => company.id === companyId) : null
   const selectedGroup =
@@ -1087,7 +1089,7 @@ export function CreatePostForm({
               accessibilityRole="button"
               accessibilityLabel={`Post settings ${audienceTriggerLabel}`}
             >
-              <audience.icon size={14} color={communityUi.textMuted} />
+              <AudienceIcon size={14} color={communityUi.textMuted} />
               <Text fontSize={12} fontWeight="700" color={communityUi.textMuted} numberOfLines={1}>
                 {audienceTriggerLabel}
               </Text>
@@ -1965,53 +1967,13 @@ export function CreatePostForm({
 
       <CommunityAdaptiveSheet open={audienceOpen} onOpenChange={setAudienceOpen} title="Post settings">
         <YStack gap={16}>
-          <YStack gap={4}>
-            <Text fontSize={12} fontWeight="700" color={communityUi.textMuted} paddingHorizontal={6}>
-              Who can see this
-            </Text>
-            {(Object.keys(AUDIENCE) as Visibility[]).map((key) => {
-              const item = AUDIENCE[key]
-              const selected = visibility === key
-              return (
-                <XStack
-                  key={key}
-                  alignItems="center"
-                  gap={12}
-                  paddingVertical={12}
-                  paddingHorizontal={6}
-                  borderRadius={12}
-                  cursor="pointer"
-                  hoverStyle={{ backgroundColor: communityUi.hoverBg }}
-                  pressStyle={{ backgroundColor: communityUi.hoverBg, opacity: 0.9 }}
-                  accessibilityRole="button"
-                  accessibilityLabel={item.label}
-                  onPress={() => {
-                    setVisibility(key)
-                  }}
-                >
-                  <XStack
-                    width={40}
-                    height={40}
-                    borderRadius={999}
-                    alignItems="center"
-                    justifyContent="center"
-                    backgroundColor={communityUi.accentMuted}
-                  >
-                    <item.icon size={20} color={communityUi.brand} />
-                  </XStack>
-                  <YStack flex={1} gap={2}>
-                    <Text fontSize={15} fontWeight="700" color={communityUi.text}>
-                      {item.label}
-                    </Text>
-                    <Text fontSize={12} color={communityUi.textMuted}>
-                      {item.description}
-                    </Text>
-                  </YStack>
-                  {selected ? <Icons.Check size={20} color={communityUi.brand} /> : null}
-                </XStack>
-              )
-            })}
-          </YStack>
+          <PostAudiencePicker
+            value={visibility}
+            onChange={(next) => {
+              setVisibility(next)
+              setAudienceOpen(false)
+            }}
+          />
 
           {hasPostAsOptions ? (
             <YStack gap={4}>

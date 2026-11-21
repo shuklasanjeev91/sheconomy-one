@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 
 import type { CommunityPost } from '~/community/lib/community'
-import { hydrateCommunityPostMedia } from '~/community/lib/community'
+import { hydrateCommunityPostMedia, restrictPostsByAudience } from '~/community/lib/community'
+import { normalizePostVisibility } from '~/community/lib/post-visibility'
 import { supabase } from '~/lib/supabase/client'
 
 type PostRow = {
@@ -21,6 +22,7 @@ type PostRow = {
   author_headline: string | null
   author_avatar: string | null
   is_pinned?: boolean | null
+  visibility?: string | null
 }
 
 function mapPost(row: PostRow): CommunityPost {
@@ -72,6 +74,7 @@ function mapPost(row: PostRow): CommunityPost {
     repost_comment: null,
     originalPost: null,
     is_pinned: !!row.is_pinned,
+    visibility: normalizePostVisibility(row.visibility),
   }
 }
 
@@ -94,7 +97,7 @@ export function useUserPosts(userId?: string, limit = 5) {
       const { data, error: postsError } = await supabase
         .from('posts_with_stats')
         .select(
-          'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, total_comments, author_name, author_headline, author_avatar, is_pinned',
+          'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, total_comments, author_name, author_headline, author_avatar, is_pinned, visibility',
         )
         .eq('user_id', userId)
         .eq('is_deleted', false)
@@ -111,7 +114,7 @@ export function useUserPosts(userId?: string, limit = 5) {
       }
 
       const mapped = (data ?? []).map(mapPost)
-      const hydrated = await hydrateCommunityPostMedia(mapped)
+      const hydrated = await restrictPostsByAudience(await hydrateCommunityPostMedia(mapped))
       if (cancelled) return
       setPosts(hydrated)
       setIsLoading(false)

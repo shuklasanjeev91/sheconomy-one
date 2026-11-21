@@ -5,6 +5,7 @@ import { SendPostSheet } from '~/chat/components/SendPostSheet'
 import { WebOnlyStyle } from '~/components/platform/WebOnlyStyle'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { MentionInput } from '~/community/components/MentionInput'
+import { PostAudiencePicker } from '~/community/components/PostAudiencePicker'
 import { PostComments } from '~/community/components/PostComments'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { RepostPreviewCard } from '~/community/components/RepostPreviewCard'
@@ -38,6 +39,7 @@ import {
   type CommunityPost,
 } from '~/community/lib/community'
 import { collectPostMedia, postHasMedia } from '~/community/lib/post-media'
+import { normalizePostVisibility, type PostVisibility } from '~/community/lib/post-visibility'
 import { ShareSheet } from '~/components/share/ShareSheet'
 import {
   Avatar,
@@ -92,6 +94,9 @@ export function PostActionSheets({
   const [collectionName, setCollectionName] = useState('Saved')
   const [saveNotes, setSaveNotes] = useState('')
   const [editDraft, setEditDraft] = useState(post.content)
+  const [editVisibility, setEditVisibility] = useState<PostVisibility>(
+    normalizePostVisibility(post.visibility),
+  )
   const [isEditing, setIsEditing] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const editEncodedRef = useRef('')
@@ -99,8 +104,9 @@ export function PostActionSheets({
   useEffect(() => {
     if (engagement.activeSheet !== 'edit') return
     setEditDraft(post.content)
+    setEditVisibility(normalizePostVisibility(post.visibility))
     editEncodedRef.current = post.content
-  }, [engagement.activeSheet, post.content])
+  }, [engagement.activeSheet, post.content, post.visibility])
 
   useEffect(() => {
     if (!user?.id || engagement.activeSheet !== 'options') return
@@ -823,6 +829,7 @@ export function PostActionSheets({
             minHeight={110}
             backgroundColor={ui.surface}
           />
+          <PostAudiencePicker value={editVisibility} onChange={setEditVisibility} />
           <XStack justifyContent="flex-end" gap="$2">
             <Button
               backgroundColor="transparent"
@@ -847,7 +854,10 @@ export function PostActionSheets({
                 const nextContent = editEncodedRef.current || editDraft
                 if (!nextContent.trim()) return
                 setIsEditing(true)
-                void updateCommunityPost(user.id, post.id, { content: nextContent }).then(
+                void updateCommunityPost(user.id, post.id, {
+                  content: nextContent,
+                  visibility: editVisibility,
+                }).then(
                   (result) => {
                     setIsEditing(false)
                     if (result.error) {
@@ -858,7 +868,8 @@ export function PostActionSheets({
                       return
                     }
                     post.content = nextContent
-                    onPostUpdated?.(post.id, { content: nextContent })
+                    post.visibility = editVisibility
+                    onPostUpdated?.(post.id, { content: nextContent, visibility: editVisibility })
                     toast.show('Post updated', { tone: 'success' })
                     engagement.closeSheet()
                   },

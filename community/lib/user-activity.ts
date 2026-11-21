@@ -1,5 +1,6 @@
 import type { CommunityPost } from '~/community/lib/community'
-import { hydrateCommunityPostMedia } from '~/community/lib/community'
+import { hydrateCommunityPostMedia, restrictPostsByAudience } from '~/community/lib/community'
+import { normalizePostVisibility } from '~/community/lib/post-visibility'
 import { supabase } from '~/lib/supabase/client'
 
 export const ACTIVITY_PAGE_SIZE = 10
@@ -7,7 +8,7 @@ export const ACTIVITY_PAGE_SIZE = 10
 export type ActivityFilter = 'posts' | 'comments' | 'reactions'
 
 const POST_SELECT =
-  'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, total_comments, author_name, author_headline, author_avatar, is_pinned'
+  'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, total_comments, author_name, author_headline, author_avatar, is_pinned, visibility'
 
 type PostRow = {
   id: string
@@ -26,6 +27,7 @@ type PostRow = {
   author_headline: string | null
   author_avatar: string | null
   is_pinned?: boolean | null
+  visibility?: string | null
 }
 
 function mapPost(row: PostRow): CommunityPost {
@@ -77,6 +79,7 @@ function mapPost(row: PostRow): CommunityPost {
     repost_comment: null,
     originalPost: null,
     is_pinned: !!row.is_pinned,
+    visibility: normalizePostVisibility(row.visibility),
   }
 }
 
@@ -112,15 +115,10 @@ async function fetchPostsByIds(postIds: string[]): Promise<Map<string, Community
     .in('id', unique)
     .eq('is_deleted', false)
 
-  for (const row of (data ?? []) as PostRow[]) {
-    map.set(row.id, mapPost(row))
-  }
-  const posts = [...map.values()]
-  const hydrated = await hydrateCommunityPostMedia(posts)
-  const hydratedMap = new Map(hydrated.map((post) => [post.id, post]))
-  for (const [id, post] of hydratedMap) {
-    map.set(id, post)
-  }
+  const hydrated = await restrictPostsByAudience(
+    await hydrateCommunityPostMedia(((data ?? []) as PostRow[]).map(mapPost)),
+  )
+  for (const post of hydrated) map.set(post.id, post)
   return map
 }
 
@@ -140,7 +138,7 @@ export async function fetchUserPosts(
   if (error) return { items: [], hasMore: false, error: error.message }
 
   const rows = (data ?? []) as PostRow[]
-  const items = await hydrateCommunityPostMedia(rows.map(mapPost))
+  const items = await restrictPostsByAudience(await hydrateCommunityPostMedia(rows.map(mapPost)))
   return { items, hasMore: rows.length === limit, error: null }
 }
 

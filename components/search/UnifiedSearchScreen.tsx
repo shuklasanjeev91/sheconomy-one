@@ -33,6 +33,7 @@ import {
   runAiSearch,
   SEARCH_SCOPE_LABELS,
   searchScopeGateHref,
+  suggestHitOrder,
   type FederatedSearchResult,
   type SearchHit,
   type SearchScope,
@@ -63,21 +64,34 @@ type SectionKey =
   | 'programs'
   | 'meetings'
 
+const SECTION_KIND: Record<SectionKey, SearchHit['kind']> = {
+  listings: 'listing',
+  categories: 'category',
+  shops: 'shop',
+  people: 'person',
+  companies: 'company',
+  groups: 'group',
+  jobs: 'job',
+  posts: 'post',
+  programs: 'program',
+  meetings: 'meeting',
+}
+
 const SECTION_META: Array<{
   key: SectionKey
   scope: SearchScope
   title: string
   pick: (result: FederatedSearchResult) => SearchHit[]
 }> = [
-  { key: 'listings', scope: 'listings', title: 'Listings', pick: (r) => r.listings },
+  { key: 'listings', scope: 'listings', title: 'Products', pick: (r) => r.listings },
   { key: 'categories', scope: 'categories', title: 'Categories', pick: (r) => r.categories },
   { key: 'shops', scope: 'shops', title: 'Shops', pick: (r) => r.shops },
   { key: 'people', scope: 'people', title: 'People', pick: (r) => r.people },
-  { key: 'companies', scope: 'companies', title: 'Companies', pick: (r) => r.companies },
+  { key: 'companies', scope: 'companies', title: 'Pages', pick: (r) => r.companies },
   { key: 'groups', scope: 'groups', title: 'Groups', pick: (r) => r.groups },
   { key: 'jobs', scope: 'jobs', title: 'Jobs', pick: (r) => r.jobs },
   { key: 'posts', scope: 'posts', title: 'Posts', pick: (r) => r.posts },
-  { key: 'programs', scope: 'programs', title: 'Programs', pick: (r) => r.programs },
+  { key: 'programs', scope: 'programs', title: 'Classes', pick: (r) => r.programs },
   { key: 'meetings', scope: 'meetings', title: 'Meetings', pick: (r) => r.meetings },
 ]
 
@@ -123,7 +137,7 @@ export function UnifiedSearchScreen({
   const history = useSearchHistory()
   const query = queryProp.trim()
   const aiMode = modeProp === 'ai'
-  const scope = aiMode ? 'listings' : scopeProp
+  const scope = scopeProp
   const [aiAnswer, setAiAnswer] = useState<string | null>(null)
   const [aiSearchTerm, setAiSearchTerm] = useState<string | null>(null)
   const [aiFilters, setAiFilters] = useState<ListingBrowseFilters>({})
@@ -383,9 +397,19 @@ export function UnifiedSearchScreen({
 
   const gated = scope !== 'all' && !canAccessSearchScope(tier, scope)
 
+  const sectionOrder = suggestHitOrder(query)
   const visibleSections = SECTION_META.filter(
-    (section) => scope === 'all' || scope === section.scope,
+    (section) =>
+      (scope === 'all' || scope === section.scope) &&
+      !(section.key === 'people' && aiProfiles.length > 0) &&
+      !(section.key === 'shops' && aiShops.length > 0) &&
+      !(section.key === 'listings' && aiGroups.length > 0 && aiListings.length > 0),
   )
+    .slice()
+    .sort((a, b) => {
+      if (scope !== 'all') return 0
+      return sectionOrder.indexOf(SECTION_KIND[a.key]) - sectionOrder.indexOf(SECTION_KIND[b.key])
+    })
 
   return (
     <FullWidthLayout scroll>
@@ -457,15 +481,22 @@ export function UnifiedSearchScreen({
                   {aiError}
                 </Text>
               ) : null}
+              {!aiLoading && aiAnswer && scope !== 'listings' ? (
+                <Text fontSize={14} color={ui.text} lineHeight={21}>
+                  {aiAnswer}
+                </Text>
+              ) : null}
               {!aiLoading && (aiListingsLoading || aiEntitiesLoading) ? (
                 <XStack alignItems="center" gap="$2">
                   <Spinner size="small" />
                   <Text fontSize={13} color={ui.textSecondary}>
-                    {aiResultKind === 'person'
-                      ? 'Loading profiles…'
-                      : aiResultKind === 'shop'
-                        ? 'Loading shops…'
-                        : 'Loading products…'}
+                    {scope === 'all'
+                      ? 'Searching products, shops, people, pages, and more…'
+                      : aiResultKind === 'person'
+                        ? 'Loading profiles…'
+                        : aiResultKind === 'shop'
+                          ? 'Loading shops…'
+                          : 'Loading products…'}
                   </Text>
                 </XStack>
               ) : null}
@@ -578,7 +609,11 @@ export function UnifiedSearchScreen({
                   })}
                 </YStack>
               ) : null}
-              {!aiLoading && aiResultKind === 'listing' && aiListings.length > 0 && aiGroups.length === 0 ? (
+              {!aiLoading &&
+              scope === 'listings' &&
+              aiResultKind === 'listing' &&
+              aiListings.length > 0 &&
+              aiGroups.length === 0 ? (
                 <YStack gap="$2" width="100%">
                   <Text fontSize={14} color={ui.text} lineHeight={21}>
                     {aiAnswer || `Products for “${aiSearchTerm || query}”`}
@@ -592,6 +627,7 @@ export function UnifiedSearchScreen({
                 </YStack>
               ) : null}
               {!aiLoading &&
+              scope === 'listings' &&
               !aiListingsLoading &&
               !aiEntitiesLoading &&
               aiListings.length === 0 &&
@@ -796,7 +832,7 @@ export function UnifiedSearchScreen({
                 visibleSections.every((section) => section.pick(result).length === 0) ? (
                   <EmptyState
                     title={`No results for “${query}”`}
-                    message="Try another keyword, switch scope, or clear filters. Recent searches above can help you restart quickly."
+                    message="Try another keyword. Results include products, shops, people, pages, groups, jobs, posts, classes, and meetings."
                     actionLabel="Search all"
                     onAction={() => setScope('all')}
                   />

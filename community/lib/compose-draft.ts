@@ -6,6 +6,7 @@ export type ComposeDraft = {
   content: string
   articleTitle?: string
   mode?: string
+  visibility?: string
   updatedAt: string
 }
 
@@ -20,6 +21,7 @@ export async function saveComposeDraft(draft: Omit<ComposeDraft, 'updatedAt'>): 
     content: draft.content,
     articleTitle: draft.articleTitle,
     mode: draft.mode,
+    visibility: draft.visibility,
   })
 }
 
@@ -28,6 +30,7 @@ export async function loadComposeDraft(): Promise<ComposeDraft | null> {
     content: string
     articleTitle?: string
     mode?: string
+    visibility?: string
   }>(DRAFT_KEY)
   if (!envelope) return null
   if (typeof envelope.data.content !== 'string') return null
@@ -35,6 +38,7 @@ export async function loadComposeDraft(): Promise<ComposeDraft | null> {
     content: envelope.data.content,
     articleTitle: envelope.data.articleTitle,
     mode: envelope.data.mode,
+    visibility: envelope.data.visibility,
     updatedAt: envelope.updatedAt,
   }
 }

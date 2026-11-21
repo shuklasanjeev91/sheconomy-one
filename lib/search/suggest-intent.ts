@@ -1,4 +1,4 @@
-import type { SearchScope } from '~/lib/search/types'
+import type { SearchHit, SearchScope } from '~/lib/search/types'
 
 const PEOPLE =
   /\b(entrepren\w*|enterpren\w*|founders?|business owners?|people|members|profiles)\b/i
@@ -108,22 +108,112 @@ export function suggestFocusTokens(query: string): string[] {
   return [...new Set(tokens)]
 }
 
+const HIT_ORDER: SearchHit['kind'][] = [
+  'person',
+  'shop',
+  'listing',
+  'company',
+  'group',
+  'job',
+  'post',
+  'program',
+  'meeting',
+  'category',
+]
+
+/** A short name, with no product or place words, is likely a person. */
+export function looksLikePersonName(query: string): boolean {
+  const lower = query.toLowerCase()
+  if (
+    PRODUCT.test(lower) ||
+    SHOP.test(lower) ||
+    JOB.test(lower) ||
+    PROGRAM.test(lower) ||
+    POST.test(lower) ||
+    COMPANY.test(lower) ||
+    isShopSetupQuestion(lower)
+  ) {
+    return false
+  }
+  const tokens = query.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0 || tokens.length > 3) return false
+  return tokens.every((token) => /^[A-Za-z][A-Za-z.'-]{1,}$/.test(token))
+}
+
+/** Global result order. The sentence's subject leads; every other kind still follows. */
+export function suggestHitOrder(query: string): SearchHit['kind'][] {
+  const lead: SearchHit['kind'] | null = looksLikePersonName(query)
+    ? 'person'
+    : suggestIntent(query) === 'person'
+      ? 'person'
+      : suggestIntent(query) === 'shop'
+        ? 'shop'
+        : suggestIntent(query) === 'job'
+          ? 'job'
+          : suggestIntent(query) === 'program'
+            ? 'program'
+            : suggestIntent(query) === 'post'
+              ? 'post'
+              : suggestIntent(query) === 'company'
+                ? 'company'
+                : null
+  if (!lead) return HIT_ORDER
+  return [lead, ...HIT_ORDER.filter((kind) => kind !== lead)]
+}
+
+export function orderSuggestHits(hits: SearchHit[], query: string): SearchHit[] {
+  const buckets = new Map<SearchHit['kind'], SearchHit[]>()
+  for (const hit of hits) {
+    const list = buckets.get(hit.kind) ?? []
+    list.push(hit)
+    buckets.set(hit.kind, list)
+  }
+  return suggestHitOrder(query).flatMap((kind) => buckets.get(kind) ?? [])
+}
+
+export function suggestHitSectionLabel(kind: SearchHit['kind']): string {
+  switch (kind) {
+    case 'listing':
+      return 'PRODUCTS'
+    case 'shop':
+      return 'SHOPS'
+    case 'person':
+      return 'PEOPLE'
+    case 'company':
+      return 'PAGES'
+    case 'group':
+      return 'GROUPS'
+    case 'job':
+      return 'JOBS'
+    case 'post':
+      return 'POSTS'
+    case 'program':
+      return 'CLASSES'
+    case 'meeting':
+      return 'MEETINGS'
+    case 'category':
+      return 'CATEGORIES'
+  }
+}
+
 export function suggestHint(query: string): string {
   switch (suggestIntent(query)) {
     case 'person':
-      return 'Find people who match this'
+      return 'Search people, plus products, shops, pages, and groups'
     case 'shop':
-      return 'Find shops that match this'
+      return 'Search shops, plus products, people, pages, and groups'
     case 'job':
-      return 'Find jobs that match this'
+      return 'Search jobs, plus people, companies, and posts'
     case 'program':
-      return 'Find classes that match this'
+      return 'Search classes, plus people, posts, and products'
     case 'post':
-      return 'Find posts that match this'
+      return 'Search posts, plus people, groups, and products'
     case 'company':
-      return 'Find companies that match this'
+      return 'Search pages, plus people, jobs, and products'
     default:
-      return 'Find products that match this'
+      return looksLikePersonName(query)
+        ? 'Search people, products, shops, pages, and groups'
+        : 'Search products, shops, people, pages, groups, and more'
   }
 }
 

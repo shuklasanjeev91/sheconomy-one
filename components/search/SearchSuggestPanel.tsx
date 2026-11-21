@@ -4,7 +4,7 @@ import { AdaptiveTypeaheadPanel } from '~/components/search/AdaptiveTypeaheadPan
 import { SearchHitRow } from '~/components/search/SearchHitRow'
 import { SuggestSectionHeader } from '~/components/search/SuggestSectionHeader'
 import type { SearchHit } from '~/lib/search'
-import { suggestHint, suggestSectionLabel } from '~/lib/search/suggest-intent'
+import { suggestHint, suggestHitSectionLabel } from '~/lib/search/suggest-intent'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type SearchSuggestPanelProps = {
@@ -20,6 +20,16 @@ type SearchSuggestPanelProps = {
   onRemoveRecent?: (term: string) => void
   onHitPress?: () => void
   onAskAi?: () => void
+}
+
+function groupSuggestHits(hits: SearchHit[]): Array<{ kind: SearchHit['kind']; hits: SearchHit[] }> {
+  const groups: Array<{ kind: SearchHit['kind']; hits: SearchHit[] }> = []
+  for (const hit of hits) {
+    const last = groups[groups.length - 1]
+    if (last?.kind === hit.kind) last.hits.push(hit)
+    else groups.push({ kind: hit.kind, hits: [hit] })
+  }
+  return groups
 }
 
 export function SearchSuggestPanel({
@@ -131,29 +141,31 @@ export function SearchSuggestPanel({
       ) : null}
 
       {trimmed ? (
-        <YStack gap="$1">
-          <SuggestSectionHeader label={suggestSectionLabel(trimmed)} />
-          {loading ? (
-            <YStack padding="$4" alignItems="center">
-              <Spinner size="small" />
+        loading ? (
+          <YStack padding="$4" alignItems="center">
+            <Spinner size="small" />
+          </YStack>
+        ) : hits.length === 0 ? (
+          <Text paddingHorizontal="$3" paddingVertical="$2" fontSize={13} color={ui.textSecondary}>
+            No quick matches — hit Search for full results.
+          </Text>
+        ) : (
+          groupSuggestHits(hits).map((group) => (
+            <YStack key={group.kind} gap="$1">
+              <SuggestSectionHeader label={suggestHitSectionLabel(group.kind)} />
+              {group.hits.map((hit) => (
+                <SearchHitRow
+                  key={`${hit.kind}-${hit.id}`}
+                  hit={hit}
+                  onPress={() => {
+                    onHitPress?.()
+                    onOpenChange(false)
+                  }}
+                />
+              ))}
             </YStack>
-          ) : hits.length === 0 ? (
-            <Text paddingHorizontal="$3" paddingVertical="$2" fontSize={13} color={ui.textSecondary}>
-              No quick matches — hit Search for full results.
-            </Text>
-          ) : (
-            hits.map((hit) => (
-              <SearchHitRow
-                key={`${hit.kind}-${hit.id}`}
-                hit={hit}
-                onPress={() => {
-                  onHitPress?.()
-                  onOpenChange(false)
-                }}
-              />
-            ))
-          )}
-        </YStack>
+          ))
+        )
       ) : null}
 
       {!trimmed && recent.length === 0 ? (

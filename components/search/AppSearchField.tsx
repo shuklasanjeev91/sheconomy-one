@@ -23,7 +23,7 @@ import {
   type SearchScope,
 } from '~/lib/search'
 import { buildAiSearchHref } from '~/lib/search/ai-search'
-import { suggestScope } from '~/lib/search/suggest-intent'
+import { isShopSetupQuestion } from '~/lib/search/suggest-intent'
 import { appRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 import { AI_NAME } from '~/config/brand'
@@ -153,8 +153,8 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
       void searchSuggest(trimmed, {
         tier,
         pathname,
-        scope: activeScope,
-        limit: 12,
+        scope: 'all',
+        limit: 24,
         userId: user?.id,
         latitude: userGeo.latitude,
         longitude: userGeo.longitude,
@@ -173,7 +173,6 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
     open,
     tier,
     pathname,
-    activeScope,
     user?.id,
     userGeo.latitude,
     userGeo.longitude,
@@ -197,7 +196,13 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
       navigateApp(buildAiSearchHref(trimmed) as never)
       return
     }
-    navigateApp(appRoutes.search(trimmed || undefined, suggestScope(trimmed) ?? activeScope) as never)
+    const explicitScope = searchScopeFromRouteParams(routeParams)
+    navigateApp(
+      appRoutes.search(
+        trimmed || undefined,
+        isShopSetupQuestion(trimmed) ? 'listings' : (explicitScope ?? 'all'),
+      ) as never,
+    )
   }
 
   submitVoiceRef.current = (term: string) => submitSearch(term)

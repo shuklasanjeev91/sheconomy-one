@@ -66,6 +66,6 @@ export function buildAiSearchHref(query: string): string {
   const q = query.trim()
   if (q) params.set('q', q)
   params.set('mode', 'ai')
-  params.set('scope', 'listings')
+  params.set('scope', 'all')
   return `/search?${params.toString()}`
 }
