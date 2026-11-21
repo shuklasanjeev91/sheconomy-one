@@ -147,7 +147,7 @@ function shipmentRiskRow(item: VendorOrderItem, now: number): VendorSlaInboxRow 
     description: 'This order is ready for fulfillment but still has no outbound tracking.',
     dueLabel:
       ageHours >= SHIPMENT_WARNING_HOURS ? `Overdue by ${ageLabel(ageHours)}` : `Waiting ${ageLabel(ageHours)}`,
-    nextActionLabel: 'Add outbound tracking',
+    nextActionLabel: 'Fulfill',
     orderItemId: item.id,
     issueId: null,
     orderId: item.order_id ?? item.orders?.id ?? null,

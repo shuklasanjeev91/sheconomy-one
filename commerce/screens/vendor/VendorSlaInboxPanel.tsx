@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Share } from 'react-native'
+import { useRouter } from 'one'
 
 import { Button, Icons, Input, Spinner, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
 import {
@@ -44,8 +45,10 @@ import { formatOrderDate } from '~/lib/orders/order.utils'
 import { getVendorOrderItem, getVendorOrders } from '~/lib/orders/vendor-orders.service'
 import type { VendorOrderItem } from '~/lib/orders/vendor-orders.type'
 import { resolveVendorShippingAddress } from '~/lib/orders/vendor-orders.utils'
+import { vendorRoutes } from '~/lib/routes'
 import { supabase } from '~/lib/supabase'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
+import { processEasyshipShipment } from '~/lib/vendor-shipping/easyship-shipping-credit'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 import { toneStyle } from '~/commerce/components/vendor/StatusPill'
 import {
@@ -99,6 +102,7 @@ export function VendorSlaInboxPanel({
   tabs,
 }: VendorSlaInboxPanelProps) {
   const toast = useAppToast()
+  const router = useRouter()
   const dispatch = useAppDispatch()
   const payments = useAppSelector(selectOrderPayments)
 
@@ -120,6 +124,7 @@ export function VendorSlaInboxPanel({
   const [trackingItem, setTrackingItem] = useState<VendorOrderItem | null>(null)
   const [trackingMode, setTrackingMode] = useState<'outbound' | 'return'>('outbound')
   const [trackingSubmitting, setTrackingSubmitting] = useState(false)
+  const [fulfillingItemId, setFulfillingItemId] = useState<string | null>(null)
   const [detailItem, setDetailItem] = useState<VendorOrderItem | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -251,6 +256,48 @@ export function VendorSlaInboxPanel({
     setSelectedIds((current) =>
       current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
     )
+  }
+
+  async function fulfillOrderItem(item: VendorOrderItem) {
+    if (!shopId || !item.order_id) {
+      toast.show('Could not fulfill', {
+        tone: 'danger',
+        message: 'This order is missing its id. Refresh and try again.',
+      })
+      return
+    }
+    setFulfillingItemId(item.id)
+    try {
+      const result = await processEasyshipShipment({
+        shopId,
+        orderId: item.order_id,
+        orderItemIds: [item.id],
+      })
+      if (!result.success) {
+        if (result.code === 'seller_origin_incomplete') {
+          toast.show('Fulfillment address required', {
+            tone: 'warning',
+            message: result.error ?? 'Add your warehouse address, then fulfill again.',
+          })
+          router.push((result.setupPath || vendorRoutes.settingsSection('warehouse')) as never)
+          return
+        }
+        toast.show('Could not fulfill order', {
+          tone: 'danger',
+          message: result.error ?? 'Check your wallet and try again.',
+        })
+        return
+      }
+      toast.show('Order fulfilled', {
+        tone: 'success',
+        message: result.trackingNumber
+          ? `Tracking ${result.trackingNumber} added. The buyer is notified automatically.`
+          : 'Shipping label purchased. The buyer is notified automatically.',
+      })
+      await load()
+    } finally {
+      setFulfillingItemId(null)
+    }
   }
 
   async function openTrackingForItem(orderItemId: string, mode: 'outbound' | 'return') {
@@ -778,15 +825,16 @@ export function VendorSlaInboxPanel({
                       >
                         {row.internalNote || row.internalTags.length > 0 ? 'Edit note / tags' : 'Add note / tags'}
                       </Button>
-                      {row.kind === 'shipment_risk' && row.orderItemId ? (
+                      {row.kind === 'shipment_risk' && row.orderItem ? (
                         <Button
                           tone="primary"
                           size="$3"
                           borderRadius={999}
-                          icon={<Icons.Truck size={14} />}
-                          onPress={() => void openTrackingForItem(row.orderItemId!, 'outbound')}
+                          disabled={fulfillingItemId === row.orderItem.id}
+                          icon={<Icons.Package size={14} />}
+                          onPress={() => void fulfillOrderItem(row.orderItem!)}
                         >
-                          {row.nextActionLabel}
+                          {fulfillingItemId === row.orderItem.id ? 'Fulfilling…' : 'Fulfill'}
                         </Button>
                       ) : null}
                       {row.kind === 'pickup_exception' && row.orderItemId ? (
@@ -888,9 +936,11 @@ export function VendorSlaInboxPanel({
           setDetailItem(null)
           setDetailIssues([])
         }}
+        easyshipSubmitting={fulfillingItemId === detailItem?.id}
+        onProcessEasyship={(item) => void fulfillOrderItem(item)}
         onAdvance={(item, target) => {
           if (target === ORDER_STATUS.SHIPPED) {
-            void openTrackingForItem(item.id, 'outbound')
+            void fulfillOrderItem(item)
           } else {
             toast.show('Use the inbox actions for this item', { tone: 'info' })
           }

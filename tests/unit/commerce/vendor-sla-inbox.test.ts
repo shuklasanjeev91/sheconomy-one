@@ -111,6 +111,7 @@ describe('vendor SLA inbox', () => {
       'pickup_exception',
       'shipment_risk',
     ])
+    expect(rows.find((row) => row.kind === 'shipment_risk')?.nextActionLabel).toBe('Fulfill')
   })
 
   it('builds filter counts for shipping, returns, pickup, and exchange block lanes', () => {
