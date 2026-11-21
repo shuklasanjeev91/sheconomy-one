@@ -13,6 +13,8 @@ import { generateListingSlug } from '~/lib/listing/listing.utils'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
+import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import { readMetadataString } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
 type SeoStepProps = {
   ui: AppUiTokens
@@ -31,6 +33,7 @@ export function SeoStep({
   shopSlug,
   isDesktop,
   onUpdate,
+  onUpdateMetadata,
 }: SeoStepProps) {
   const slug = formData.slug?.trim() || generateListingSlug(formData.title)
   const seoTitle = formData.meta_title?.trim() || formData.title
@@ -62,7 +65,7 @@ export function SeoStep({
           </Text>
           <ListingPublishFieldError ui={ui} message={errors.slug} />
 
-          <Field label="Search Keywords">
+          <Field label="Public tags">
             <Input
               value={(formData.tags ?? []).join(', ')}
               editable={false}
@@ -70,8 +73,19 @@ export function SeoStep({
             />
           </Field>
           <Text fontSize={11} color={ui.textMuted}>
-            Tags from Basic Info are used as search keywords. Separate with commas.
+            Tags from Vital info are shown to shoppers. They are separate from backend search terms.
           </Text>
+          <Field label="Backend search terms" error={errors.backend_search_terms}>
+            <TextArea
+              minHeight={72}
+              value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.BACKEND_SEARCH_TERMS)}
+              onChangeText={(value) =>
+                onUpdateMetadata(LISTING_METADATA_KEYS.BACKEND_SEARCH_TERMS, value.slice(0, 250))
+              }
+              placeholder="Hidden terms shoppers never see. 250 characters."
+            />
+          </Field>
+          <ListingPublishFieldError ui={ui} message={errors.backend_search_terms} />
         </ListingPublishCard>
 
         <ListingPublishCard ui={ui} title="Meta Description" titleAccent>

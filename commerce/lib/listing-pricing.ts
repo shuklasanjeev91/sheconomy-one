@@ -1,4 +1,5 @@
 import { formatCurrency } from '~/lib/format'
+import { effectiveUnitPrice } from '~/lib/listing/product-catalog'
 
 export type ListingPriceInput = {
   /** Current selling price (what the buyer pays). */
@@ -10,6 +11,11 @@ export type ListingPriceInput = {
   priceIncludesTax?: boolean | null
   /** Declared GST/tax % for disclosure (optional). */
   taxPercent?: number | null
+  /** Promotional price. Applied only inside the sale window. */
+  salePrice?: number | null
+  saleStartsAt?: string | null
+  saleEndsAt?: string | null
+  now?: Date
 }
 
 export type ListingPriceDisplay = {
@@ -36,8 +42,16 @@ function toFiniteNumber(value: unknown): number | null {
 
 /** Normalize listing pricing for cards, PDP, and sticky buy bars. */
 export function resolveListingPrice(input: ListingPriceInput): ListingPriceDisplay {
-  const price = Math.max(0, toFiniteNumber(input.price) ?? 0)
-  const mrp = toFiniteNumber(input.mrp)
+  const offer = Math.max(0, toFiniteNumber(input.price) ?? 0)
+  const price = effectiveUnitPrice(
+    offer,
+    toFiniteNumber(input.salePrice),
+    input.saleStartsAt,
+    input.saleEndsAt,
+    input.now,
+  )
+  const statedMrp = toFiniteNumber(input.mrp)
+  const mrp = price < offer ? Math.max(statedMrp ?? 0, offer) : statedMrp
   const showMrp = mrp != null && mrp > price + 0.009
   const currency = (input.currency || 'INR').toUpperCase()
   const priceIncludesTax = input.priceIncludesTax !== false

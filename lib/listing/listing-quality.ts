@@ -16,6 +16,12 @@ import {
   type ListingImageDraft,
   type ListingType,
 } from "~/lib/listing/listing.type";
+import type { ProductTypeCatalog } from "~/lib/listing/product-catalog";
+import {
+  validateProductIdentifier,
+  validateRequiredAttributes,
+  validateRequiredCompliance,
+} from "~/lib/listing/product-catalog";
 
 export type ListingQualityIssue = {
   field: string;
@@ -227,7 +233,7 @@ export function validatePhysicalProductInfoQuality(
 /** Full publish quality gate for create + edit. */
 export function validateListingQuality(
   formData: Partial<ListingFormData>,
-  options: { requireDimensions?: boolean } = {},
+  options: { requireDimensions?: boolean; catalog?: ProductTypeCatalog | null } = {},
 ): ListingQualityResult {
   const issues: ListingQualityIssue[] = [];
   const errors: Record<string, string> = {};
@@ -296,9 +302,58 @@ export function validateListingQuality(
         message: "Enter quantity in stock for this product.",
       });
     }
+
+    if (!formData.product_type_id) {
+      pushIssue(issues, errors, warnings, {
+        field: "product_type_id",
+        severity: "error",
+        message: "Choose a product type.",
+      });
+    }
+    if (!formData.item_condition) {
+      pushIssue(issues, errors, warnings, {
+        field: "item_condition",
+        severity: "error",
+        message: "Choose the item condition.",
+      });
+    }
+    const identifierErrors = validateProductIdentifier(formData.product_identifier, {
+      required: true,
+    });
+    for (const [field, message] of Object.entries(identifierErrors)) {
+      pushIssue(issues, errors, warnings, { field, severity: "error", message });
+    }
+    const attributeErrors = validateRequiredAttributes(
+      options.catalog,
+      formData.attribute_values,
+    );
+    for (const [field, message] of Object.entries(attributeErrors)) {
+      pushIssue(issues, errors, warnings, { field, severity: "error", message });
+    }
+    const complianceErrors = validateRequiredCompliance(
+      options.catalog,
+      formData.compliance_documents,
+    );
+    for (const [field, message] of Object.entries(complianceErrors)) {
+      pushIssue(issues, errors, warnings, { field, severity: "error", message });
+    }
   }
 
   if (listingType === LISTING_TYPES.DIGITAL) {
+    if (!formData.product_type_id) {
+      pushIssue(issues, errors, warnings, {
+        field: "product_type_id",
+        severity: "error",
+        message: "Choose a product type.",
+      });
+    }
+    const attributeErrors = validateRequiredAttributes(
+      options.catalog,
+      formData.attribute_values,
+    );
+    for (const [field, message] of Object.entries(attributeErrors)) {
+      pushIssue(issues, errors, warnings, { field, severity: "error", message });
+    }
     if (!String(formData.digital_file_url ?? "").trim()) {
       pushIssue(issues, errors, warnings, {
         field: "digital_file_url",

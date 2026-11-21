@@ -28,6 +28,7 @@ import { assignCategories, deleteListing } from '~/lib/listing/listing.service'
 import { generateListingSlug, prepareListingDataForSubmission } from '~/lib/listing/listing.utils'
 import { addImage, batchUploadImages } from '~/lib/listing/listing-images.service'
 import { replaceAttributes } from '~/lib/listing/listing-attributes.service'
+import { replaceListingCatalog } from '~/lib/listing/product-catalog.service'
 import { replaceMaterials } from '~/lib/listing/listing-materials.service'
 import { replaceVariations } from '~/lib/listing/listing-variations.service'
 import { generateUniqueSku, normalizeSku } from '~/lib/listing/sku.utils'
@@ -716,7 +717,27 @@ export const listingPublishOrchestrator = {
         },
         {
           step: PUBLISH_STEPS.ATTRIBUTES,
-          run: () => createListingAttributes(publishResult.listing_id as string, publishData.attributes),
+          run: async () => {
+            const created = await createListingAttributes(
+              publishResult.listing_id as string,
+              publishData.attributes,
+            )
+            if (!created.success) return created
+            const variationStep = publishResult.detailed_results?.[PUBLISH_STEPS.VARIATIONS] as
+              | { temp_key_to_variation_id?: Record<string, string> }
+              | undefined
+            const tempMap = new Map(Object.entries(variationStep?.temp_key_to_variation_id ?? {}))
+            const catalog = await replaceListingCatalog(
+              publishResult.listing_id as string,
+              publishData,
+              publishData.shop_id,
+              tempMap,
+            )
+            if (!catalog.success) {
+              return { success: false, error: catalog.error ?? 'Could not save product details.' }
+            }
+            return created
+          },
         },
         {
           step: PUBLISH_STEPS.MATERIALS,

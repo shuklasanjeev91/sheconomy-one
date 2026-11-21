@@ -336,6 +336,8 @@ const LISTING_TABLE_FIELDS: (keyof ListingInsert)[] = [
   'price_includes_tax',
   'tax_percent',
   'product_info',
+  'product_type_id',
+  'item_condition',
   'quantity',
   'category',
   'is_featured',
@@ -398,6 +400,8 @@ export function prepareListingDataForSubmission(formData: Partial<ListingFormDat
   if (payload.price_includes_tax !== undefined) {
     payload.price_includes_tax = Boolean(payload.price_includes_tax)
   }
+  if (payload.item_condition === '') payload.item_condition = null
+  if (payload.product_type_id === '') payload.product_type_id = null
 
   // Clean tags array.
   if (Array.isArray(payload.tags)) {

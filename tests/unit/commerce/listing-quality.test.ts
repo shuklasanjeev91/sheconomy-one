@@ -100,6 +100,18 @@ describe('validateListingQuality', () => {
           { image_url: 'b.jpg', width: 1600, height: 1600 },
           { image_url: 'c.jpg', width: 1600, height: 1600 },
         ],
+        product_type_id: 'apparel-type',
+        item_condition: 'new',
+        product_identifier: {
+          product_id_type: 'none',
+          product_id_value: '',
+          gtin_exemption: true,
+          gtin_exemption_reason: 'handmade',
+        },
+        attribute_values: [{ attribute_id: 'material', value_text: 'Cotton' }],
+        compliance_documents: [
+          { requirement_code: 'origin', document_type: 'pdf', file_url: 'shops/docs/origin.pdf' },
+        ],
         product_info: {
           brand: 'SheLoom',
           generic_name: 'Cotton stole',
@@ -111,6 +123,36 @@ describe('validateListingQuality', () => {
           hsn_code: '6214',
         },
       }),
+      {
+        catalog: {
+          id: 'apparel-type',
+          code: 'apparel',
+          name: 'Apparel',
+          family: 'apparel',
+          variationThemes: [],
+          attributes: [
+            {
+              id: 'material',
+              code: 'material',
+              label: 'Material',
+              data_type: 'text',
+              is_required: true,
+              is_recommended: false,
+              is_variation_axis: false,
+              display_order: 1,
+              options: [],
+            },
+          ],
+          compliance: [
+            {
+              code: 'origin',
+              label: 'Country of origin certificate',
+              is_required: true,
+              document_types: ['pdf'],
+            },
+          ],
+        },
+      },
     )
     expect(result.isValid).toBe(true)
     expect(result.score).toBeGreaterThanOrEqual(80)

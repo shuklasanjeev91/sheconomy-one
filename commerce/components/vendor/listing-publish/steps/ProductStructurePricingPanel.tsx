@@ -55,6 +55,7 @@ import {
   type ProductStructure,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import {
+  readMetadataString,
   readProductInfoString,
   resolveProductStructure,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
@@ -70,6 +71,8 @@ type ProductStructurePricingPanelProps = {
   sellerCountryCode?: string | null
   /** Offer commercial fields vs Variations Yes/No + SKU table. */
   panel?: 'full' | 'type-and-price' | 'variants'
+  /** Product-type variation axes. Falls back to Color / Size / Material / Style. */
+  axisNames?: string[]
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
   onStructureChange?: (next: ProductStructure) => void
@@ -82,6 +85,7 @@ export function ProductStructurePricingPanel({
   currencySymbol,
   sellerCountryCode,
   panel = 'full',
+  axisNames,
   onUpdate,
   onUpdateMetadata,
   onStructureChange,
@@ -350,6 +354,7 @@ export function ProductStructurePricingPanel({
 
   const showOffer = panel === 'full' || panel === 'type-and-price'
   const showVariants = panel === 'full' || panel === 'variants'
+  const themeNames = axisNames?.length ? axisNames : [...AXIS_PRESETS]
 
   return (
     <YStack gap="$4" width="100%">
@@ -468,6 +473,76 @@ export function ProductStructurePricingPanel({
         </ListingPublishCard>
       ) : null}
 
+      {showOffer ? (
+        <ListingPublishCard ui={ui} title="Offer settings">
+          <ListingFormRow ui={ui} label="Minimum order quantity">
+            <Input
+              value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.MIN_ORDER_QUANTITY)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.MIN_ORDER_QUANTITY, value)}
+              keyboardType="numeric"
+              placeholder="1"
+            />
+          </ListingFormRow>
+          <ListingFormRow ui={ui} label="Low-stock threshold">
+            <Input
+              value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.LOW_STOCK_THRESHOLD)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.LOW_STOCK_THRESHOLD, value)}
+              keyboardType="numeric"
+              placeholder="5"
+            />
+          </ListingFormRow>
+          <ListingFormRow ui={ui} label="Handling time (days)">
+            <Input
+              value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.HANDLING_TIME_DAYS)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.HANDLING_TIME_DAYS, value)}
+              keyboardType="numeric"
+              placeholder="2"
+            />
+          </ListingFormRow>
+          <ListingFormRow ui={ui} label="Sale price">
+            <Input
+              value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.SALE_PRICE)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.SALE_PRICE, value)}
+              keyboardType="decimal-pad"
+              placeholder="Optional"
+            />
+          </ListingFormRow>
+          <ListingFormRow ui={ui} label="Sale starts" error={errors.sale_end_at}>
+            <Input
+              value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.SALE_START_AT)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.SALE_START_AT, value)}
+              placeholder="YYYY-MM-DD"
+            />
+          </ListingFormRow>
+          <ListingFormRow ui={ui} label="Sale ends" error={errors.sale_end_at}>
+            <Input
+              value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.SALE_END_AT)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.SALE_END_AT, value)}
+              placeholder="YYYY-MM-DD"
+            />
+          </ListingFormRow>
+          <ListingFormRow ui={ui} label="Allow preorder">
+            <Switch
+              checked={Boolean(
+                (formData.listing_metadata as Record<string, unknown> | undefined)?.[
+                  LISTING_METADATA_KEYS.ALLOW_PREORDER
+                ],
+              )}
+              onCheckedChange={(checked) =>
+                onUpdateMetadata(LISTING_METADATA_KEYS.ALLOW_PREORDER, Boolean(checked))
+              }
+            />
+          </ListingFormRow>
+          <ListingFormRow ui={ui} label="Expected ship date">
+            <Input
+              value={readMetadataString(formData.listing_metadata, LISTING_METADATA_KEYS.EXPECTED_SHIP_AT)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.EXPECTED_SHIP_AT, value)}
+              placeholder="YYYY-MM-DD"
+            />
+          </ListingFormRow>
+        </ListingPublishCard>
+      ) : null}
+
       {showVariants ? (
         <ListingPublishCard ui={ui} title="Does this product have variations?">
           {isDigital ? (
@@ -576,7 +651,7 @@ export function ProductStructurePricingPanel({
                         </SelectTrigger>
                         <SelectContent zIndex={300000}>
                           <SelectViewport>
-                            {AXIS_PRESETS.map((type, typeIndex) => (
+                            {themeNames.map((type, typeIndex) => (
                               <SelectItem key={type} index={typeIndex} value={type}>
                                 <Select.ItemText>{type}</Select.ItemText>
                               </SelectItem>
@@ -738,6 +813,32 @@ export function ProductStructurePricingPanel({
                               Auto
                             </Button>
                           </XStack>
+                          <Input
+                            value={
+                              (formData.variation_identifiers ?? []).find(
+                                (row) => row.variant_temp_key === tempKey || row.variation_id === variation.id,
+                              )?.product_id_value ?? ''
+                            }
+                            onChangeText={(value) => {
+                              const current = formData.variation_identifiers ?? []
+                              const indexOf = current.findIndex(
+                                (row) => row.variant_temp_key === tempKey || row.variation_id === variation.id,
+                              )
+                              const nextRow = {
+                                product_id_type: 'gtin' as const,
+                                product_id_value: value,
+                                gtin_exemption: false,
+                                variant_temp_key: tempKey,
+                                variation_id: variation.id,
+                              }
+                              const next =
+                                indexOf >= 0
+                                  ? current.map((row, rowIndex) => (rowIndex === indexOf ? { ...row, ...nextRow } : row))
+                                  : [...current, nextRow]
+                              onUpdate('variation_identifiers', next)
+                            }}
+                            placeholder="Barcode (optional)"
+                          />
                         </YStack>
 
                         <YStack flex={0.9} minWidth={90} gap="$1">

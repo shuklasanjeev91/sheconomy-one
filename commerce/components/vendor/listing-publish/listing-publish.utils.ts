@@ -10,6 +10,13 @@ import type {
   ListingVariation,
 } from '~/lib/listing/listing.type'
 import { LISTING_STATUS, LISTING_TYPES } from '~/lib/listing/listing.type'
+import type { ProductTypeCatalog } from '~/lib/listing/product-catalog'
+import {
+  validateProductIdentifier,
+  validateRequiredAttributes,
+  validateRequiredCompliance,
+} from '~/lib/listing/product-catalog'
+import type { ListingCatalogChildren } from '~/lib/listing/product-catalog.service'
 import { generateListingSlug } from '~/lib/listing/listing.utils'
 import {
   validateListingQuality,
@@ -64,8 +71,12 @@ export function mergeListingMetadata(
   return { ...LISTING_PUBLISH_DEFAULT_METADATA, ...(existing ?? {}) }
 }
 
-export function readMetadataString(meta: Record<string, unknown>, key: string, fallback = ''): string {
-  const value = meta[key]
+export function readMetadataString(
+  meta: Record<string, unknown> | undefined,
+  key: string,
+  fallback = '',
+): string {
+  const value = meta?.[key]
   if (value === null || value === undefined) return fallback
   return String(value)
 }
@@ -157,6 +168,7 @@ export function buildFormFromListingDetails(
     attributes?: ListingAttribute[]
     materials?: ListingMaterial[]
     categoryIds?: { category_id: string; is_primary?: boolean }[]
+    catalog?: ListingCatalogChildren
     /** Prefill create wizard as a duplicate (Amazon “Copy listing”). */
     asDuplicate?: boolean
   },
@@ -245,6 +257,23 @@ export function buildFormFromListingDetails(
     variations,
     attributes,
     materials,
+    product_type_id: listing.product_type_id ?? null,
+    item_condition: listing.item_condition ?? 'new',
+    product_identifier: extras?.catalog?.productIdentifier,
+    variation_identifiers: (extras?.catalog?.variationIdentifiers ?? []).map((row) =>
+      asDuplicate ? { ...row, variation_id: null } : row,
+    ),
+    attribute_values: (extras?.catalog?.attributeValues ?? []).map((row) =>
+      asDuplicate ? { ...row, id: undefined, variation_id: null } : row,
+    ),
+    compliance_documents: (extras?.catalog?.complianceDocuments ?? []).map((row) =>
+      asDuplicate ? { ...row, id: undefined } : row,
+    ),
+    aplus_modules: (extras?.catalog?.aplusModules ?? []).map((row) =>
+      asDuplicate ? { ...row, id: undefined } : row,
+    ),
+    delivery_profile_id: extras?.catalog?.deliveryProfileId ?? null,
+    return_policy_id: extras?.catalog?.returnPolicyId ?? null,
   }
 }
 
@@ -313,11 +342,24 @@ export type StepValidationResult = {
 export function validatePublishStep(
   stepId: ListingPublishStepId,
   formData: ListingFormData,
+  catalog?: ProductTypeCatalog | null,
 ): StepValidationResult {
   const errors: Record<string, string> = {}
   const warnings: string[] = []
 
   switch (stepId) {
+    case LISTING_PUBLISH_STEP_IDS.IDENTITY: {
+      if (formData.listing_type === LISTING_TYPES.SERVICE) break
+      if (!formData.product_type_id) errors.product_type_id = 'Choose a product type.'
+      if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
+        if (!formData.item_condition) errors.item_condition = 'Choose the item condition.'
+        Object.assign(
+          errors,
+          validateProductIdentifier(formData.product_identifier, { required: true }),
+        )
+      }
+      break
+    }
     case LISTING_PUBLISH_STEP_IDS.BASIC: {
       // Only the fields this step renders — price lives on the pricing step.
       const title = validateListingField('title', formData.title ?? '')
@@ -336,6 +378,9 @@ export function validatePublishStep(
         Object.assign(errors, productQuality.errors)
         warnings.push(...productQuality.warnings)
       }
+      if (formData.listing_type !== LISTING_TYPES.SERVICE) {
+        Object.assign(errors, validateRequiredAttributes(catalog, formData.attribute_values))
+      }
       if (formData.listing_type === LISTING_TYPES.DIGITAL) {
         if (!formData.digital_file_url?.trim()) {
           errors.digital_file_url = 'A download URL is required for digital products.'
@@ -350,6 +395,12 @@ export function validatePublishStep(
       // Package fields are optional — no hard gates.
       break
     }
+    case LISTING_PUBLISH_STEP_IDS.COMPLIANCE: {
+      if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
+        Object.assign(errors, validateRequiredCompliance(catalog, formData.compliance_documents))
+      }
+      break
+    }
     case LISTING_PUBLISH_STEP_IDS.PRICING: {
       const structure = resolveProductStructure(formData)
       if (structure === PRODUCT_STRUCTURES.SIMPLE) {
@@ -361,6 +412,12 @@ export function validatePublishStep(
         ) {
           errors.stock = 'Enter quantity available for this offer.'
         }
+      }
+      const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
+      const saleStart = String(meta[LISTING_METADATA_KEYS.SALE_START_AT] ?? '')
+      const saleEnd = String(meta[LISTING_METADATA_KEYS.SALE_END_AT] ?? '')
+      if (saleStart && saleEnd && saleEnd < saleStart) {
+        errors.sale_end_at = 'Sale end must be on or after the sale start.'
       }
       break
     }
@@ -404,6 +461,14 @@ export function validatePublishStep(
       if (!metaTitle.isValid && metaTitle.error) errors.meta_title = metaTitle.error
       const metaDesc = validateListingField('meta_description', formData.meta_description ?? '')
       if (!metaDesc.isValid && metaDesc.error) errors.meta_description = metaDesc.error
+      const searchTerms = String(
+        ((formData.listing_metadata ?? {}) as Record<string, unknown>)[
+          LISTING_METADATA_KEYS.BACKEND_SEARCH_TERMS
+        ] ?? '',
+      )
+      if (searchTerms.length > 250) {
+        errors.backend_search_terms = 'Backend search terms must be 250 characters or fewer.'
+      }
       break
     }
     default:
@@ -425,10 +490,13 @@ export function validateDraftForm(formData: ListingFormData): StepValidationResu
   return { isValid: Object.keys(errors).length === 0, errors, warnings: [] }
 }
 
-export function validateFullPublishForm(formData: ListingFormData): StepValidationResult {
+export function validateFullPublishForm(
+  formData: ListingFormData,
+  catalog?: ProductTypeCatalog | null,
+): StepValidationResult {
   const structure = resolveProductStructure(formData)
   const result = validateListingData(formData)
-  const quality = validateListingQuality(formData)
+  const quality = validateListingQuality(formData, { catalog })
   const errors = { ...result.errors, ...quality.errors }
   const warnings = [...quality.warnings]
 
@@ -451,6 +519,10 @@ export function validateFullPublishForm(formData: ListingFormData): StepValidati
 }
 
 const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
+  product_type_id: LISTING_PUBLISH_STEP_IDS.IDENTITY,
+  item_condition: LISTING_PUBLISH_STEP_IDS.IDENTITY,
+  product_id_value: LISTING_PUBLISH_STEP_IDS.IDENTITY,
+  gtin_exemption_reason: LISTING_PUBLISH_STEP_IDS.IDENTITY,
   title: LISTING_PUBLISH_STEP_IDS.BASIC,
   description: LISTING_PUBLISH_STEP_IDS.BASIC,
   listing_type: LISTING_PUBLISH_STEP_IDS.BASIC,
@@ -482,6 +554,8 @@ const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
   slug: LISTING_PUBLISH_STEP_IDS.SEO,
   meta_title: LISTING_PUBLISH_STEP_IDS.SEO,
   meta_description: LISTING_PUBLISH_STEP_IDS.SEO,
+  sale_end_at: LISTING_PUBLISH_STEP_IDS.PRICING,
+  backend_search_terms: LISTING_PUBLISH_STEP_IDS.SEO,
 }
 
 /** Which step owns the first offending field, so we can jump the vendor there. */
@@ -489,7 +563,13 @@ export function findStepForErrors(
   errors: Record<string, string>,
 ): ListingPublishStepId | undefined {
   for (const field of Object.keys(errors)) {
-    const step = FIELD_STEP_LOOKUP[field]
+    const step =
+      FIELD_STEP_LOOKUP[field] ??
+      (field.startsWith('attr_')
+        ? LISTING_PUBLISH_STEP_IDS.DETAILS
+        : field.startsWith('compliance_')
+          ? LISTING_PUBLISH_STEP_IDS.COMPLIANCE
+          : undefined)
     if (step) return step
   }
   return undefined

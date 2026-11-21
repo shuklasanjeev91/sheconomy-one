@@ -13,6 +13,7 @@ type PricingStepProps = {
   isDesktop: boolean
   sellerCountryCode?: string | null
   panel?: 'full' | 'type-and-price' | 'variants'
+  axisNames?: string[]
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
   onStructureChange?: (next: ProductStructure) => void
@@ -25,6 +26,7 @@ export function PricingStep({
   currencySymbol,
   sellerCountryCode,
   panel = 'full',
+  axisNames,
   onUpdate,
   onUpdateMetadata,
   onStructureChange,
@@ -38,6 +40,7 @@ export function PricingStep({
         currencySymbol={currencySymbol}
         sellerCountryCode={sellerCountryCode}
         panel={panel}
+        axisNames={axisNames}
         onUpdate={onUpdate}
         onUpdateMetadata={onUpdateMetadata}
         onStructureChange={onStructureChange}

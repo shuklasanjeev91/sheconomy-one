@@ -1,4 +1,10 @@
 import type { Database, Tables, TablesInsert, TablesUpdate } from '~/lib/supabase'
+import type {
+  ListingAplusModuleDraft,
+  ListingAttributeValueDraft,
+  ListingComplianceDocumentDraft,
+  ListingProductIdentifierDraft,
+} from '~/lib/listing/product-catalog'
 
 /**
  * Shared shape returned by every listing service call.
@@ -93,6 +99,10 @@ export type ListingFormData = {
   tax_percent?: number | string | null
   /** Manufacturing / legal bag stored on `listings.product_info`. */
   product_info?: Record<string, unknown>
+  /** Amazon product type. Column on `listings`. */
+  product_type_id?: string | null
+  /** New / used / refurbished. Column on `listings`. */
+  item_condition?: string | null
 
   // Physical
   stock?: number | string
@@ -120,6 +130,16 @@ export type ListingFormData = {
   variations?: Partial<ListingVariationInsert>[]
   attributes?: Partial<ListingAttributeInsert>[]
   materials?: Partial<ListingMaterialInsert>[]
+  /** Parent barcode or GTIN exemption. */
+  product_identifier?: ListingProductIdentifierDraft
+  /** Optional barcode per child SKU. */
+  variation_identifiers?: ListingProductIdentifierDraft[]
+  /** Values for the product type's attribute definitions. */
+  attribute_values?: ListingAttributeValueDraft[]
+  compliance_documents?: ListingComplianceDocumentDraft[]
+  aplus_modules?: ListingAplusModuleDraft[]
+  delivery_profile_id?: string | null
+  return_policy_id?: string | null
 }
 
 /**
@@ -408,6 +428,20 @@ export function getDefaultListingFormData(
     variations: [],
     attributes: [],
     materials: [],
+    product_type_id: null,
+    item_condition: 'new',
+    product_identifier: {
+      product_id_type: 'none',
+      product_id_value: '',
+      gtin_exemption: false,
+      gtin_exemption_reason: null,
+    },
+    variation_identifiers: [],
+    attribute_values: [],
+    compliance_documents: [],
+    aplus_modules: [],
+    delivery_profile_id: null,
+    return_policy_id: null,
   }
 
   if (listingType === LISTING_TYPES.PHYSICAL) {

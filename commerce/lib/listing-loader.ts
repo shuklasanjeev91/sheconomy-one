@@ -98,11 +98,33 @@ export type ListingShop = Pick<
   }> | null
 }
 
+export type ListingAplusModuleRow = {
+  id: string
+  module_type: string
+  display_order: number
+  headline: string | null
+  body: string | null
+  image_url: string | null
+  payload: Record<string, unknown> | null
+}
+
+export type ListingTypedAttributeRow = {
+  attribute_id: string
+  value_text: string | null
+  value_number: number | null
+  value_boolean: boolean | null
+  value_json: unknown
+  product_type_attributes?: { label: string; display_order: number; unit: string | null } | null
+}
+
 export type ListingRow = ListingDetail & {
   slug?: string | null
+  item_condition?: string | null
   listing_images: ListingImage[] | null
   listing_variations: ListingVariation[] | null
   listing_attributes: ListingAttribute[] | null
+  listing_attribute_values?: ListingTypedAttributeRow[] | null
+  listing_aplus_modules?: ListingAplusModuleRow[] | null
   listing_delivery_profiles: Array<{ delivery_profiles: DeliveryProfile | null }> | null
   shops: ListingShop | null
 }
@@ -112,7 +134,7 @@ export const LISTING_CORE_SELECT = `
   id, slug, title, description, price, listing_type, listing_status, is_active,
   average_rating, total_reviews, stock, quantity, category, tags,
   shop_id, created_at, sku, weight, dimensions, listing_metadata,
-  mrp, price_includes_tax, tax_percent, product_info,
+  mrp, price_includes_tax, tax_percent, product_info, item_condition,
   digital_file_url, digital_file_type, digital_file_size, download_limit, shipping_required,
   listing_images(id, image_url, is_primary, display_order, alt_text, image_type, image_metadata, variation_id),
   listing_variations(
@@ -122,6 +144,13 @@ export const LISTING_CORE_SELECT = `
   ),
   listing_attributes(
     id, attribute_name, attribute_value, display_order
+  ),
+  listing_attribute_values(
+    attribute_id, value_text, value_number, value_boolean, value_json,
+    product_type_attributes(label, display_order, unit)
+  ),
+  listing_aplus_modules(
+    id, module_type, display_order, headline, body, image_url, payload
   ),
   shops(
     id, shop_name, logo_url, shop_currency, verified, slug, shop_metadata, user_id,

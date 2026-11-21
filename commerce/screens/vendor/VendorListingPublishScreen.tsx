@@ -79,7 +79,17 @@ import { DetailsStep } from '~/commerce/components/vendor/listing-publish/steps/
 import { ImagesStep } from '~/commerce/components/vendor/listing-publish/steps/ImagesStep'
 import { PricingStep } from '~/commerce/components/vendor/listing-publish/steps/PricingStep'
 import { SeoStep } from '~/commerce/components/vendor/listing-publish/steps/SeoStep'
+import { IdentityStep } from '~/commerce/components/vendor/listing-publish/steps/IdentityStep'
+import { ComplianceStep } from '~/commerce/components/vendor/listing-publish/steps/ComplianceStep'
+import { AplusStep } from '~/commerce/components/vendor/listing-publish/steps/AplusStep'
 import { resolveCountryCode } from '~/lib/geo'
+import { supabase } from '~/lib/supabase'
+import { variationAxisNames, type ProductTypeCatalog } from '~/lib/listing/product-catalog'
+import {
+  getProductTypeCatalog,
+  listActiveProductTypes,
+  loadListingCatalogChildren,
+} from '~/lib/listing/product-catalog.service'
 
 function pickedToDraft(picked: PickedImage, order: number): ListingImageDraft {
   return {
@@ -162,6 +172,12 @@ function VendorListingPublishContent() {
   const [sellerCountryCode, setSellerCountryCode] = useState(
     shop?.shop_currency === 'INR' ? 'IN' : 'IN',
   )
+  const [productTypes, setProductTypes] = useState<
+    { id: string; name: string; family: string; category_id: string | null }[]
+  >([])
+  const [productCatalog, setProductCatalog] = useState<ProductTypeCatalog | null>(null)
+  const [deliveryProfiles, setDeliveryProfiles] = useState<{ id: string; profile_name: string }[]>([])
+  const [returnPolicies, setReturnPolicies] = useState<{ id: string; policy_name: string }[]>([])
 
   useEffect(() => {
     if (!shop?.id) return
@@ -174,6 +190,64 @@ function VendorListingPublishContent() {
       cancelled = true
     }
   }, [shop?.id])
+
+  useEffect(() => {
+    let cancelled = false
+    void listActiveProductTypes().then((result) => {
+      if (!cancelled && result.success) setProductTypes(result.data ?? [])
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!shop?.id) return
+    let cancelled = false
+    void Promise.all([
+      supabase
+        .from('delivery_profiles')
+        .select('id, profile_name')
+        .eq('shop_id', shop.id)
+        .eq('is_active', true),
+      supabase
+        .from('return_policies')
+        .select('id, policy_name')
+        .eq('shop_id', shop.id)
+        .eq('is_active', true),
+    ]).then(([delivery, returns]) => {
+      if (cancelled) return
+      setDeliveryProfiles(delivery.data ?? [])
+      setReturnPolicies(returns.data ?? [])
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [shop?.id])
+
+  useEffect(() => {
+    const typeId = formData.product_type_id
+    if (!typeId) {
+      setProductCatalog(null)
+      return
+    }
+    let cancelled = false
+    void getProductTypeCatalog(typeId).then((result) => {
+      if (!cancelled) setProductCatalog(result.success ? result.data : null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [formData.product_type_id])
+
+  useEffect(() => {
+    if (formData.product_type_id || !productTypes.length) return
+    const primary =
+      formData.categories?.find((row) => row.is_primary) ?? formData.categories?.[0]
+    if (!primary) return
+    const match = productTypes.find((type) => type.category_id === primary.category_id)
+    if (match) dispatch(updateListingField({ field: 'product_type_id', value: match.id }))
+  }, [dispatch, formData.categories, formData.product_type_id, productTypes])
 
   const shopSlug =
     shop?.slug || shop?.shop_name?.toLowerCase().replace(/\s+/g, '-') || 'shop'
@@ -201,13 +275,14 @@ function VendorListingPublishContent() {
 
       // A missing side-table (or a policy that hides it) must not strand the
       // whole composer — hydrate what loaded and let the vendor re-enter the rest.
-      const [imagesResult, variationsResult, materialsResult, attributesResult, categoriesResult] =
+      const [imagesResult, variationsResult, materialsResult, attributesResult, categoriesResult, catalogResult] =
         await Promise.all([
           settleOr(dispatch(loadImages(listingId)).unwrap(), { items: [] }),
           settleOr(dispatch(loadVariations(listingId)).unwrap(), { items: [] }),
           settleOr(dispatch(loadMaterials(listingId)).unwrap(), { items: [] }),
           settleOr(dispatch(loadAttributes(listingId)).unwrap(), { items: [] }),
           settleOr(dispatch(loadListingCategories(listingId)).unwrap(), { rows: [] }),
+          loadListingCatalogChildren(listingId),
         ])
       if (cancelled) return
 
@@ -220,6 +295,7 @@ function VendorListingPublishContent() {
           category_id: row.category_id,
           is_primary: row.is_primary ?? false,
         })),
+        catalog: catalogResult.data ?? undefined,
         asDuplicate: isDuplicateMode,
       })
 
@@ -227,7 +303,7 @@ function VendorListingPublishContent() {
       if (isDuplicateMode) {
         setTypePicked(true)
         setTypeConfirmed(true)
-        setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
+        setActiveStep(LISTING_PUBLISH_STEP_IDS.IDENTITY)
         toast.show('Listing copied', {
           tone: 'success',
           message: 'Review the copy, then save as draft or publish.',
@@ -324,7 +400,7 @@ function VendorListingPublishContent() {
       handleChangeType(type)
       setTypePicked(true)
       setTypeConfirmed(true)
-      setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
+      setActiveStep(LISTING_PUBLISH_STEP_IDS.IDENTITY)
     },
     [handleChangeType],
   )
@@ -479,7 +555,7 @@ function VendorListingPublishContent() {
 
   const goNext = useCallback(() => {
     if (isLastStep) return
-    const result = validatePublishStep(activeStep, formData)
+    const result = validatePublishStep(activeStep, formData, productCatalog)
     setStepErrors(result.errors)
     if (!result.isValid) {
       toast.show('Fix this tab to continue', {
@@ -490,7 +566,7 @@ function VendorListingPublishContent() {
     }
     const next = visibleSteps[stepIndex + 1]
     if (next) setActiveStep(next.id)
-  }, [activeStep, formData, isLastStep, stepConfig.label, stepIndex, toast, visibleSteps])
+  }, [activeStep, formData, isLastStep, productCatalog, stepConfig.label, stepIndex, toast, visibleSteps])
 
   const goBack = useCallback(() => {
     if (stepIndex === 0) {
@@ -587,7 +663,7 @@ function VendorListingPublishContent() {
       return
     }
 
-    const full = validateFullPublishForm(formData)
+    const full = validateFullPublishForm(formData, productCatalog)
     if (!full.isValid) {
       setStepErrors(full.errors)
       const failingStep = findStepForErrors(full.errors)
@@ -660,6 +736,7 @@ function VendorListingPublishContent() {
     kycAllowsSelling,
     kycLoading,
     router,
+    productCatalog,
     shop?.id,
     toast,
   ])
@@ -789,6 +866,16 @@ function VendorListingPublishContent() {
         />
 
         <YStack flex={1} minWidth={280} gap="$4" width="100%">
+          {activeStep === LISTING_PUBLISH_STEP_IDS.IDENTITY ? (
+            <IdentityStep
+              ui={ui}
+              formData={formData}
+              errors={displayErrors}
+              productTypes={productTypes}
+              onUpdate={updateField}
+            />
+          ) : null}
+
           {activeStep === LISTING_PUBLISH_STEP_IDS.BASIC ? (
             <BasicInfoStep
               ui={ui}
@@ -824,6 +911,7 @@ function VendorListingPublishContent() {
               isDesktop={isDesktop}
               sellerCountryCode={sellerCountryCode}
               panel="variants"
+              axisNames={variationAxisNames(productCatalog)}
               onUpdate={updateField}
               onUpdateMetadata={updateMetadata}
             />
@@ -850,9 +938,24 @@ function VendorListingPublishContent() {
               errors={displayErrors}
               sellerCountryCode={sellerCountryCode}
               section="details"
+              catalog={productCatalog}
               onUpdate={updateField}
               onUpdateMetadata={updateMetadata}
             />
+          ) : null}
+
+          {activeStep === LISTING_PUBLISH_STEP_IDS.COMPLIANCE ? (
+            <ComplianceStep
+              ui={ui}
+              formData={formData}
+              errors={displayErrors}
+              catalog={productCatalog}
+              onUpdate={updateField}
+            />
+          ) : null}
+
+          {activeStep === LISTING_PUBLISH_STEP_IDS.APLUS ? (
+            <AplusStep ui={ui} formData={formData} onUpdate={updateField} />
           ) : null}
 
           {activeStep === LISTING_PUBLISH_STEP_IDS.SHIPPING ? (
@@ -862,6 +965,8 @@ function VendorListingPublishContent() {
               errors={displayErrors}
               sellerCountryCode={sellerCountryCode}
               section="shipping"
+              deliveryProfiles={deliveryProfiles}
+              returnPolicies={returnPolicies}
               onUpdate={updateField}
               onUpdateMetadata={updateMetadata}
             />

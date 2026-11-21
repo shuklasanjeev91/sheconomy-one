@@ -1,4 +1,5 @@
 import type { Json } from '~/lib/supabase'
+import { conditionLabel } from '~/lib/listing/product-catalog'
 import {
   axisGroupsFromChildSkus,
   getChildMrp,
@@ -204,6 +205,8 @@ export function buildListingSpecifications(input: {
   tags?: string[] | null
   /** Extra manufacturing / legal rows (brand, origin, HSN, etc.). */
   productInfoSpecs?: ListingSpecification[]
+  itemCondition?: string | null
+  typedAttributes?: ListingSpecification[]
 }): ListingSpecification[] {
   const specs: ListingSpecification[] = []
   const seen = new Set<string>()
@@ -217,6 +220,14 @@ export function buildListingSpecifications(input: {
 
     seen.add(key)
     specs.push({ label, value: trimmed })
+  }
+
+  if (input.itemCondition) {
+    add('Condition', conditionLabel(input.itemCondition) || input.itemCondition)
+  }
+
+  for (const extra of input.typedAttributes ?? []) {
+    add(extra.label, extra.value)
   }
 
   for (const attribute of [...(input.attributes ?? [])].sort(

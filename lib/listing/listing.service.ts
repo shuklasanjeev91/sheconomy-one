@@ -27,6 +27,12 @@ import { addImage, uploadAndAttachImage } from '~/lib/listing/listing-images.ser
 import { replaceAttributes } from '~/lib/listing/listing-attributes.service'
 import { replaceMaterials } from '~/lib/listing/listing-materials.service'
 import { replaceVariations } from '~/lib/listing/listing-variations.service'
+import { listingCompletenessHint } from '~/lib/listing/product-catalog'
+import {
+  getProductTypeCatalog,
+  loadListingCatalogChildren,
+  replaceListingCatalog,
+} from '~/lib/listing/product-catalog.service'
 import {
   LISTING_PAGE_SIZE,
   LISTING_STATUS,
@@ -52,6 +58,8 @@ type Fn = Database['public']['Functions']
 export type ShopListingRow = Fn['get_shop_listings']['Returns'][number] & {
   /** Present when loaded via direct table query (not returned by RPC). */
   sku?: string | null
+  /** Seller inventory nudge: missing product type, barcode, attribute, or document. */
+  completeness_hint?: string | null
 }
 export type AdminListingRow = Fn['admin_search_listings']['Returns'][number]
 export type PopularTag = Fn['get_popular_tags']['Returns'][number]
@@ -172,7 +180,11 @@ export async function getShopListings(
         `
         id, title, slug, description, price, quantity, listing_type, listing_status,
         is_active, is_featured, is_online, created_at, updated_at, sku,
-        listing_images ( image_url, is_primary, display_order )
+        product_type_id, item_condition,
+        listing_images ( image_url, is_primary, display_order ),
+        listing_product_identifiers ( product_id_type, product_id_value, gtin_exemption, gtin_exemption_reason, variation_id ),
+        listing_compliance_documents ( requirement_code, file_url ),
+        listing_attribute_values ( attribute_id, value_text, value_number, value_boolean, value_json )
       `,
       )
       .eq('shop_id', shopId)
@@ -196,8 +208,64 @@ export async function getShopListings(
     const { data, error } = await request
     if (error) return fail(error)
 
-    const rows = (data ?? []) as ListingCatalogRow[]
-    return ok(rows.map(mapCatalogRowToShopListing))
+    const rows = (data ?? []) as Array<
+      ListingCatalogRow & {
+        product_type_id?: string | null
+        item_condition?: string | null
+        listing_product_identifiers?: Array<{
+          product_id_type: string
+          product_id_value: string | null
+          gtin_exemption: boolean
+          gtin_exemption_reason: string | null
+          variation_id: string | null
+        }> | null
+        listing_compliance_documents?: Array<{
+          requirement_code: string
+          file_url: string
+        }> | null
+        listing_attribute_values?: Array<{
+          attribute_id: string
+          value_text: string | null
+          value_number: number | null
+          value_boolean: boolean | null
+          value_json: unknown
+        }> | null
+      }
+    >
+    const typeIds = [
+      ...new Set(rows.map((row) => row.product_type_id).filter((id): id is string => Boolean(id))),
+    ]
+    const catalogPairs = await Promise.all(
+      typeIds.map(async (id) => {
+        const catalog = await getProductTypeCatalog(id)
+        return [id, catalog.data] as const
+      }),
+    )
+    const catalogById = new Map(catalogPairs)
+    return ok(
+      rows.map((row) => {
+        const parent = (row.listing_product_identifiers ?? []).find((item) => !item.variation_id)
+        return {
+          ...mapCatalogRowToShopListing(row),
+          completeness_hint: listingCompletenessHint({
+            listingType: row.listing_type,
+            productTypeId: row.product_type_id,
+            itemCondition: row.item_condition,
+            identifier: parent
+              ? {
+                  product_id_type: parent.product_id_type as 'upc' | 'ean' | 'gtin' | 'isbn' | 'none',
+                  product_id_value: parent.product_id_value,
+                  gtin_exemption: parent.gtin_exemption,
+                  gtin_exemption_reason: parent.gtin_exemption_reason,
+                }
+              : null,
+            attributeValues: row.listing_attribute_values ?? [],
+            documents: row.listing_compliance_documents ?? [],
+            catalog: row.product_type_id ? catalogById.get(row.product_type_id) ?? null : null,
+          }),
+        }
+      }),
+    )
   } catch (error) {
     return fail(error)
   }
@@ -648,6 +716,16 @@ async function persistListingChildren(
       }
     }
   }
+
+  const catalog = await replaceListingCatalog(
+    listingId,
+    formData,
+    formData.shop_id,
+    tempKeyToVariationId,
+  )
+  if (!catalog.success) {
+    throw new Error(catalog.error ?? 'Could not save product details.')
+  }
 }
 
 /**
@@ -840,18 +918,23 @@ async function assertListingMeetsQuality(
     return { ok: false, error: details.error ?? 'Could not load listing for quality check.' }
   }
 
-  const [imagesRes, materialsRes, variationsRes] = await Promise.all([
+  const [imagesRes, materialsRes, variationsRes, catalogChildren] = await Promise.all([
     getImages(listingId),
     getMaterials(listingId),
     getVariations(listingId),
+    loadListingCatalogChildren(listingId),
   ])
 
   const form = buildFormFromListingDetails(details.data, {
     images: imagesRes.data ?? [],
     materials: materialsRes.data ?? [],
     variations: variationsRes.data ?? [],
+    catalog: catalogChildren.data ?? undefined,
   })
-  const quality = validateListingQuality(form)
+  const catalog = form.product_type_id
+    ? await getProductTypeCatalog(form.product_type_id)
+    : null
+  const quality = validateListingQuality(form, { catalog: catalog?.data ?? null })
   if (quality.isValid) return { ok: true }
 
   const firstError = Object.values(quality.errors)[0] || 'Listing does not meet publish quality.'

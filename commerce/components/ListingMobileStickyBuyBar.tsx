@@ -16,6 +16,9 @@ type ListingMobileStickyBuyBarProps = {
   mrp?: number | null
   priceIncludesTax?: boolean | null
   taxPercent?: number | null
+  salePrice?: number | null
+  saleStartsAt?: string | null
+  saleEndsAt?: string | null
   disabled?: boolean
   isLoading?: boolean
   /** When the selected listing/variant is already in the cart. */
@@ -39,6 +42,9 @@ export function ListingMobileStickyBuyBar({
   mrp,
   priceIncludesTax,
   taxPercent,
+  salePrice,
+  saleStartsAt,
+  saleEndsAt,
   disabled,
   isLoading,
   inCart = false,
@@ -87,6 +93,9 @@ export function ListingMobileStickyBuyBar({
             currency={currency}
             priceIncludesTax={priceIncludesTax}
             taxPercent={taxPercent}
+            salePrice={salePrice}
+            saleStartsAt={saleStartsAt}
+            saleEndsAt={saleEndsAt}
             size="sm"
             hideTaxLabel={inCart}
           />

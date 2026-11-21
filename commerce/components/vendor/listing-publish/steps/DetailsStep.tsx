@@ -42,6 +42,8 @@ import {
   readMetadataString,
   readProductInfoString,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
+import { TypedAttributesPanel } from '~/commerce/components/vendor/listing-publish/steps/TypedAttributesPanel'
+import type { ProductTypeCatalog } from '~/lib/listing/product-catalog'
 
 type DetailsStepProps = {
   ui: AppUiTokens
@@ -50,6 +52,9 @@ type DetailsStepProps = {
   sellerCountryCode?: string | null
   /** Amazon tabs: product details vs shipping package. */
   section?: 'details' | 'shipping' | 'all'
+  catalog?: ProductTypeCatalog | null
+  deliveryProfiles?: { id: string; profile_name: string }[]
+  returnPolicies?: { id: string; policy_name: string }[]
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
 }
@@ -59,11 +64,15 @@ export function DetailsStep({
   formData,
   errors,
   section = 'all',
+  catalog = null,
+  deliveryProfiles = [],
+  returnPolicies = [],
   onUpdate,
   onUpdateMetadata,
 }: DetailsStepProps) {
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
   const attributes = formData.attributes ?? []
+  const materials = formData.materials ?? []
   const isDigital = formData.listing_type === LISTING_TYPES.DIGITAL
   const productInfo = parseListingProductInfo(formData.product_info)
   const countryOptions = useMemo(() => getAllGeoCountries().map(countryToOption), [])
@@ -93,6 +102,24 @@ export function DetailsStep({
 
 
 
+
+  function addMaterial() {
+    onUpdate('materials', [...materials, { material_name: '', percentage: null, is_primary: materials.length === 0 }])
+  }
+
+  function updateMaterial(index: number, patch: Record<string, unknown>) {
+    onUpdate(
+      'materials',
+      materials.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    )
+  }
+
+  function removeMaterial(index: number) {
+    onUpdate(
+      'materials',
+      materials.filter((_, i) => i !== index),
+    )
+  }
 
   function addAttribute() {
     onUpdate('attributes', [...attributes, { attribute_name: '', attribute_value: '' }])
@@ -369,6 +396,55 @@ export function DetailsStep({
         </ListingPublishCard>
       ) : null}
 
+      {showDetails && !isDigital ? (
+        <TypedAttributesPanel
+          ui={ui}
+          formData={formData}
+          errors={errors}
+          catalog={catalog ?? null}
+          onUpdate={onUpdate}
+        />
+      ) : null}
+
+      {showDetails && !isDigital ? (
+        <ListingPublishCard
+          ui={ui}
+          title="Materials"
+          headerRight={
+            <Text fontSize={12} fontWeight="700" color={ui.brand} cursor="pointer" onPress={addMaterial}>
+              + Add material
+            </Text>
+          }
+        >
+          {materials.length === 0 ? (
+            <Text fontSize={13} color={ui.textSecondary}>
+              Add fabric, metal, or other materials when they help shoppers compare.
+            </Text>
+          ) : (
+            materials.map((material, index) => (
+              <XStack key={`material-${index}`} gap="$2" flexWrap="wrap" alignItems="flex-end">
+                <Field label="Material" flex={1} minWidth={140}>
+                  <Input
+                    value={material.material_name ?? ''}
+                    onChangeText={(value) => updateMaterial(index, { material_name: value })}
+                    placeholder="Cotton"
+                  />
+                </Field>
+                <Field label="%" width={90}>
+                  <Input
+                    value={material.percentage != null ? String(material.percentage) : ''}
+                    onChangeText={(value) => updateMaterial(index, { percentage: value })}
+                    keyboardType="decimal-pad"
+                    placeholder="80"
+                  />
+                </Field>
+                <Button tone="ghost" size="$2" icon={<Icons.X size={14} />} onPress={() => removeMaterial(index)} />
+              </XStack>
+            ))
+          )}
+        </ListingPublishCard>
+      ) : null}
+
       {showDetails ? (
       <ListingPublishCard
         ui={ui}
@@ -478,6 +554,54 @@ export function DetailsStep({
                 onCheckedChange={(checked) => onUpdate('shipping_required', !!checked)}
               />
             </XStack>
+          </ListingFormRow>
+          <ListingFormRow ui={ui} label="Shipping template">
+            <Select
+              value={formData.delivery_profile_id || 'shop-default'}
+              onValueChange={(value) =>
+                onUpdate('delivery_profile_id', value === 'shop-default' ? null : value)
+              }
+            >
+              <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
+                <Select.Value placeholder="Shop default" />
+              </SelectTrigger>
+              <SelectContent zIndex={300000}>
+                <SelectViewport>
+                  <SelectItem index={0} value="shop-default">
+                    <Select.ItemText>Shop default</Select.ItemText>
+                  </SelectItem>
+                  {deliveryProfiles.map((profile, index) => (
+                    <SelectItem key={profile.id} index={index + 1} value={profile.id}>
+                      <Select.ItemText>{profile.profile_name}</Select.ItemText>
+                    </SelectItem>
+                  ))}
+                </SelectViewport>
+              </SelectContent>
+            </Select>
+          </ListingFormRow>
+          <ListingFormRow ui={ui} label="Return policy">
+            <Select
+              value={formData.return_policy_id || 'shop-default'}
+              onValueChange={(value) =>
+                onUpdate('return_policy_id', value === 'shop-default' ? null : value)
+              }
+            >
+              <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={14} color={ui.textMuted} />}>
+                <Select.Value placeholder="Shop default" />
+              </SelectTrigger>
+              <SelectContent zIndex={300000}>
+                <SelectViewport>
+                  <SelectItem index={0} value="shop-default">
+                    <Select.ItemText>Shop default</Select.ItemText>
+                  </SelectItem>
+                  {returnPolicies.map((policy, index) => (
+                    <SelectItem key={policy.id} index={index + 1} value={policy.id}>
+                      <Select.ItemText>{policy.policy_name}</Select.ItemText>
+                    </SelectItem>
+                  ))}
+                </SelectViewport>
+              </SelectContent>
+            </Select>
           </ListingFormRow>
         </ListingPublishCard>
       ) : null}

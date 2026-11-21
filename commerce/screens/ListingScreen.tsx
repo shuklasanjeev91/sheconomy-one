@@ -64,6 +64,8 @@ import { useEmailCommerceActions } from '~/commerce/hooks/useEmailCommerceAction
 import { useShopFollow } from '~/commerce/hooks/useShopFollow'
 import { recordListingView } from '~/commerce/lib/recently-viewed'
 import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import { ListingAplusContent } from '~/commerce/components/ListingAplusContent'
+import { effectiveUnitPrice } from '~/lib/listing/product-catalog'
 import { readMetadataBoolean } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
@@ -393,7 +395,7 @@ export function ListingScreen({
 
   const currency = listing.shops?.shop_currency ?? 'INR'
   const selectedVariations = selectedVariationsPreview
-  const displayPrice = getVariantPrice(listing.price, selectedVariations)
+  const offerPrice = getVariantPrice(listing.price, selectedVariations)
   const displayStock = getVariantStock(listing.stock, selectedVariations)
   const displayMrp = getVariantMrp(listing.mrp, selectedVariations)
   const shopAddressForTax = listing.shops?.shop_addresses
@@ -413,6 +415,19 @@ export function ListingScreen({
   const listingMeta =
     listing.listing_metadata && typeof listing.listing_metadata === 'object'
       ? (listing.listing_metadata as Record<string, unknown>)
+      : {}
+  const salePriceNumber = Number(listingMeta[LISTING_METADATA_KEYS.SALE_PRICE])
+  const saleStartsAt = String(listingMeta[LISTING_METADATA_KEYS.SALE_START_AT] ?? '')
+  const saleEndsAt = String(listingMeta[LISTING_METADATA_KEYS.SALE_END_AT] ?? '')
+  const displayPrice = effectiveUnitPrice(
+    offerPrice,
+    Number.isFinite(salePriceNumber) ? salePriceNumber : null,
+    saleStartsAt,
+    saleEndsAt,
+  )
+  const salePriceProps =
+    displayPrice < offerPrice
+      ? { salePrice: salePriceNumber, saleStartsAt, saleEndsAt }
       : {}
   const outOfStock = displayStock === 0
   const allowPreorder = readMetadataBoolean(listingMeta, LISTING_METADATA_KEYS.ALLOW_PREORDER, false)
@@ -546,6 +561,24 @@ export function ListingScreen({
     category: listing.category,
     listingType: listing.listing_type,
     attributes,
+    itemCondition: listing.item_condition,
+    typedAttributes: (listing.listing_attribute_values ?? []).flatMap((row) => {
+      const label = row.product_type_attributes?.label
+      if (!label) return []
+      let value = row.value_text?.trim() || ''
+      if (!value && row.value_number != null) {
+        value = row.product_type_attributes?.unit
+          ? `${row.value_number} ${row.product_type_attributes.unit}`
+          : String(row.value_number)
+      }
+      if (!value && typeof row.value_boolean === 'boolean') value = row.value_boolean ? 'Yes' : 'No'
+      if (!value && Array.isArray(row.value_json)) value = row.value_json.map(String).filter(Boolean).join(', ')
+      if (!value && row.value_json && typeof row.value_json === 'object' && 'value' in row.value_json) {
+        const measured = row.value_json as { value?: unknown; unit?: string }
+        value = `${measured.value ?? ''} ${measured.unit || row.product_type_attributes?.unit || ''}`.trim()
+      }
+      return value ? [{ label, value }] : []
+    }),
     tags: listing.tags,
     productInfoSpecs: buildManufacturingSpecifications({
       ...baseProductInfo,
@@ -845,6 +878,12 @@ export function ListingScreen({
         </MarketplaceCard>
       ) : null}
 
+      {(listing.listing_aplus_modules ?? []).length > 0 ? (
+        <MarketplaceCard hasSideRails={hasSideRails}>
+          <ListingAplusContent modules={listing.listing_aplus_modules ?? []} />
+        </MarketplaceCard>
+      ) : null}
+
       {shopPolicies ? (
         <MarketplaceCard hasSideRails={hasSideRails}>
           <ListingShopPolicies policies={shopPolicies} />
@@ -967,12 +1006,13 @@ export function ListingScreen({
 
                 <YStack gap="$2">
                   <ListingPriceBlock
-                    price={displayPrice}
+                    price={offerPrice}
                     mrp={displayMrp}
                     currency={currency}
                     priceIncludesTax={displayPriceIncludesTax}
                     taxPercent={displayTaxPercent}
                     size="lg"
+                    {...salePriceProps}
                   />
                   {fromCommunityPost && communityPostId && listing?.id ? (
                     <PostedAtPriceChip
@@ -1016,8 +1056,9 @@ export function ListingScreen({
         </FullWidthLayout>
 
         <ListingMobileStickyBuyBar
-          price={displayPrice}
+          price={offerPrice}
           mrp={displayMrp}
+          {...salePriceProps}
           priceIncludesTax={displayPriceIncludesTax}
           taxPercent={displayTaxPercent}
           currency={currency}
@@ -1149,12 +1190,13 @@ export function ListingScreen({
 
         <YStack gap="$2" width="100%">
           <ListingPriceBlock
-            price={displayPrice}
+            price={offerPrice}
             mrp={displayMrp}
             currency={currency}
             priceIncludesTax={displayPriceIncludesTax}
             taxPercent={displayTaxPercent}
             size="lg"
+            {...salePriceProps}
           />
           {fromCommunityPost && communityPostId && listing?.id ? (
             <PostedAtPriceChip

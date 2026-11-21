@@ -5362,6 +5362,198 @@ export type Database = {
         }
         Relationships: []
       }
+      listing_aplus_modules: {
+        Row: {
+          body: string | null
+          created_at: string
+          display_order: number
+          headline: string | null
+          id: string
+          image_url: string | null
+          listing_id: string
+          module_type: string
+          payload: Json
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          display_order?: number
+          headline?: string | null
+          id?: string
+          image_url?: string | null
+          listing_id: string
+          module_type: string
+          payload?: Json
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          display_order?: number
+          headline?: string | null
+          id?: string
+          image_url?: string | null
+          listing_id?: string
+          module_type?: string
+          payload?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_aplus_modules_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_compliance_documents: {
+        Row: {
+          created_at: string
+          document_type: string
+          expires_on: string | null
+          file_name: string | null
+          file_url: string
+          id: string
+          listing_id: string
+          notes: string | null
+          requirement_code: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          document_type: string
+          expires_on?: string | null
+          file_name?: string | null
+          file_url: string
+          id?: string
+          listing_id: string
+          notes?: string | null
+          requirement_code: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          document_type?: string
+          expires_on?: string | null
+          file_name?: string | null
+          file_url?: string
+          id?: string
+          listing_id?: string
+          notes?: string | null
+          requirement_code?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_compliance_documents_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_product_identifiers: {
+        Row: {
+          created_at: string
+          gtin_exemption: boolean
+          gtin_exemption_reason: string | null
+          id: string
+          listing_id: string
+          product_id_type: string
+          product_id_value: string | null
+          updated_at: string
+          variation_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          gtin_exemption?: boolean
+          gtin_exemption_reason?: string | null
+          id?: string
+          listing_id: string
+          product_id_type?: string
+          product_id_value?: string | null
+          updated_at?: string
+          variation_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          gtin_exemption?: boolean
+          gtin_exemption_reason?: string | null
+          id?: string
+          listing_id?: string
+          product_id_type?: string
+          product_id_value?: string | null
+          updated_at?: string
+          variation_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_product_identifiers_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_attribute_values: {
+        Row: {
+          attribute_id: string
+          created_at: string
+          id: string
+          listing_id: string
+          updated_at: string
+          value_boolean: boolean | null
+          value_json: Json | null
+          value_number: number | null
+          value_text: string | null
+          variation_id: string | null
+        }
+        Insert: {
+          attribute_id: string
+          created_at?: string
+          id?: string
+          listing_id: string
+          updated_at?: string
+          value_boolean?: boolean | null
+          value_json?: Json | null
+          value_number?: number | null
+          value_text?: string | null
+          variation_id?: string | null
+        }
+        Update: {
+          attribute_id?: string
+          created_at?: string
+          id?: string
+          listing_id?: string
+          updated_at?: string
+          value_boolean?: boolean | null
+          value_json?: Json | null
+          value_number?: number | null
+          value_text?: string | null
+          variation_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_attribute_values_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_attribute_values_attribute_id_fkey"
+            columns: ["attribute_id"]
+            isOneToOne: false
+            referencedRelation: "product_type_attributes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listing_attributes: {
         Row: {
           attribute_name: string
@@ -6940,6 +7132,7 @@ export type Database = {
           is_active: boolean
           is_featured: boolean
           is_online: boolean | null
+          item_condition: string | null
           listing_metadata: Json
           listing_status: Database["public"]["Enums"]["listing_status_enum"]
           listing_type: Database["public"]["Enums"]["listing_type_enum"]
@@ -6952,6 +7145,7 @@ export type Database = {
           price: number
           price_includes_tax: boolean
           product_info: Json
+          product_type_id: string | null
           published_at: string | null
           quantity: number | null
           requires_approval: boolean | null
@@ -6983,6 +7177,7 @@ export type Database = {
           is_active?: boolean
           is_featured?: boolean
           is_online?: boolean | null
+          item_condition?: string | null
           listing_metadata?: Json
           listing_status?: Database["public"]["Enums"]["listing_status_enum"]
           listing_type: Database["public"]["Enums"]["listing_type_enum"]
@@ -6995,6 +7190,7 @@ export type Database = {
           price: number
           price_includes_tax?: boolean
           product_info?: Json
+          product_type_id?: string | null
           published_at?: string | null
           quantity?: number | null
           requires_approval?: boolean | null
@@ -7026,6 +7222,7 @@ export type Database = {
           is_active?: boolean
           is_featured?: boolean
           is_online?: boolean | null
+          item_condition?: string | null
           listing_metadata?: Json
           listing_status?: Database["public"]["Enums"]["listing_status_enum"]
           listing_type?: Database["public"]["Enums"]["listing_type_enum"]
@@ -7038,6 +7235,7 @@ export type Database = {
           price?: number
           price_includes_tax?: boolean
           product_info?: Json
+          product_type_id?: string | null
           published_at?: string | null
           quantity?: number | null
           requires_approval?: boolean | null
@@ -10968,6 +11166,194 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_type_attribute_options: {
+        Row: {
+          attribute_id: string
+          display_order: number
+          id: string
+          label: string
+          value: string
+        }
+        Insert: {
+          attribute_id: string
+          display_order?: number
+          id?: string
+          label: string
+          value: string
+        }
+        Update: {
+          attribute_id?: string
+          display_order?: number
+          id?: string
+          label?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_type_attribute_options_attribute_id_fkey"
+            columns: ["attribute_id"]
+            isOneToOne: false
+            referencedRelation: "product_type_attributes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_type_attributes: {
+        Row: {
+          code: string
+          created_at: string
+          data_type: string
+          description: string | null
+          display_order: number
+          group_name: string
+          id: string
+          is_recommended: boolean
+          is_required: boolean
+          is_variation_axis: boolean
+          label: string
+          max_length: number | null
+          max_value: number | null
+          min_value: number | null
+          product_type_id: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          data_type: string
+          description?: string | null
+          display_order?: number
+          group_name?: string
+          id?: string
+          is_recommended?: boolean
+          is_required?: boolean
+          is_variation_axis?: boolean
+          label: string
+          max_length?: number | null
+          max_value?: number | null
+          min_value?: number | null
+          product_type_id: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          data_type?: string
+          description?: string | null
+          display_order?: number
+          group_name?: string
+          id?: string
+          is_recommended?: boolean
+          is_required?: boolean
+          is_variation_axis?: boolean
+          label?: string
+          max_length?: number | null
+          max_value?: number | null
+          min_value?: number | null
+          product_type_id?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_type_attributes_product_type_id_fkey"
+            columns: ["product_type_id"]
+            isOneToOne: false
+            referencedRelation: "product_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_type_compliance_requirements: {
+        Row: {
+          code: string
+          description: string | null
+          display_order: number
+          document_types: string[]
+          id: string
+          is_required: boolean
+          label: string
+          product_type_id: string
+        }
+        Insert: {
+          code: string
+          description?: string | null
+          display_order?: number
+          document_types?: string[]
+          id?: string
+          is_required?: boolean
+          label: string
+          product_type_id: string
+        }
+        Update: {
+          code?: string
+          description?: string | null
+          display_order?: number
+          document_types?: string[]
+          id?: string
+          is_required?: boolean
+          label?: string
+          product_type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_type_compliance_requirements_product_type_id_fkey"
+            columns: ["product_type_id"]
+            isOneToOne: false
+            referencedRelation: "product_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_types: {
+        Row: {
+          category_id: string | null
+          code: string
+          created_at: string
+          description: string | null
+          family: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+          variation_themes: Json
+        }
+        Insert: {
+          category_id?: string | null
+          code: string
+          created_at?: string
+          description?: string | null
+          family?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+          variation_themes?: Json
+        }
+        Update: {
+          category_id?: string | null
+          code?: string
+          created_at?: string
+          description?: string | null
+          family?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+          variation_themes?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_types_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["category_id"]
           },
         ]
       }
@@ -17022,6 +17408,8 @@ export type Database = {
           updated_at: string | null
           variations: Json | null
           weight: number | null
+          item_condition: string | null
+          product_type_id: string | null
         }
         Relationships: [
           {

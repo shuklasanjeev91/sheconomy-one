@@ -6,11 +6,14 @@ import {
 
 /** Amazon-style top-tab identifiers — stable keys for navigation + validation. */
 export const LISTING_PUBLISH_STEP_IDS = {
+  IDENTITY: 'identity',
   BASIC: 'basic',
   IMAGES: 'images',
   VARIANTS: 'variants',
   PRICING: 'pricing',
   DETAILS: 'details',
+  COMPLIANCE: 'compliance',
+  APLUS: 'aplus',
   SHIPPING: 'shipping',
   CATEGORIES: 'categories',
   SEO: 'seo',
@@ -24,11 +27,29 @@ export type ListingPublishStepConfig = {
   label: string
   headline: string
   subtitle: string
-  iconName: 'info' | 'layers' | 'indian-rupee' | 'tags' | 'image' | 'search' | 'sliders' | 'truck'
+  iconName:
+    | 'info'
+    | 'layers'
+    | 'indian-rupee'
+    | 'tags'
+    | 'image'
+    | 'search'
+    | 'sliders'
+    | 'truck'
+    | 'barcode'
+    | 'shield'
+    | 'layout'
 }
 
 /** Amazon Seller Central tab order: Vital info → Images → Variations → Offer → … */
 export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
+  {
+    id: LISTING_PUBLISH_STEP_IDS.IDENTITY,
+    label: 'Identity',
+    headline: 'Product identity',
+    subtitle: 'Product type, condition, and barcode or GTIN exemption.',
+    iconName: 'barcode',
+  },
   {
     id: LISTING_PUBLISH_STEP_IDS.BASIC,
     label: 'Vital info',
@@ -63,6 +84,20 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
     headline: 'Product details',
     subtitle: 'Brand, manufacturer, country of origin, and compliance fields.',
     iconName: 'layers',
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.COMPLIANCE,
+    label: 'Compliance',
+    headline: 'Safety and compliance',
+    subtitle: 'Upload the documents this product type requires.',
+    iconName: 'shield',
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.APLUS,
+    label: 'A+ content',
+    headline: 'A+ content',
+    subtitle: 'Optional image and text modules shoppers see under the description.',
+    iconName: 'layout',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.SHIPPING,
@@ -153,6 +188,11 @@ export const LISTING_METADATA_KEYS = {
   PACKAGE_LENGTH_CM: 'package_length_cm',
   PACKAGE_WIDTH_CM: 'package_width_cm',
   PACKAGE_HEIGHT_CM: 'package_height_cm',
+  HANDLING_TIME_DAYS: 'handling_time_days',
+  SALE_PRICE: 'sale_price',
+  SALE_START_AT: 'sale_start_at',
+  SALE_END_AT: 'sale_end_at',
+  BACKEND_SEARCH_TERMS: 'backend_search_terms',
 } as const
 
 export const LISTING_PUBLISH_DEFAULT_METADATA = {
@@ -176,6 +216,11 @@ export const LISTING_PUBLISH_DEFAULT_METADATA = {
   [LISTING_METADATA_KEYS.PACKAGE_LENGTH_CM]: '',
   [LISTING_METADATA_KEYS.PACKAGE_WIDTH_CM]: '',
   [LISTING_METADATA_KEYS.PACKAGE_HEIGHT_CM]: '',
+  [LISTING_METADATA_KEYS.HANDLING_TIME_DAYS]: '2',
+  [LISTING_METADATA_KEYS.SALE_PRICE]: '',
+  [LISTING_METADATA_KEYS.SALE_START_AT]: '',
+  [LISTING_METADATA_KEYS.SALE_END_AT]: '',
+  [LISTING_METADATA_KEYS.BACKEND_SEARCH_TERMS]: '',
 } as const
 
 export const LISTING_PUBLISH_COPY = {

@@ -772,6 +772,11 @@ function ProductTableRow({
           <Text fontSize={11.5} color={ui.textMuted} fontWeight="600">
             SKU: {row.sku?.trim() || listingSkuFallback(row.slug, row.id)}
           </Text>
+          {row.completeness_hint ? (
+            <Text fontSize={11} color="#B45309" fontWeight="700">
+              {row.completeness_hint}
+            </Text>
+          ) : null}
         </YStack>
       </XStack>
 
@@ -903,6 +908,11 @@ function ProductMobileCard({
         <Text fontSize={12} color={ui.textMuted}>
           {priceLabel} · {listingTypeLabel(row.listing_type)}
         </Text>
+        {row.completeness_hint ? (
+          <Text fontSize={11} color="#B45309" fontWeight="700">
+            {row.completeness_hint}
+          </Text>
+        ) : null}
         <XStack alignItems="center" gap="$2" flexWrap="wrap">
           <XStack
             alignItems="center"
