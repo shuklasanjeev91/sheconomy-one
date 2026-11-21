@@ -4,15 +4,18 @@ import {
   LISTING_VALIDATION,
 } from '~/lib/listing/listing.type'
 
-/** Etsy-style section anchors — one scrolling page, not a wizard. */
+/** Section anchors for the single listing page. */
 export const LISTING_PUBLISH_STEP_IDS = {
   PHOTOS: 'photos',
+  CATEGORY: 'category',
   ABOUT: 'about',
   PRICE: 'price',
-  VARIATIONS: 'variations',
+  VARIATIONS: 'item-options',
   PERSONALIZATION: 'personalization',
   SHIPPING: 'shipping',
   RETURNS: 'returns',
+  MADE: 'how-its-made',
+  SETTINGS: 'settings',
   DETAILS: 'details',
 } as const
 
@@ -35,21 +38,35 @@ export type ListingPublishStepConfig = {
     | 'truck'
 }
 
-/** One-page section order, matching the Etsy listing editor. */
+/** One scrolling page: photos, category, details, options, price, shipping, maker, settings. */
 export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
   {
     id: LISTING_PUBLISH_STEP_IDS.PHOTOS,
     label: 'Photos',
     headline: 'Photos and video',
-    subtitle: 'Add up to 10 photos and 1 video. The first photo is the thumbnail.',
+    subtitle: `Add up to ${LISTING_IMAGE_CONSTRAINTS.MAX_COUNT} photos and ${LISTING_IMAGE_CONSTRAINTS.MAX_VIDEOS} videos. The first photo is the thumbnail.`,
     iconName: 'image',
   },
   {
+    id: LISTING_PUBLISH_STEP_IDS.CATEGORY,
+    label: 'Category',
+    headline: 'Category',
+    subtitle: 'One category, physical or digital, and when it was made.',
+    iconName: 'search',
+  },
+  {
     id: LISTING_PUBLISH_STEP_IDS.ABOUT,
-    label: 'About',
-    headline: 'About this listing',
-    subtitle: 'Title, description, one category, and whether it is physical or digital.',
+    label: 'Details',
+    headline: 'Item details',
+    subtitle: 'Title, description, and download files for digital items.',
     iconName: 'info',
+  },
+  {
+    id: LISTING_PUBLISH_STEP_IDS.VARIATIONS,
+    label: 'Options',
+    headline: 'Item options',
+    subtitle: 'Up to three options such as color, size, and style, plus personalization and tags.',
+    iconName: 'sliders',
   },
   {
     id: LISTING_PUBLISH_STEP_IDS.PRICE,
@@ -59,39 +76,25 @@ export const LISTING_PUBLISH_STEPS: readonly ListingPublishStepConfig[] = [
     iconName: 'indian-rupee',
   },
   {
-    id: LISTING_PUBLISH_STEP_IDS.VARIATIONS,
-    label: 'Variations',
-    headline: 'Variations',
-    subtitle: 'Up to two properties, such as color and size.',
-    iconName: 'sliders',
-  },
-  {
-    id: LISTING_PUBLISH_STEP_IDS.PERSONALIZATION,
-    label: 'Personalization',
-    headline: 'Personalization',
-    subtitle: 'Optional instructions when a buyer should add a name or note.',
-    iconName: 'layers',
-  },
-  {
     id: LISTING_PUBLISH_STEP_IDS.SHIPPING,
     label: 'Shipping',
-    headline: 'Shipping',
-    subtitle: 'Delivery profile, item weight, and package size. Digital listings use a file link instead.',
+    headline: 'Pricing and shipping',
+    subtitle: 'Processing time, delivery profile, package size, and returns.',
     iconName: 'truck',
   },
   {
-    id: LISTING_PUBLISH_STEP_IDS.RETURNS,
-    label: 'Returns',
-    headline: 'Returns and exchanges',
-    subtitle: 'The return policy shoppers see on this listing.',
-    iconName: 'tags',
+    id: LISTING_PUBLISH_STEP_IDS.MADE,
+    label: 'Made',
+    headline: 'How it is made',
+    subtitle: 'Who made it and whether it is a finished product or a supply.',
+    iconName: 'layers',
   },
   {
-    id: LISTING_PUBLISH_STEP_IDS.DETAILS,
-    label: 'Details',
-    headline: 'Item details',
-    subtitle: 'Shop section, tags, materials, and who made it.',
-    iconName: 'search',
+    id: LISTING_PUBLISH_STEP_IDS.SETTINGS,
+    label: 'Settings',
+    headline: 'Settings',
+    subtitle: 'Shop section and whether this listing is featured.',
+    iconName: 'tags',
   },
 ] as const
 
@@ -167,6 +170,10 @@ export const LISTING_METADATA_KEYS = {
   PACKAGE_WIDTH_CM: 'package_width_cm',
   PACKAGE_HEIGHT_CM: 'package_height_cm',
   HANDLING_TIME_DAYS: 'handling_time_days',
+  ITEM_READINESS: 'item_readiness',
+  PROCESSING_MIN_DAYS: 'processing_min_days',
+  PROCESSING_MAX_DAYS: 'processing_max_days',
+  DIGITAL_FILES: 'digital_files',
   SALE_PRICE: 'sale_price',
   SALE_START_AT: 'sale_start_at',
   SALE_END_AT: 'sale_end_at',
@@ -227,11 +234,11 @@ export const LISTING_PUBLISH_COPY = {
   LAST_SAVED_PREFIX: 'Last saved:',
   LAST_SAVED_NEVER: 'Not saved yet',
   IMAGES_REQUIRED_BANNER:
-    'Add at least 1 photo. You can upload up to 10 photos and 1 video. The first photo is the thumbnail.',
+    `Add at least 1 photo. You can upload up to ${LISTING_IMAGE_CONSTRAINTS.MAX_COUNT} photos and ${LISTING_IMAGE_CONSTRAINTS.MAX_VIDEOS} videos. The first photo is the thumbnail.`,
   IMAGE_GUIDELINES: [
     'The first photo is the thumbnail buyers see in search.',
     `At least ${LISTING_IMAGE_CONSTRAINTS.MIN_LONG_EDGE_PX}px on the longest side (1600px+ recommended).`,
-    `Upload up to ${LISTING_IMAGE_CONSTRAINTS.MAX_COUNT} photos and 1 video.`,
+    `Upload up to ${LISTING_IMAGE_CONSTRAINTS.MAX_COUNT} photos and ${LISTING_IMAGE_CONSTRAINTS.MAX_VIDEOS} videos.`,
     'Drag is not required — the first photo stays the thumbnail.',
     'Use natural lighting and keep colours accurate to the product.',
   ] as const,

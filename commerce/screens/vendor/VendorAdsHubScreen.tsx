@@ -21,7 +21,7 @@ export function VendorAdsHubScreen() {
     >
       <YStack gap="$1">
         <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text}>
-          Ads & Promo
+          Marketing
         </Text>
         <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
           Boost community posts with prepaid wallet or PayU, or manage shop discounts.

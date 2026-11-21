@@ -57,15 +57,17 @@ describe('publish section validation', () => {
 
   it('asks digital listings for a download URL and file type', () => {
     const missing = validatePublishStep(
-      LISTING_PUBLISH_STEP_IDS.SHIPPING,
-      form({ listing_type: LISTING_TYPES.DIGITAL }),
+      LISTING_PUBLISH_STEP_IDS.ABOUT,
+      form({ listing_type: LISTING_TYPES.DIGITAL, title: 'Pattern', description: 'A downloadable sewing pattern with sizes, fabric notes, and step by step assembly instructions.' }),
     )
     expect(missing.errors.digital_file_url).toBeTruthy()
     expect(missing.errors.digital_file_type).toBeTruthy()
 
     const complete = validatePublishStep(
-      LISTING_PUBLISH_STEP_IDS.SHIPPING,
+      LISTING_PUBLISH_STEP_IDS.ABOUT,
       form({
+        title: 'Pattern',
+        description: 'A downloadable sewing pattern with sizes, fabric notes, and step by step assembly instructions.',
         listing_type: LISTING_TYPES.DIGITAL,
         digital_file_url: 'https://example.com/pattern.pdf',
         digital_file_type: 'pdf',
@@ -74,14 +76,18 @@ describe('publish section validation', () => {
     expect(complete.isValid).toBe(true)
   })
 
-  it('asks for who made it on the details section', () => {
-    const result = validatePublishStep(
-      LISTING_PUBLISH_STEP_IDS.DETAILS,
+  it('asks for who made it and when it was made', () => {
+    const made = validatePublishStep(
+      LISTING_PUBLISH_STEP_IDS.MADE,
       form({ listing_type: LISTING_TYPES.PHYSICAL }),
     )
-    expect(result.errors.who_made).toBeTruthy()
-    expect(result.errors.when_made).toBeTruthy()
-    expect(result.errors.what_is_it).toBeTruthy()
+    expect(made.errors.who_made).toBeTruthy()
+    expect(made.errors.what_is_it).toBeTruthy()
+    const category = validatePublishStep(
+      LISTING_PUBLISH_STEP_IDS.CATEGORY,
+      form({ listing_type: LISTING_TYPES.PHYSICAL, categories: [{ category_id: 'scarves', is_primary: true }] }),
+    )
+    expect(category.errors.when_made).toBeTruthy()
   })
 })
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Platform, useWindowDimensions } from 'react-native'
+import { useWindowDimensions } from 'react-native'
 
 import { Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
@@ -26,10 +26,12 @@ export function ListingPublishCard({
   children,
   noPadding,
 }: ListingPublishCardProps) {
+  const { width } = useWindowDimensions()
+  const compact = width < FORM_ROW_BREAKPOINT
   return (
     <YStack
       gap="$3.5"
-      padding={noPadding ? 0 : '$5'}
+      padding={noPadding ? 0 : compact ? '$3' : '$5'}
       borderRadius={radius.card}
       borderWidth={1}
       borderColor={ui.borderSubtle}
@@ -115,7 +117,7 @@ type ListingFormRowProps = {
   stacked?: boolean
 }
 
-/** Amazon-style form row: label left / control right on wide layouts. */
+/** Label above the field, full width on every screen size. */
 export function ListingFormRow({
   ui,
   label,
@@ -123,10 +125,8 @@ export function ListingFormRow({
   hint,
   error,
   children,
-  stacked,
 }: ListingFormRowProps) {
-  const { width } = useWindowDimensions()
-  const sideBySide = !stacked && (Platform.OS === 'web' ? width >= FORM_ROW_BREAKPOINT : width >= 900)
+  const sideBySide = false
 
   return (
     <YStack gap="$1.5" width="100%">

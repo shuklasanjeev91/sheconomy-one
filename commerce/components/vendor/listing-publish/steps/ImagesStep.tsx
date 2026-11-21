@@ -127,8 +127,8 @@ export function ImagesStep({
   }, [images, onApplyAiDraft, toast])
 
   return (
-    <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
-      <YStack flex={1} minWidth={280} gap="$4">
+    <YStack width="100%" gap="$4">
+      <YStack width="100%" minWidth={0} gap="$4">
         {showBanner ? (
           <XStack
             gap="$2"
@@ -148,7 +148,6 @@ export function ImagesStep({
 
         <ListingPublishCard ui={ui} noPadding>
           <YStack
-            padding="$6"
             alignItems="center"
             justifyContent="center"
             gap="$3"
@@ -156,7 +155,8 @@ export function ImagesStep({
             borderStyle="dashed"
             borderColor={ui.borderSubtle}
             borderRadius={16}
-            margin={isDesktop ? '$5' : '$4'}
+            margin={isDesktop ? '$5' : '$3'}
+            padding={isDesktop ? '$6' : '$4'}
             minHeight={180}
             cursor="pointer"
             hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
@@ -208,11 +208,19 @@ export function ImagesStep({
             paddingBottom="$5"
           >
             {images.map((image, index) => (
-              <YStack key={`${image.id ?? image.image_url}-${index}`} width={140} gap="$1.5" position="relative">
+              <YStack
+                key={`${image.id ?? image.image_url}-${index}`}
+                width="47%"
+                maxWidth={180}
+                minWidth={104}
+                flexGrow={1}
+                gap="$1.5"
+                position="relative"
+              >
                 <Image
                   source={{ uri: image.image_url }}
-                  width={140}
-                  height={140}
+                  width="100%"
+                  aspectRatio={1}
                   borderRadius={12}
                   backgroundColor={ui.surfaceMuted}
                 />
@@ -231,14 +239,7 @@ export function ImagesStep({
                     </Text>
                   </XStack>
                 ) : (
-                  <Button
-                    tone="ghost"
-                    size="$2"
-                    position="absolute"
-                    top={6}
-                    right={6}
-                    onPress={() => setPrimary(index)}
-                  >
+                  <Button tone="ghost" size="$2" onPress={() => setPrimary(index)}>
                     Set primary
                   </Button>
                 )}
@@ -249,8 +250,11 @@ export function ImagesStep({
             ))}
 
             <YStack
-              width={140}
-              height={140}
+              width="47%"
+              maxWidth={180}
+              minWidth={104}
+              flexGrow={1}
+              aspectRatio={1}
               borderRadius={12}
               borderWidth={2}
               borderStyle="dashed"
@@ -266,7 +270,7 @@ export function ImagesStep({
         </ListingPublishCard>
       </YStack>
 
-      <YStack width={isDesktop ? 280 : '100%'} maxWidth="100%" gap="$3">
+      <YStack width="100%" maxWidth="100%" gap="$3">
         <ListingPublishCard ui={ui} title="Image Guidelines">
           <YStack gap="$2">
             {LISTING_PUBLISH_COPY.IMAGE_GUIDELINES.map((line) => (
@@ -280,7 +284,7 @@ export function ImagesStep({
           </YStack>
         </ListingPublishCard>
       </YStack>
-    </XStack>
+    </YStack>
   )
 }
 

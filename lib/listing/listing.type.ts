@@ -94,7 +94,7 @@ export type ListingFormData = {
   tax_percent?: number | string | null
   /** Manufacturing / legal bag stored on `listings.product_info`. */
   product_info?: Record<string, unknown>
-  /** Etsy maker facts. Columns on `listings`. */
+  /** Maker facts. Columns on `listings`. */
   who_made?: WhoMade | string | null
   when_made?: WhenMade | string | null
   what_is_it?: WhatIsIt | string | null
@@ -382,8 +382,8 @@ export const LISTING_IMAGE_CONSTRAINTS = {
   MIN_COUNT_PUBLISH: 1,
   /** Soft recommendation for lifestyle / detail shots. */
   MIN_COUNT_RECOMMENDED: 5,
-  MAX_COUNT: 10,
-  MAX_VIDEOS: 1,
+  MAX_COUNT: 20,
+  MAX_VIDEOS: 2,
   /** Longest edge must be ≥ 1000px when dimensions are known. */
   MIN_LONG_EDGE_PX: 1000,
   /** Guidance target for crisp zooms. */

@@ -83,7 +83,7 @@ export function VendorListingsScreen() {
             <Text fontSize={14} color={ui.textSecondary} maxWidth={620} lineHeight={20}>
               {activeTab === 'section'
                 ? 'Organize storefront collections so shoppers can browse your catalogue.'
-                : 'Add, edit, duplicate, or close listings — search by title or SKU like Amazon Seller Central.'}
+                : 'Add, edit, duplicate, or close listings. Search by title or SKU.'}
             </Text>
           </YStack>
 

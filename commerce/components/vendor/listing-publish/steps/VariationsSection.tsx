@@ -27,7 +27,7 @@ import {
 } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import { readMetadataBoolean } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
-const PROPERTY_PRESETS = ['Primary color', 'Size'] as const
+const PROPERTY_PRESETS = ['Primary color', 'Secondary color', 'Size', 'Material', 'Style'] as const
 
 type VariationsSectionProps = {
   ui: AppUiTokens
@@ -150,7 +150,7 @@ export function VariationsSection({
             This listing has variations
           </Text>
           <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
-            Add up to two properties, such as color and size.
+            Add up to three options, such as color, size, and style. Price, quantity, SKU, processing time, and visibility can differ for each.
           </Text>
         </YStack>
         <Switch checked={enabled} onCheckedChange={(checked) => (checked ? addProperty() : turnOff())} />
@@ -202,9 +202,10 @@ export function VariationsSection({
                   </XStack>
                 ))}
               </XStack>
-              <XStack gap="$2">
+              <XStack gap="$2" flexWrap="wrap">
                 <Input
                   flex={1}
+                  minWidth={140}
                   value={drafts[index] ?? ''}
                   onChangeText={(value) => setDrafts((current) => ({ ...current, [index]: value }))}
                   placeholder="Add an option, such as Red"

@@ -1,6 +1,6 @@
 /**
  * Shipping template and return policy attached to a listing.
- * Amazon product types, barcodes, papers, and A+ modules are no longer stored.
+ * Product types, barcodes, papers, and story modules are no longer stored.
  */
 
 import { supabase } from '~/lib/supabase'

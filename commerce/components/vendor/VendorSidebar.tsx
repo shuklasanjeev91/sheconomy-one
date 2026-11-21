@@ -8,7 +8,7 @@ import type { AppUiTokens } from '~/lib/theme/app-ui'
 import {
   VENDOR_NAV_GROUPS,
   getVendorSectionNavItemId,
-  isVendorNavChildActive,
+  isVendorChildPathActive,
   isVendorNavItemActive,
   type VendorNavItem,
 } from '~/commerce/components/vendor/vendor-nav'
@@ -77,7 +77,7 @@ export function VendorSidebar({
                 {shopName || 'My Shop'}
               </Text>
               <Text fontSize={11} color={ui.textMuted} fontWeight="600" numberOfLines={1}>
-                Vendor console
+                Shop manager
               </Text>
             </YStack>
           ) : null}
@@ -108,7 +108,7 @@ export function VendorSidebar({
         <YStack gap="$4" paddingHorizontal={collapsed ? '$2' : '$3'}>
           {VENDOR_NAV_GROUPS.map((group) => (
             <YStack key={group.title} gap="$1">
-              {!collapsed ? (
+              {!collapsed && group.title ? (
                 <Text
                   fontSize={11}
                   fontWeight="700"
@@ -181,9 +181,8 @@ function VendorNavEntry({ ui, item, activeId, activeSubId, collapsed, onSelect }
   const pathname = usePathname()
   const children = item.children ?? []
   const hasChildren = children.length > 0
-  const hasActiveChild = Boolean(
-    (activeSubId && children.some((child) => isVendorNavChildActive(child, activeSubId))) ||
-      children.some((child) => isVendorNavItemActive(child, activeId, activeSubId, pathname)),
+  const hasActiveChild = children.some((child) =>
+    isVendorChildPathActive(child, pathname, activeSubId),
   )
   const groupActive =
     item.id === activeId ||
@@ -234,7 +233,7 @@ function VendorNavEntry({ ui, item, activeId, activeSubId, collapsed, onSelect }
               key={child.id}
               ui={ui}
               item={child}
-              active={isVendorNavChildActive(child, activeSubId)}
+              active={isVendorChildPathActive(child, pathname, activeSubId)}
               collapsed={false}
               isChild
               onPress={() => onSelect(child)}

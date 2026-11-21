@@ -40,7 +40,7 @@ import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { EtsyListingForm, scrollToListingSection } from '~/commerce/components/vendor/listing-publish/EtsyListingForm'
+import { ListingEditorForm, scrollToListingSection } from '~/commerce/components/vendor/listing-publish/ListingEditorForm'
 import { ListingPublishFooter } from '~/commerce/components/vendor/listing-publish/ListingPublishFooter'
 import { ListingPublishPageHeader } from '~/commerce/components/vendor/listing-publish/ListingPublishStepNav'
 import { LISTING_PUBLISH_COPY } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
@@ -68,7 +68,7 @@ async function settleOr<T>(promise: Promise<T>, fallback: T): Promise<T> {
   }
 }
 
-/** Empty buffer for a listing type — Amazon-style single-SKU default (no forced variants). */
+/** Empty buffer for a listing type. New listings start as one SKU until options are added. */
 function seedFormForType(listingType: ListingType, shopId?: string): ListingFormData {
   return {
     ...getDefaultListingFormData(listingType),
@@ -589,7 +589,7 @@ function VendorListingPublishContent() {
           subtitle="Photos, price, variations, shipping, and who made it. Save a draft any time."
         />
 
-        <EtsyListingForm
+        <ListingEditorForm
           ui={ui}
           formData={formData}
           errors={displayErrors}

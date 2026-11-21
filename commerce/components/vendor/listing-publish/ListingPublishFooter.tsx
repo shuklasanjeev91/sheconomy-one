@@ -89,13 +89,14 @@ export function ListingPublishFooter({
         {savedLabel}
       </Text>
 
-      <XStack gap="$2" alignItems="center" flexShrink={0}>
+      <XStack gap="$2" alignItems="center" flexShrink={isDesktop ? 0 : 1} width={isDesktop ? undefined : '100%'}>
         <Button
           tone="outline"
           size="$4"
           borderRadius={999}
           disabled={busy}
           onPress={onSaveDraft}
+          flex={isDesktop ? undefined : 1}
           icon={isSaving ? <Spinner size="small" /> : undefined}
         >
           {LISTING_PUBLISH_COPY.SAVE_DRAFT}
@@ -108,7 +109,8 @@ export function ListingPublishFooter({
             disabled={busy}
             onPress={onPublish}
             icon={busy ? <Spinner size="small" color="white" /> : undefined}
-            minWidth={120}
+            flex={isDesktop ? undefined : 1}
+            minWidth={isDesktop ? 120 : 0}
           >
             {LISTING_PUBLISH_COPY.PUBLISH}
           </Button>

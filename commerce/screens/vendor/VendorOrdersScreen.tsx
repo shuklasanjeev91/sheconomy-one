@@ -423,7 +423,7 @@ export function VendorOrdersScreen() {
       tabs={[
         {
           id: 'inbox',
-          label: 'SLA Inbox',
+          label: 'Orders to ship',
           icon: Icons.Inbox,
           href: String(vendorRoutes.ordersSection('inbox')),
         },
@@ -436,7 +436,7 @@ export function VendorOrdersScreen() {
         },
         {
           id: 'fulfillments',
-          label: 'Fulfillments',
+          label: 'Shipments',
           icon: Icons.PackageCheck,
           href: String(vendorRoutes.ordersSection('fulfillments')),
         },

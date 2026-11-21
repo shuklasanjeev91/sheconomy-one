@@ -172,7 +172,7 @@ export function buildFormFromListingDetails(
     materials?: ListingMaterial[]
     categoryIds?: { category_id: string; is_primary?: boolean }[]
     catalog?: ListingCatalogChildren
-    /** Prefill create wizard as a duplicate (Amazon “Copy listing”). */
+    /** Prefill the editor as a duplicate of an existing listing. */
     asDuplicate?: boolean
   },
 ): ListingFormData {
@@ -359,14 +359,26 @@ export function validatePublishStep(
     case LISTING_PUBLISH_STEP_IDS.PHOTOS:
       Object.assign(errors, sectionErrors(formData, ['images']))
       break
+    case LISTING_PUBLISH_STEP_IDS.CATEGORY: {
+      if (!formData.listing_type) errors.listing_type = 'Choose physical or digital.'
+      const cat = validateCategoryData(formData.categories)
+      if (!cat.isValid && cat.error) errors.categories = cat.error
+      Object.assign(errors, sectionErrors(formData, ['when_made']))
+      break
+    }
     case LISTING_PUBLISH_STEP_IDS.ABOUT: {
       const title = validateListingField('title', formData.title ?? '')
       if (!title.isValid && title.error) errors.title = title.error
       const desc = validateListingField('description', formData.description ?? '')
       if (!desc.isValid && desc.error) errors.description = desc.error
-      if (!formData.listing_type) errors.listing_type = 'Choose physical or digital.'
-      const cat = validateCategoryData(formData.categories)
-      if (!cat.isValid && cat.error) errors.categories = cat.error
+      if (formData.listing_type === LISTING_TYPES.DIGITAL) {
+        if (!formData.digital_file_url?.trim()) {
+          errors.digital_file_url = 'A download URL is required for digital products.'
+        }
+        if (!formData.digital_file_type?.trim()) {
+          errors.digital_file_type = 'File type is required for digital products.'
+        }
+      }
       break
     }
     case LISTING_PUBLISH_STEP_IDS.PRICE: {
@@ -376,28 +388,21 @@ export function validatePublishStep(
       break
     }
     case LISTING_PUBLISH_STEP_IDS.VARIATIONS:
-      Object.assign(errors, sectionErrors(formData, ['variations']))
+      if (formData.listing_type !== LISTING_TYPES.DIGITAL) {
+        Object.assign(errors, sectionErrors(formData, ['variations']))
+      }
+      Object.assign(errors, validatePersonalization(formData))
+      Object.assign(errors, sectionErrors(formData, ['tags']))
       break
     case LISTING_PUBLISH_STEP_IDS.PERSONALIZATION:
       Object.assign(errors, validatePersonalization(formData))
       break
     case LISTING_PUBLISH_STEP_IDS.SHIPPING:
-      if (formData.listing_type === LISTING_TYPES.DIGITAL) {
-        if (!formData.digital_file_url?.trim()) {
-          errors.digital_file_url = 'A download URL is required for digital products.'
-        }
-        if (!formData.digital_file_type?.trim()) {
-          errors.digital_file_type = 'File type is required for digital products.'
-        }
-      } else {
+      if (formData.listing_type !== LISTING_TYPES.DIGITAL) {
         Object.assign(
           errors,
           sectionErrors(formData, ['weight', 'package_length_cm', 'package_width_cm', 'package_height_cm']),
         )
-      }
-      break
-    case LISTING_PUBLISH_STEP_IDS.DETAILS: {
-      if (formData.listing_type === LISTING_TYPES.PHYSICAL) {
         const productQuality = validatePhysicalProductInfoQuality(
           formData.product_info,
           formData.listing_metadata,
@@ -405,6 +410,11 @@ export function validatePublishStep(
         Object.assign(errors, productQuality.errors)
         warnings.push(...productQuality.warnings)
       }
+      break
+    case LISTING_PUBLISH_STEP_IDS.MADE:
+      Object.assign(errors, sectionErrors(formData, ['who_made', 'what_is_it']))
+      break
+    case LISTING_PUBLISH_STEP_IDS.DETAILS: {
       Object.assign(errors, sectionErrors(formData, ['who_made', 'when_made', 'what_is_it', 'tags']))
       break
     }
@@ -446,8 +456,8 @@ const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
   images: LISTING_PUBLISH_STEP_IDS.PHOTOS,
   title: LISTING_PUBLISH_STEP_IDS.ABOUT,
   description: LISTING_PUBLISH_STEP_IDS.ABOUT,
-  listing_type: LISTING_PUBLISH_STEP_IDS.ABOUT,
-  categories: LISTING_PUBLISH_STEP_IDS.ABOUT,
+  listing_type: LISTING_PUBLISH_STEP_IDS.CATEGORY,
+  categories: LISTING_PUBLISH_STEP_IDS.CATEGORY,
   price: LISTING_PUBLISH_STEP_IDS.PRICE,
   stock: LISTING_PUBLISH_STEP_IDS.PRICE,
   quantity: LISTING_PUBLISH_STEP_IDS.PRICE,
@@ -459,19 +469,19 @@ const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
   package_length_cm: LISTING_PUBLISH_STEP_IDS.SHIPPING,
   package_width_cm: LISTING_PUBLISH_STEP_IDS.SHIPPING,
   package_height_cm: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  digital_file_url: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  digital_file_type: LISTING_PUBLISH_STEP_IDS.SHIPPING,
-  who_made: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  when_made: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  what_is_it: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  tags: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  digital_file_url: LISTING_PUBLISH_STEP_IDS.ABOUT,
+  digital_file_type: LISTING_PUBLISH_STEP_IDS.ABOUT,
+  who_made: LISTING_PUBLISH_STEP_IDS.MADE,
+  when_made: LISTING_PUBLISH_STEP_IDS.CATEGORY,
+  what_is_it: LISTING_PUBLISH_STEP_IDS.MADE,
+  tags: LISTING_PUBLISH_STEP_IDS.VARIATIONS,
   materials: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  manufacturer_name: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  manufacturer_address: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  brand: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  generic_name: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  key_features: LISTING_PUBLISH_STEP_IDS.DETAILS,
-  country_of_origin: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  manufacturer_name: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  manufacturer_address: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  brand: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  generic_name: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  key_features: LISTING_PUBLISH_STEP_IDS.SHIPPING,
+  country_of_origin: LISTING_PUBLISH_STEP_IDS.SHIPPING,
 }
 
 /** Which step owns the first offending field, so we can jump the vendor there. */

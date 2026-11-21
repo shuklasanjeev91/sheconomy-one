@@ -1,5 +1,5 @@
 /**
- * Etsy-style listing helpers: who made it, personalization, and sale price.
+ * Listing helpers: who made it, personalization, and sale price.
  * Pure functions — no Supabase — so seller validation can be unit-tested.
  */
 
@@ -27,9 +27,9 @@ export type WhoMade = (typeof WHO_MADE_OPTIONS)[number]['value']
 export type WhenMade = (typeof WHEN_MADE_OPTIONS)[number]['value']
 export type WhatIsIt = (typeof WHAT_IS_IT_OPTIONS)[number]['value']
 
-export const MAX_VARIATION_PROPERTIES = 2
+export const MAX_VARIATION_PROPERTIES = 3
 export const MAX_LISTING_TAGS = 13
-export const MAX_LISTING_PHOTOS = 10
+export const MAX_LISTING_PHOTOS = 20
 export const PERSONALIZATION_CHAR_LIMIT = { MIN: 1, MAX: 1024 } as const
 
 export function optionLabel(

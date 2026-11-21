@@ -32,7 +32,7 @@ import {
   type PlatformWalletStatus,
 } from '~/lib/wallet/platform-wallet'
 import { VENDOR_SHIPPING_UI_COPY } from '~/lib/vendor-shipping/vendor-shipping-ui.copy'
-import { commerceRoutes } from '~/lib/routes'
+import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 
 type TabId = 'activity' | 'referrals'
 
@@ -169,12 +169,30 @@ export function VendorWalletScreen() {
     >
       <YStack gap="$1">
         <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
-          Wallet
+          Finances
         </Text>
         <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
-          One prepaid balance for shipping labels, sponsored ads, and referral rewards. Top up with
-          PayU anytime.
+          Payment account for shipping labels, ads, and referral rewards. Deposits release after
+          verification.
         </Text>
+        <XStack gap="$2" flexWrap="wrap" marginTop="$2">
+          <Button
+            size="$3"
+            tone="outline"
+            borderRadius={999}
+            onPress={() => router.push(vendorRoutes.settingsSection('payments'))}
+          >
+            Deposits
+          </Button>
+          <Button
+            size="$3"
+            tone="outline"
+            borderRadius={999}
+            onPress={() => router.push(vendorRoutes.settingsSection('verification'))}
+          >
+            Tax & verification
+          </Button>
+        </XStack>
       </YStack>
 
       {lowBalance ? (

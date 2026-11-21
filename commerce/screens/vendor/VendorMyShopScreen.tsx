@@ -28,11 +28,11 @@ import type { VendorOrderAnalytics } from '~/lib/orders/vendor-orders.type'
 import { openExternalUrl as openPlatformUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes, routes, vendorRoutes } from '~/lib/routes'
 import { deleteShop, loadMyShops, loadShopStats, updateShop } from '~/lib/shop/shop.store'
-import { getShopFollowerCount } from '~/lib/shop/shop.service'
 import type { Shop, ShopStats } from '~/lib/shop/shop.type'
 import { formatShopHours, getShopCompletionPercentage } from '~/lib/shop/shop.utils'
 import { sendAiMessage } from '~/lib/ai/client'
 import { fetchLowStockListings, type LowStockListing } from '~/commerce/lib/low-stock'
+import { fetchVendorInquiriesHomeCards } from '~/commerce/lib/vendor-inquiries-home'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
@@ -55,6 +55,13 @@ const SOCIAL_ICONS: Record<string, IconType> = {
 
 /** Last 7 days order counts (index 0 = 6 days ago). */
 const ENGAGEMENT_DAYS = ['D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'Today']
+
+const SHIP_QUEUE_STATUSES = ['pending', 'confirmed', 'processing', 'ready_to_ship', 'packed']
+
+function countOrdersToShip(distribution: Record<string, number> | undefined): number | null {
+  if (!distribution) return null
+  return SHIP_QUEUE_STATUSES.reduce((sum, status) => sum + (distribution[status] ?? 0), 0)
+}
 
 function openExternalUrl(url: string | null | undefined) {
   if (!url) return
@@ -79,8 +86,8 @@ export function VendorMyShopScreen() {
   const analytics = useAppSelector(selectVendorAnalytics)
 
   const [address, setAddress] = useState<ShopAddressDetails | null>(null)
-  const [followerCount, setFollowerCount] = useState<number | null>(null)
   const [lowStock, setLowStock] = useState<LowStockListing[]>([])
+  const [openMessages, setOpenMessages] = useState(0)
   const [lowStockAdvice, setLowStockAdvice] = useState<string | null>(null)
   const [adviceLoading, setAdviceLoading] = useState(false)
 
@@ -94,11 +101,11 @@ export function VendorMyShopScreen() {
     // All-time order totals for this shop (since the shop was created).
     void dispatch(loadVendorAnalytics({ vendorId: shop.id, filters: { date_from: shop.created_at } }))
     let active = true
-    void getShopFollowerCount(shop.id).then((result) => {
-      if (active && result.success) setFollowerCount(result.data ?? 0)
-    })
     void fetchLowStockListings(shop.id).then((result) => {
       if (active && !result.error) setLowStock(result.listings)
+    })
+    void fetchVendorInquiriesHomeCards(shop.id, 20).then((result) => {
+      if (active && !result.error) setOpenMessages(result.cards.length)
     })
     return () => {
       active = false
@@ -121,6 +128,8 @@ export function VendorMyShopScreen() {
 
   const completion = useMemo(() => getShopCompletionPercentage(shop), [shop])
   const totalOrders = analytics?.total_orders ?? null
+  const totalRevenue = analytics?.total_revenue ?? null
+  const ordersToShip = countOrdersToShip(analytics?.status_distribution)
   const engagementSeries = analytics?.engagement_series ?? [0, 0, 0, 0, 0, 0, 0]
   const retryLoadShops = () => {
     void dispatch(loadMyShops(undefined))
@@ -197,7 +206,7 @@ export function VendorMyShopScreen() {
       await dispatch(
         updateShop({ shopId: shop.id, updates: { is_active: !shop.is_active } }),
       ).unwrap()
-      toast.show(shop.is_active ? 'Shop paused' : 'Shop is now live', {
+      toast.show(shop.is_active ? 'Vacation mode is on' : 'Shop is open again', {
         tone: 'success',
         message: shop.is_active
           ? 'Your storefront is hidden from shoppers.'
@@ -275,10 +284,12 @@ export function VendorMyShopScreen() {
               stats={stats}
               address={address}
               totalOrders={totalOrders}
-              followerCount={followerCount}
+              totalRevenue={totalRevenue}
+              ordersToShip={ordersToShip}
               engagementSeries={engagementSeries}
               isDesktop={isDesktop}
               lowStock={lowStock}
+              openMessages={openMessages}
               lowStockAdvice={lowStockAdvice}
               adviceLoading={adviceLoading}
               onAskLowStockAdvice={handleAskLowStockAdvice}
@@ -310,10 +321,12 @@ export function VendorMyShopScreen() {
             stats={stats}
             address={address}
             totalOrders={totalOrders}
-            followerCount={followerCount}
+            totalRevenue={totalRevenue}
+            ordersToShip={ordersToShip}
             engagementSeries={engagementSeries}
             isDesktop={isDesktop}
             lowStock={lowStock}
+            openMessages={openMessages}
             lowStockAdvice={lowStockAdvice}
             adviceLoading={adviceLoading}
             onAskLowStockAdvice={handleAskLowStockAdvice}
@@ -362,6 +375,14 @@ function ShopHeaderBar({ ui, shop, isDesktop, previewHref, isDeleting, onDelete 
     >
    
 
+      <YStack flex={1} minWidth={180} gap="$1">
+        <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
+          Dashboard
+        </Text>
+        <Text fontSize={13} color={ui.textMuted} numberOfLines={1}>
+          {shop.shop_name}
+        </Text>
+      </YStack>
       <XStack gap="$2" flexWrap="wrap" alignItems="center">
         <AppLink href={previewHref} asChild>
           <Button tone="outline" size="$3" borderRadius={999} icon={<Icons.Eye size={16} />}>
@@ -403,6 +424,92 @@ function ShopHeaderBar({ ui, shop, isDesktop, previewHref, isDeleting, onDelete 
   )
 }
 
+function TodaysTasks({
+  ui,
+  ordersToShip,
+  openMessages,
+  listingsToRestock,
+}: {
+  ui: AppUiTokens
+  ordersToShip: number | null
+  openMessages: number
+  listingsToRestock: number
+}) {
+  const tasks: { label: string; value: string; hint: string; href: Href; icon: IconType }[] = [
+    {
+      label: 'Orders to ship',
+      value: ordersToShip == null ? '—' : String(ordersToShip),
+      hint: 'Open orders from the last period',
+      href: vendorRoutes.ordersSection('inbox'),
+      icon: Icons.Truck,
+    },
+    {
+      label: 'Messages',
+      value: String(openMessages),
+      hint: 'Buyer questions waiting on you',
+      href: vendorRoutes.reviews,
+      icon: Icons.MessageSquare,
+    },
+    {
+      label: 'Listings to restock',
+      value: String(listingsToRestock),
+      hint: 'Low stock on active listings',
+      href: vendorRoutes.products,
+      icon: Icons.Package,
+    },
+  ]
+
+  return (
+    <Card ui={ui}>
+      <SectionHeading ui={ui} icon={Icons.LayoutDashboard} title="Today’s tasks" noMargin />
+      <XStack gap="$3" flexWrap="wrap" marginTop="$3">
+        {tasks.map((task) => {
+          const Icon = task.icon
+          return (
+            <AppLink key={task.label} href={task.href} asChild>
+              <XStack
+                flex={1}
+                minWidth={160}
+                gap="$2.5"
+                padding="$3"
+                borderRadius={radius.chip}
+                borderWidth={1}
+                borderColor={ui.borderSubtle}
+                backgroundColor={ui.surfaceMuted}
+                cursor="pointer"
+                hoverStyle={{ borderColor: ui.brand }}
+                pressStyle={{ opacity: 0.9 }}
+              >
+                <YStack
+                  width={36}
+                  height={36}
+                  borderRadius={999}
+                  alignItems="center"
+                  justifyContent="center"
+                  backgroundColor={ui.surface}
+                >
+                  <Icon size={18} color={ui.brand} />
+                </YStack>
+                <YStack flex={1} minWidth={0} gap={2}>
+                  <Text fontSize={12} fontWeight="700" color={ui.textMuted} numberOfLines={1}>
+                    {task.label}
+                  </Text>
+                  <Text fontSize={20} fontWeight="800" color={ui.text} letterSpacing={-0.3}>
+                    {task.value}
+                  </Text>
+                  <Text fontSize={11} color={ui.textSecondary} numberOfLines={2}>
+                    {task.hint}
+                  </Text>
+                </YStack>
+              </XStack>
+            </AppLink>
+          )
+        })}
+      </XStack>
+    </Card>
+  )
+}
+
 // ============================================================================
 // Main column
 // ============================================================================
@@ -413,7 +520,9 @@ type MainColumnProps = {
   stats: ShopStats | null
   address: ShopAddressDetails | null
   totalOrders: number | null
-  followerCount: number | null
+  totalRevenue: number | null
+  ordersToShip: number | null
+  openMessages: number
   engagementSeries: number[]
   isDesktop: boolean
   lowStock: LowStockListing[]
@@ -428,7 +537,9 @@ function MainColumn({
   stats,
   address,
   totalOrders,
-  followerCount,
+  totalRevenue,
+  ordersToShip,
+  openMessages,
   engagementSeries,
   isDesktop,
   lowStock,
@@ -436,7 +547,7 @@ function MainColumn({
   adviceLoading,
   onAskLowStockAdvice,
 }: MainColumnProps) {
-  const { currency } = useVendorCurrency()
+  const { currency, formatAmount } = useVendorCurrency()
   const categories = Array.isArray(shop.shop_categories) ? (shop.shop_categories as string[]) : []
   const socialLinks = (shop.social_links as Record<string, string> | null) ?? {}
   const socialEntries = Object.entries(socialLinks).filter(([, url]) => Boolean(url))
@@ -453,6 +564,13 @@ function MainColumn({
 
   return (
     <YStack gap="$5">
+      <TodaysTasks
+        ui={ui}
+        ordersToShip={ordersToShip}
+        openMessages={openMessages}
+        listingsToRestock={lowStock.length}
+      />
+
       {/* Identity card */}
       <Card ui={ui} padding={0} overflow="hidden">
         <YStack height={132} position="relative" zIndex={0} overflow="hidden">
@@ -617,36 +735,42 @@ function MainColumn({
       <XStack width="100%" flexWrap="wrap" gap="$3">
         <StatTile
           ui={ui}
-          icon={Icons.Package}
-          label="Active Products"
-          value={String(activeProducts)}
-          hint={listingsHint}
-          real
-        />
-        <StatTile
-          ui={ui}
           icon={Icons.ShoppingBag}
-          label="Total Orders"
+          label="Orders"
           value={ordersLabel}
           hint="All time"
           real={totalOrders != null}
         />
         <StatTile
           ui={ui}
+          icon={Icons.Banknote}
+          label="Revenue"
+          value={totalRevenue == null ? '—' : formatAmount(totalRevenue)}
+          hint={currency}
+          real={totalRevenue != null}
+        />
+        <StatTile
+          ui={ui}
+          icon={Icons.Tag}
+          label="Listings"
+          value={String(activeProducts)}
+          hint={listingsHint}
+          real
+        />
+        <StatTile
+          ui={ui}
           icon={Icons.Star}
-          label="Merchant Rating"
+          label="Rating"
           value={ratingLabel}
           hint={reviewsLabel}
           real={rating != null && rating > 0}
         />
-        <StatTile
-          ui={ui}
-          icon={Icons.Users}
-          label="Followers"
-          value={followerCount == null ? '—' : String(followerCount)}
-          real={followerCount != null}
-        />
       </XStack>
+      <AppLink href={vendorRoutes.analytics as Href} asChild>
+        <Button size="$3" tone="outline" borderRadius={999} alignSelf="flex-start">
+          View all stats
+        </Button>
+      </AppLink>
 
       {/* Address + Contact */}
       <XStack gap="$4" flexWrap="wrap" alignItems="stretch">
@@ -826,20 +950,20 @@ function DangerZone({ ui, shop, isUpdating, isDeleting, onPauseToggle, onDelete 
     >
       <XStack alignItems="center" gap="$2">
         <Icons.TriangleAlert size={18} color={ui.error} />
-        <Text fontSize={16} fontWeight="800" color={ui.error}>
-          Danger Zone
+          <Text fontSize={16} fontWeight="800" color={ui.error}>
+          Shop availability
         </Text>
       </XStack>
 
       <XStack alignItems="center" justifyContent="space-between" gap="$3" flexWrap="wrap">
         <YStack flex={1} minWidth={200}>
           <Text fontSize={14} fontWeight="700" color={ui.text}>
-            {shop.is_active ? 'Pause shop visibility' : 'Resume shop visibility'}
+            {shop.is_active ? 'Vacation mode' : 'Shop is on vacation'}
           </Text>
           <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
             {shop.is_active
-              ? 'Temporarily hide your storefront and listings from shoppers.'
-              : 'Make your storefront visible to shoppers again.'}
+              ? 'Hide your shop while you are away. Open orders still need to ship.'
+              : 'Turn vacation mode off so shoppers can buy again.'}
           </Text>
         </YStack>
         <Button
@@ -849,7 +973,7 @@ function DangerZone({ ui, shop, isUpdating, isDeleting, onPauseToggle, onDelete 
           disabled={isUpdating}
           onPress={onPauseToggle}
         >
-          {shop.is_active ? 'Pause shop' : 'Go live'}
+          {shop.is_active ? 'Turn on' : 'Turn off'}
         </Button>
       </XStack>
 

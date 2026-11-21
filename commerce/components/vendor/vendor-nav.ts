@@ -2,7 +2,6 @@ import type { Href } from 'one'
 import { Platform } from 'react-native'
 
 import { Icons } from '~/components/ui'
-import { helpHref } from '~/lib/help/types'
 import { vendorRoutes } from '~/lib/routes'
 
 type IconType = (typeof Icons)[keyof typeof Icons]
@@ -17,56 +16,14 @@ export type VendorNavItem = {
   ready?: boolean
   /** Nested rows revealed by expanding this item (e.g. Orders sections). */
   children?: VendorNavItem[]
+  /** Extra path prefixes that should highlight this row. */
+  alsoActive?: readonly string[]
 }
 
 /** Build a `/vendor/settings?section=<id>` link for a settings sub-item. */
 function settingsHref(section: VendorSettingsSectionId): Href {
   return vendorRoutes.settingsSection(section)
 }
-
-/** Build a `/vendor/orders?section=<id>` link for an orders sub-item. */
-function ordersHref(section: VendorOrdersSectionId): Href {
-  return vendorRoutes.ordersSection(section)
-}
-
-/**
- * Orders sub-sections, surfaced as a dropdown under the main "Orders" item.
- * All sections below are implemented in VendorOrdersScreen.
- */
-const ORDERS_CHILDREN: VendorNavItem[] = [
-  {
-    id: 'orders-inbox',
-    label: 'SLA Inbox',
-    description: 'Operational priority queue for shipments, returns, and exceptions.',
-    icon: Icons.Inbox,
-    href: ordersHref('inbox'),
-    ready: true,
-  },
-  {
-    id: 'orders-all',
-    label: 'All orders',
-    description: 'Every line item sold, with status and fulfilment actions.',
-    icon: Icons.ClipboardList,
-    href: ordersHref('all'),
-    ready: true,
-  },
-  {
-    id: 'orders-issues',
-    label: 'Issues & requests',
-    description: 'Cancellations, returns, refunds, and customer complaints.',
-    icon: Icons.AlertTriangle,
-    href: ordersHref('issues'),
-    ready: true,
-  },
-  {
-    id: 'orders-fulfillments',
-    label: 'Fulfilments',
-    description: 'Pick, pack, and ship queue with carrier scan history.',
-    icon: Icons.PackageCheck,
-    href: ordersHref('fulfillments'),
-    ready: true,
-  },
-]
 
 export type VendorNavGroup = {
   title: string
@@ -75,197 +32,75 @@ export type VendorNavGroup = {
 
 export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
   {
-    title: 'Sell',
+    title: '',
     items: [
       {
         id: 'myshop',
-        label: 'My Shop',
-        description: 'Your storefront profile, details, and health.',
-        icon: Icons.Store,
+        label: 'Dashboard',
+        description: 'Tasks, open orders, and a snapshot of the shop.',
+        icon: Icons.LayoutDashboard,
         href: vendorRoutes.myShop,
         ready: true,
       },
       {
         id: 'products',
-        label: 'Products',
-        description: 'Manage listings and inventory.',
-        icon: Icons.Package,
+        label: 'Listings',
+        description: 'Create, edit, and restock what you sell.',
+        icon: Icons.Tag,
         href: vendorRoutes.products,
+        alsoActive: [vendorRoutes.bundles, vendorRoutes.createListing],
         ready: true,
       },
       {
-        id: 'bundles',
-        label: 'Bundles',
-        description: 'Kit products at a bundle price.',
-        icon: Icons.Layers,
-        href: vendorRoutes.bundles,
+        id: 'messages',
+        label: 'Messages',
+        description: 'Buyer questions and reviews that need a reply.',
+        icon: Icons.MessageSquare,
+        href: vendorRoutes.reviews,
         ready: true,
       },
       {
         id: 'orders',
-        label: 'Orders',
-        description: 'Track and fulfil customer orders.',
+        label: 'Orders & shipping',
+        description: 'Ship open orders, add tracking, and handle requests.',
         icon: Icons.ShoppingBag,
-        href: ORDERS_CHILDREN[0].href,
-        ready: true,
-        children: ORDERS_CHILDREN,
-      },
-    ],
-  },
-  {
-    title: 'Money',
-    items: [
-      {
-        id: 'wallet',
-        label: 'Wallet',
-        description: 'Prepaid balance for shipping, ads, and referral rewards.',
-        icon: Icons.Wallet,
-        href: vendorRoutes.wallet,
+        href: vendorRoutes.orders,
+        alsoActive: [vendorRoutes.delivery],
         ready: true,
       },
-      {
-        id: 'settings-verification',
-        label: 'Verification',
-        description: 'KYC, Tax & GST, and bank documents for admin review and PayU setup.',
-        icon: Icons.BadgeCheck,
-        href: settingsHref('verification'),
-        ready: true,
-      },
-      {
-        id: 'settings-payments',
-        label: 'Payouts',
-        description: 'Settlement status after your shop is verified.',
-        icon: Icons.Banknote,
-        href: settingsHref('payments'),
-        ready: true,
-      },
-    ],
-  },
-  {
-    title: 'Fulfillment',
-    items: [
-      {
-        id: 'settings-warehouse',
-        label: 'Warehouse',
-        description: 'Ship-from address used for labels and inventory.',
-        icon: Icons.Building2,
-        href: settingsHref('warehouse'),
-        ready: true,
-      },
-      {
-        id: 'delivery',
-        label: 'Delivery',
-        description: 'EasyShip labels, carriers, and shipping credit.',
-        icon: Icons.Truck,
-        href: vendorRoutes.delivery,
-        ready: true,
-      },
-      {
-        id: 'fulfillment-policies',
-        label: 'Policies',
-        description: 'Buyer shipping rates and return rules.',
-        icon: Icons.FileText,
-        href: settingsHref('shipping'),
-        ready: true,
-        children: [
-          {
-            id: 'settings-shipping',
-            label: 'Shipping rates',
-            description: 'Delivery fees, free-shipping thresholds, and zones.',
-            icon: Icons.Package,
-            href: settingsHref('shipping'),
-            ready: true,
-          },
-          {
-            id: 'settings-returns',
-            label: 'Returns',
-            description: 'Return windows, refund rules, and reverse logistics.',
-            icon: Icons.Undo2,
-            href: settingsHref('returns'),
-            ready: true,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    title: 'Grow',
-    items: [
       {
         id: 'analytics',
-        label: 'Analytics',
-        description: 'Traffic, sales, and engagement trends.',
+        label: 'Stats',
+        description: 'Orders, revenue, and traffic.',
         icon: Icons.BarChart3,
         href: vendorRoutes.analytics,
-        ready: true,
-      },
-      {
-        id: 'customers',
-        label: 'Customers',
-        description: '360 profiles, segments, and journeys.',
-        icon: Icons.Users,
-        href: vendorRoutes.customers,
+        alsoActive: [vendorRoutes.customers],
         ready: true,
       },
       {
         id: 'ads',
-        label: 'Ads & Promo',
-        description: 'Boost posts, sponsored campaigns, and discounts.',
+        label: 'Marketing',
+        description: 'Ads, sales, and discounts.',
         icon: Icons.Megaphone,
         href: vendorRoutes.ads,
+        alsoActive: [vendorRoutes.discounts],
         ready: true,
       },
       {
-        id: 'reviews',
-        label: 'Reviews',
-        description: 'Customer ratings and feedback.',
-        icon: Icons.Star,
-        href: vendorRoutes.reviews,
-        ready: true,
-      },
-    ],
-  },
-  {
-    title: 'Shop setup',
-    items: [
-      {
-        id: 'settings-general',
-        label: 'Shop profile',
-        description: 'Name, logo, hours, categories, and currency.',
-        icon: Icons.Store,
-        href: settingsHref('general'),
+        id: 'wallet',
+        label: 'Finances',
+        description: 'Payment account, deposits, and verification.',
+        icon: Icons.Wallet,
+        href: vendorRoutes.wallet,
+        alsoActive: [settingsHref('payments'), settingsHref('verification')],
         ready: true,
       },
       {
-        id: 'settings-connect',
-        label: 'Contact & address',
-        description: 'Phone, email, public shop location, and social links.',
-        icon: Icons.MapPin,
-        href: settingsHref('connect'),
-        ready: true,
-      },
-      {
-        id: 'settings-notifications',
-        label: 'Notifications',
-        description: 'Order, marketing, and customer alerts.',
-        icon: Icons.Bell,
-        href: settingsHref('notifications'),
-        ready: true,
-      },
-      {
-        id: 'settings-security',
-        label: 'Team & security',
-        description: 'Sign-in, teammates, and permissions.',
-        icon: Icons.ShieldCheck,
-        href: settingsHref('security'),
-        ready: true,
-      },
-      {
-        id: 'seller-help',
-        label: 'Seller help',
-        description: 'Guides and support for your shop.',
-        icon: Icons.HelpCircle,
-        href: helpHref('shop') as Href,
+        id: 'settings',
+        label: 'Settings',
+        description: 'Shop info, policies, shipping, and team.',
+        icon: Icons.Settings,
+        href: vendorRoutes.settings,
         ready: true,
       },
     ],
@@ -444,6 +279,20 @@ export function isVendorNavChildActive(child: VendorNavItem, activeSubId?: strin
   return subIdFromHref(child.href) === activeSubId
 }
 
+/** Highlight a nested row whose href is its own page, not a `?section=` link. */
+export function isVendorChildPathActive(
+  child: VendorNavItem,
+  pathname: string,
+  activeSubId?: string,
+): boolean {
+  if (isVendorNavChildActive(child, activeSubId)) return true
+  const raw = String(child.href)
+  if (raw.includes('section=')) return false
+  const normalized = normalizeVendorPathname(pathname)
+  const path = normalizeVendorPathname(raw.split('?')[0] ?? raw)
+  return normalized === path || normalized.startsWith(`${path}/`)
+}
+
 /** Whether a leaf (or parent) nav row should highlight for the current URL. */
 export function isVendorNavItemActive(
   item: VendorNavItem,
@@ -461,11 +310,9 @@ export function isVendorNavItemActive(
     return groupActive && !hasActiveChild
   }
 
-  // Flat settings/orders links use `settings-*` / `orders-*` ids matching activeSubId.
+  if (item.id === activeId) return true
   if (activeSubId && isVendorNavChildActive(item, activeSubId)) return true
-
-  if (activeSubId) return false
-  return item.id === activeId
+  return false
 }
 
 /** Resolve the active nav item from the current pathname (defaults to My Shop). */
@@ -490,13 +337,43 @@ export function getActiveVendorNavItem(pathname: string): VendorNavItem {
     }
   }
 
-  return (
-    VENDOR_NAV_ITEMS.find((item) => {
-      // Compare on the path only — nav hrefs may carry query strings (e.g. `?section=`).
-      const href = normalizeVendorPathname(String(item.href).split('?')[0])
-      return normalized === href || normalized.startsWith(`${href}/`)
-    }) ?? VENDOR_NAV_ITEMS[0]
-  )
+  return bestVendorNavItem(pathname) ?? VENDOR_NAV_ITEMS[0]
+}
+
+/** Prefer a `?section=` link over a bare path when both match the URL. */
+function hrefMatchScore(href: Href | string, pathname: string): number {
+  const raw = String(href)
+  const normalized = normalizeVendorPathname(pathname)
+  const path = normalizeVendorPathname(raw.split('?')[0] ?? raw)
+  const pathMatch = normalized === path || (path.length > 1 && normalized.startsWith(`${path}/`))
+  if (!pathMatch) return 0
+  const wanted = raw.match(/[?&]section=([^&]+)/)?.[1]
+  if (!wanted) return 1
+  const current = readSectionFromPathname(pathname) ?? readSectionFromLocation()
+  return current === decodeURIComponent(wanted) ? 3 : 0
+}
+
+function bestVendorNavItem(pathname: string): VendorNavItem | null {
+  let best: VendorNavItem | null = null
+  let bestScore = 0
+  for (const item of VENDOR_NAV_ITEMS) {
+    const hrefs = [item.href, ...(item.alsoActive ?? [])]
+    for (const href of hrefs) {
+      const score = hrefMatchScore(href, pathname)
+      if (score > bestScore) {
+        best = item
+        bestScore = score
+      }
+    }
+    for (const child of item.children ?? []) {
+      const score = hrefMatchScore(child.href, pathname)
+      if (score > bestScore) {
+        best = item
+        bestScore = score
+      }
+    }
+  }
+  return best
 }
 
 /** Derive a readable section title from a `/vendor/*` pathname (for placeholder pages). */

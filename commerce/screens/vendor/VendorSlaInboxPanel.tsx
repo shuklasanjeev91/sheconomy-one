@@ -142,7 +142,7 @@ export function VendorSlaInboxPanel({
       setIssues(issuesResult.data?.issues ?? [])
       setContextEntries(contextResult)
     } catch (error) {
-      toast.show('Could not load SLA inbox', {
+      toast.show('Could not load orders to ship', {
         tone: 'danger',
         message: error instanceof Error ? error.message : String(error),
       })
@@ -242,7 +242,7 @@ export function VendorSlaInboxPanel({
       return
     }
     await Share.share({
-      title: activeFilter === 'ship_now' || activeFilter === 'pickup_issues' ? 'Manifest export' : 'SLA inbox export',
+      title: activeFilter === 'ship_now' || activeFilter === 'pickup_issues' ? 'Manifest export' : 'Orders to ship export',
       message: csv,
     })
   }
@@ -509,9 +509,9 @@ export function VendorSlaInboxPanel({
           ui={ui}
           isDesktop={isDesktop}
           shopName={shopName}
-          title="SLA Inbox"
+          title="Orders to ship"
           count={filteredRows.length}
-          subtitle="Prioritized operations queue for shipments, returns, pickup exceptions, and high-risk issues."
+          subtitle="Open orders to ship, overdue shipments, returns, and pickup exceptions."
           onRefresh={() => void load()}
           refreshing={refreshing}
           actions={headerActions}

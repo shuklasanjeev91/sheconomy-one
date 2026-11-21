@@ -46,7 +46,7 @@ export function VendorSlaHomeStrip({ inset = false }: { inset?: boolean }) {
 
       <AppLink href={vendorRoutes.ordersSection('inbox')} asChild>
         <Button tone="outline" size="$3" borderRadius={999}>
-          Open SLA inbox
+          Open orders to ship
         </Button>
       </AppLink>
     </CommercePanel>

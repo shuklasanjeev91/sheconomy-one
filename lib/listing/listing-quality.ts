@@ -97,7 +97,7 @@ export function validateListingImagesQuality(
     pushIssue(issues, errors, warnings, {
       field: "images",
       severity: "error",
-      message: "Add only one video.",
+      message: `Add at most ${LISTING_IMAGE_CONSTRAINTS.MAX_VIDEOS} videos.`,
     });
   }
 
