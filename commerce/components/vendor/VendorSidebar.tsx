@@ -102,6 +102,7 @@ export function VendorSidebar({
 
       <ScrollView
         flex={1}
+        minHeight={0}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingVertical: 12 }}
       >

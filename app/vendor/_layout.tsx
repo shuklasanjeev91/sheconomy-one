@@ -101,6 +101,8 @@ export function VendorLayout() {
               borderRightColor={ui.borderSubtle}
               backgroundColor={ui.surface}
               height="100%"
+              minHeight={0}
+              overflow="hidden"
               style={
                 Platform.OS === 'web'
                   ? ({ position: 'sticky', top: desktopHeaderHeight } as const)

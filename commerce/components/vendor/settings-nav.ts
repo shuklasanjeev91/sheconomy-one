@@ -27,7 +27,7 @@ export type SettingsSection = {
 
 /**
  * The shop-settings section catalog. Used by the settings hub and section headers.
- * Sidebar placement lives in `vendor-nav.ts` (Finances / Settings).
+ * Sidebar placement lives in `vendor-nav.ts`.
  */
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
