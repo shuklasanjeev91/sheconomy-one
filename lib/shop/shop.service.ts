@@ -29,7 +29,11 @@ import { fetchStorefrontCategories } from '~/lib/supabase/commerce'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase'
 import { blockedContentMessage } from '~/lib/safety/content-screen'
-import { uploadShopLogoImage, uploadShopGstDocument } from '~/lib/supabase/storage-upload'
+import {
+  uploadShopLogoImage,
+  uploadShopGstDocument,
+  type StorageUploadFile,
+} from '~/lib/supabase/storage-upload'
 
 import { toFriendlyShopError } from '~/lib/shop/shop.errors'
 import {
@@ -763,6 +767,24 @@ export async function deleteShop(shopId: string): Promise<ShopServiceResponse<{ 
   }
 }
 
+function toLogoUploadFile(file: ShopImageUpload): StorageUploadFile {
+  const bytes =
+    file.data instanceof Uint8Array
+      ? file.data
+      : file.data instanceof ArrayBuffer
+        ? file.data
+        : file.blob instanceof ArrayBuffer
+          ? file.blob
+          : undefined
+
+  return {
+    data: bytes && bytes.byteLength > 0 ? bytes : undefined,
+    blob: bytes ? undefined : file.blob instanceof Blob ? file.blob : undefined,
+    mimeType: file.mimeType,
+    fileName: file.fileName,
+  }
+}
+
 /** Upload a new shop logo and persist the resulting public URL. */
 export async function uploadShopLogo(
   userId: string,
@@ -773,15 +795,10 @@ export async function uploadShopLogo(
   if (!userId || !shopId) return fail('User and shop are required')
 
   try {
-    const blob = file.blob instanceof ArrayBuffer ? new Blob([file.blob]) : file.blob
     const { data, error } = await uploadShopLogoImage(
       userId,
       shopId,
-      {
-        blob: blob as Blob,
-        mimeType: file.mimeType,
-        fileName: file.fileName,
-      },
+      toLogoUploadFile(file),
       { onProgress: options?.onProgress },
     )
 

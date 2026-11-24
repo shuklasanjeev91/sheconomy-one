@@ -108,7 +108,9 @@ export type ShopValidationResult = {
 }
 
 export type ShopImageUpload = {
-  blob: Blob | ArrayBuffer | File
+  /** Raw bytes from `preparePickedImagesForUpload`. Prefer these over Blob. */
+  data?: Uint8Array | ArrayBuffer
+  blob?: Blob | ArrayBuffer | File
   mimeType: string
   fileName?: string
 }
