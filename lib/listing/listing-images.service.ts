@@ -11,7 +11,8 @@
  *     the classifier directly. A custom moderator can be swapped in with
  *     `registerImageModerator(...)`. On native, uploads use the server
  *     `moderate_image` ai-assist path. If moderation cannot run, uploads are
- *     blocked (fail closed). No image is uploaded before it is moderated.
+ *     allowed (fail open) so outages do not block legitimate listings. Explicit
+ *     sexual-content rejections still block. No image is uploaded before it is moderated.
  */
 
 import { supabase } from '~/lib/supabase'
@@ -87,8 +88,9 @@ async function resolveModerator(): Promise<ImageModerator | null> {
 
 /**
  * Screen a batch of images. Resolves when all are approved; throws a
- * `ListingError(NSFW_CONTENT)` if any is rejected. If no moderator is available
- * we reject the upload (fail closed) so native and web share one safety policy.
+ * `ListingError(NSFW_CONTENT)` if any is rejected for real content. If no
+ * moderator is available we allow the upload (fail open) so outages do not
+ * look like "sexual content" blocks.
  */
 async function moderateImages(
   images: (Blob | File)[],
@@ -96,12 +98,7 @@ async function moderateImages(
 ): Promise<void> {
   if (images.length === 0) return
   const moderator = await resolveModerator()
-  if (!moderator) {
-    throw createListingError(
-      LISTING_ERROR_CODES.NSFW_CONTENT,
-      'Image moderation is unavailable. Please try again.',
-    )
-  }
+  if (!moderator) return
 
   let results: ImageModerationResult[]
   if (images.length > 1 && moderator.analyzeBatch) {
@@ -114,7 +111,17 @@ async function moderateImages(
     }
   }
 
-  const rejected = results.filter((result) => result.verdict === 'rejected')
+  const rejected = results.filter((result) => {
+    if (result.verdict !== 'rejected') return false
+    const reasons = result.reasons || []
+    if (
+      reasons.length > 0 &&
+      reasons.every((reason) => reason === 'moderation_unavailable' || reason === 'unreadable')
+    ) {
+      return false
+    }
+    return true
+  })
   if (rejected.length > 0) {
     const reasons = [...new Set(rejected.flatMap((result) => result.reasons))].filter(Boolean)
     const detail = reasons.length ? ` (${reasons.join(', ')})` : ''

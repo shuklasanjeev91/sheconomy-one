@@ -20,6 +20,17 @@ function joinedText(parts: Array<string | null | undefined>): string {
     .trim()
 }
 
+function isHardReject(result: Verdict | null | undefined): boolean {
+  if (!result || result.verdict !== 'rejected') return false
+  const reasons = (result.reasons || []).map(String)
+  // Infrastructure / parse failures must not block member uploads.
+  if (reasons.length === 0) return true
+  if (reasons.every((reason) => reason === 'moderation_unavailable' || reason === 'unreadable')) {
+    return false
+  }
+  return true
+}
+
 /** Returns the member-facing block message, or null when the text can be saved. */
 export async function blockedContentMessage(
   parts: string | Array<string | null | undefined>,
@@ -32,37 +43,13 @@ export async function blockedContentMessage(
       product: 'account',
       message: text,
     })
-    if (result?.verdict === 'approved') return null
+    if (!result) return null
+    if (isHardReject(result)) return BLOCKED_CONTENT_MESSAGE
+    return null
   } catch {
-    // A missed check is treated the same as a rejection.
+    // Missed check → allow. Blocking on outages caused false "sexual content" errors.
+    return null
   }
-  return BLOCKED_CONTENT_MESSAGE
-}
-
-async function bytesToDataUrl(body: ScreenBody, mimeType: string): Promise<string> {
-  if (typeof Blob !== 'undefined' && body instanceof Blob && typeof FileReader !== 'undefined') {
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onerror = () => reject(new Error('Could not read image'))
-      reader.onload = () => resolve(String(reader.result || ''))
-      reader.readAsDataURL(body)
-    })
-  }
-
-  const bytes =
-    body instanceof ArrayBuffer
-      ? new Uint8Array(body)
-      : body instanceof Uint8Array
-        ? body
-        : new Uint8Array(await body.arrayBuffer())
-  let binary = ''
-  const step = 0x8000
-  for (let index = 0; index < bytes.length; index += step) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + step))
-  }
-  const base64 = typeof btoa === 'function' ? btoa(binary) : ''
-  if (!base64) return ''
-  return `data:${mimeType || 'image/jpeg'};base64,${base64}`
 }
 
 async function screenWithLocalClassifier(body: ScreenBody): Promise<'approved' | 'rejected' | null> {
@@ -82,6 +69,10 @@ async function screenWithLocalClassifier(body: ScreenBody): Promise<'approved' |
  * Returns the member-facing block message, or null when the file can be uploaded.
  * Video cannot be checked frame by frame, so a video is allowed.
  * Files that are not images (documents, for example) are left unchanged.
+ *
+ * Hard gate is on-device NSFWJS on web (porn/hentai only — not "sexy" alone).
+ * Native uploads fail open: server vision false-positives on clothed portraits
+ * were blocking profile, chat, and post photos across the app.
  */
 export async function blockedImageMessage(input: {
   mimeType?: string | null
@@ -89,23 +80,9 @@ export async function blockedImageMessage(input: {
 }): Promise<string | null> {
   const mime = (input.mimeType || 'image/jpeg').toLowerCase()
   if (!mime.startsWith('image/')) return null
-  if (!input.body) return BLOCKED_CONTENT_MESSAGE
+  if (!input.body) return null
 
   const local = await screenWithLocalClassifier(input.body)
-  if (local === 'approved') return null
   if (local === 'rejected') return BLOCKED_CONTENT_MESSAGE
-
-  try {
-    const dataUrl = await bytesToDataUrl(input.body, mime)
-    if (!dataUrl.startsWith('data:image/')) return BLOCKED_CONTENT_MESSAGE
-    const result = await invokeOwnedAssist<Verdict>({
-      action: 'moderate_image',
-      product: 'account',
-      message: dataUrl.slice(0, 3_500_000),
-    })
-    if (result?.verdict === 'approved') return null
-  } catch {
-    // A missed check is treated the same as a rejection.
-  }
-  return BLOCKED_CONTENT_MESSAGE
+  return null
 }

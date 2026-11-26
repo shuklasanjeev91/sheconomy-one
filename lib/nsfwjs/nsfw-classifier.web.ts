@@ -135,10 +135,11 @@ const CONFIG = {
   MODEL_SIZE: 224,
   DEFAULT_TIMEOUT: 60000, // 1 minute timeout for analysis
   MODEL_LOAD_TIMEOUT: 120000, // 2 minutes for model loading
+  // NSFWJS "sexy" scores high on clothed portraits and fashion — do not reject
+  // on sexy alone. Hard categories need a clear signal.
   REJECTION_THRESHOLDS: {
-    porn: 0.7,
-    sexy: 0.8,
-    hentai: 0.7,
+    porn: 0.85,
+    hentai: 0.85,
   } as Record<string, number>,
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000,
@@ -978,19 +979,24 @@ const processClassificationResults = (
     { porn: 0, sexy: 0, hentai: 0, neutral: 0, drawing: 0 } as NsfwScores,
   )
 
-  // Determine rejection reasons based on thresholds
+  // Determine rejection reasons based on thresholds.
+  // Clothed portraits / fashion often score high on "sexy" alone — only reject
+  // when porn or hentai clears the bar, or sexy is extreme *and* porn is elevated.
   const rejectionReasons: string[] = []
+  const pornThreshold = thresholds.porn ?? 0.85
+  const hentaiThreshold = thresholds.hentai ?? 0.85
 
-  Object.entries(thresholds).forEach(([category, threshold]) => {
-    const score = (scores as Record<string, number>)[category]
-    if (score > threshold) {
-      rejectionReasons.push(
-        `${category.charAt(0).toUpperCase() + category.slice(1)} content detected (${(
-          score * 100
-        ).toFixed(1)}%)`,
-      )
-    }
-  })
+  if (scores.porn > pornThreshold) {
+    rejectionReasons.push(`Porn content detected (${(scores.porn * 100).toFixed(1)}%)`)
+  }
+  if (scores.hentai > hentaiThreshold) {
+    rejectionReasons.push(`Hentai content detected (${(scores.hentai * 100).toFixed(1)}%)`)
+  }
+  if (scores.sexy > 0.92 && scores.porn > 0.5) {
+    rejectionReasons.push(
+      `Suggestive content detected (${(scores.sexy * 100).toFixed(1)}% sexy, ${(scores.porn * 100).toFixed(1)}% porn)`,
+    )
+  }
 
   // Determine final verdict
   const verdict: NsfwVerdict = rejectionReasons.length > 0 ? 'rejected' : 'approved'

@@ -2603,9 +2603,10 @@ Deno.serve(async (req) => {
       }
 
       const systemPrompt = [
-        'You are a marketplace listing image safety moderator for a women-focused commerce platform.',
-        'Reject sexual content, pornography, graphic violence, hate symbols, and illegal goods imagery.',
-        'Approve normal product photos, fashion, food, crafts, and lifestyle images.',
+        'You are a marketplace listing image safety moderator for SHEconomy, a women-focused commerce platform.',
+        'Reject ONLY explicit sexual content: exposed genitals or nipples, sex acts, or pornography meant to arouse.',
+        'Always approve clothed portraits and selfies, fashion and modeling poses, makeup, cleavage in clothing, tight or glamorous outfits without nudity, product photos, food, crafts, and lifestyle images.',
+        'When unsure, approve.',
         'Return ONLY JSON: {"verdict":"approved"|"rejected","reasons":["..."],"confidence":0-1}',
       ].join('\n')
 
@@ -2615,11 +2616,12 @@ Deno.serve(async (req) => {
         return json({ ...parsed, usedFallback: false, product: 'commerce' })
       }
 
-      // Fail closed when the model does not respond cleanly.
+      // Fail open when the model does not respond cleanly — outages must not
+      // look like sexual-content rejections to members.
       return json({
-        verdict: 'rejected',
-        reasons: ['moderation_unavailable'],
-        confidence: 1,
+        verdict: 'approved',
+        reasons: [],
+        confidence: 0,
         usedFallback: true,
         product: 'commerce',
       })
