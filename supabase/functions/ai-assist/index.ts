@@ -210,6 +210,13 @@ type Intent =
   | 'community_groups'
   | 'community_pages'
   | 'community_stories'
+  | 'community_analytics'
+  | 'community_articles'
+  | 'following_shops'
+  | 'group_order'
+  | 'try_on'
+  | 'contacts_invite'
+  | 'product_info'
   | 'chat'
   | 'chat_calls'
   | 'class'
@@ -222,8 +229,32 @@ type Intent =
 
 function detectIntent(product: AiProduct, message: string): Intent {
   const lower = message.toLowerCase()
-  // Navigation intents before shopping extraction ("find events" must not become product search).
-  if (/\b(events?|rsvp)\b/.test(lower) && (product === 'community' || /\b(community|find (?:an? )?events?)\b/.test(lower))) {
+  // Seller / KYC / create shop before shopping.
+  if (
+    /\b(seller wallet|vendor wallet|seller payouts?|seller kyc|manage shop|create (?:a |my )?shop|open a shop|sellerlanding|seller dashboard|shop ads?|create (?:an? )?(?:shop )?ad|vendor\/ads|run (?:an? )?ad|seller discounts?|kyc|seller verification|vendor verification)\b/.test(
+      lower,
+    )
+  ) {
+    return 'seller'
+  }
+  if (
+    /\b(manage shop|seller wallet|vendor|low stock|payout|inventory|listing title|fulfill|ship order|boost sales|create listing|verification|seller ads?|bundles?|seller (?:orders?|reviews?|customers?|delivery|analytics))\b/.test(
+      lower,
+    ) ||
+    (product === 'shop' && /\b(stock|listing|order|policy|payout|sales|wallet|ads?|kyc)\b/.test(lower))
+  ) {
+    return 'seller'
+  }
+  // App navigation BEFORE shopping ("find jobs/events" must not become product search).
+  if (/\b(job|jobs|hiring|open to work|job board)\b/.test(lower) || (product === 'community' && lower.includes('job'))) {
+    return 'community_jobs'
+  }
+  if (
+    /\b(events?|rsvp|meetup)\b/.test(lower) &&
+    (product === 'community' ||
+      /\b(community|attend|host an? event|find (?:an? )?events?)\b/.test(lower) ||
+      /\b(find|browse|create|host).{0,24}\bevents?\b/.test(lower))
+  ) {
     return 'community_events'
   }
   if (
@@ -235,48 +266,48 @@ function detectIntent(product: AiProduct, message: string): Intent {
   if (/\b(compan(?:y|ies)|company page)\b/.test(lower) && (product === 'community' || /\bcommunity\b/.test(lower))) {
     return 'community_pages'
   }
-  if (/\b(stor(?:y|ies)|boost (?:post|ad)|community ads?)\b/.test(lower)) return 'community_stories'
+  if (/\b(community analytics|post analytics|content analytics)\b/.test(lower)) return 'community_analytics'
+  if (/\b(stor(?:y|ies)|boost (?:a )?post|boost (?:post|ad)|community ads?)\b/.test(lower)) return 'community_stories'
   if (
-    /\b(meetings? list|my meetings|\/co-work\/meetings|upcoming meetings)\b/.test(lower) ||
-    (product === 'cowork' && /\bmeetings?\b/.test(lower) && !/\bschedule\b/.test(lower))
+    /\b(articles?|community article)\b/.test(lower) &&
+    (product === 'community' || /\bcommunity\b/.test(lower) || /\b(read|open|browse)\b/.test(lower))
+  ) {
+    return 'community_articles'
+  }
+  if (/\b(followed shops?|shops? i follow|following shops?)\b/.test(lower) || (/\bfollowing\b/.test(lower) && /\bshops?\b/.test(lower))) {
+    return 'following_shops'
+  }
+  if (/\b(group (?:order|checkout)|shared (?:cart|order))\b/.test(lower)) return 'group_order'
+  if (/\b(try[\s-]?on|view in (?:my |your )?room|room preview|virtual try)\b/.test(lower)) return 'try_on'
+  if (/\b(import contacts?|invite (?:link|friends?|code)|qr (?:sign[\s-]?in|approve|login))\b/.test(lower)) {
+    return 'contacts_invite'
+  }
+  if (
+    /\b(meetings? list|my meetings|\/co-work\/meetings|upcoming meetings|co-work chat)\b/.test(lower) ||
+    (product === 'cowork' && /\b(meetings?|chat)\b/.test(lower) && !/\bschedule\b/.test(lower))
   ) {
     return 'cowork'
   }
-  if (/\b(shop ads?|create (?:an? )?(?:shop )?ad|vendor\/ads|run (?:an? )?ad|seller discounts?)\b/.test(lower)) {
-    return 'seller'
-  }
-  if (extractShoppingQuery(message)) return 'shop_buy'
-  if (/\b(return|refund|exchange)\b/.test(lower)) return 'returns'
-  if (/\b(favorites?|wishlist|saved (?:items?|listings?))\b/.test(lower)) return 'favorites'
-  if (/\b(addresses?|shipping address|delivery address)\b/.test(lower)) return 'addresses'
-  if (/\b(buyer wallet|my wallet|wallet balance)\b/.test(lower) && !/\b(seller|vendor|payout)\b/.test(lower)) {
-    return 'wallet_buyer'
-  }
-  if (/\b(payment failed|pay(?:ment)? (?:failed|failure|declined)|razorpay|payu)\b/.test(lower)) {
-    return 'payment_failed'
-  }
-  if (/\b(cart|checkout|coupon|offer|discount)\b/.test(lower) && !/\b(vendor|seller|manage shop)\b/.test(lower)) {
-    return 'cart'
-  }
   if (
-    /\b(orders?|tracking|track|delivery|shipment|shipping)\b/.test(lower) &&
-    !/\b(buy|purchase|looking for|want to buy|seller|vendor|manage shop)\b/.test(lower)
+    /\b(class\s*(?:video|audio|playlists?)|playlists?|class\/video|class\/audio|where (?:is|are) class)\b/.test(lower) ||
+    (product === 'class' && /\b(video|audio|playlist)\b/.test(lower))
   ) {
-    return 'orders'
+    return 'class_media'
+  }
+  if (product === 'class' || /\b(class|enroll|course|lesson|playback|certificate|program)\b/.test(lower)) {
+    return 'class'
+  }
+  if (product === 'cowork' || /\b(meeting|co-work|cowork|camera|mic|microphone|host|schedule|session|sync)\b/.test(lower)) {
+    return 'cowork'
+  }
+  if (/\b((audio|video)\s*call|start a call|call history)\b/.test(lower) || (product === 'chat' && /\bcalls?\b/.test(lower))) {
+    return 'chat_calls'
+  }
+  if (product === 'chat' || /\b(chat|message|mute|dm|group chat|read receipt|disappearing)\b/.test(lower)) {
+    return 'chat'
   }
   if (
-    /\b(manage shop|seller wallet|vendor|low stock|payout|inventory|listing title|fulfill|ship order|boost sales|create listing|kyc|seller ads?|bundles?)\b/.test(
-      lower,
-    ) ||
-    (product === 'shop' && /\b(stock|listing|order|policy|payout|sales|wallet|ads?)\b/.test(lower))
-  ) {
-    return 'seller'
-  }
-  if (/\b(job|jobs|hiring|open to work|apply|role)\b/.test(lower) || (product === 'community' && lower.includes('job'))) {
-    return 'community_jobs'
-  }
-  if (
-    /\b(connect|connection|network|intro|introduction|follow|followers)\b/.test(lower) ||
+    /\b(connect|connection|network|intro|introduction|follow(?:ers)?)\b/.test(lower) ||
     (product === 'community' && /\b(people|network)\b/.test(lower))
   ) {
     return 'community_network'
@@ -287,40 +318,34 @@ function detectIntent(product: AiProduct, message: string): Intent {
   ) {
     return 'community_post'
   }
-  if (/\b((audio|video)\s*call|start a call|call history)\b/.test(lower) || (product === 'chat' && /\bcalls?\b/.test(lower))) {
-    return 'chat_calls'
-  }
-  if (
-    /\b(chat|message|mute|dm|group chat|read receipt|disappearing)\b/.test(lower) ||
-    (product === 'chat' && lower.length > 0)
-  ) {
-    if (product === 'chat' || /\b(chat|message|mute|dm|group)\b/.test(lower)) return 'chat'
-  }
-  if (/\b(playlist|class\/video|class\/audio)\b/.test(lower) || (product === 'class' && /\b(video|audio|playlist)\b/.test(lower))) {
-    return 'class_media'
-  }
-  if (
-    /\b(class|enroll|course|lesson|playback|certificate|program)\b/.test(lower) ||
-    product === 'class'
-  ) {
-    if (product === 'class' || /\b(class|enroll|course|lesson|playback|certificate)\b/.test(lower)) {
-      return 'class'
-    }
-  }
-  if (
-    /\b(meeting|co-work|cowork|camera|mic|microphone|host|join code|schedule)\b/.test(lower) ||
-    product === 'cowork'
-  ) {
-    if (
-      product === 'cowork' ||
-      /\b(meeting|co-work|cowork|camera|mic|host|schedule|session|sync)\b/.test(lower)
-    ) {
-      return 'cowork'
-    }
-  }
   if (/\b(onboard|sign[\s-]?up|sign[\s-]?in|complete profile|welcome tour)\b/.test(lower)) return 'onboarding'
-  if (/\b(legal|privacy policy|terms of use|cookies|interest-based ads)\b/.test(lower)) return 'legal'
-  if (/\b(settings?|notification|password|profile|payment methods?)\b/.test(lower)) return 'settings'
+  if (/\b(legal|privacy policy|terms of use|cookies|interest-based ads|shipping (?:and|&) exchange|return (?:and|&) refund)\b/.test(lower)) {
+    return 'legal'
+  }
+  if (/\b(settings?|notification(?:s)?|password|profile|payment methods?|appearance|security settings?)\b/.test(lower)) {
+    return 'settings'
+  }
+  if (/\b(return|refund|exchange)\b/.test(lower)) return 'returns'
+  if (/\b(favorites?|wishlist|saved (?:items?|listings?))\b/.test(lower)) return 'favorites'
+  if (/\b(addresses?|shipping address|delivery address)\b/.test(lower)) return 'addresses'
+  if (/\b(buyer wallet|my wallet|wallet balance)\b/.test(lower) && !/\b(seller|vendor|payout)\b/.test(lower)) {
+    return 'wallet_buyer'
+  }
+  if (/\b(payment failed|pay(?:ment)? (?:failed|failure|declined)|razorpay|payu)\b/.test(lower)) {
+    return 'payment_failed'
+  }
+  if (/\b(add to cart|buy (?:this|it|now)|purchase (?:this|it))\b/.test(lower)) return 'product_info'
+  if (/\b(cart|checkout|coupon|offer|discount)\b/.test(lower) && !/\b(vendor|seller|manage shop)\b/.test(lower)) {
+    return 'cart'
+  }
+  if (
+    /\b(orders?|tracking|track|delivery|shipment|shipping)\b/.test(lower) &&
+    !/\b(buy|purchase|looking for|want to buy|seller|vendor|manage shop)\b/.test(lower)
+  ) {
+    return 'orders'
+  }
+  // Shopping last — after every app-surface intent.
+  if (extractShoppingQuery(message)) return 'shop_buy'
   return 'general'
 }
 
@@ -334,7 +359,11 @@ function resolveEffectiveProduct(product: AiProduct, intent: Intent, shoppingQue
     intent === 'favorites' ||
     intent === 'addresses' ||
     intent === 'wallet_buyer' ||
-    intent === 'payment_failed'
+    intent === 'payment_failed' ||
+    intent === 'product_info' ||
+    intent === 'following_shops' ||
+    intent === 'group_order' ||
+    intent === 'try_on'
   ) {
     return 'commerce'
   }
@@ -346,14 +375,18 @@ function resolveEffectiveProduct(product: AiProduct, intent: Intent, shoppingQue
     intent === 'community_events' ||
     intent === 'community_groups' ||
     intent === 'community_pages' ||
-    intent === 'community_stories'
+    intent === 'community_stories' ||
+    intent === 'community_analytics' ||
+    intent === 'community_articles'
   ) {
     return 'community'
   }
   if (intent === 'chat' || intent === 'chat_calls') return 'chat'
   if (intent === 'class' || intent === 'class_media') return 'class'
   if (intent === 'cowork') return 'cowork'
-  if (intent === 'settings' || intent === 'onboarding' || intent === 'legal') return 'account'
+  if (intent === 'settings' || intent === 'onboarding' || intent === 'legal' || intent === 'contacts_invite') {
+    return 'account'
+  }
   return product
 }
 
@@ -367,6 +400,8 @@ function productDeepLinks(product: AiProduct, searchQuery?: string | null): Deep
         { label: 'Orders', href: '/orders' },
         { label: 'Cart', href: '/cart' },
         { label: 'Favorites', href: '/favorites' },
+        { label: 'Following', href: '/following' },
+        { label: 'Wallet', href: '/wallet' },
         { label: 'Help Center', href: helpHref(product) },
       ]
     case 'community':
@@ -376,6 +411,7 @@ function productDeepLinks(product: AiProduct, searchQuery?: string | null): Deep
         { label: 'Jobs', href: '/community/jobs' },
         { label: 'Events', href: '/community/events' },
         { label: 'Groups', href: '/community/groups' },
+        { label: 'Analytics', href: '/community/analytics' },
         { label: 'Help Center', href: helpHref(product) },
       ]
     case 'chat':
@@ -501,6 +537,17 @@ const SHOPPING_STOP_WORDS = new Set([
 /** Pull a marketplace search phrase from natural language ("want to buy tshirt" → "tshirt"). */
 function extractShoppingQuery(message: string): string | null {
   const lower = message.toLowerCase().trim()
+  // App surfaces are not marketplace product queries.
+  if (
+    /\b(community events?|community groups?|company pages?|stories?|playlists?|video call|audio call|co-?work meetings?|seller wallet|shop ads?|favorites?|wishlist|onboard|privacy policy|terms of use|jobs?|hiring|open to work|class\s*(?:video|audio|playlists?)|kyc|seller verification|try[\s-]?on|followed shops?|group (?:order|checkout)|import contacts?|invite (?:link|code)|community analytics|hashtags?)\b/.test(
+      lower,
+    )
+  ) {
+    return null
+  }
+  if (/\b(find|browse|open|where(?:'s| is| are)?)\s+(jobs?|events?|groups?|classes?|meetings?)\b/.test(lower)) {
+    return null
+  }
   const buyIntent =
     /\b(buy|purchase|shop\s+for|looking\s+for|find|need|want|wanna|get|search|recommend|suggest)\b/.test(
       lower,
@@ -914,133 +961,161 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
       return [
         `Great — here are live marketplace picks for “${shoppingQuery}”:`,
         matchFact.replace(/^Matching marketplace listings:\s*/, ''),
-        `Open ${searchFact?.replace(/^Marketplace search:\s*/, '') || `/search?q=${encodeURIComponent(shoppingQuery)}`} to see all matches, then checkout from /cart.`,
+        'Open Search to see all matches, then checkout from Cart.',
       ].join(' ')
     }
     if (noMatchFact) {
-      return `I couldn’t find an exact “${shoppingQuery}” title match. Try /search?q=${encodeURIComponent(shoppingQuery)} or browse / for similar finds.`
+      return `I couldn’t find an exact “${shoppingQuery}” title match. Try Search from the top bar, or browse the marketplace for similar finds.`
     }
-    return `Search “${shoppingQuery}” at /search?q=${encodeURIComponent(shoppingQuery)}, open a listing, add to cart, then checkout.`
+    return `Search for “${shoppingQuery}”, open a listing you like, add it to Cart, then checkout.`
   }
 
   if (intent === 'orders') {
     if (orderFact) {
-      return `Here are your latest orders: ${orderFact.replace(/^Recent orders:\s*/, '')} Open /orders for tracking. Help: ${helpHref('commerce')}`
+      return `Here are your latest orders: ${orderFact.replace(/^Recent orders:\s*/, '')} Open Orders anytime for live tracking.`
     }
     return noOrders
-      ? `You don’t have recent orders yet. Browse /, add items to cart, then checkout. Help: ${helpHref('commerce')}`
-      : `Open /orders to track deliveries. Help: ${helpHref('commerce')}`
+      ? 'You don’t have recent orders yet. Browse the marketplace, add items to Cart, then checkout.'
+      : 'Open Orders to track deliveries.'
   }
 
   if (intent === 'returns') {
-    return `Most returns start from Order details when the shop’s policy allows it. Read Return & refund at /legal/returns, Shipping & exchange at /legal/shipping, then open /orders. Help: ${helpHref('commerce')}`
+    return 'Most returns start from Order details when the shop’s policy allows it. Skim Return & refund and Shipping & exchange under Help → Policies, then open Orders.'
   }
 
   if (intent === 'cart') {
-    return `Open /cart to review quantities and offers, apply coupons, then checkout with address + payment. Help: ${helpHref('commerce')}`
+    return 'Open Cart to review quantities and offers, apply a coupon if you have one, then checkout with your address and payment.'
   }
 
   if (intent === 'favorites') {
-    return `Open saved listings at /favorites. Share a wishlist with /w/{token} when available. Help: ${helpHref('commerce')}`
+    return 'Your saved listings live in Favorites. From there you can reopen anything you hearted.'
   }
 
   if (intent === 'addresses') {
-    return `Manage delivery addresses at /addresses. Checkout asks for one if none is saved. Help: ${helpHref('commerce')}`
+    return 'Add or edit delivery addresses under Addresses. Checkout asks for one if none is saved yet.'
   }
 
   if (intent === 'wallet_buyer') {
-    return `Open your buyer wallet at /wallet. Seller payouts live under /vendor/wallet. Help: ${helpHref('commerce')}`
+    return 'Your buyer balance is in Wallet. Seller payouts live under Manage shop → Wallet.'
   }
 
   if (intent === 'payment_failed') {
-    return `If payment failed, retry from /payment/failure or the order. Try another method at /payment-methods, then return to /cart or /checkout. Help: ${helpHref('commerce')}`
+    return 'If payment didn’t go through, retry from the failure screen or the order. Try another saved method under Payment methods, then return to Cart or Checkout.'
   }
 
   if (intent === 'seller') {
     if (/\b(ads?|discount|boost)\b/.test(lower)) {
-      return 'Create shop ads at /vendor/ads or /vendor/ads/create. Manage discounts at /vendor/discounts. Seller help: /help/seller.'
+      return 'Create shop ads under Manage shop → Ads, and run discounts from Discounts. Seller help has step-by-step tips if you get stuck.'
     }
     if (/\b(wallet|payout)\b/.test(lower)) {
-      return 'Open the seller wallet at /vendor/wallet. Payout settings: /vendor/settings?section=payments. Seller help: /help/seller.'
+      return 'Open Manage shop → Wallet for balances and payouts. Keep bank details current under Settings → Payments.'
+    }
+    if (/\b(kyc|verif)\b/.test(lower)) {
+      return 'Finish Human verification, then open Create shop. Update KYC anytime under Manage shop → Settings → Verification. Seller help walks through the steps.'
+    }
+    if (/\b(delivery|ship|fulfill)\b/.test(lower)) {
+      return 'Manage fulfillment under Manage shop → Delivery and Orders — mark shipped and add tracking when you have it.'
     }
     return [
-      shopFact ? `${shopFact}.` : 'Create or open your shop at /create-my-shop (or /vendor/myshop).',
+      shopFact ? `${shopFact}.` : 'Open Manage shop for your hub — or Create shop (from Seller landing) if you don’t have one yet.',
       activeListings ? `${activeListings}.` : null,
-      stockFact ? `${stockFact}. Restock under /vendor/products.` : 'Keep stock updated so listings stay visible.',
-      'Orders /vendor/orders · wallet /vendor/wallet · ads /vendor/ads · seller help /help/seller.',
+      stockFact ? `${stockFact}. Restock under Products.` : 'Keep stock updated so listings stay visible.',
+      'From the hub you can handle Orders, Wallet, Ads, and Seller help.',
     ]
       .filter(Boolean)
       .join(' ')
   }
 
   if (intent === 'community_jobs') {
-    return 'Browse roles at /community/jobs, tailor your profile, and turn on Open to work if available. Help: ' + helpHref('community')
+    return 'Browse roles under Community → Jobs, tailor your profile, and turn on Open to work if it’s available.'
   }
 
   if (intent === 'community_network') {
     return [
       followFact ? `${followFact}.` : null,
       followerFact ? `${followerFact}.` : null,
-      'Grow your network at /community/network or /community/people — send connection requests and ask for warm intros. Help: ' +
-        helpHref('community'),
+      'Grow your circle in Community → Network (or People) — send requests and ask for warm intros.',
     ]
       .filter(Boolean)
       .join(' ')
   }
 
   if (intent === 'community_post') {
-    return 'Share a short professional update on /community (compose at /community/create). Add 1–2 hashtags and engage on others’ posts. Help: ' + helpHref('community')
+    return 'Share a short professional update on Community (compose from Create). Add 1–2 hashtags and engage on others’ posts.'
   }
 
   if (intent === 'community_events') {
-    return 'Browse /community/events or create one at /community/events/create. Help: ' + helpHref('community')
+    return 'Find or host gatherings under Community → Events.'
   }
 
   if (intent === 'community_groups') {
-    return 'Browse /community/groups or create at /community/group/create. Help: ' + helpHref('community')
+    return 'Join or start a group under Community → Groups.'
   }
 
   if (intent === 'community_pages') {
-    return 'Browse company pages at /community/companies or create at /community/company/create. Help: ' + helpHref('community')
+    return 'Browse company pages under Community → Companies, or create one from there.'
   }
 
   if (intent === 'community_stories') {
-    return 'Share stories at /community/stories. Boost a post via /community/ads. Help: ' + helpHref('community')
+    return 'Share a story under Community → Stories. You can boost a post from Community ads when you’re ready.'
+  }
+
+  if (intent === 'community_analytics') {
+    return 'Open Community → Analytics to see how your posts and reach are doing.'
+  }
+
+  if (intent === 'community_articles') {
+    return 'Open articles from Community when they’re published, or browse the feed for article posts.'
+  }
+
+  if (intent === 'following_shops') {
+    return 'Shops you follow live under Following. Open any shop from there to browse new arrivals.'
+  }
+
+  if (intent === 'group_order') {
+    return 'Group checkout and shared orders open from Orders when you’ve been invited. Each member can pay their part from the group order page.'
+  }
+
+  if (intent === 'try_on') {
+    return 'On supported listings, open Try-on or View in your room from the product page. If you don’t see it, that shop hasn’t enabled the preview yet.'
+  }
+
+  if (intent === 'contacts_invite') {
+    return 'Import contacts during onboarding or from Settings when offered. Share an invite link from Invite, and approve QR sign-in from the QR screen when you scan on another device.'
   }
 
   if (intent === 'chat_calls') {
-    return `Open call history at /chat/calls. Start audio or video from a conversation (/chat/call/{code}?type=audio|video). Help: ${helpHref('chat')}`
+    return 'Call history is under Chat → Calls. Start audio or video from any conversation header.'
   }
 
   if (intent === 'chat') {
     if (lower.includes('mute')) {
-      return `Open a conversation in /chat, tap the header menu, and choose Mute. Help: ${helpHref('chat')}`
+      return 'Open a conversation in Chat, tap the header menu, and choose Mute.'
     }
     if (lower.includes('group')) {
-      return `Open groups at /chat/groups — or start one from /chat. Help: ${helpHref('chat')}`
+      return 'Open Chat → Groups — or start one from the Chat inbox.'
     }
     return [
       chatFact ? `${chatFact}.` : null,
-      'Open /chat to message people. Groups /chat/groups · Calls /chat/calls. Help: ' + helpHref('chat'),
+      'Open Chat to message someone, or use Groups and Calls from the same inbox.',
     ]
       .filter(Boolean)
       .join(' ')
   }
 
   if (intent === 'class_media') {
-    return `Use /class/video, /class/audio, and /class/playlists — or open a program at /class. Help: ${helpHref('class')}`
+    return 'Class has Video, Audio, and Playlists tabs — or open any program from Class and enroll.'
   }
 
   if (intent === 'class') {
     if (lower.includes('play') || lower.includes('video') || lower.includes('audio')) {
-      return `For playback issues: refresh, check connection, try another browser/device, then reopen from /class (tabs /class/video and /class/audio). Help: ${helpHref('class')}`
+      return 'For playback issues: refresh, check your connection, try another browser or device, then reopen the lesson from Class.'
     }
     return [
       classFact ? `${classFact}.` : null,
       publishedClasses
         ? `Try these: ${publishedClasses.replace(/^Published classes:\s*/, '')}`
-        : 'Browse programs at /class and enroll from a class page.',
-      'Help: ' + helpHref('class'),
+        : 'Browse programs in Class and enroll from a class page.',
     ]
       .filter(Boolean)
       .join(' ')
@@ -1048,72 +1123,70 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
 
   if (intent === 'cowork') {
     if (lower.includes('camera') || lower.includes('mic')) {
-      return `Allow camera/mic in browser + system settings, then refresh the meeting. Join/host from /co-work. Help: ${helpHref('cowork')}`
+      return 'Allow camera and mic in browser and system settings, then refresh the meeting. Join or host from Co-Work.'
     }
     if (wantsScheduleMeeting(message)) {
       const draftFact = facts.find((f) => f.startsWith('Suggested meeting draft:'))
       if (draftFact) {
-        return `${draftFact.replace(/^Suggested meeting draft:\s*/, '')} Open /co-work/schedule to create it and share the code/link. Help: ${helpHref('cowork')}`
+        return `${draftFact.replace(/^Suggested meeting draft:\s*/, '')} Open Co-Work → Schedule to create it and share the code or link.`
       }
       return [
-        'To schedule a Co-Work meeting for tomorrow (or any time): open /co-work/schedule.',
-        'Use Create with AI — e.g. “team sync tomorrow at 11am” — then review title/time and create.',
-        'After creating, share the meeting code or /co-work/meeting/{code} link.',
+        'To schedule a Co-Work meeting, open Co-Work → Schedule.',
+        'Use Create with AI — e.g. “team sync tomorrow at 11am” — then review title and time and create.',
+        'After creating, share the meeting code or invite link.',
         meetingFact ? `${meetingFact}.` : null,
-        'Help: ' + helpHref('cowork'),
       ]
         .filter(Boolean)
         .join(' ')
     }
     if (lower.includes('join') || lower.includes('code')) {
-      return `On /co-work or /co-work/join, enter the meeting code to join. Ask the host if you don’t have a code. Help: ${helpHref('cowork')}`
+      return 'On Co-Work → Join, enter the meeting code. Ask the host if you don’t have one yet.'
     }
     return [
       meetingFact ? `${meetingFact}.` : 'No upcoming hosted meetings right now.',
-      'To schedule one, open /co-work/schedule (or host instantly from /co-work) and share the code/link. Help: ' +
-        helpHref('cowork'),
+      'To schedule one, open Co-Work → Schedule (or host instantly from Co-Work) and share the code or link.',
     ].join(' ')
   }
 
   if (intent === 'onboarding') {
-    return 'Sign in with OTP at /auth/sign-in, finish /auth/complete-profile, then explore the app. Selling continues at /create-my-shop after verification. Replay the welcome tour under Settings → About.'
+    return 'Sign in with a one-time code, finish your profile, then explore the app. Selling continues from Create shop after verification. You can replay the welcome tour under Settings → About.'
   }
 
   if (intent === 'legal') {
-    return 'Policies: /legal/about, /legal/terms, /legal/privacy, /legal/cookies, /legal/ads, /legal/shipping, /legal/payment, /legal/returns.'
+    return 'Policies live under Help → Policies — About us, Terms, Privacy, Cookies, Ads, Shipping & exchange, Payment, and Return & refund.'
   }
 
   if (intent === 'settings') {
-    return 'Update profile and alerts at /settings (sections under /settings/{account|notifications|privacy|…}). Help Center: /help'
+    return 'Update your profile and alerts under Settings — account, notifications, privacy, and more.'
   }
 
   switch (product) {
     case 'commerce':
       return [
         'I can help you shop, track orders, or checkout.',
-        freshPicks ? `Fresh picks: ${freshPicks.replace(/^Fresh marketplace picks:\s*/, '')}` : 'Browse / or /search.',
+        freshPicks ? `Fresh picks: ${freshPicks.replace(/^Fresh marketplace picks:\s*/, '')}` : 'Browse the marketplace or Search.',
         'Try: “buy a t-shirt”, “track my order”, or “apply a coupon”.',
       ].join(' ')
     case 'community':
-      return 'I can help with posting, networking, and jobs. Try: “what should I post?”, “grow my network”, or “find jobs”. Open /community.'
+      return 'I can help with posting, networking, and jobs. Try: “what should I post?”, “grow my network”, or “find jobs”.'
     case 'shop':
       return [
-        shopFact ? `${shopFact}.` : 'Create your shop at /create-my-shop.',
-        'Try: “manage new orders”, “low stock”, or “boost sales”. Hub: /vendor/myshop.',
+        shopFact ? `${shopFact}.` : 'Create your shop from Create shop when you’re ready.',
+        'Try: “manage new orders”, “low stock”, or “boost sales”. Your hub is Manage shop.',
       ].join(' ')
     case 'chat':
-      return 'I can help with messaging, mute, and groups. Open /chat — try: “start a chat” or “mute a conversation”.'
+      return 'I can help with messaging, mute, and groups. Open Chat — try: “start a chat” or “mute a conversation”.'
     case 'class':
       return [
         publishedClasses
           ? `Classes to explore: ${publishedClasses.replace(/^Published classes:\s*/, '')}`
-          : 'Browse /class to enroll.',
+          : 'Browse Class to enroll.',
         'Try: “enroll in a class” or “video won’t play”.',
       ].join(' ')
     case 'cowork':
-      return 'I can help schedule, host, or join Co-Work meetings and fix camera/mic. Try: “schedule a meeting for tomorrow at 11am”, “host a meeting”, or “join with code”. Open /co-work/schedule or /co-work.'
+      return 'I can help schedule, host, or join Co-Work meetings and fix camera/mic. Try: “schedule a meeting for tomorrow at 11am”, “host a meeting”, or “join with code”.'
     default:
-      return `I can help across Marketplace, Community, Chat, Class, Co-Work, and Manage shop. Ask a product question, or open ${help}.`
+      return 'I can help across Marketplace, Community, Chat, Class, Co-Work, and Manage shop. Ask a product question, or open Help anytime.'
   }
 }
 
@@ -2509,15 +2582,17 @@ Deno.serve(async (req) => {
           arr.findIndex((other) => other.href === link.href && other.label === link.label) === index,
       )
       const systemPrompt = [
-        'You are SHERPA — the in-app assistant for Marketplace, Community, Manage Shop, Chat, Class, and Co-Work.',
-        'Answer like a capable product expert: clear, warm, specific, and action-oriented (2–6 short sentences unless the user asks for detail).',
-        'Stay on the user’s intent. For shopping, recommend Matching marketplace listings and /search?q=…. Do NOT dump account/settings or unrelated order lists unless asked.',
+        'You are SHERPA — a warm shopping and product guide inside SHEconomy (Marketplace, Community, Manage Shop, Chat, Class, and Co-Work).',
+        'Sound helpful and human: short plain sentences, everyday words, no jargon or URL dumps.',
+        'Answer in 2–5 short sentences. Lead with the useful answer, then one clear next step.',
+        'Name screens the way members see them (Orders, Cart, Favorites, Manage shop, Community, Chat, Class, Co-Work). Deep links already carry the paths — do not paste raw URLs.',
+        'Stay on the user’s intent. For shopping, recommend Matching marketplace listings and Search. Do NOT dump account/settings or unrelated order lists unless asked.',
         'Use grounding facts for personalization. Never invent order numbers, stock, prices, meetings, or listings not in the facts.',
-        'Point to real in-app paths (/search, /listing/…, /orders, /cart, /community, /chat, /class, /co-work, /co-work/schedule, /co-work/join, /vendor/myshop, /create-my-shop, /settings, /help).',
+        'On a listing, stay on that product unless the user clearly asks to leave it.',
         'Prefer concrete next steps. Never ask for passwords or full payment card numbers.',
         languageDirective(context, body),
         scheduleRequested
-          ? 'The user wants to SCHEDULE a Co-Work meeting. Use the Suggested meeting draft fact. Tell them the drafted title/time and send them to /co-work/schedule (Create with AI). Do not reply that there are no upcoming meetings as the only answer.'
+          ? 'The user wants to SCHEDULE a Co-Work meeting. Use the Suggested meeting draft fact. Tell them the drafted title/time and send them to Co-Work → Schedule (Create with AI). Do not reply that there are no upcoming meetings as the only answer.'
           : '',
         `Detected intent: ${intent}.`,
         `Product focus: ${effectiveProduct}.`,
