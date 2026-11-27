@@ -122,66 +122,73 @@ function productPlaybook(product: AiProduct): string {
       return [
         'Marketplace playbook:',
         '- Buy flow: search (/search?q=) → listing → add to cart → /cart → /checkout → /orders.',
-        '- For “buy/find X”, recommend Matching marketplace listings and /search?q=X.',
-        '- Orders: status lives at /orders; returns start from order details when policy allows.',
+        '- Browse: /shops, /category/{slug}, /browse/{kind}; favorites /favorites; wishlist share /w/{token}.',
+        '- Account commerce: /addresses, /payment-methods, /wallet, /following.',
+        '- Orders at /orders; returns from order details when policy allows.',
+        '- Policies: /legal/shipping, /legal/payment, /legal/returns, /legal/about, /legal/terms, /legal/privacy, /legal/cookies, /legal/ads.',
+        '- Payment failed: retry via /payment/failure or order; other methods at /payment-methods.',
         '- Offers/coupons apply in cart; delivery estimates appear at checkout.',
         '- Never invent prices or stock — only use grounding listing matches.',
       ].join('\n')
     case 'community':
       return [
         'Community playbook:',
-        '- Feed: create posts, react, comment, follow hashtags at /community.',
-        '- Network: connect at /community/network; request warm intros from profiles.',
-        '- Jobs: browse /community/jobs; improve profile + open-to-work for better matches.',
-        '- Growth tips: post consistently, engage on others’ posts, complete profile sections.',
+        '- Feed: /community and /community/create; saved /community/saved.',
+        '- Network: /community/network and /community/people.',
+        '- Jobs: /community/jobs (create /community/jobs/create).',
+        '- Groups /community/groups; events /community/events; companies /community/companies.',
+        '- Stories /community/stories; boost via /community/ads.',
+        '- Analytics: /community/analytics.',
         'Create-post drafting (trained):',
-        '- When a member gives a short instruction like “Write about X”, expand into a complete ready-to-publish post.',
-        '- Never echo the instruction. Write 2–4 short paragraphs: hook, insight/story, and a question or call to action.',
-        '- Use attached photos, videos, and links as the subject; keep at most 2 hashtags; no markdown fences.',
-        '- Tone: warm, professional, women-led community — specific over generic.',
+        '- Expand short instructions into a ready-to-publish post (2–4 short paragraphs).',
+        '- Never echo the instruction; warm professional tone; at most 2 hashtags; no markdown fences.',
       ].join('\n')
     case 'shop':
       return [
         'Manage shop playbook:',
-        '- Hub: /vendor/myshop → listings, orders, policies, payouts.',
-        '- New listing: create listing with clear title, photos, price, stock, shipping/return policy.',
-        '- Fulfillment: open seller orders, mark shipped, add tracking when available.',
-        '- Growth: restock low inventory, improve titles, run offers, reply to buyer questions fast.',
+        '- Hub /vendor/myshop; create shop /create-my-shop after verification.',
+        '- Catalog: /vendor/products, /vendor/create-listing, /vendor/bundles.',
+        '- Orders /vendor/orders; delivery /vendor/delivery.',
+        '- Growth: /vendor/analytics, /vendor/customers, /vendor/reviews, /vendor/ads, /vendor/discounts.',
+        '- Money: /vendor/wallet; payouts /vendor/settings?section=payments; KYC ?section=verification.',
+        '- Policies via /vendor/settings?section={warehouse|shipping|returns|general}.',
+        '- Seller help: /help/seller.',
         '- Visibility: inactive, zero stock, or incomplete listings may be hidden from browse.',
       ].join('\n')
     case 'chat':
       return [
         'Chat playbook:',
-        '- Start chats from /chat or a profile Message button.',
-        '- Mute from conversation header menu; groups support multiple members.',
-        '- Media: photos/files may fail on size/network — retry or compress.',
-        '- Thread tools: read receipts, disappearing messages when enabled.',
+        '- Inbox /chat; groups /chat/groups; calls /chat/calls.',
+        '- Start audio/video at /chat/call/{code}?type=audio|video.',
+        '- Mute / leave / report from the conversation header menu.',
+        '- Media may fail on size/network — retry or compress.',
       ].join('\n')
     case 'class':
       return [
         'Class playbook:',
-        '- Browse /class → open program → enroll → watch lessons.',
+        '- Browse /class → /class/{slug} → enroll → watch lessons.',
+        '- Tabs: /class/video, /class/audio, /class/playlists.',
         '- Playback issues: refresh, check connection, try another browser/device, re-open lesson.',
-        '- Enrollments appear in Classes; new lessons notify based on alert preferences.',
-        '- Certificates depend on the program — check the class details page.',
+        '- Class alerts: /settings/class. Certificates depend on the program details page.',
       ].join('\n')
     case 'cowork':
       return [
         'Co-Work playbook (support-trained):',
-        '- Schedule a meeting: open /co-work/schedule (Create with AI accepts natural language like “weekly sync tomorrow 11am”).',
-        '- Instant host: start from /co-work, then share the meeting code or /co-work/meeting/{code} link.',
-        '- Join: /co-work/join or enter the code on /co-work; allow camera/mic in browser + system settings.',
-        '- After scheduling: copy code/link, invite guests, open lobby when it is time.',
+        '- Schedule /co-work/schedule (Create with AI accepts natural language).',
+        '- Instant host from /co-work; join /co-work/join; meetings list /co-work/meetings.',
+        '- Live /co-work/meeting/{code}/live; recordings /co-work/recording/{token}.',
+        '- Co-Work chat /co-work/chat (separate from /chat).',
         '- AV blocked: grant permissions, refresh, try another browser/device/headset.',
-        '- Upcoming hosted meetings appear in grounding facts — never invent codes or times.',
-        '- When the user asks to schedule/book a meeting, guide them to /co-work/schedule with a concrete draft (title, time, next step). Do NOT only say “no upcoming meetings”.',
+        '- Never invent meeting codes or times missing from grounding facts.',
+        '- When asked to schedule, guide to /co-work/schedule with a concrete draft — do not only say “no upcoming meetings”.',
       ].join('\n')
     default:
       return [
         'Account playbook:',
-        '- Settings: /settings for profile, notifications, payment methods.',
-        '- Help: /help for FAQs and support tickets across products.',
-        '- For shopping questions, switch to Marketplace guidance.',
+        '- Settings /settings and /settings/{account|security|notifications|privacy|about|…}.',
+        '- Onboarding: /auth/sign-in → /auth/complete-profile; selling → /create-my-shop.',
+        '- Buyer tools: /favorites, /addresses, /payment-methods, /wallet, /orders.',
+        '- Help /help and /help/seller; alerts /notifications; blog /blog.',
       ].join('\n')
   }
 }
@@ -191,36 +198,81 @@ type Intent =
   | 'orders'
   | 'returns'
   | 'cart'
+  | 'favorites'
+  | 'addresses'
+  | 'wallet_buyer'
+  | 'payment_failed'
   | 'seller'
   | 'community_network'
   | 'community_jobs'
   | 'community_post'
+  | 'community_events'
+  | 'community_groups'
+  | 'community_pages'
+  | 'community_stories'
   | 'chat'
+  | 'chat_calls'
   | 'class'
+  | 'class_media'
   | 'cowork'
   | 'settings'
+  | 'onboarding'
+  | 'legal'
   | 'general'
 
 function detectIntent(product: AiProduct, message: string): Intent {
   const lower = message.toLowerCase()
+  // Navigation intents before shopping extraction ("find events" must not become product search).
+  if (/\b(events?|rsvp)\b/.test(lower) && (product === 'community' || /\b(community|find (?:an? )?events?)\b/.test(lower))) {
+    return 'community_events'
+  }
+  if (
+    /\b(groups?|community group)\b/.test(lower) &&
+    (product === 'community' || /\bcommunity\b/.test(lower) || /\b(join|browse|create).{0,20}\bgroup/.test(lower))
+  ) {
+    return 'community_groups'
+  }
+  if (/\b(compan(?:y|ies)|company page)\b/.test(lower) && (product === 'community' || /\bcommunity\b/.test(lower))) {
+    return 'community_pages'
+  }
+  if (/\b(stor(?:y|ies)|boost (?:post|ad)|community ads?)\b/.test(lower)) return 'community_stories'
+  if (
+    /\b(meetings? list|my meetings|\/co-work\/meetings|upcoming meetings)\b/.test(lower) ||
+    (product === 'cowork' && /\bmeetings?\b/.test(lower) && !/\bschedule\b/.test(lower))
+  ) {
+    return 'cowork'
+  }
+  if (/\b(shop ads?|create (?:an? )?(?:shop )?ad|vendor\/ads|run (?:an? )?ad|seller discounts?)\b/.test(lower)) {
+    return 'seller'
+  }
   if (extractShoppingQuery(message)) return 'shop_buy'
   if (/\b(return|refund|exchange)\b/.test(lower)) return 'returns'
-  if (/\b(cart|checkout|coupon|offer|discount)\b/.test(lower)) return 'cart'
+  if (/\b(favorites?|wishlist|saved (?:items?|listings?))\b/.test(lower)) return 'favorites'
+  if (/\b(addresses?|shipping address|delivery address)\b/.test(lower)) return 'addresses'
+  if (/\b(buyer wallet|my wallet|wallet balance)\b/.test(lower) && !/\b(seller|vendor|payout)\b/.test(lower)) {
+    return 'wallet_buyer'
+  }
+  if (/\b(payment failed|pay(?:ment)? (?:failed|failure|declined)|razorpay|payu)\b/.test(lower)) {
+    return 'payment_failed'
+  }
+  if (/\b(cart|checkout|coupon|offer|discount)\b/.test(lower) && !/\b(vendor|seller|manage shop)\b/.test(lower)) {
+    return 'cart'
+  }
   if (
     /\b(orders?|tracking|track|delivery|shipment|shipping)\b/.test(lower) &&
-    !/\b(buy|purchase|looking for|want to buy)\b/.test(lower)
+    !/\b(buy|purchase|looking for|want to buy|seller|vendor|manage shop)\b/.test(lower)
   ) {
     return 'orders'
   }
   if (
-    /\b(manage shop|seller|low stock|payout|inventory|listing title|fulfill|ship order|boost sales)\b/.test(
+    /\b(manage shop|seller wallet|vendor|low stock|payout|inventory|listing title|fulfill|ship order|boost sales|create listing|kyc|seller ads?|bundles?)\b/.test(
       lower,
     ) ||
-    (product === 'shop' && /\b(stock|listing|order|policy|payout|sales)\b/.test(lower))
+    (product === 'shop' && /\b(stock|listing|order|policy|payout|sales|wallet|ads?)\b/.test(lower))
   ) {
     return 'seller'
   }
-  if (/\b(job|jobs|hiring|open to work|apply|role)\b/.test(lower) || product === 'community' && lower.includes('job')) {
+  if (/\b(job|jobs|hiring|open to work|apply|role)\b/.test(lower) || (product === 'community' && lower.includes('job'))) {
     return 'community_jobs'
   }
   if (
@@ -235,11 +287,17 @@ function detectIntent(product: AiProduct, message: string): Intent {
   ) {
     return 'community_post'
   }
+  if (/\b((audio|video)\s*call|start a call|call history)\b/.test(lower) || (product === 'chat' && /\bcalls?\b/.test(lower))) {
+    return 'chat_calls'
+  }
   if (
     /\b(chat|message|mute|dm|group chat|read receipt|disappearing)\b/.test(lower) ||
     (product === 'chat' && lower.length > 0)
   ) {
     if (product === 'chat' || /\b(chat|message|mute|dm|group)\b/.test(lower)) return 'chat'
+  }
+  if (/\b(playlist|class\/video|class\/audio)\b/.test(lower) || (product === 'class' && /\b(video|audio|playlist)\b/.test(lower))) {
+    return 'class_media'
   }
   if (
     /\b(class|enroll|course|lesson|playback|certificate|program)\b/.test(lower) ||
@@ -255,27 +313,47 @@ function detectIntent(product: AiProduct, message: string): Intent {
   ) {
     if (
       product === 'cowork' ||
-      /\b(meeting|co-work|cowork|camera|mic|host|schedule|session|call|sync)\b/.test(lower)
+      /\b(meeting|co-work|cowork|camera|mic|host|schedule|session|sync)\b/.test(lower)
     ) {
       return 'cowork'
     }
   }
+  if (/\b(onboard|sign[\s-]?up|sign[\s-]?in|complete profile|welcome tour)\b/.test(lower)) return 'onboarding'
+  if (/\b(legal|privacy policy|terms of use|cookies|interest-based ads)\b/.test(lower)) return 'legal'
   if (/\b(settings?|notification|password|profile|payment methods?)\b/.test(lower)) return 'settings'
   return 'general'
 }
 
 function resolveEffectiveProduct(product: AiProduct, intent: Intent, shoppingQuery: string | null): AiProduct {
-  if (shoppingQuery || intent === 'shop_buy' || intent === 'orders' || intent === 'returns' || intent === 'cart') {
+  if (
+    shoppingQuery ||
+    intent === 'shop_buy' ||
+    intent === 'orders' ||
+    intent === 'returns' ||
+    intent === 'cart' ||
+    intent === 'favorites' ||
+    intent === 'addresses' ||
+    intent === 'wallet_buyer' ||
+    intent === 'payment_failed'
+  ) {
     return 'commerce'
   }
   if (intent === 'seller') return 'shop'
-  if (intent === 'community_network' || intent === 'community_jobs' || intent === 'community_post') {
+  if (
+    intent === 'community_network' ||
+    intent === 'community_jobs' ||
+    intent === 'community_post' ||
+    intent === 'community_events' ||
+    intent === 'community_groups' ||
+    intent === 'community_pages' ||
+    intent === 'community_stories'
+  ) {
     return 'community'
   }
-  if (intent === 'chat') return 'chat'
-  if (intent === 'class') return 'class'
+  if (intent === 'chat' || intent === 'chat_calls') return 'chat'
+  if (intent === 'class' || intent === 'class_media') return 'class'
   if (intent === 'cowork') return 'cowork'
-  if (intent === 'settings') return 'account'
+  if (intent === 'settings' || intent === 'onboarding' || intent === 'legal') return 'account'
   return product
 }
 
@@ -288,25 +366,30 @@ function productDeepLinks(product: AiProduct, searchQuery?: string | null): Deep
           : [{ label: 'Marketplace', href: '/' }]),
         { label: 'Orders', href: '/orders' },
         { label: 'Cart', href: '/cart' },
+        { label: 'Favorites', href: '/favorites' },
         { label: 'Help Center', href: helpHref(product) },
       ]
     case 'community':
       return [
+        { label: 'Feed', href: '/community' },
         { label: 'Network', href: '/community/network' },
         { label: 'Jobs', href: '/community/jobs' },
-        { label: 'Connections FAQ', href: '/help?product=community&article=connections' },
+        { label: 'Events', href: '/community/events' },
+        { label: 'Groups', href: '/community/groups' },
         { label: 'Help Center', href: helpHref(product) },
       ]
     case 'chat':
       return [
         { label: 'Messages', href: '/chat' },
-        { label: 'Start chat FAQ', href: '/help?product=chat&article=start-chat' },
+        { label: 'Groups', href: '/chat/groups' },
+        { label: 'Calls', href: '/chat/calls' },
         { label: 'Help Center', href: helpHref(product) },
       ]
     case 'class':
       return [
         { label: 'Classes', href: '/class' },
-        { label: 'Enroll FAQ', href: '/help?product=class&article=enroll-class' },
+        { label: 'Video', href: '/class/video' },
+        { label: 'Playlists', href: '/class/playlists' },
         { label: 'Help Center', href: helpHref(product) },
       ]
     case 'cowork':
@@ -314,19 +397,23 @@ function productDeepLinks(product: AiProduct, searchQuery?: string | null): Deep
         { label: 'Schedule meeting', href: '/co-work/schedule' },
         { label: 'Co-Work home', href: '/co-work' },
         { label: 'Join with code', href: '/co-work/join' },
-        { label: 'Schedule FAQ', href: '/help?product=cowork&article=schedule-meeting' },
+        { label: 'Meetings', href: '/co-work/meetings' },
         { label: 'Help Center', href: helpHref(product) },
       ]
     case 'shop':
       return [
         { label: 'My shop', href: '/vendor/myshop' },
-        { label: 'Seller orders FAQ', href: '/help?product=shop&article=seller-orders' },
-        { label: 'Help Center', href: helpHref(product) },
+        { label: 'Listings', href: '/vendor/products' },
+        { label: 'Seller orders', href: '/vendor/orders' },
+        { label: 'Seller wallet', href: '/vendor/wallet' },
+        { label: 'Seller help', href: '/help/seller' },
       ]
     default:
       return [
         { label: 'Settings', href: '/settings' },
-        { label: 'Help Center', href: helpHref(product) },
+        { label: 'Favorites', href: '/favorites' },
+        { label: 'Addresses', href: '/addresses' },
+        { label: 'Help Center', href: '/help' },
       ]
   }
 }
@@ -846,19 +933,41 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
   }
 
   if (intent === 'returns') {
-    return `Most returns start from Order details when the shop’s policy allows it. Check Shipping & policies on the listing, then open /orders. Help: ${helpHref('commerce')}`
+    return `Most returns start from Order details when the shop’s policy allows it. Read Return & refund at /legal/returns, Shipping & exchange at /legal/shipping, then open /orders. Help: ${helpHref('commerce')}`
   }
 
   if (intent === 'cart') {
     return `Open /cart to review quantities and offers, apply coupons, then checkout with address + payment. Help: ${helpHref('commerce')}`
   }
 
+  if (intent === 'favorites') {
+    return `Open saved listings at /favorites. Share a wishlist with /w/{token} when available. Help: ${helpHref('commerce')}`
+  }
+
+  if (intent === 'addresses') {
+    return `Manage delivery addresses at /addresses. Checkout asks for one if none is saved. Help: ${helpHref('commerce')}`
+  }
+
+  if (intent === 'wallet_buyer') {
+    return `Open your buyer wallet at /wallet. Seller payouts live under /vendor/wallet. Help: ${helpHref('commerce')}`
+  }
+
+  if (intent === 'payment_failed') {
+    return `If payment failed, retry from /payment/failure or the order. Try another method at /payment-methods, then return to /cart or /checkout. Help: ${helpHref('commerce')}`
+  }
+
   if (intent === 'seller') {
+    if (/\b(ads?|discount|boost)\b/.test(lower)) {
+      return 'Create shop ads at /vendor/ads or /vendor/ads/create. Manage discounts at /vendor/discounts. Seller help: /help/seller.'
+    }
+    if (/\b(wallet|payout)\b/.test(lower)) {
+      return 'Open the seller wallet at /vendor/wallet. Payout settings: /vendor/settings?section=payments. Seller help: /help/seller.'
+    }
     return [
       shopFact ? `${shopFact}.` : 'Create or open your shop at /create-my-shop (or /vendor/myshop).',
       activeListings ? `${activeListings}.` : null,
-      stockFact ? `${stockFact}. Restock under Listings.` : 'Keep stock updated so listings stay visible.',
-      'Manage orders, policies, and payouts from the seller hub. Help: ' + helpHref('shop'),
+      stockFact ? `${stockFact}. Restock under /vendor/products.` : 'Keep stock updated so listings stay visible.',
+      'Orders /vendor/orders · wallet /vendor/wallet · ads /vendor/ads · seller help /help/seller.',
     ]
       .filter(Boolean)
       .join(' ')
@@ -872,7 +981,7 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
     return [
       followFact ? `${followFact}.` : null,
       followerFact ? `${followerFact}.` : null,
-      'Grow your network at /community/network — send connection requests and ask for warm intros. Help: ' +
+      'Grow your network at /community/network or /community/people — send connection requests and ask for warm intros. Help: ' +
         helpHref('community'),
     ]
       .filter(Boolean)
@@ -880,7 +989,27 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
   }
 
   if (intent === 'community_post') {
-    return 'Share a short professional update on /community: a win, tip, or question. Add 2–3 hashtags and engage on others’ posts. Help: ' + helpHref('community')
+    return 'Share a short professional update on /community (compose at /community/create). Add 1–2 hashtags and engage on others’ posts. Help: ' + helpHref('community')
+  }
+
+  if (intent === 'community_events') {
+    return 'Browse /community/events or create one at /community/events/create. Help: ' + helpHref('community')
+  }
+
+  if (intent === 'community_groups') {
+    return 'Browse /community/groups or create at /community/group/create. Help: ' + helpHref('community')
+  }
+
+  if (intent === 'community_pages') {
+    return 'Browse company pages at /community/companies or create at /community/company/create. Help: ' + helpHref('community')
+  }
+
+  if (intent === 'community_stories') {
+    return 'Share stories at /community/stories. Boost a post via /community/ads. Help: ' + helpHref('community')
+  }
+
+  if (intent === 'chat_calls') {
+    return `Open call history at /chat/calls. Start audio or video from a conversation (/chat/call/{code}?type=audio|video). Help: ${helpHref('chat')}`
   }
 
   if (intent === 'chat') {
@@ -888,20 +1017,23 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
       return `Open a conversation in /chat, tap the header menu, and choose Mute. Help: ${helpHref('chat')}`
     }
     if (lower.includes('group')) {
-      return `Start or open a group from /chat — groups support multiple members. Help: ${helpHref('chat')}`
+      return `Open groups at /chat/groups — or start one from /chat. Help: ${helpHref('chat')}`
     }
     return [
       chatFact ? `${chatFact}.` : null,
-      'Open /chat to message people, start a conversation, or manage mute/media from the thread. Help: ' +
-        helpHref('chat'),
+      'Open /chat to message people. Groups /chat/groups · Calls /chat/calls. Help: ' + helpHref('chat'),
     ]
       .filter(Boolean)
       .join(' ')
   }
 
+  if (intent === 'class_media') {
+    return `Use /class/video, /class/audio, and /class/playlists — or open a program at /class. Help: ${helpHref('class')}`
+  }
+
   if (intent === 'class') {
     if (lower.includes('play') || lower.includes('video') || lower.includes('audio')) {
-      return `For playback issues: refresh, check connection, try another browser/device, then reopen the lesson from /class. Help: ${helpHref('class')}`
+      return `For playback issues: refresh, check connection, try another browser/device, then reopen from /class (tabs /class/video and /class/audio). Help: ${helpHref('class')}`
     }
     return [
       classFact ? `${classFact}.` : null,
@@ -943,8 +1075,16 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
     ].join(' ')
   }
 
+  if (intent === 'onboarding') {
+    return 'Sign in with OTP at /auth/sign-in, finish /auth/complete-profile, then explore the app. Selling continues at /create-my-shop after verification. Replay the welcome tour under Settings → About.'
+  }
+
+  if (intent === 'legal') {
+    return 'Policies: /legal/about, /legal/terms, /legal/privacy, /legal/cookies, /legal/ads, /legal/shipping, /legal/payment, /legal/returns.'
+  }
+
   if (intent === 'settings') {
-    return 'Update profile, notifications, and payment methods at /settings. Help Center: /help'
+    return 'Update profile and alerts at /settings (sections under /settings/{account|notifications|privacy|…}). Help Center: /help'
   }
 
   switch (product) {
