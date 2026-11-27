@@ -71,7 +71,14 @@ export function CommerceDesktopFooter() {
           </YStack>
 
           {COMMERCE_FOOTER_COLUMNS.map((column) => (
-            <YStack key={column.title} flexBasis={140} flexGrow={1} flexShrink={1} minWidth={130} gap="$3">
+            <YStack
+              key={column.title}
+              flexBasis={column.title === 'Policies' ? 160 : 130}
+              flexGrow={1}
+              flexShrink={1}
+              minWidth={column.title === 'Policies' ? 150 : 120}
+              gap="$3"
+            >
               <Text fontWeight="700" fontSize={13} letterSpacing={0.4} color={ui.text}>
                 {column.title}
               </Text>

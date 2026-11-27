@@ -63,6 +63,9 @@ export const COMMERCE_FOOTER_COLUMNS: { title: string; links: NavLinkItem[] }[] 
       { href: `${appRoutes.help}?tab=contact` as Href, label: 'Contact us' },
       { href: helpHref('commerce') as Href, label: 'Buying help' },
       { href: helpHref('chat', 'chat-safety') as Href, label: 'Safety' },
+      { href: appRoutes.legalShipping, label: 'Shipping & exchange' },
+      { href: appRoutes.legalPayment, label: 'Payment policy' },
+      { href: appRoutes.legalReturns, label: 'Return & refund' },
       { href: appRoutes.settingsSection('privacy'), label: 'Privacy settings' },
       { href: appRoutes.settings, label: 'Account settings' },
       { href: commerceRoutes.paymentMethods, label: 'Payment methods' },
@@ -75,7 +78,7 @@ export const COMMERCE_FOOTER_COLUMNS: { title: string; links: NavLinkItem[] }[] 
       { href: appRoutes.legalTerms, label: 'Terms of use' },
       { href: appRoutes.legalPrivacy, label: 'Privacy policy' },
       { href: appRoutes.legalShipping, label: 'Shipping & exchange' },
-      { href: appRoutes.legalPayment, label: 'Payment' },
+      { href: appRoutes.legalPayment, label: 'Payment policy' },
       { href: appRoutes.legalReturns, label: 'Return & refund' },
       { href: appRoutes.legalCookies, label: 'Cookies' },
       { href: appRoutes.legalAds, label: 'Interest-based ads' },
@@ -83,13 +86,14 @@ export const COMMERCE_FOOTER_COLUMNS: { title: string; links: NavLinkItem[] }[] 
   },
 ]
 
-/** Compact legal bar under the footer columns — full set lives in Policies. */
+/** Always-visible legal bar — keep marketplace policies here so they don’t rely on column wrap. */
 export const COMMERCE_FOOTER_LEGAL: NavLinkItem[] = [
   { href: appRoutes.legalAbout, label: 'About us' },
-  { href: appRoutes.legalTerms, label: 'Terms' },
+  { href: appRoutes.legalTerms, label: 'Terms of use' },
   { href: appRoutes.legalPrivacy, label: 'Privacy' },
-  { href: appRoutes.legalShipping, label: 'Shipping' },
+  { href: appRoutes.legalShipping, label: 'Shipping & exchange' },
   { href: appRoutes.legalPayment, label: 'Payment' },
-  { href: appRoutes.legalReturns, label: 'Returns' },
+  { href: appRoutes.legalReturns, label: 'Return & refund' },
   { href: appRoutes.legalCookies, label: 'Cookies' },
+  { href: appRoutes.legalAds, label: 'Interest-based ads' },
 ]
