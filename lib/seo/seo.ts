@@ -215,10 +215,14 @@ const ROUTE_RULES: RouteRule[] = [
       description: 'Get help with orders, shops, accounts, and everything SHEconomy.',
     },
   },
+  { path: '/legal/about', seo: { title: 'About Us' } },
   { path: '/legal/terms', seo: { title: 'Terms of Service' } },
   { path: '/legal/privacy', seo: { title: 'Privacy Policy' } },
   { path: '/legal/cookies', seo: { title: 'Cookie Policy' } },
   { path: '/legal/ads', seo: { title: 'Advertising Policy' } },
+  { path: '/legal/shipping', seo: { title: 'Shipping & Exchange Policy' } },
+  { path: '/legal/payment', seo: { title: 'Payment Policy' } },
+  { path: '/legal/returns', seo: { title: 'Return & Refund Policy' } },
 ]
 
 // Longest prefix first so `/community/post` beats `/community`.

@@ -1,6 +1,12 @@
 /** Official product name — always "SHEconomy" in user-facing copy. */
 export const BRAND_NAME = 'SHEconomy' as const
 
+/** Legal operator of the SHEconomy platform. */
+export const LEGAL_ENTITY_NAME = 'SHEconomy Pvt Ltd' as const
+
+/** Technical partner of SHEconomy Pvt Ltd — platform engineering and infrastructure. */
+export const TECHNICAL_PARTNER_NAME = 'Ampersand Media Maker Pvt Ltd' as const
+
 /** In-app assistant. The marketplace brand stays SHEconomy. */
 export const AI_NAME = 'SHERPA' as const
 

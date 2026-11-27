@@ -31,10 +31,14 @@ export const STATIC_SITEMAP_PATHS = [
   '/shops',
   '/community',
   '/help',
+  '/legal/about',
   '/legal/terms',
   '/legal/privacy',
   '/legal/cookies',
   '/legal/ads',
+  '/legal/shipping',
+  '/legal/payment',
+  '/legal/returns',
 ]
 
 export type SitemapEntry = {

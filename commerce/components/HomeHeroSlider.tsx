@@ -29,7 +29,7 @@ export type HomeHeroSlideAction = {
 }
 
 export type HomeHeroSlide = {
-  id: keyof HomeHeroImageSet | 'sell' | 'app'
+  id: Exclude<keyof HomeHeroImageSet, 'categoryHref'> | 'sell' | 'app'
   eyebrow: string
   title: string
   subtitle: string
@@ -54,6 +54,9 @@ const EMPTY_HERO_IMAGES: HomeHeroImageSet = {
   digital: [],
   trending: [],
   sell: [],
+  categories: [],
+  products: [],
+  categoryHref: null,
 }
 
 export function buildHomeHeroSlides(
@@ -66,19 +69,48 @@ export function buildHomeHeroSlides(
   },
 ): HomeHeroSlide[] {
   const images = options?.images ?? EMPTY_HERO_IMAGES
+  const slides: HomeHeroSlide[] = []
 
-  const slides: HomeHeroSlide[] = [
-    {
-      id: 'shops',
-      eyebrow: 'Curated marketplace',
-      title: 'Discover women-led shops',
-      subtitle: `${formatCount(stats.shops_with_listings)} unique storefronts on ${BRAND_NAME}`,
-      cta: 'Shop now',
-      href: commerceRoutes.shops,
+  // Lead with category + product promo art so the home hero feels like a campaign.
+  if (images.categories.length > 0) {
+    slides.push({
+      id: 'categories',
+      eyebrow: 'Shop by category',
+      title: 'Browse what you love',
+      subtitle: `Handpicked aisles with ${formatCount(stats.total_active_listings)} products from women-led shops`,
+      cta: 'Explore categories',
+      href: (images.categoryHref ?? commerceRoutes.browse('featured')) as Href,
       gradient: 'brand',
-      images: images.shops,
-    },
-  ]
+      images: images.categories,
+    })
+  }
+
+  if (images.products.length > 0) {
+    slides.push({
+      id: 'products',
+      eyebrow: 'Featured products',
+      title: 'Fresh picks for you',
+      subtitle:
+        stats.total_featured_listings > 0
+          ? `${formatCount(stats.total_featured_listings)} featured finds ready to add to cart`
+          : `Standout products from ${BRAND_NAME} sellers`,
+      cta: 'Shop products',
+      href: commerceRoutes.browse('featured'),
+      gradient: 'brandSubtle',
+      images: images.products,
+    })
+  }
+
+  slides.push({
+    id: 'shops',
+    eyebrow: 'Curated marketplace',
+    title: 'Discover women-led shops',
+    subtitle: `${formatCount(stats.shops_with_listings)} unique storefronts on ${BRAND_NAME}`,
+    cta: 'Shop now',
+    href: commerceRoutes.shops,
+    gradient: 'brand',
+    images: images.shops,
+  })
 
   if (options?.includeAppSlide) {
     slides.push({
@@ -89,7 +121,11 @@ export function buildHomeHeroSlides(
       cta: 'Get the app',
       href: commerceRoutes.home,
       gradient: 'brandSubtle',
-      images: images.trending.length ? images.trending : images.shops,
+      images: images.products.length
+        ? images.products
+        : images.trending.length
+          ? images.trending
+          : images.shops,
       actions: [
         { label: 'App Store', url: IOS_APP_STORE_URL, tone: 'light' },
         { label: 'Google Play', url: ANDROID_PLAY_STORE_URL, tone: 'outline' },

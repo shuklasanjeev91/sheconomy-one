@@ -92,6 +92,9 @@ const EMPTY_HERO_IMAGES: HomeHeroImageSet = {
   digital: [],
   trending: [],
   sell: [],
+  categories: [],
+  products: [],
+  categoryHref: null,
 }
 
 /**

@@ -5,7 +5,7 @@ import { Platform } from 'react-native'
 import { RegionPreferencesTrigger } from '~/components/locale'
 import { AppLink } from '~/components/navigation/AppLink'
 import { Icons, Text, XStack, YStack } from '~/components/ui'
-import { BRAND_NAME, BRAND_SOCIAL } from '~/config/brand'
+import { BRAND_NAME, BRAND_SOCIAL, LEGAL_ENTITY_NAME, TECHNICAL_PARTNER_NAME } from '~/config/brand'
 import { NavLogo } from '~/components/navigation/NavLogo'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -61,8 +61,8 @@ export function CommerceDesktopFooter() {
           <YStack flexBasis={200} flexGrow={1} flexShrink={1} minWidth={180} gap="$3" paddingRight="$4">
             <NavLogo href={commerceRoutes.home} />
             <Text color={ui.textSecondary} fontSize={13} lineHeight={20} maxWidth={260}>
-              Discover independent shops, buy with confidence, and grow your business on{' '}
-              {BRAND_NAME}.
+              Women-first marketplace and community operated by {LEGAL_ENTITY_NAME}. Technical
+              partner: {TECHNICAL_PARTNER_NAME}.
             </Text>
             <XStack gap="$2" marginTop="$1">
               <FooterSocial icon={Icons.Instagram} label="Instagram" href={BRAND_SOCIAL.instagram} />
@@ -113,7 +113,7 @@ export function CommerceDesktopFooter() {
         <XStack flex={1} minWidth={220} alignItems="center" gap="$3" flexWrap="wrap">
           <RegionPreferencesTrigger variant="footerBar" />
           <Text fontSize={12} color={barMuted}>
-            © {new Date().getFullYear()} {BRAND_NAME}
+            © {new Date().getFullYear()} {BRAND_NAME} · {LEGAL_ENTITY_NAME}
           </Text>
         </XStack>
 

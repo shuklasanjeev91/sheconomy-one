@@ -21,10 +21,14 @@ export const appRoutes = {
   helpSeller: '/help/seller' as Href,
   helpProduct: (product: string) =>
     `/help?product=${encodeURIComponent(product)}` as Href,
+  legalAbout: '/legal/about' as Href,
   legalTerms: '/legal/terms' as Href,
   legalPrivacy: '/legal/privacy' as Href,
   legalCookies: '/legal/cookies' as Href,
   legalAds: '/legal/ads' as Href,
+  legalShipping: '/legal/shipping' as Href,
+  legalPayment: '/legal/payment' as Href,
+  legalReturns: '/legal/returns' as Href,
   cart: '/cart' as Href,
   checkout: '/checkout' as Href,
   /** Unified omnibox results — optional `scope`: all | listings | shops | people | …; `mode`: ai */

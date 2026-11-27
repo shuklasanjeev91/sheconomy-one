@@ -23,6 +23,7 @@ import { isStorefrontCategoryVisible } from '~/commerce/lib/category-visibility'
 import { ACTIVE_LISTING_FILTER } from '~/commerce/lib/listing-visibility'
 import { formatShopLocation, normalizeShopAddress } from '~/commerce/lib/shop-location'
 import { supabase } from '~/lib/supabase/client'
+import { commerceRoutes } from '~/lib/routes'
 
 import { BRAND_NAME } from '~/config/brand'
 
@@ -508,6 +509,12 @@ export type HomeHeroImageSet = {
   digital: string[]
   trending: string[]
   sell: string[]
+  /** Curated category artwork for the promotional categories hero slide. */
+  categories: string[]
+  /** Featured / trending product photos for the promotional products hero slide. */
+  products: string[]
+  /** Deep-link for the categories slide (first category with artwork). */
+  categoryHref: string | null
 }
 
 export type HomeBootstrapData = {
@@ -1414,38 +1421,78 @@ function shopLogoUrls(items: ShopSummary[], limit = 6): string[] {
   return urls
 }
 
+function categoryImageUrls(items: CategorySummary[], limit = 6): string[] {
+  const urls: string[] = []
+  for (const category of items) {
+    const url = category.category_image_url
+    if (url && !urls.includes(url)) urls.push(url)
+    if (urls.length >= limit) break
+  }
+  return urls
+}
+
+function firstCategoryHref(items: CategorySummary[]): string | null {
+  for (const category of items) {
+    if (!category.category_image_url) continue
+    const slug = getCategorySlug(category)
+    if (slug) return String(commerceRoutes.category(slug))
+  }
+  const fallback = items[0]
+  if (!fallback) return null
+  const slug = getCategorySlug(fallback)
+  return slug ? String(commerceRoutes.category(slug)) : null
+}
+
 function heroImagesFromFeeds(input: {
   shops: ShopSummary[]
   physical: ListingSummary[]
   digital: ListingSummary[]
   trending: ListingSummary[]
+  categories: CategorySummary[]
+  featured: ListingSummary[]
 }): HomeHeroImageSet {
   const shops = shopLogoUrls(input.shops, 6)
   const physical = listingImageUrls(input.physical, 6)
   const digital = listingImageUrls(input.digital, 6)
   const trending = listingImageUrls(input.trending, 6)
+  const categories = categoryImageUrls(input.categories, 6)
+  const featured = listingImageUrls(input.featured, 6)
+  const products = featured.length
+    ? featured
+    : trending.length
+      ? trending
+      : physical.length
+        ? physical
+        : digital
   return {
     shops,
     physical,
     digital,
     trending,
     sell: shops.length ? shops : trending,
+    categories,
+    products,
+    categoryHref: firstCategoryHref(input.categories),
   }
 }
 
 /** @deprecated Prefer fetchHomeBootstrap — hero images are derived from the same feed queries. */
 export async function fetchHomeHeroImages(): Promise<HomeHeroImageSet> {
-  const [shops, physical, digital, trending] = await Promise.all([
+  const [shops, physical, digital, trending, categories, featured] = await Promise.all([
     fetchShopsPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE),
     fetchListingFeedPage('physical', 0),
     fetchListingFeedPage('digital', 0),
     fetchListingFeedPage('trending', 0),
+    fetchCategoriesPage(0, CATEGORY_RAIL_PAGE_SIZE),
+    fetchListingFeedPage('featured', 0),
   ])
   return heroImagesFromFeeds({
     shops: shops.items,
     physical: physical.items,
     digital: digital.items,
     trending: trending.items,
+    categories: categories.items,
+    featured: featured.items,
   })
 }
 
@@ -1455,13 +1502,16 @@ export async function fetchHomeBootstrap(): Promise<{
   feedSeeds?: HomeBootstrapFeedSeeds
 }> {
   // One round-trip set: stats + the same feeds the home sections/hero use.
-  const [{ data: statsRow, error }, shops, physical, digital, trending] = await Promise.all([
-    supabase.from('marketplace_statistics').select('*').maybeSingle(),
-    fetchShopsPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE),
-    fetchListingFeedPage('physical', 0),
-    fetchListingFeedPage('digital', 0),
-    fetchListingFeedPage('trending', 0),
-  ])
+  const [{ data: statsRow, error }, shops, physical, digital, trending, categories, featured] =
+    await Promise.all([
+      supabase.from('marketplace_statistics').select('*').maybeSingle(),
+      fetchShopsPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE),
+      fetchListingFeedPage('physical', 0),
+      fetchListingFeedPage('digital', 0),
+      fetchListingFeedPage('trending', 0),
+      fetchCategoriesPage(0, CATEGORY_RAIL_PAGE_SIZE),
+      fetchListingFeedPage('featured', 0),
+    ])
 
   if (error) {
     return { data: null, error: error.message }
@@ -1483,6 +1533,8 @@ export async function fetchHomeBootstrap(): Promise<{
     physical: physical.items,
     digital: digital.items,
     trending: trending.items,
+    categories: categories.items,
+    featured: featured.items,
   })
 
   return {

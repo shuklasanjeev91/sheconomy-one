@@ -6,11 +6,11 @@ import { usePwaInstall } from '~/components/pwa/PwaBootstrap'
 import { Icons, ListItem, Separator, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { SurfaceCard } from '~/components/layout'
 import { SettingsPanel } from '~/components/settings/SettingsPanel'
-import { AI_NAME } from '~/config/brand'
+import { AI_NAME, BRAND_NAME, LEGAL_ENTITY_NAME, TECHNICAL_PARTNER_NAME } from '~/config/brand'
 import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { resetAppOnboardingSeen } from '~/lib/onboarding/first-launch'
-import { routes } from '~/lib/routes'
+import { appRoutes, routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { getBundleInfo } from '~/lib/updates/bundle-info'
 import {
@@ -61,8 +61,53 @@ export function AboutSettingsPanel() {
       : 'compact layout — no side rails'
 
   return (
-    <SettingsPanel title="About" description="Help, AI assist, and app version">
+    <SettingsPanel title="About" description="Company information, help, and app version">
+      <SurfaceCard padding="$4" borderRadius={radius.card} marginBottom="$4" gap="$2">
+        <Text fontSize={16} fontWeight="700" color={ui.text}>
+          About {BRAND_NAME}
+        </Text>
+        <Text fontSize={14} lineHeight={21} color={ui.textSecondary}>
+          {BRAND_NAME} is a women-first marketplace and community operated by {LEGAL_ENTITY_NAME}.{' '}
+          {TECHNICAL_PARTNER_NAME} is the technical partner of {LEGAL_ENTITY_NAME} and powers the
+          platform technology.
+        </Text>
+        <AppLink href={appRoutes.legalAbout} asChild>
+          <Text
+            fontSize={14}
+            fontWeight="600"
+            color={ui.link}
+            cursor="pointer"
+            hoverStyle={{ textDecorationLine: 'underline' }}
+            marginTop="$1"
+          >
+            Read About us
+          </Text>
+        </AppLink>
+      </SurfaceCard>
+
       <SurfaceCard padding="$0" borderRadius={radius.card} overflow="hidden">
+        <AppLink href={appRoutes.legalAbout} asChild>
+          <XStack
+            alignItems="center"
+            gap="$3"
+            paddingHorizontal="$4"
+            paddingVertical="$3.5"
+            hoverStyle={{ backgroundColor: ui.navHover }}
+            cursor="pointer"
+          >
+            <Icons.Building2 size={18} color={ui.brand} />
+            <YStack flex={1} gap={2}>
+              <Text fontSize={15} color={ui.text} fontWeight="600">
+                About us & company information
+              </Text>
+              <Text fontSize={13} color={ui.textMuted}>
+                {LEGAL_ENTITY_NAME} · partner {TECHNICAL_PARTNER_NAME}
+              </Text>
+            </YStack>
+            <Icons.ChevronRight size={16} color={ui.textMuted} />
+          </XStack>
+        </AppLink>
+        <Separator />
         <AppLink href={routes.help} asChild>
           <XStack
             alignItems="center"

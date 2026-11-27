@@ -150,9 +150,13 @@ declare module 'one' {
         | `/following`
         | `/help`
         | `/help/seller`
+        | `/legal/about`
         | `/legal/ads`
         | `/legal/cookies`
+        | `/legal/payment`
         | `/legal/privacy`
+        | `/legal/returns`
+        | `/legal/shipping`
         | `/legal/terms`
         | `/listing`
         | `/log-in`

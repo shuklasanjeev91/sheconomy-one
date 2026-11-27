@@ -45,7 +45,8 @@ export const COMMERCE_FOOTER_COLUMNS: { title: string; links: NavLinkItem[] }[] 
   {
     title: 'About',
     links: [
-      { href: appRoutes.settingsSection('about'), label: `About ${BRAND_NAME}` },
+      { href: appRoutes.legalAbout, label: 'About us' },
+      { href: appRoutes.settingsSection('about'), label: 'App & version' },
       { href: blogRoutes.home, label: 'Blog' },
       { href: communityRoutes.home, label: 'Community' },
       { href: communityRoutes.jobs, label: 'Careers' },
@@ -67,11 +68,28 @@ export const COMMERCE_FOOTER_COLUMNS: { title: string; links: NavLinkItem[] }[] 
       { href: commerceRoutes.paymentMethods, label: 'Payment methods' },
     ],
   },
+  {
+    title: 'Policies',
+    links: [
+      { href: appRoutes.legalAbout, label: 'About us' },
+      { href: appRoutes.legalTerms, label: 'Terms of use' },
+      { href: appRoutes.legalPrivacy, label: 'Privacy policy' },
+      { href: appRoutes.legalShipping, label: 'Shipping & exchange' },
+      { href: appRoutes.legalPayment, label: 'Payment' },
+      { href: appRoutes.legalReturns, label: 'Return & refund' },
+      { href: appRoutes.legalCookies, label: 'Cookies' },
+      { href: appRoutes.legalAds, label: 'Interest-based ads' },
+    ],
+  },
 ]
 
+/** Compact legal bar under the footer columns — full set lives in Policies. */
 export const COMMERCE_FOOTER_LEGAL: NavLinkItem[] = [
-  { href: appRoutes.legalTerms, label: 'Terms of use' },
+  { href: appRoutes.legalAbout, label: 'About us' },
+  { href: appRoutes.legalTerms, label: 'Terms' },
   { href: appRoutes.legalPrivacy, label: 'Privacy' },
+  { href: appRoutes.legalShipping, label: 'Shipping' },
+  { href: appRoutes.legalPayment, label: 'Payment' },
+  { href: appRoutes.legalReturns, label: 'Returns' },
   { href: appRoutes.legalCookies, label: 'Cookies' },
-  { href: appRoutes.legalAds, label: 'Interest-based ads' },
 ]
