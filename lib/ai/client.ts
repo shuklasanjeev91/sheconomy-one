@@ -1,4 +1,5 @@
 import { AI_NAME } from '~/config/brand'
+import { parseAiAssistActions } from '~/lib/ai/assist-actions'
 import { getAiLanguagePrefs, withAiLanguage } from '~/lib/ai/language'
 import { isGenericFallbackDraft } from '~/lib/ai/post-draft-guards'
 import { invokeOwnedAssist } from '~/lib/ai/owned-service'
@@ -166,6 +167,7 @@ export async function sendAiMessage(params: SendAiMessageParams): Promise<SendAi
     listingIds: Array.isArray(result.listingIds)
       ? result.listingIds.map((id) => String(id)).filter(Boolean).slice(0, 4)
       : [],
+    actions: parseAiAssistActions((result as { actions?: unknown }).actions),
     usedFallback: Boolean(result.usedFallback),
   }
 }

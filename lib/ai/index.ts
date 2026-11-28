@@ -1,4 +1,6 @@
 export type {
+  AiAssistAction,
+  AiAssistActionType,
   AiAssistMessage,
   AiContext,
   AiDeepLink,
@@ -21,6 +23,8 @@ export type {
   ShopDraftParams,
   ShopDraftResult,
 } from '~/lib/ai/types'
+export type { ListingAssistHandlers } from '~/lib/ai/assist-actions'
+export { parseAiAssistActions } from '~/lib/ai/assist-actions'
 
 export {
   draftCommentWithAi,

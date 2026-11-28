@@ -9,6 +9,15 @@ const MATERIAL: ProductQuestion = { label: 'Material', prompt: 'What is this mad
 const SIZES: ProductQuestion = { label: 'Sizes', prompt: 'What sizes does this come in?' }
 const PACK: ProductQuestion = { label: 'Pack size', prompt: 'What pack sizes does this come in?' }
 const INGREDIENTS: ProductQuestion = { label: 'Ingredients', prompt: 'What are the ingredients?' }
+const ADD_CART: ProductQuestion = { label: 'Add to cart', prompt: 'Add this product to my cart' }
+const CHECKOUT: ProductQuestion = { label: 'Checkout', prompt: 'Checkout with this product' }
+const SHIPPING: ProductQuestion = {
+  label: 'Delivery',
+  prompt: 'How long will delivery take and are there delivery charges?',
+}
+const SELLER: ProductQuestion = { label: 'About seller', prompt: 'Tell me about the seller and founder' }
+const MESSAGE: ProductQuestion = { label: 'Message seller', prompt: 'Message the seller for me' }
+const FOLLOW: ProductQuestion = { label: 'Follow shop', prompt: 'Follow this shop for me' }
 
 const APPAREL = [
   'fashion',
@@ -61,14 +70,15 @@ function categoryHas(category: string, keywords: string[]): boolean {
 /** Question chips for the open product. The category chooses them. */
 export function productQuestionChips(category?: string | null): ProductQuestion[] {
   const value = (category ?? '').toLowerCase()
+  const actions = [ADD_CART, CHECKOUT, SHIPPING, SELLER, MESSAGE, FOLLOW]
   if (categoryHas(value, APPAREL)) {
-    return [PRICE, MATERIAL, SIZES, STOCK, REVIEWS, RETURNS, ABOUT]
+    return [PRICE, MATERIAL, SIZES, STOCK, ...actions, REVIEWS, RETURNS, ABOUT]
   }
   if (categoryHas(value, INGESTIBLE)) {
-    return [PRICE, INGREDIENTS, PACK, STOCK, REVIEWS, RETURNS, ABOUT]
+    return [PRICE, INGREDIENTS, PACK, STOCK, ...actions, REVIEWS, RETURNS, ABOUT]
   }
   if (categoryHas(value, HOME)) {
-    return [PRICE, MATERIAL, STOCK, REVIEWS, RETURNS, ABOUT]
+    return [PRICE, MATERIAL, STOCK, ...actions, REVIEWS, RETURNS, ABOUT]
   }
-  return [PRICE, STOCK, REVIEWS, RETURNS, ABOUT]
+  return [PRICE, STOCK, ...actions, REVIEWS, RETURNS, ABOUT]
 }

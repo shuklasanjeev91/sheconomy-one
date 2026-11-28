@@ -1,3 +1,7 @@
+import type { AiAssistAction } from '~/lib/ai/assist-actions'
+
+export type { AiAssistAction, AiAssistActionType } from '~/lib/ai/assist-actions'
+
 export type AiProduct =
   | 'commerce'
   | 'community'
@@ -40,6 +44,7 @@ export type AiAssistMessage = {
   content: string
   deepLinks?: AiDeepLink[]
   listingIds?: string[]
+  actions?: AiAssistAction[]
 }
 
 export type AiRouteContext = {
@@ -66,6 +71,7 @@ export type SendAiMessageResult = {
   answer: string
   deepLinks: AiDeepLink[]
   listingIds: string[]
+  actions: AiAssistAction[]
   usedFallback: boolean
   product: AiProduct
 }

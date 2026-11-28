@@ -6,6 +6,7 @@ import { AiAssistSheet } from '~/components/ai/AiAssistSheet'
 import { YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { resolveAiRouteContext } from '~/lib/ai'
+import { ListingAssistHandlersProvider } from '~/providers/listing-assist-handlers'
 
 import {
   AiAssistContext,
@@ -67,17 +68,19 @@ export function AiAssistProvider({ children }: { children: ReactNode }) {
 
   return (
     <AiAssistContext.Provider value={value}>
-      <YStack
-        flex={documentScroll ? undefined : 1}
-        flexGrow={documentScroll ? 1 : undefined}
-        flexShrink={documentScroll ? 0 : undefined}
-        width="100%"
-        position="relative"
-        style={documentScroll ? ({ flex: '1 0 auto', minHeight: '100dvh' } as const) : undefined}
-      >
-        {children}
-        <AiAssistSheet />
-      </YStack>
+      <ListingAssistHandlersProvider>
+        <YStack
+          flex={documentScroll ? undefined : 1}
+          flexGrow={documentScroll ? 1 : undefined}
+          flexShrink={documentScroll ? 0 : undefined}
+          width="100%"
+          position="relative"
+          style={documentScroll ? ({ flex: '1 0 auto', minHeight: '100dvh' } as const) : undefined}
+        >
+          {children}
+          <AiAssistSheet />
+        </YStack>
+      </ListingAssistHandlersProvider>
     </AiAssistContext.Provider>
   )
 }

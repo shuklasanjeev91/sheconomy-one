@@ -4,6 +4,9 @@ import { useParams } from 'one'
 
 import { AI_NAME } from '~/config/brand'
 import { useAiAssistOptional } from '~/providers/ai-assist-context'
+import { useListingAssistHandlersOptional } from '~/providers/listing-assist-handlers'
+import { createDirectConversation } from '~/chat/lib/chats'
+import { chatRoutes } from '~/lib/routes'
 import {
   Button,
   Icons,
@@ -239,6 +242,7 @@ export function ListingScreen({
   const toast = useAppToast()
   const { hasSideRails } = useAppLayout()
   const shopFollow = useShopFollow(listing?.shop_id)
+  const listingAssistHandlers = useListingAssistHandlersOptional()
   const { fromCommunityPost, communityPostId } = useCommunityListingAttribution(listing?.id)
 
   usePageSeo(
@@ -392,6 +396,84 @@ export function ListingScreen({
         : null,
     [listing, sortedImages],
   )
+
+  // Register PDP handlers so SHERPA can add to cart / checkout / follow / message.
+  useEffect(() => {
+    if (!listingAssistHandlers || !listing) {
+      listingAssistHandlers?.register(null)
+      return
+    }
+    const listingId = listing.id
+    const shopId = listing.shop_id
+    const ownerUserId = listing.shops?.user_id ?? null
+    const shopSlug = listing.shops ? getShopSlug(listing.shops) : null
+    const variantId = selectedVariationsPreview[0]?.id ?? null
+    const followersOnly = readMetadataBoolean(
+      listing.listing_metadata,
+      LISTING_METADATA_KEYS.FOLLOWERS_ONLY,
+      false,
+    )
+    const isOwner = Boolean(user?.id && ownerUserId && user.id === ownerUserId)
+    const locked = followersOnly && !isOwner && (!shopFollow.isFollowing || !user)
+
+    listingAssistHandlers.register({
+      listingId,
+      shopId,
+      ownerUserId,
+      selectedVariantId: variantId,
+      addToCart: async () => {
+        if (locked) {
+          return { ok: false, error: 'Follow this shop to unlock purchase on this listing.' }
+        }
+        const { error: cartError } = await addToCart(listingId, {
+          quantity: 1,
+          variantId: variantId ?? undefined,
+        })
+        return cartError ? { ok: false, error: cartError } : { ok: true }
+      },
+      checkout: async () => {
+        if (locked) {
+          return { ok: false, error: 'Follow this shop to unlock purchase on this listing.' }
+        }
+        const { error: cartError } = await addToCart(listingId, {
+          quantity: 1,
+          variantId: variantId ?? undefined,
+        })
+        if (cartError) return { ok: false, error: cartError }
+        const href = user
+          ? commerceRoutes.checkout
+          : buildSignInUrl(String(commerceRoutes.checkout))
+        navigateApp(href)
+        return { ok: true }
+      },
+      followShop: async () => {
+        if (!user) return { ok: false, error: 'Sign in to follow shops.' }
+        const wasFollowing = shopFollow.isFollowing
+        const result = await shopFollow.toggleFollow()
+        if (result.error) return { ok: false, error: result.error }
+        return { ok: true, following: !wasFollowing }
+      },
+      messageSeller: async () => {
+        if (!ownerUserId) return { ok: false, error: 'This seller cannot be messaged right now.' }
+        if (!user) return { ok: false, error: 'Sign in to message the seller.' }
+        if (user.id === ownerUserId) return { ok: false, error: 'This is your shop.' }
+        const { conversationId, error } = await createDirectConversation(ownerUserId)
+        if (error || !conversationId) return { ok: false, error: error ?? 'Could not open chat' }
+        navigateApp(chatRoutes.conversation(conversationId))
+        return { ok: true }
+      },
+      openShop: shopSlug ? () => navigateApp(commerceRoutes.shop(shopSlug)) : undefined,
+    })
+
+    return () => listingAssistHandlers.register(null)
+  }, [
+    listing,
+    listingAssistHandlers,
+    addToCart,
+    shopFollow,
+    user,
+    selectedVariationsPreview,
+  ])
 
   if (isLoading && !listing) {
     return (
@@ -764,6 +846,19 @@ export function ListingScreen({
       icon={<Icons.Sparkles size={16} color={ui.brand} />}
       onPress={() => {
         const listingSlug = slug ?? listing.slug ?? listing.id
+        const shop = listing.shops
+        const shippingLabel =
+          fulfillmentInfo?.kind === 'physical'
+            ? [
+                fulfillmentInfo.estimatedDeliveryLabel,
+                fulfillmentInfo.shippingCostLabel,
+                fulfillmentInfo.processingLabel,
+              ]
+                .filter(Boolean)
+                .join('. ')
+            : fulfillmentInfo?.kind === 'digital'
+              ? fulfillmentInfo.deliveryLabel
+              : undefined
         ai.openAssist({
           product: 'commerce',
           contextPage: 'listing',
@@ -772,6 +867,11 @@ export function ListingScreen({
             listing_slug: listingSlug,
             listing_title: listing.title,
             listing_category: listing.category,
+            shop_id: listing.shop_id,
+            shop_slug: shop ? getShopSlug(shop) : undefined,
+            shop_name: shop?.shop_name,
+            owner_user_id: shop?.user_id,
+            shipping_label: shippingLabel,
             route: `/listing/${listingSlug}`,
           },
           prompt: 'Tell me about this product',

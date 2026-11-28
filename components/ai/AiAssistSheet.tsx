@@ -24,6 +24,7 @@ import {
   fetchAiSuggestions,
   sendAiMessage,
   sendAiSuggestionFeedback,
+  type AiAssistAction,
   type AiAssistMessage,
   type AiProduct,
   type AiSuggestion,
@@ -37,9 +38,11 @@ import {
   type AiAssistContextValue,
   type OpenAssistOptions,
 } from '~/providers/ai-assist-context'
+import { useListingAssistHandlersOptional } from '~/providers/listing-assist-handlers'
 import type { AiRouteContext } from '~/lib/ai'
 import { navigateApp } from '~/lib/platform/navigate'
 import { routes } from '~/lib/routes'
+import { useAppToast } from '~/components/ui/Toast'
 
 function newLocalId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -140,6 +143,8 @@ function AiAssistSheetBody({
   languageCode: string
 }) {
   const dictation = useDictationOptional()
+  const toast = useAppToast()
+  const listingHandlers = useListingAssistHandlersOptional()
   const product: AiProduct = override?.product ?? routeContext.product
   const contextPage = override?.contextPage ?? routeContext.contextPage
   const context = { ...routeContext.context, ...(override?.context ?? {}) }
@@ -153,14 +158,104 @@ function AiAssistSheetBody({
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [actingId, setActingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const sessionIdRef = useRef<string | null>(null)
   const sendingRef = useRef(false)
   const autoSentRef = useRef<string | null>(null)
+  const autoRanRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     sessionIdRef.current = sessionId
   }, [sessionId])
+
+  const runAssistAction = useCallback(
+    async (action: AiAssistAction, sourceMessageId: string) => {
+      const handlers = listingHandlers?.get() ?? null
+      const key = `${sourceMessageId}:${action.type}:${action.label}`
+      if (actingId === key) return
+      setActingId(key)
+      try {
+        if (action.type === 'add_to_cart') {
+          if (!handlers?.addToCart) {
+            toast.show('Open this product page to add it to cart', { tone: 'info' })
+            return
+          }
+          const result = await handlers.addToCart()
+          if (!result.ok) {
+            toast.show('Could not add to cart', { tone: 'danger', message: result.error })
+            return
+          }
+          toast.show('Added to cart', { tone: 'success' })
+          return
+        }
+        if (action.type === 'checkout') {
+          if (!handlers?.checkout) {
+            closeAssist()
+            navigateApp(routes.checkout as never)
+            return
+          }
+          const result = await handlers.checkout()
+          if (!result.ok) {
+            toast.show('Could not start checkout', { tone: 'danger', message: result.error })
+            return
+          }
+          closeAssist()
+          return
+        }
+        if (action.type === 'follow_shop') {
+          if (!handlers?.followShop) {
+            toast.show('Open this product page to follow the shop', { tone: 'info' })
+            return
+          }
+          const result = await handlers.followShop()
+          if (!result.ok) {
+            toast.show('Could not update follow', { tone: 'danger', message: result.error })
+            return
+          }
+          toast.show(result.following ? 'Following shop' : 'Unfollowed shop', { tone: 'success' })
+          return
+        }
+        if (action.type === 'message_seller') {
+          if (!handlers?.messageSeller) {
+            toast.show('Open this product page to message the seller', { tone: 'info' })
+            return
+          }
+          const result = await handlers.messageSeller()
+          if (!result.ok) {
+            toast.show('Could not open chat', { tone: 'danger', message: result.error })
+            return
+          }
+          closeAssist()
+          return
+        }
+        if (action.type === 'open_shop') {
+          if (handlers?.openShop) {
+            handlers.openShop()
+            closeAssist()
+            return
+          }
+          if (action.href) {
+            closeAssist()
+            navigateApp(action.href as never)
+          }
+          return
+        }
+        if (action.type === 'open_cart') {
+          closeAssist()
+          navigateApp(routes.cart as never)
+          return
+        }
+        if (action.type === 'navigate' && action.href) {
+          closeAssist()
+          navigateApp(action.href as never)
+        }
+      } finally {
+        setActingId(null)
+      }
+    },
+    [actingId, closeAssist, listingHandlers, toast],
+  )
 
   const handleSend = useCallback(
     async (raw?: string) => {
@@ -183,16 +278,24 @@ function AiAssistSheetBody({
         })
         sessionIdRef.current = result.sessionId
         setSessionId(result.sessionId)
+        const assistantId = newLocalId()
+        const actions = result.actions ?? []
         setMessages((prev) => [
           ...prev,
           {
-            id: newLocalId(),
+            id: assistantId,
             role: 'assistant',
             content: result.answer,
             deepLinks: result.deepLinks,
             listingIds: result.listingIds,
+            actions,
           },
         ])
+        const auto = actions.find((action) => action.autoExecute)
+        if (auto && !autoRanRef.current.has(assistantId)) {
+          autoRanRef.current.add(assistantId)
+          void runAssistAction(auto, assistantId)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong.')
         setMessages((prev) => [
@@ -209,7 +312,7 @@ function AiAssistSheetBody({
         setSending(false)
       }
     },
-    [context, contextPage, input, product],
+    [context, contextPage, input, product, runAssistAction],
   )
 
   useEffect(() => {
@@ -402,6 +505,7 @@ function AiAssistSheetBody({
         {messages.map((message) => {
           const isUser = message.role === 'user'
           const links = onListing ? [] : (message.deepLinks ?? [])
+          const actions = message.actions ?? []
           return (
             <YStack
               key={message.id}
@@ -421,6 +525,31 @@ function AiAssistSheetBody({
                   {message.content}
                 </Text>
               </YStack>
+              {actions.length ? (
+                <XStack gap="$2" flexWrap="wrap">
+                  {actions.map((action) => {
+                    const busy = actingId === `${message.id}:${action.type}:${action.label}`
+                    return (
+                      <XStack
+                        key={`${message.id}-${action.type}-${action.label}`}
+                        paddingHorizontal={10}
+                        paddingVertical={6}
+                        borderRadius={radius.pill}
+                        borderWidth={1}
+                        borderColor={ui.brand}
+                        backgroundColor={ui.chip}
+                        cursor="pointer"
+                        opacity={busy ? 0.7 : 1}
+                        onPress={() => void runAssistAction(action, message.id)}
+                      >
+                        <Text fontSize={12} fontWeight="600" color={ui.brand}>
+                          {busy ? 'Working…' : action.label}
+                        </Text>
+                      </XStack>
+                    )
+                  })}
+                </XStack>
+              ) : null}
               {links.length ? (
                 <XStack gap="$2" flexWrap="wrap">
                   {links.map((link) => (
